@@ -1,9 +1,22 @@
 package models
-import "time"
 
+import (
+	"gorm.io/gorm"
+)
+
+type UserRole string
+
+const (
+	AdminRole		UserRole = "admin"
+	CustomerRole	UserRole = "customer"
+	CoachRole		UserRole = "coach"
+
+)
 type User struct {
-    ID        uint      `gorm:"primaryKey"`
-    Name      string    `gorm:"type:varchar(100);not null"`
-    Email     string    `gorm:"type:varchar(100);unique;not null"`
-    CreatedAt time.Time
+	gorm.Model
+	Role		UserRole `json:"role"`
+	FirstName	string `json:"firstName"`
+	LastName  	string `json:"lastName"`
+	Email 		string `json:"email" gorm:"unique"`
+	Password 	string `json:"password"`
 }
