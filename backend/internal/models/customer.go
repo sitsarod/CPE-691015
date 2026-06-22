@@ -33,5 +33,7 @@ type Customer struct {
 	Evaluations       	[]Evaluation    `gorm:"foreignKey:CustomerID"`
 	Feedbacks         	[]Feedback      `gorm:"foreignKey:CustomerID"`
 	DetectedVideos    	[]DetectedVideo `gorm:"foreignKey:CustomerID"`
+
+	Enrollments    []Enrollment     `json:"enrollments" gorm:"foreignKey:CustomerID"`
 }
 

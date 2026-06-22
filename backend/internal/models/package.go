@@ -12,4 +12,6 @@ type Package struct {
 
 	CourseID uint    `json:"course_id" valid:"required~courseId is required"`
 	Course   *Course `json:"course" gorm:"foreignKey:CourseID"`
+
+	Enrollments []Enrollment `json:"enrollments" gorm:"foreignKey:PackageID"`
 }
