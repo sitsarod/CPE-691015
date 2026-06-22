@@ -35,7 +35,13 @@ func main() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.Product{}, // อย่าลืมสร้างไฟล์ product.go ใน internal/models/
-		// มีตารางอะไรอีก ก็เอามาใส่เพิ่มตรงนี้
+		&models.Customer{},
+		&models.CustomerPhoto{},
+		&models.Evaluation{},
+		&models.Feedback{},
+		&models.DetectedVideo{},
+		&models.RawVideo{},
+		
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลวซะงั้น!: %v", err)
