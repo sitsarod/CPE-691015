@@ -17,7 +17,7 @@ type Course struct {
 
 	CourseName  string       `json:"course_name" gorm:"type:varchar(100)" valid:"required~courseName is required"`
 	Description string       `json:"description" gorm:"type:text" valid:"required~description is required"`
-	Status      CourseStatus `json:"status" gorm:"type:varchar(20);not null;default:'Draft'"`
+	Status      CourseStatus  `json:"status" gorm:"type:varchar(20);not null;default:'Draft'"`
 
 	CreatedBy uint `json:"created_by" valid:"required~createdBy is required"`
 
