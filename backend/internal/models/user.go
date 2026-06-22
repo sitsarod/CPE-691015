@@ -21,4 +21,6 @@ type User struct {
 	Password 	string `json:"password"`
 
 	Customers 	[]Customer `gorm:"foreignKey:UserID"`
+	
+	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
 }

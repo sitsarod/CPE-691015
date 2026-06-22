@@ -45,6 +45,8 @@ func main() {
 		&models.Package{},
 		&models.Enrollment{},
 		&models.WeeklySchedule{},
+		&models.StudentAttendance{},
+		&models.CoachAttendance{},
 		
 	)
 	if err != nil {

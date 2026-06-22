@@ -31,4 +31,5 @@ type Enrollment struct {
 	Package         *Package         `json:"package" gorm:"foreignKey:PackageID"`
 	Customer        *Customer        `json:"customer" gorm:"foreignKey:CustomerID"`
 	WeeklySchedules []WeeklySchedule `json:"weekly_schedules" gorm:"foreignKey:EnrollmentID"`
+	StudentAttendances []StudentAttendance `json:"student_attendances" gorm:"foreignKey:EnrollmentID"`
 }
