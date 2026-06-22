@@ -41,6 +41,10 @@ func main() {
 		&models.Feedback{},
 		&models.DetectedVideo{},
 		&models.RawVideo{},
+		&models.Course{},
+		&models.Package{},
+		&models.Enrollment{},
+		&models.WeeklySchedule{},
 		
 	)
 	if err != nil {
