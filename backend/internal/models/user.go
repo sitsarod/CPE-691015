@@ -19,4 +19,6 @@ type User struct {
 	LastName  	string `json:"lastName"`
 	Email 		string `json:"email" gorm:"unique"`
 	Password 	string `json:"password"`
+
+	Customers 	[]Customer `gorm:"foreignKey:UserID"`
 }
