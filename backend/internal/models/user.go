@@ -29,4 +29,6 @@ type User struct {
 	AdminBillings    []Billing `json:"admin_billings" gorm:"foreignKey:AdminID"`
 	
 	CustomerInvoices []Invoice `json:"customer_invoices" gorm:"foreignKey:CustomerID"`
+
+	Announcements []Announcement `json:"announcements" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 }
