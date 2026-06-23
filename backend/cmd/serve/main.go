@@ -1,29 +1,37 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
+	"CPE-691015/internal/config"
+	"CPE-691015/internal/routes"
+
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 func main() {
-	// โหลด .env
-	_ = godotenv.Load("../../.env")
-	dsn := os.Getenv("DATABASE_URL")
+	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
+	_ = godotenv.Load("../../../.env")
 
-	// เชื่อมต่อ DB เพื่อส่งต่อให้ Repository/Service ไปใช้งานต่อ
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("เปิดเซิร์ฟเวอร์ไม่สำเร็จเพราะเชื่อมต่อ DB ไม่ได้: %v", err)
+	// 1. เชื่อมต่อฐานข้อมูล GORM
+	config.ConnectDB()
+
+	// 2. สร้าง Gin HTTP Engine
+	r := gin.Default()
+
+	// 3. ตั้งค่า Routes
+	routes.SetupRoutes(r)
+
+	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	fmt.Println("ฐานข้อมูลพร้อมใช้งาน... กำลังสตาร์ทเซิร์ฟเวอร์หลัก (serve)")
-	
-	// ตรงนี้ค่อยเอาตัวแปร `db` ไปผูกเข้ากับ Repository และ Service
-	// ตัวอย่าง: repo := repositories.NewRepository(db)
-	// และเขียนโค้ดเปิด Port รันเซิร์ฟเวอร์เลย
+	log.Printf("เซิร์ฟเวอร์หลักเริ่มต้นที่พอร์ต %s...", port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("ไม่สามารถสตาร์ทเซิร์ฟเวอร์ได้: %v", err)
+	}
 }

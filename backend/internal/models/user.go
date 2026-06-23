@@ -21,7 +21,7 @@ type User struct {
 	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
 	Customers          []Customer          `json:"customer" gorm:"foreignKey:UserID"`
-	Courses            []Package           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
+	Courses            []Course           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
 
 	CustomerBillings []Billing `json:"customer_billings" gorm:"foreignKey:CustomerID"`
