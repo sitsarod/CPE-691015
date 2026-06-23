@@ -31,6 +31,8 @@ type StudentAttendance struct {
 	IsOffSchedule bool             `json:"is_off_schedule" gorm:"default:false"`
 	Status        AttendanceStatus `json:"status" gorm:"type:varchar(20);default:'present'"`
 	Remarks       string           `json:"remarks" gorm:"type:text"`
+	SnapshotURL     string  `json:"snapshot_url" gorm:"type:varchar(255)"`
+	ConfidenceScore float64 `json:"confidence_score"`
 
 	// Foreign Keys
 	EnrollmentID uint  `json:"enrollment_id" valid:"required~enrollmentId is required"`
