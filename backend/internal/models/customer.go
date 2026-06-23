@@ -16,6 +16,8 @@ const (
 type Customer struct {
 	gorm.Model
 	UserID				uint			`json:"userId"`
+	User   				*User  			`json:"user" gorm:"foreignKey:UserID"`
+	
 	FirstName			string			`json:"firstName"`
 	LastName  			string 			`json:"lastName"`
 	Email 				string 			`json:"email" gorm:"unique"`
@@ -29,11 +31,12 @@ type Customer struct {
 	Status 				CustomerStatus 	`json:"status" gorm:"default:'active'"`
 
 
-	Photos            	[]CustomerPhoto `gorm:"foreignKey:CustomerID"`
-	Evaluations       	[]Evaluation    `gorm:"foreignKey:CustomerID"`
-	Feedbacks         	[]Feedback      `gorm:"foreignKey:CustomerID"`
-	DetectedVideos    	[]DetectedVideo `gorm:"foreignKey:CustomerID"`
+	Photos            	[]CustomerPhoto `json:"photo" gorm:"foreignKey:CustomerID"`
+	Evaluations       	[]Evaluation    `json:"evaluation" gorm:"foreignKey:CustomerID"`
+	Feedbacks         	[]Feedback      `json:"feedback" gorm:"foreignKey:CustomerID"`
+	DetectedVideos    	[]DetectedVideo `json:"detectedVideo" gorm:"foreignKey:CustomerID"`
+	Enrollments    		[]Enrollment    `json:"enrollment" gorm:"foreignKey:CustomerID"`
 
-	Enrollments    []Enrollment     `json:"enrollments" gorm:"foreignKey:CustomerID"`
+	
 }
 

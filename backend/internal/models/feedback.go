@@ -30,10 +30,14 @@ type Feedback struct {
 	gorm.Model
 
 	CustomerID    	uint             `json:"customerId"`
+	Customer   		*Customer  		 `json:"customer" gorm:"foreignKey:CustomerID"`
+
 	Content   		string           `json:"content"`
 	
-	Category  FeedbackCategory `json:"category" gorm:"type:string"` 
-	Status    FeedbackStatus   `json:"status" gorm:"type:string;default:'UNREAD'"` 
+	Category  		FeedbackCategory `json:"category" gorm:"type:string"` 
+	Status    		FeedbackStatus   `json:"status" gorm:"type:string;default:'UNREAD'"` 
+
+
 	
 
 }

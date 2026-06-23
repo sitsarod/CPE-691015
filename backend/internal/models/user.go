@@ -14,13 +14,13 @@ const (
 )
 type User struct {
 	gorm.Model
-	Role		UserRole `json:"role"`
-	FirstName	string `json:"firstName"`
-	LastName  	string `json:"lastName"`
-	Email 		string `json:"email" gorm:"unique"`
-	Password 	string `json:"password"`
+	Role				UserRole 		`json:"role"`
+	FirstName			string 			`json:"firstName"`
+	LastName  			string 			`json:"lastName"`
+	Email 				string 			`json:"email" gorm:"unique"`
+	Password 			string 			`json:"password"`
 
-	Customers 	[]Customer `gorm:"foreignKey:UserID"`
+	Customers 			[]Customer 		`json:"customer" gorm:"foreignKey:UserID"`
 	
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
 }
