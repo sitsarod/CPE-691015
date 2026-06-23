@@ -23,9 +23,6 @@ type User struct {
 	Customers          []Customer          `gorm:"foreignKey:UserID"`
 	Courses            []Package           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
-<<<<<<< HEAD
-}
-=======
 
 	CustomerBillings []Billing `json:"customer_billings" gorm:"foreignKey:CustomerID"`
 	
@@ -33,4 +30,3 @@ type User struct {
 	
 	CustomerInvoices []Invoice `json:"customer_invoices" gorm:"foreignKey:CustomerID"`
 }
->>>>>>> be4c9b839861df84ad428fb5d5906597025777f8
