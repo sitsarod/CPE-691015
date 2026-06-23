@@ -1,7 +1,7 @@
 package main
 
 import (
-    "CPE-691015/backend/models"
+    "CPE-691015/backend/internal/models"
     "fmt"
 )
 
