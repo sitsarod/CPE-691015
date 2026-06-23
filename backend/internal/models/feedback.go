@@ -29,11 +29,18 @@ const (
 type Feedback struct {
 	gorm.Model
 
-	CustomerID    	uint             `json:"customerId"`
-	Content   		string           `json:"content"`
+	UserID    		uint             `json:"user_id" valid:"required~UserID is required"`
+	User      		*User            `json:"user" gorm:"foreignKey:UserID"`
 	
-	Category  FeedbackCategory `json:"category" gorm:"type:string"` 
-	Status    FeedbackStatus   `json:"status" gorm:"type:string;default:'UNREAD'"` 
+	CustomerID    	uint             `json:"customer_id"`
+	Customer   		*Customer  		 `json:"customer" gorm:"foreignKey:CustomerID"`
+
+	Content   		string           `json:"content" valid:"required~Content is required,length(10|1000)~Content must be between 10 and 1000 characters"`
+	
+	Category  		FeedbackCategory `json:"category" gorm:"type:string" valid:"required~Category is required,oneof(place coach course service other)~Invalid category value"` 
+	Status    		FeedbackStatus   `json:"status" gorm:"type:string;default:'UNREAD'"` 
+
+
 	
 
 }
