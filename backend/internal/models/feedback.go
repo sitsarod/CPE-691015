@@ -29,6 +29,9 @@ const (
 type Feedback struct {
 	gorm.Model
 
+	UserID    		uint             `json:"userId"`
+	User      		*User            `json:"user" gorm:"foreignKey:UserID"`
+	
 	CustomerID    	uint             `json:"customerId"`
 	Customer   		*Customer  		 `json:"customer" gorm:"foreignKey:CustomerID"`
 

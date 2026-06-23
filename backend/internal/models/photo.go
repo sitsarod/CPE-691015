@@ -5,10 +5,14 @@ import (
 
 )
 
-type CustomerPhoto struct {
+type Photo struct {
+
 	gorm.Model
 	CustomerID    	uint      	`json:"customerId"`
 	Customer   		*Customer  	`json:"customer" gorm:"foreignKey:CustomerID"`
+
+	CoachID    		uint      	`json:"coachId"`
+	Coach   		*Coach  	`json:"coach" gorm:"foreignKey:CoachID"`
 
 	PhotoURL  		string    	`json:"photoUrl"` // URL รูปต้นฉบับ 
 
