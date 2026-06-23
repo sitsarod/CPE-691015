@@ -7,20 +7,20 @@ import (
 type UserRole string
 
 const (
-	AdminRole		UserRole = "admin"
-	CustomerRole	UserRole = "customer"
-	CoachRole		UserRole = "coach"
-
+	AdminRole    UserRole = "admin"
+	CustomerRole UserRole = "customer"
+	CoachRole    UserRole = "coach"
 )
+
 type User struct {
 	gorm.Model
-	Role		UserRole `json:"role"`
-	FirstName	string `json:"firstName"`
-	LastName  	string `json:"lastName"`
-	Email 		string `json:"email" gorm:"unique"`
-	Password 	string `json:"password"`
+	Role      UserRole `json:"role"`
+	FirstName string   `json:"firstName"`
+	LastName  string   `json:"lastName"`
+	Email     string   `json:"email" gorm:"unique"`
+	Password  string   `json:"password"`
 
-	Customers 	[]Customer `gorm:"foreignKey:UserID"`
-	
+	Customers          []Customer          `gorm:"foreignKey:UserID"`
+	Courses            []Package           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
 }
