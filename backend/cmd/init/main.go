@@ -47,6 +47,10 @@ func main() {
 		&models.WeeklySchedule{},
 		&models.StudentAttendance{},
 		&models.CoachAttendance{},
+		&models.Billing{},
+		&models.BillingType{},
+		&models.Invoice{},
+		&models.PaymentItem{},
 		
 	)
 	if err != nil {
