@@ -7,22 +7,25 @@ import (
 type UserRole string
 
 const (
-	AdminRole		UserRole = "admin"
-	CustomerRole	UserRole = "customer"
-	CoachRole		UserRole = "coach"
-
+	AdminRole    UserRole = "admin"
+	CustomerRole UserRole = "customer"
+	CoachRole    UserRole = "coach"
 )
+
 type User struct {
 	gorm.Model
-	Role		UserRole `json:"role"`
-	FirstName	string `json:"firstName"`
-	LastName  	string `json:"lastName"`
-	Email 		string `json:"email" gorm:"unique"`
-	Password 	string `json:"password"`
+	Role      UserRole `json:"role"`
+	FirstName string   `json:"firstName"`
+	LastName  string   `json:"lastName"`
+	Email     string   `json:"email" gorm:"unique"`
+	Password  string   `json:"password"`
 
-	Customers 	[]Customer `gorm:"foreignKey:UserID"`
-	
+	Customers          []Customer          `gorm:"foreignKey:UserID"`
+	Courses            []Package           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
+<<<<<<< HEAD
+}
+=======
 
 	CustomerBillings []Billing `json:"customer_billings" gorm:"foreignKey:CustomerID"`
 	
@@ -30,3 +33,4 @@ type User struct {
 	
 	CustomerInvoices []Invoice `json:"customer_invoices" gorm:"foreignKey:CustomerID"`
 }
+>>>>>>> be4c9b839861df84ad428fb5d5906597025777f8
