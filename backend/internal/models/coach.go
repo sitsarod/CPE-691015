@@ -23,6 +23,6 @@ type Coach struct {
 
 	CoachAvailability []CoachAvailability `json:"coach_availability" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	WorkSchedules     []WorkSchedule      `json:"work_schedules" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
-
+	Photos            []Photo             `json:"photos" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	CoachAttendances []CoachAttendance `json:"coach_attendances" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 }
