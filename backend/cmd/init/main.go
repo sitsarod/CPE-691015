@@ -51,7 +51,8 @@ func main() {
 		&models.BillingType{},
 		&models.Invoice{},
 		&models.PaymentItem{},
-		
+		&models.Announcement{},
+		&models.Category{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลวซะงั้น!: %v", err)
