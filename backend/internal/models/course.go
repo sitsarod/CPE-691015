@@ -23,5 +23,6 @@ type Course struct {
 	User   *User `json:"user" gorm:"foreignKey:UserID"`
 
 
-	Packages []Package `json:"packages" gorm:"foreignKey:CourseID"`
+	Packages []Package `json:"packages" gorm:"foreignKey:CourseID;constraint:OnDelete:CASCADE;"`
+	WorkSchedules []WorkSchedule `gorm:"foreignKey:CourseID;constraint:OnDelete:CASCADE;"`
 }
