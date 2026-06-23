@@ -14,11 +14,11 @@ const (
 )
 type User struct {
 	gorm.Model
-	Role				UserRole 		`json:"role"`
-	FirstName			string 			`json:"firstName"`
-	LastName  			string 			`json:"lastName"`
-	Email 				string 			`json:"email" gorm:"unique"`
-	Password 			string 			`json:"password"`
+	Role				UserRole 		`json:"role" valid:"required~Role is required,oneof(admin customer coach)~Invalid role value"`
+	FirstName			string 			`json:"firstName" valid:"required~First name is required"`
+	LastName  			string 			`json:"lastName" valid:"required~Last name is required"`
+	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,email~Invalid email format"`
+	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
 	Customers 			[]Customer 		`json:"customer" gorm:"foreignKey:UserID"`
 	

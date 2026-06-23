@@ -6,5 +6,5 @@ import (
 
 type RawVideo struct {
 	gorm.Model
-	VideoURL  		string    	`json:"videoUrl"` 
+	VideoURL  		string    	`json:"videoUrl" valid:"required~Video URL is required,url~Invalid video URL format"` // URL วิดีโอต้นฉบับ
 }
