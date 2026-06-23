@@ -23,4 +23,10 @@ type User struct {
 	Customers 	[]Customer `gorm:"foreignKey:UserID"`
 	
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
+
+	CustomerBillings []Billing `json:"customer_billings" gorm:"foreignKey:CustomerID"`
+	
+	AdminBillings    []Billing `json:"admin_billings" gorm:"foreignKey:AdminID"`
+	
+	CustomerInvoices []Invoice `json:"customer_invoices" gorm:"foreignKey:CustomerID"`
 }
