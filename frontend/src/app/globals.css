@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc; /* Soft minimalist off-white */
+  --foreground: #0f172a; /* Slate 900 text */
+  --primary-orange: #f97316; /* Sports Orange */
+  --primary-orange-glow: rgba(249, 115, 22, 0.08);
+  --primary-orange-hover: #ea580c;
+  --accent-green: #22c55e; /* Court Green */
+  --accent-green-glow: rgba(34, 197, 94, 0.08);
+  --accent-green-hover: #16a34a;
+  --card-bg: #ffffff; /* Clean white card */
+  --border-light: #e2e8f0; /* Soft border */
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  --color-orange-primary: var(--primary-orange);
+  --color-orange-glow: var(--primary-orange-glow);
+  --color-orange-hover: var(--primary-orange-hover);
+  
+  --color-green-accent: var(--accent-green);
+  --color-green-glow: var(--accent-green-glow);
+  --color-green-hover: var(--accent-green-hover);
+  
+  --color-card-bg: var(--card-bg);
+  --color-border-light: var(--border-light);
+  
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-orange);
+}
+
+/* Light Mode Glassmorphism/Sticky nav */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+
