@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"CPE-691015/internal/config"
+	"CPE-691015/internal/midlewares"
 	"CPE-691015/internal/routes"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,9 @@ func main() {
 
 	// 2. สร้าง Gin HTTP Engine
 	r := gin.Default()
+
+	// ใช้งาน CORS Middleware ก่อนลงทะเบียน Routes เพื่อให้อนุญาตการเข้าถึงจาก Next.js
+	r.Use(midlewares.CORSMiddleware())
 
 	// 3. ตั้งค่า Routes
 	routes.SetupRoutes(r)
