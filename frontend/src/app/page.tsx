@@ -1,121 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-// Mock Data
-const FEATURES = [
-  {
-    title: 'Smart Video Analysis',
-    description: 'บันทึกและวิเคราะห์ฟอร์มการเล่น การเคลื่อนไหวเท้า และความเร็วลูกตบด้วย AI ช่วยให้จับจุดบกพร่องและแก้ไขได้ทันที',
-    icon: (
-      <svg className="w-6 h-6 text-green-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Professional Coaches',
-    description: 'เรียนรู้กับอดีตนักกีฬาทีมชาติและโค้ชที่ได้รับใบรับรองระดับสากล ดูแลอย่างใกล้ชิดและออกแบบแผนการสอนเฉพาะบุคคล',
-    icon: (
-      <svg className="w-6 h-6 text-orange-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Flexible Scheduling',
-    description: 'จองคลาสเรียนและจัดการตารางเวลาผ่านระบบออนไลน์ด้วยตัวเอง เช็คประวัติการเข้าเรียนและจัดการชั่วโมงเรียนที่เหลือได้ง่ายๆ',
-    icon: (
-      <svg className="w-6 h-6 text-green-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Transparent Billing',
-    description: 'ตรวจสอบบิลค่าเรียน ใบแจ้งหนี้ และประวัติการชำระเงินย้อนหลังได้อย่างปลอดภัย พร้อมระบบอัปโหลดหลักฐานการจ่ายเงินที่สะดวกรวดเร็ว',
-    icon: (
-      <svg className="w-6 h-6 text-orange-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-];
-
-const COURSES = [
-  {
-    id: 1,
-    title: 'Junior Badminton Basics',
-    category: 'beginners',
-    age: 'อายุ 6 - 12 ปี',
-    lessons: '10 คลาส (15 ชม.)',
-    price: '4,500 บาท',
-    description: 'ปูพื้นฐานการจับไม้ การยืน ท่าทาง และการเคลื่อนไหวพื้นฐานอย่างสนุกสนานสำหรับเด็กๆ',
-  },
-  {
-    id: 2,
-    title: 'Adult Basic & Stroke Play',
-    category: 'beginners',
-    age: 'อายุ 15 ปีขึ้นไป',
-    lessons: '10 คลาส (20 ชม.)',
-    price: '6,000 บาท',
-    description: 'ฝึกฝนท่าการตีลูกโฟร์แฮนด์-แบ็คแฮนด์ การเซฟลูก ลูกดาด และทักษะพื้นฐานสำหรับผู้เริ่มต้น',
-  },
-  {
-    id: 3,
-    title: 'Intermediate Tactics & Court Play',
-    category: 'intermediate',
-    age: 'ทุกช่วงอายุที่มีพื้นฐาน',
-    lessons: '12 คลาส (24 ชม.)',
-    price: '7,500 บาท',
-    description: 'เจาะลึกเทคนิคการเคลื่อนที่บนคอร์ท (Footwork) วิธีวางแผนเกมบุก เกมรับ และทักษะการประสานงานประเภทคู่',
-  },
-  {
-    id: 4,
-    title: 'Elite Tournament Preparation',
-    category: 'elite',
-    age: 'เน้นส่งแข่ง',
-    lessons: '16 คลาส (32 ชม.)',
-    price: '9,900 บาท',
-    description: 'คอร์สเข้มข้นสำหรับนักกีฬาส่งแข่ง เน้นพละกำลัง ความเร็ว ความอึด แท็กติกขั้นสูง และวิเคราะห์ฟอร์มด้วยวิดีโอ',
-  },
-  {
-    id: 5,
-    title: 'Private 1-on-1 Coaching',
-    category: 'elite',
-    age: 'ทุกช่วงอายุ',
-    lessons: '1 คลาส (2 ชม.)',
-    price: '1,500 บาท / ครั้ง',
-    description: 'เรียนเดี่ยวตัวต่อตัวกับโค้ช เลือกเน้นจุดที่ต้องการแก้ไขหรือฝึกซ้อมเฉพาะทักษะได้อย่างรวดเร็ว',
-  },
-];
-
-const COACHES = [
-  {
-    name: 'โค้ชกิตติพงษ์ (Coach Kit)',
-    role: 'Head Coach & Founder',
-    experience: 'อดีตนักกีฬาทีมชาติไทยประเภทเดี่ยว ประсบการณ์สอนกว่า 12 ปี',
-    specialty: 'เทคนิคการเคลื่อนที่ (Footwork) และแผนการแข่งขันประเภทเดี่ยว',
-    rating: '5.0',
-  },
-  {
-    name: 'โค้ชสุนิสา (Coach May)',
-    role: 'Senior Youth Coach',
-    experience: 'อดีตผู้ฝึกสอนเยาวชนทีมจังหวัด ใบรับรองระดับ B-License',
-    specialty: 'ปูพื้นฐานเด็กเยาวชน การจัดระเบียบร่างกาย และการเสิร์ฟ/หยอด',
-    rating: '4.9',
-  },
-  {
-    name: 'โค้ชทีรุตม์ (Coach T)',
-    role: 'Tactical Coach & Video Analyst',
-    experience: 'ผู้เชี่ยวชาญด้านวิทยาศาสตร์การกีฬาและเทคโนโลยีวิดีโอวิเคราะห์การเล่น',
-    specialty: 'วิเคราะห์ฟอร์มการตบลูก (Smash Speed) และฟิตเนสสร้างพลังกล้ามเนื้อ',
-    rating: '4.9',
-  },
-];
+import Icons from '../components/ui/Icons';
+import { FEATURES, COURSES, FALLBACK_COACHES } from '../constants/mockData';
+import { getUICoaches } from '../services/coachService';
+import { UICoach } from '../types/coach';
 
 export default function Home() {
-  const [coaches, setCoaches] = useState(COACHES);
+  const [coaches, setCoaches] = useState<UICoach[]>(FALLBACK_COACHES);
   const [activeTab, setActiveTab] = useState('all');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [role, setRole] = useState('student'); // student | coach | admin
@@ -126,26 +18,9 @@ export default function Home() {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/coaches')
-      .then(res => {
-        if (!res.ok) throw new Error('API failed');
-        return res.json();
-      })
-      .then(data => {
-        if (data && data.length > 0) {
-          const mapped = data.map((c: any) => ({
-            name: `โค้ช${c.nickname || c.first_name} (${c.first_name} ${c.last_name})`,
-            role: c.specialization ? 'Coach Staff' : 'Senior Coach',
-            experience: `ผู้ฝึกสอนของสถาบัน เบอร์โทรติดต่อ: ${c.phone}`,
-            specialty: c.specialization || 'ทักษะแบดมินตันทั่วไป',
-            rating: '4.9',
-          }));
-          setCoaches(mapped);
-        }
-      })
-      .catch(err => {
-        console.log('Backend API is down or empty, using mock coaches data:', err);
-      });
+    getUICoaches().then(data => {
+      setCoaches(data);
+    });
   }, []);
 
   // Filter courses
@@ -279,25 +154,28 @@ export default function Home() {
             <p className="text-3xl md:text-4xl font-bold text-slate-800 tracking-tight">
               ทำไมต้องเรียนกับ Smash Academy?
             </p>
-            <p className="text-slate-500 mt-4 text-sm leading-relaxed">
+            <p className="text-slate-555 mt-4 text-sm leading-relaxed">
               เราผสมผสานกีฬาและเทคโนโลยีการซ้อมรูปแบบใหม่เข้าด้วยกัน เพื่อยกระดับผู้เรียนอย่างรวดเร็วและปลอดภัย
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {FEATURES.map((feat, idx) => (
-              <div key={idx} className="p-8 rounded-2xl bg-white border border-slate-200/80 flex gap-6 hover:shadow-md transition-all">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                  idx % 2 === 0 ? 'bg-green-glow' : 'bg-orange-glow'
-                }`}>
-                  {feat.icon}
+            {FEATURES.map((feat, idx) => {
+              const IconComponent = Icons[feat.iconName as keyof typeof Icons] || Icons.CheckCircle;
+              return (
+                <div key={idx} className="p-8 rounded-2xl bg-white border border-slate-200/80 flex gap-6 hover:shadow-md transition-all">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                    idx % 2 === 0 ? 'bg-green-glow' : 'bg-orange-glow'
+                  }`}>
+                    <IconComponent className={`w-6 h-6 ${idx % 2 === 0 ? 'text-green-accent' : 'text-orange-primary'}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">{feat.title}</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">{feat.description}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 mb-2">{feat.title}</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">{feat.description}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -310,7 +188,7 @@ export default function Home() {
             <p className="text-3xl md:text-4xl font-bold text-slate-800 tracking-tight">
               หลักสูตรและแพ็กเกจเรียน
             </p>
-            <p className="text-slate-500 mt-4 text-sm leading-relaxed">
+            <p className="text-slate-555 mt-4 text-sm leading-relaxed">
               ตอบโจทย์ทั้งการปูพื้นฐานเยาวชน การซ้อมเพื่อสุขภาพ หรือเทรนความฟิตเตรียมความพร้อมแข่งทัวร์นาเมนต์
             </p>
           </div>
@@ -406,7 +284,7 @@ export default function Home() {
                   <p className="text-xs text-slate-600 font-semibold mb-4 leading-relaxed">
                     🎓 {coach.experience}
                   </p>
-                  <p className="text-slate-500 text-xs leading-relaxed">
+                  <p className="text-slate-555 text-xs leading-relaxed">
                     🎯 <span className="font-semibold text-slate-700">จุดเด่น:</span> {coach.specialty}
                   </p>
                 </div>
@@ -501,7 +379,7 @@ export default function Home() {
               ) : (
                 <form onSubmit={handleContactSubmit} className="grid gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">ชื่อ-นามสกุลของคุณ</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">ชื่อ-นามสกุลของคุณ</label>
                     <input
                       type="text"
                       required
@@ -513,7 +391,7 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">อีเมลติดต่อ</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">อีเมลติดต่อ</label>
                     <input
                       type="email"
                       required
@@ -525,7 +403,7 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">ข้อความหรือรายละเอียดหลักสูตรที่สนใจ</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">ข้อความหรือรายละเอียดหลักสูตรที่สนใจ</label>
                     <textarea
                       required
                       rows={4}
@@ -601,8 +479,8 @@ export default function Home() {
                 
                 {/* Role Switcher */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-2">บทบาทผู้ใช้งานของคุณ</label>
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                  <label className="block text-xs font-bold text-slate-555 mb-2">บทบาทผู้ใช้งานของคุณ</label>
+                  <div className="grid grid-cols-3 gap-2 bg-slate-55 p-1.5 rounded-lg border border-slate-200">
                     {['student', 'coach', 'admin'].map((r) => (
                       <button
                         key={r}
@@ -623,7 +501,7 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">ชื่อผู้ใช้งาน (Username)</label>
+                  <label className="block text-xs font-bold text-slate-555 mb-1.5">ชื่อผู้ใช้งาน (Username)</label>
                   <input
                     type="text"
                     required
@@ -635,7 +513,7 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">รหัสผ่าน (Password)</label>
+                  <label className="block text-xs font-bold text-slate-555 mb-1.5">รหัสผ่าน (Password)</label>
                   <input
                     type="password"
                     required
