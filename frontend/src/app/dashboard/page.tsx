@@ -2,66 +2,13 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-
-// --- ICONS (SVGs) ---
-const Icons = {
-  Home: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-    </svg>
-  ),
-  Calendar: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  ),
-  Video: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-  ),
-  Billing: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
-  ),
-  Users: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-    </svg>
-  ),
-  Attendance: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  ),
-  Feedback: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-    </svg>
-  ),
-  Settings: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  Announce: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-    </svg>
-  ),
-  Logout: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-    </svg>
-  ),
-  Chart: () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-    </svg>
-  )
-};
+import Icons from '../../components/ui/Icons';
+import Sidebar from '../../components/layout/Sidebar';
+import MobileNavbar from '../../components/layout/MobileNavbar';
+import { ROLE_CONFIGS } from '../../constants/navigation';
+import { getDashboardCoaches } from '../../services/coachService';
+import { INITIAL_ATTENDANCE_LIST, FALLBACK_DASHBOARD_COACHES } from '../../constants/mockData';
+import { DashboardCoach } from '../../types/coach';
 
 // --- CORE DASHBOARD COMPONENT ---
 function DashboardContent() {
@@ -69,7 +16,7 @@ function DashboardContent() {
   const router = useRouter();
 
   // Get active role from URL params, default is 'student'
-  const [role, setRole] = useState('student');
+  const [role, setRole] = useState<'student' | 'coach' | 'admin'>('student');
   const [currentTab, setCurrentTab] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -77,7 +24,7 @@ function DashboardContent() {
   useEffect(() => {
     const roleParam = searchParams.get('role');
     if (roleParam && ['student', 'coach', 'admin'].includes(roleParam)) {
-      setRole(roleParam);
+      setRole(roleParam as 'student' | 'coach' | 'admin');
     }
   }, [searchParams]);
 
@@ -88,45 +35,19 @@ function DashboardContent() {
 
   // Change role dynamically
   const switchRole = (newRole: string) => {
-    setRole(newRole);
+    setRole(newRole as 'student' | 'coach' | 'admin');
     router.push(`/dashboard?role=${newRole}`);
   };
 
   // --- MOCK INTERACTIVE STATES ---
-  const [attendanceList, setAttendanceList] = useState([
-    { id: 101, name: 'เด็กชาย ภูมินทร์ (น้องภู)', status: 'unchecked', time: '16:00' },
-    { id: 102, name: 'เด็กหญิง นภัสสร (น้องครีม)', status: 'checked', time: '16:00' },
-    { id: 103, name: 'นาย อัครพล (เจมส์)', status: 'unchecked', time: '18:00' },
-    { id: 104, name: 'นางสาว พรนภา (ก้อย)', status: 'absent', time: '18:00' },
-  ]);
-
-  const [coaches, setCoaches] = useState([
-    { id: 1, name: 'โค้ชกิตติพงษ์ (Coach Kit)', role: 'Head Coach', hours: '42 ชั่วโมง', status: 'ปกติ' },
-    { id: 2, name: 'โค้ชสุนิสา (Coach May)', role: 'Senior Coach', hours: '35 ชั่วโมง', status: 'ปกติ' },
-  ]);
+  const [attendanceList, setAttendanceList] = useState(INITIAL_ATTENDANCE_LIST);
+  const [coaches, setCoaches] = useState<DashboardCoach[]>(FALLBACK_DASHBOARD_COACHES);
 
   useEffect(() => {
     if (role === 'admin' && currentTab === 'coaches') {
-      fetch('http://localhost:8080/api/coaches')
-        .then(res => {
-          if (!res.ok) throw new Error('API failed');
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.length > 0) {
-            const mapped = data.map((c: any) => ({
-              id: c.ID || Math.random(),
-              name: `โค้ช${c.nickname || c.first_name} (${c.first_name} ${c.last_name})`,
-              role: c.specialization || 'สตาฟผู้ฝึกสอน',
-              hours: c.phone ? `ติดต่อ: ${c.phone}` : '42 ชั่วโมง',
-              status: 'ปกติ'
-            }));
-            setCoaches(mapped);
-          }
-        })
-        .catch(err => {
-          console.log('Backend not available, using mock coaches list:', err);
-        });
+      getDashboardCoaches().then(data => {
+        setCoaches(data);
+      });
     }
   }, [role, currentTab]);
 
@@ -136,131 +57,26 @@ function DashboardContent() {
     ));
   };
 
-  // --- CONFIGURATIONS FOR EACH ROLE ---
-  const roleConfigs: {
-    [key: string]: {
-      title: string;
-      user: { name: string; avatar: string; email: string };
-      menu: { id: string; label: string; icon: React.ReactNode }[];
-    };
-  } = {
-    student: {
-      title: 'Student Portal',
-      user: { name: 'ภูมินทร์ ใจดี (น้องภู)', avatar: '👦', email: 'phumin@gmail.com' },
-      menu: [
-        { id: 'home', label: 'หน้าหลัก', icon: <Icons.Home /> },
-        { id: 'classes', label: 'คลาสเรียนของฉัน', icon: <Icons.Calendar /> },
-        { id: 'video', label: 'วิเคราะห์การเล่น (AI)', icon: <Icons.Video /> },
-        { id: 'billing', label: 'ใบเสร็จ & การเงิน', icon: <Icons.Billing /> },
-        { id: 'settings', label: 'ตั้งค่าระบบ', icon: <Icons.Settings /> }
-      ]
-    },
-    coach: {
-      title: 'Coach Portal',
-      user: { name: 'โค้ชกิตติพงษ์ (Coach Kit)', avatar: '🏸', email: 'kit.coach@smash.com' },
-      menu: [
-        { id: 'home', label: 'หน้าหลัก', icon: <Icons.Home /> },
-        { id: 'classes', label: 'ตารางสอนของฉัน', icon: <Icons.Calendar /> },
-        { id: 'attendance', label: 'เช็คชื่อเข้าเรียน', icon: <Icons.Attendance /> },
-        { id: 'feedback', label: 'ประเมินฟอร์มนักเรียน', icon: <Icons.Feedback /> },
-        { id: 'settings', label: 'ตั้งค่าระบบ', icon: <Icons.Settings /> }
-      ]
-    },
-    admin: {
-      title: 'Admin Console',
-      user: { name: 'ผู้บริหาร ณัฐพล (Admin)', avatar: '💼', email: 'admin@smashacademy.com' },
-      menu: [
-        { id: 'home', label: 'หน้าภาพรวม (Overview)', icon: <Icons.Chart /> },
-        { id: 'coaches', label: 'จัดการข้อมูลโค้ช', icon: <Icons.Users /> },
-        { id: 'students', label: 'จัดการข้อมูลนักเรียน', icon: <Icons.Users /> },
-        { id: 'billing', label: 'ระบบบัญชี & ค่าเล่าเรียน', icon: <Icons.Billing /> },
-        { id: 'announcements', label: 'ประชาสัมพันธ์ข่าว', icon: <Icons.Announce /> },
-        { id: 'settings', label: 'ตั้งค่าระบบ', icon: <Icons.Settings /> }
-      ]
-    }
-  };
-
-  const config = roleConfigs[role] || roleConfigs.student;
+  const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.student;
 
   return (
     <div className="min-h-screen bg-background text-slate-800 flex flex-col md:flex-row">
       
       {/* --- MOBILE NAVBAR --- */}
-      <div className="md:hidden flex items-center justify-between px-6 h-16 bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded bg-orange-primary flex items-center justify-center font-bold text-white">S</div>
-          <span className="font-bold text-sm tracking-wider uppercase text-slate-800">{config.title}</span>
-        </div>
-        <button 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="text-slate-500 hover:text-slate-800"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            {mobileMenuOpen ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            )}
-          </svg>
-        </button>
-      </div>
+      <MobileNavbar 
+        role={role} 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen} 
+      />
 
       {/* --- SIDEBAR --- */}
-      <aside className={`w-full md:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 md:sticky md:top-0 md:h-screen z-20 transition-all ${
-        mobileMenuOpen ? 'block' : 'hidden md:flex'
-      }`}>
-        {/* Brand Header */}
-        <div className="p-6 border-b border-slate-200 hidden md:flex items-center gap-2">
-          <div className="w-10 h-10 rounded-lg bg-orange-primary flex items-center justify-center font-bold text-white text-xl shadow-sm shadow-orange-primary/10">S</div>
-          <div>
-            <h1 className="font-bold text-sm text-slate-800 tracking-wider uppercase">SMASH ACADEMY</h1>
-            <p className="text-[10px] text-green-accent font-bold uppercase">{config.title}</p>
-          </div>
-        </div>
-
-        {/* User Card */}
-        <div className="p-6 border-b border-slate-100 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl">
-            {config.user.avatar}
-          </div>
-          <div className="overflow-hidden">
-            <h2 className="font-bold text-sm text-slate-800 truncate">{config.user.name}</h2>
-            <p className="text-xs text-slate-500 truncate">{config.user.email}</p>
-          </div>
-        </div>
-
-        {/* Menu Items */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {config.menu.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                setCurrentTab(item.id);
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                currentTab === item.id
-                  ? 'bg-orange-primary text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        {/* Sidebar Footer / Log out */}
-        <div className="p-4 border-t border-slate-150">
-          <button 
-            onClick={() => window.location.href = '/'}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer"
-          >
-            <Icons.Logout />
-            ออกจากระบบ (Log Out)
-          </button>
-        </div>
-      </aside>
+      <Sidebar
+        role={role}
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
 
       {/* --- MAIN CONTENT AREA --- */}
       <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl mx-auto w-full">
@@ -319,7 +135,7 @@ function DashboardContent() {
                     <div>
                       <div className="text-[10px] text-slate-400 font-bold uppercase mb-2">การวิเคราะห์ฟอร์มล่าสุด</div>
                       <div className="text-sm font-bold text-slate-800">วิเคราะห์จังหวะการขึ้นตบ (Smash)</div>
-                      <p className="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-2">
+                      <p className="text-xs text-slate-555 mt-2 leading-relaxed line-clamp-2">
                         "สะบัดข้อมือได้เร็วขึ้นแล้ว แต่ยังต้องปรับจังหวะการกระโดดให้รับลูกพอดีหน้า..."
                       </p>
                       <span className="inline-block mt-2.5 text-[9px] bg-green-glow border border-green-accent/20 text-green-accent px-2 py-0.5 rounded font-bold">
@@ -435,7 +251,7 @@ function DashboardContent() {
                   <div className="space-y-4">
                     <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-sm">
                       <h4 className="font-bold text-xs text-slate-800 mb-3">💬 รายงานประเมินจากโค้ชทีรุตม์</h4>
-                      <p className="text-xs text-slate-550 leading-relaxed">
+                      <p className="text-xs text-slate-555 leading-relaxed">
                         "จากการบันทึกวิดีโอความเร็วตบวัดได้สูงสุด 184 กม./ชม. องศาไม้ในจังหวะสัมผัสลูกเหมาะสมมาก แต่จุดที่ต้องระวังคือเท้าข้างซ้ายยังไม่รับน้ำหนักตอนก้าวถอยหลังตบ ทำให้เสียสมดุลส่งผลให้วางลูกยาวได้ไม่แม่นยำ"
                       </p>
                       <div className="mt-6 pt-4 border-t border-slate-100 text-xs">
@@ -486,15 +302,15 @@ function DashboardContent() {
                 <div className="p-6 rounded-xl border border-slate-200 bg-white max-w-lg shadow-sm">
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">ชื่อผู้เรียน</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">ชื่อผู้เรียน</label>
                       <input type="text" readOnly value="เด็กชาย ภูมินทร์ ใจดี" className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-500 focus:outline-none" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">เบอร์โทรศัพท์ผู้ปกครอง</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">เบอร์โทรศัพท์ผู้ปกครอง</label>
                       <input type="text" defaultValue="089-999-8888" className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">อีเมลที่ผูกกับบัญชี</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">อีเมลที่ผูกกับบัญชี</label>
                       <input type="text" readOnly value="phumin@gmail.com" className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-500 focus:outline-none" />
                     </div>
                     <button className="px-5 py-2 bg-orange-primary text-white font-bold text-xs rounded-lg hover:bg-orange-hover cursor-pointer">บันทึกข้อมูลส่วนตัว</button>
@@ -662,7 +478,7 @@ function DashboardContent() {
 
                 <div className="p-6 rounded-xl border border-slate-200 bg-white max-w-xl space-y-4 shadow-sm">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">เลือกนักเรียนที่ต้องการส่งผลการประเมิน</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">เลือกนักเรียนที่ต้องการส่งผลการประเมิน</label>
                     <select className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:border-orange-primary">
                       <option>เด็กชาย ภูมินทร์ ใจดี (น้องภู)</option>
                       <option>เด็กหญิง นภัสสร สุขสบาย (น้องครีม)</option>
@@ -671,7 +487,7 @@ function DashboardContent() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">ประเภทการประเมิน</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">ประเภทการประเมิน</label>
                     <div className="flex gap-2">
                       <button className="px-3 py-1.5 bg-orange-glow border border-orange-primary/20 text-orange-primary text-xs font-bold rounded">ทักษะการตี (Stroke)</button>
                       <button className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold rounded hover:text-slate-850">ความรวดเร็ว (Footwork)</button>
@@ -680,12 +496,12 @@ function DashboardContent() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">ผลวิเคราะห์และคำติชม</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">ผลวิเคราะห์และคำติชม</label>
                     <textarea rows={4} placeholder="เขียนคำประเมิน พฤติกรรมการซ้อม จุดดี และจุดที่โค้ชแนะนำให้ผู้เรียนนำไปทบทวน..." className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:border-orange-primary resize-none" />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">ลิงก์วิดีโอ (อัปโหลดทาง Google Drive / YouTube)</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">ลิงก์วิดีโอ (อัปโหลดทาง Google Drive / YouTube)</label>
                     <input type="text" placeholder="https://youtube.com/watch?v=..." className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                   </div>
 
@@ -706,11 +522,11 @@ function DashboardContent() {
                 <div className="p-6 rounded-xl border border-slate-200 bg-white max-w-lg shadow-sm">
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">ชื่อโค้ช</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">ชื่อโค้ช</label>
                       <input type="text" readOnly value="โค้ชกิตติพงษ์ ใจงาม" className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-500 focus:outline-none" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">ความเชี่ยวชาญส่วนตัว</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">ความเชี่ยวชาญส่วนตัว</label>
                       <input type="text" defaultValue="การเคลื่อนไหวทางเท้าและจังหวะบุกตบเดี่ยว" className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                     </div>
                     <button className="px-5 py-2 bg-orange-primary text-white font-bold text-xs rounded-lg hover:bg-orange-hover cursor-pointer">บันทึกข้อมูลส่วนตัว</button>
@@ -886,11 +702,11 @@ function DashboardContent() {
                 <p className="text-slate-500 text-xs">เขียนข่าว ประกาศระเบียบการ และการหยุดทำการ เพื่อให้นักเรียนเปิดเห็นในแดชบอร์ดหลัก</p>
                 <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-sm max-w-xl space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">หัวข้อข่าวประกาศ</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">หัวข้อข่าวประกาศ</label>
                     <input type="text" placeholder="เช่น แจ้งสถาบันแบดมินตันหยุดทำการ 1 วัน..." className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">รายละเอียดประกาศ</label>
+                    <label className="block text-xs font-bold text-slate-555 mb-1.5">รายละเอียดประกาศ</label>
                     <textarea rows={4} placeholder="พิมพ์ข้อความที่ต้องการแจ้งให้นักเรียนและสตาฟรับรู้..." className="w-full bg-white border border-slate-200 rounded-lg py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:border-orange-primary resize-none" />
                   </div>
                   <button onClick={() => alert('เผยแพร่ประกาศลงสู่หน้าหลักแดชบอร์ดของทุกคนเรียบร้อย')} className="px-5 py-2.5 bg-orange-primary text-white font-bold text-xs rounded-lg hover:bg-orange-hover cursor-pointer">เผยแพร่ประกาศนี้</button>
@@ -905,11 +721,11 @@ function DashboardContent() {
                 <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-sm max-w-lg">
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">ชื่อทางการของสถาบัน</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">ชื่อทางการของสถาบัน</label>
                       <input type="text" defaultValue="สมาส แบดมินตัน อะคาเดมี สาขาลาดพร้าว" className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">จำนวนชั่วโมงของหนึ่งคลาสเรียนมาตรฐาน</label>
+                      <label className="block text-xs font-bold text-slate-555 mb-1.5">จำนวนชั่วโมงของหนึ่งคลาสเรียนมาตรฐาน</label>
                       <input type="text" defaultValue="2 ชั่วโมง" className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-orange-primary" />
                     </div>
                     <button className="px-5 py-2 bg-orange-primary text-white font-bold text-xs rounded-lg hover:bg-orange-hover cursor-pointer">บันทึกพารามิเตอร์</button>
