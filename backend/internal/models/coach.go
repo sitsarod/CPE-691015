@@ -6,12 +6,10 @@ import (
 
 type Coach struct {
 	gorm.Model
-
-	FirstName      string `json:"first_name" gorm:"type:varchar(100)" valid:"required~firstName is required"`
-	LastName       string `json:"last_name" gorm:"type:varchar(100)" valid:"required~lastName is required"`
-	Email          string `json:"email" gorm:"type:varchar(100);unique" valid:"required~email is required"`
+	UserID            uint            `json:"user_id" valid:"required~UserID is required"`
+    User              *User           `json:"user" ` 
+	
 	Phone          string `json:"phone" gorm:"type:varchar(20)" valid:"required~phone is required"`
-	Password       string `json:"password" gorm:"type:varchar(255)" valid:"required~password is required"`
 	Uid            string `json:"uid" gorm:"type:varchar(255);unique" valid:"required~uid is required"`
 	Address        string `json:"address" gorm:"type:varchar(255)" valid:"required~address is required"`
 	BirthDate      string `json:"birth_date" gorm:"type:date" valid:"required~birthDate is required"` // ปรับเป็น type:date เพื่อมาตรฐานข้อมูล

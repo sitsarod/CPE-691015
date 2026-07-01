@@ -20,7 +20,8 @@ type User struct {
 	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,email~Invalid email format"`
 	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
-	Customers          []Customer          `json:"customer" gorm:"foreignKey:UserID"`
+	Customer          *Customer          `json:"customer" gorm:"foreignKey:UserID"`
+	Coach     		  *Coach             `json:"coach" gorm:"foreignKey:UserID"`
 	Courses            []Course           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	StudentAttendances []StudentAttendance `json:"studentAttendances" gorm:"foreignKey:UserID"`
 
@@ -32,3 +33,4 @@ type User struct {
 
 	Announcements []Announcement `json:"announcements" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 }
+
