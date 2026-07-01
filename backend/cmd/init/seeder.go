@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"CPE-691015/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -31,26 +32,27 @@ func seedBillingTypes(db *gorm.DB) {
 }
 
 func seedAdmins(db *gorm.DB) {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	admins := []models.User{
 		{
 			FirstName: "สมชาย",
 			LastName:  "แอดมินดีดี",
 			Email:     "admin1@example.com",
-			Password:  "password123",
+			Password:  string(hashedPassword),
 			Role:      models.AdminRole,
 		},
 		{
 			FirstName: "สมหญิง",
 			LastName:  "แอดมินเก่ง",
 			Email:     "admin2@example.com",
-			Password:  "password123",
+			Password:  string(hashedPassword),
 			Role:      models.AdminRole,
 		},
 		{
 			FirstName: "ณรงค์",
 			LastName:  "แอดมินหลัก",
 			Email:     "admin3@example.com",
-			Password:  "password123",
+			Password:  string(hashedPassword),
 			Role:      models.AdminRole,
 		},
 	}
@@ -74,14 +76,29 @@ func seedAdmins(db *gorm.DB) {
 }
 
 func seedCoaches(db *gorm.DB) {
-	coaches := []models.Coach{
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+
+	// แกะข้อมูลออกมาพักไว้ใน Struct จำลองเพื่อแจกจ่ายลง 2 ตาราง
+	coachData := []struct {
+		FirstName      string
+		LastName       string
+		Email          string
+		Nickname       string
+		Phone          string
+		Uid            string
+		Address        string
+		BirthDate      string
+		ProfilePicture string
+		Specialization string
+		BankAccount    string
+		PaymentInfo    string
+	}{
 		{
 			FirstName:      "ธีรศิลป์",
 			LastName:       "โค้ชเก่ง",
-			Nickname:       "โค้ชบอล",
 			Email:          "coach1@example.com",
+			Nickname:       "โค้ชบอล",
 			Phone:          "0812345678",
-			Password:       "password123",
 			Uid:            "C001",
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
@@ -93,10 +110,9 @@ func seedCoaches(db *gorm.DB) {
 		{
 			FirstName:      "ชนาธิป",
 			LastName:       "โค้ชไว",
-			Nickname:       "โค้ชเจ",
 			Email:          "coach2@example.com",
+			Nickname:       "โค้ชเจ",
 			Phone:          "0823456789",
-			Password:       "password123",
 			Uid:            "C002",
 			Address:        "456/78 ถ.เพชรบุรี กรุงเทพฯ",
 			BirthDate:      "1993-10-05",
@@ -108,10 +124,9 @@ func seedCoaches(db *gorm.DB) {
 		{
 			FirstName:      "สารัช",
 			LastName:       "โค้ชแกร่ง",
-			Nickname:       "โค้ชตัง",
 			Email:          "coach3@example.com",
+			Nickname:       "โค้ชตัง",
 			Phone:          "0834567890",
-			Password:       "password123",
 			Uid:            "C003",
 			Address:        "789/12 ถ.พหลโยธิน กรุงเทพฯ",
 			BirthDate:      "1992-05-30",
@@ -122,50 +137,62 @@ func seedCoaches(db *gorm.DB) {
 		},
 	}
 
-	for _, coach := range coaches {
-		var existingCoach models.Coach
-		if err := db.Where("email = ?", coach.Email).First(&existingCoach).Error; err != nil {
+	for _, data := range coachData {
+		var existingUser models.User
+		if err := db.Where("email = ?", data.Email).First(&existingUser).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				err := db.Transaction(func(tx *gorm.DB) error {
-					if err := tx.Create(&coach).Error; err != nil {
-						return err
-					}
-					// Create corresponding User record
+					// 1. สร้าง User ตัวหลัก
 					user := models.User{
-						FirstName: coach.FirstName,
-						LastName:  coach.LastName,
-						Email:     coach.Email,
-						Password:  coach.Password,
+						FirstName: data.FirstName,
+						LastName:  data.LastName,
+						Email:     data.Email,
+						Password:  string(hashedPassword),
 						Role:      models.CoachRole,
 					}
-					var existingUser models.User
-					if err := tx.Where("email = ?", coach.Email).First(&existingUser).Error; err != nil {
-						if err := tx.Create(&user).Error; err != nil {
-							return err
-						}
+					if err := tx.Create(&user).Error; err != nil {
+						return err
 					}
-					return nil
+
+					// 2. ✅ ยัดข้อมูลลง Coach ตามโมเดลจริง ไม่มีฟิลด์ของ User เกินมาแล้ว
+					coach := models.Coach{
+						UserID:         user.ID,
+						Nickname:       data.Nickname,
+						Phone:          data.Phone,
+						Uid:            data.Uid,
+						Address:        data.Address,
+						BirthDate:      data.BirthDate,
+						ProfilePicture: data.ProfilePicture,
+						Specialization: data.Specialization,
+						BankAccount:    data.BankAccount,
+						PaymentInfo:    data.PaymentInfo,
+					}
+					return tx.Create(&coach).Error
 				})
+
 				if err != nil {
-					log.Printf("ไม่สามารถสร้าง Coach %s ได้: %v", coach.Email, err)
+					log.Printf("ไม่สามารถสร้าง Coach %s ได้: %v", data.Email, err)
 				} else {
-					fmt.Printf("Seed Coach %s สำเร็จเรียบร้อย!\n", coach.Email)
+					fmt.Printf("Seed Coach %s สำเร็จเรียบร้อย!\n", data.Email)
 				}
 			} else {
-				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบ Coach %s: %v", coach.Email, err)
+				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบ Coach %s: %v", data.Email, err)
 			}
 		} else {
-			fmt.Printf("ข้ามขั้นตอนการ Seed Coach %s เนื่องจากมีข้อมูลอยู่แล้ว\n", coach.Email)
+			fmt.Printf("ข้ามขั้นตอนการ Seed Coach %s เนื่องจากมีข้อมูลอยู่แล้ว\n", data.Email)
 		}
 	}
 }
 
 func seedCustomers(db *gorm.DB) {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+
 	customerData := []struct {
 		FirstName         string
 		LastName          string
 		Email             string
 		Password          string
+		Nickname          string
 		PhoneNumber       string
 		BirthDate         time.Time
 		ParentEmail       string
@@ -177,7 +204,8 @@ func seedCustomers(db *gorm.DB) {
 			FirstName:         "สมศักดิ์",
 			LastName:          "รักเรียน",
 			Email:             "student1@example.com",
-			Password:          "password123",
+			Password:          string(hashedPassword),
+			Nickname:          "ศักดิ์",
 			PhoneNumber:       "0845678901",
 			BirthDate:         time.Date(2010, 1, 15, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent1@example.com",
@@ -189,7 +217,8 @@ func seedCustomers(db *gorm.DB) {
 			FirstName:         "สุดา",
 			LastName:          "ใจเรียน",
 			Email:             "student2@example.com",
-			Password:          "password123",
+			Password:          string(hashedPassword),
+			Nickname:          "ดา",
 			PhoneNumber:       "0856789012",
 			BirthDate:         time.Date(2012, 5, 20, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent2@example.com",
@@ -201,7 +230,8 @@ func seedCustomers(db *gorm.DB) {
 			FirstName:         "มานะ",
 			LastName:          "พากเพียร",
 			Email:             "student3@example.com",
-			Password:          "password123",
+			Password:          string(hashedPassword),
+			Nickname:          "นะ",
 			PhoneNumber:       "0867890123",
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@example.com",
@@ -212,37 +242,27 @@ func seedCustomers(db *gorm.DB) {
 	}
 
 	for _, data := range customerData {
-		var existingCustomer models.Customer
-		if err := db.Where("email = ?", data.Email).First(&existingCustomer).Error; err != nil {
+		var user models.User
+		if err := db.Where("email = ?", data.Email).First(&user).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				err := db.Transaction(func(tx *gorm.DB) error {
-					// 1. Create/Find User
-					var user models.User
-					if err := tx.Where("email = ?", data.Email).First(&user).Error; err != nil {
-						if err == gorm.ErrRecordNotFound {
-							user = models.User{
-								FirstName: data.FirstName,
-								LastName:  data.LastName,
-								Email:     data.Email,
-								Password:  data.Password,
-								Role:      models.CustomerRole,
-							}
-							if err := tx.Create(&user).Error; err != nil {
-								return err
-							}
-						} else {
-							return err
-						}
+					// 1. สร้าง User
+					user = models.User{
+						FirstName: data.FirstName,
+						LastName:  data.LastName,
+						Email:     data.Email,
+						Password:  data.Password,
+						Role:      models.CustomerRole,
+					}
+					if err := tx.Create(&user).Error; err != nil {
+						return err
 					}
 
-					// 2. Create Customer linking to User.ID
+					// 2. ✅ ยัดข้อมูลลง Customer ตามโมเดลจริง (ไม่มีฟิลด์ First/Last Name, Email, Pass แฝง)
 					customer := models.Customer{
 						UserID:            user.ID,
-						FirstName:         data.FirstName,
-						LastName:          data.LastName,
+						Nickname:          data.Nickname,
 						BirthDate:         data.BirthDate,
-						Email:             data.Email,
-						Password:          data.Password,
 						PhoneNumber:       data.PhoneNumber,
 						ParentEmail:       data.ParentEmail,
 						ParentPhoneNumber: data.ParentPhoneNumber,
@@ -250,11 +270,9 @@ func seedCustomers(db *gorm.DB) {
 						PersonalQRCode:    data.PersonalQRCode,
 						Status:            models.CustomerStatusActive,
 					}
-					if err := tx.Create(&customer).Error; err != nil {
-						return err
-					}
-					return nil
+					return tx.Create(&customer).Error
 				})
+
 				if err != nil {
 					log.Printf("ไม่สามารถสร้าง Customer %s ได้: %v", data.Email, err)
 				} else {
@@ -270,7 +288,6 @@ func seedCustomers(db *gorm.DB) {
 }
 
 func seedCoursesAndPackages(db *gorm.DB) {
-	// ดึงแอดมินคนแรกเพื่อนำ ID มาใช้สร้าง Course
 	var admin models.User
 	if err := db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
 		log.Printf("ไม่สามารถค้นหาแอดมินหลักได้เพื่อสร้างคอร์ส: %v", err)
@@ -278,10 +295,9 @@ func seedCoursesAndPackages(db *gorm.DB) {
 	}
 
 	courseSeeds := []struct {
-		CourseName  string
-		Description string
-		Status      models.CourseStatus
-		// Package info
+		CourseName    string
+		Description   string
+		Status        models.CourseStatus
 		SessionsCount uint
 		HoursCount    uint
 		Price         float64
@@ -314,11 +330,9 @@ func seedCoursesAndPackages(db *gorm.DB) {
 
 	for _, seed := range courseSeeds {
 		var course models.Course
-		// 1. ตรวจสอบคอร์สเรียนด้วยชื่อคอร์ส
 		err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// คอร์สไม่มีอยู่ ให้สร้างคอร์สใหม่
 				course = models.Course{
 					CourseName:  seed.CourseName,
 					Description: seed.Description,
@@ -338,7 +352,6 @@ func seedCoursesAndPackages(db *gorm.DB) {
 			fmt.Printf("ข้ามขั้นตอนการ Seed คอร์ส %s เนื่องจากมีข้อมูลอยู่แล้ว\n", seed.CourseName)
 		}
 
-		// 2. ตรวจสอบและสร้าง Package สำหรับคอร์สนี้
 		var pkg models.Package
 		err = db.Where("course_id = ? AND price = ?", course.ID, seed.Price).First(&pkg).Error
 		if err != nil {
@@ -362,4 +375,3 @@ func seedCoursesAndPackages(db *gorm.DB) {
 		}
 	}
 }
-
