@@ -4,8 +4,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
       
-      {/* 1. เรียกใช้งาน Navbar ตรงส่วนหัว */}
-      <Navbar />
+      
 
       {/* 2. พื้นที่สำหรับใส่รูป (Hero Image) */}
       <main className="w-full flex-1">
