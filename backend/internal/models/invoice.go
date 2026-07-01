@@ -16,9 +16,10 @@ const (
 type PaymentMethod string
 
 const (
-	MethodQR         PaymentMethod = "qr"
-	MethodCash       PaymentMethod = "cash"
-	MethodMasterCard PaymentMethod = "mastercard"
+	MethodQR           PaymentMethod = "qr"
+	MethodBankTransfer PaymentMethod = "bank_transfer"
+	MethodCard         PaymentMethod = "credit_card"
+	MethodCash         PaymentMethod = "cash"
 )
 
 type Invoice struct {

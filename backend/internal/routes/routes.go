@@ -17,6 +17,12 @@ func SetupRoutes(r *gin.Engine) {
 	enrollmentService := services.NewEnrollmentService(db)
 	enrollmentController := controllers.NewEnrollmentController(enrollmentService)
 
+	paymentService := services.NewPaymentService(db)
+	paymentController := controllers.NewPaymentController(paymentService)
+
+	billingService := services.NewBillingService(db)
+	billingController := controllers.NewBillingController(billingService)
+
 	api := r.Group("/api")
 	{
 		api.GET("/coaches", coachController.GetCoaches)
@@ -33,6 +39,20 @@ func SetupRoutes(r *gin.Engine) {
 			enrollmentGroup.POST("/:id/schedules", enrollmentController.SetupSchedule)
 			enrollmentGroup.PUT("/schedules/:id", enrollmentController.UpdateSchedule)
 			enrollmentGroup.DELETE("/schedules/:id", enrollmentController.DeleteSchedule)
+		}
+
+		paymentGroup := api.Group("/payments")
+		{
+			paymentGroup.POST("/invoices", paymentController.CreateInvoice)
+			paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
+			paymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
+			paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
+		}
+
+		billingGroup := api.Group("/billings")
+		{
+			billingGroup.POST("/", billingController.CreateBilling)
+			billingGroup.POST("/split", billingController.CreateSplitBilling)
 		}
 	}
 }
