@@ -31,11 +31,12 @@ func main() {
 	}
 	fmt.Println("เชื่อมต่อสำเร็จแล้ว!")
 	// 2. clear database and auto migrate models
-	//db.Exec("DROP SCHEMA public CASCADE;")
-    //db.Exec("CREATE SCHEMA public;")
+	db.Exec("DROP SCHEMA public CASCADE;")
+    db.Exec("CREATE SCHEMA public;")
 	// สั่ง Auto Migrate โดยดึงโมเดลมาจาก package models
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.Coach{},
 		&models.Product{}, // อย่าลืมสร้างไฟล์ product.go ใน internal/models/
 		&models.Customer{},
 		&models.Photo{},
