@@ -1,31 +1,36 @@
-"use client";
+import Link from "next/link";
+import Image from "next/image";
 
-import Button from "../components/Button";
-
-export default function Home() {
-
+export default function Navbar() {
   return (
-    <div className="pb-16">
-      
-      {/* HERO SECTION */}
-      <section className="py-16 px-6 max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12">
-        <div className="w-full md:w-1/2 text-center md:text-left">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight mb-6">
-            ยกระดับทักษะ <br/><span className="text-green-600">แบดมินตัน</span> ของคุณ
-          </h1>
-          <p className="text-lg text-slate-600 mb-8 max-w-lg mx-auto md:mx-0">
-            ระบบจัดการโรงเรียนสอนแบดมินตันที่ทันสมัย ลงทะเบียนง่าย จัดตารางเรียนสะดวก
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-            <Button variant="secondary" href="/register" className="px-8 py-3.5 text-lg">
-              เริ่มต้นใช้งาน
-            </Button>
-          </div>
+    <nav className="w-full bg-white h-24 flex items-center px-4 md:px-12">
+        <div className="w-full flex justify-between items-center">        
+        {/* โลโก้ฝั่งซ้าย */}
+ <Link href="/" className="flex items-center">
+ 
+          <Image 
+            src="/logo.png"
+            alt="Koyama Badminton School Logo" 
+            width={220} 
+            height={60} 
+            className="object-contain"
+            priority 
+          />
+        </Link>
+
+        {/* เมนูฝั่งขวา */}
+        <div className="hidden md:flex items-center gap-8 text-black text-lg font-medium">
+          <Link href="/staff" className="hover:text-red-600 transition-colors">บุคลากร</Link>
+          <Link href="/courses" className="hover:text-red-600 transition-colors">คอร์สเรียน</Link>
+          <Link href="/about" className="hover:text-red-600 transition-colors">เกี่ยวกับฉัน</Link>
+          
+          {/* เส้นกั้นแนวตั้ง */}
+          <div className="h-6 w-px bg-gray-400 mx-2"></div>
+          
+          <Link href="/login" className="hover:text-red-600 transition-colors">เข้าสู่ระบบ</Link>
         </div>
-        
-      </section>
 
-
-    </div>
+      </div>
+    </nav>
   );
 }
