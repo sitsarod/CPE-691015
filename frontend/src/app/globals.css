@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc; /* Soft minimalist off-white */
+  --background: #ffffff; /* Soft minimalist off-white */
   --foreground: #0f172a; /* Slate 900 text */
   --primary-orange: #f97316; /* Sports Orange */
   --primary-orange-glow: rgba(249, 115, 22, 0.08);
