@@ -87,7 +87,7 @@ func (s *UserService) UpdateUser(id uint, input models.User) (*models.User, erro
 		s.db.Model(user.Coach).Updates(input.Coach)
 	}
 
-	s.db.Preload("Customer").Preload("Coach").First(&user, id) // ดึงข้อมูลล่าสุดหลังอัปเดต
+	s.db.Preload("Customer").Preload("Coach").First(&user, id) //ดึงข้อมูลล่าสุดหลังอัปเดต
 	return &user, nil
 }
 
