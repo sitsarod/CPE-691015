@@ -24,14 +24,16 @@ func main() {
 	if dsn == "" {
 		log.Fatal("กรุณาตั้งค่า DATABASE_URL ในไฟล์ .env ด้วยซะล่ะ!")
 	}
-
+	
 	// เชื่อมต่อฐานข้อมูล
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("เชื่อมต่อฐานข้อมูลไม่สำเร็จ: %v", err)
 	}
 	fmt.Println("เชื่อมต่อสำเร็จแล้ว!")
-
+	// 2. clear database and auto migrate models
+	//db.Exec("DROP SCHEMA public CASCADE;")
+    //db.Exec("CREATE SCHEMA public;")
 	// สั่ง Auto Migrate โดยดึงโมเดลมาจาก package models
 	err = db.AutoMigrate(
 		&models.User{},
