@@ -1,12 +1,13 @@
 package services
 
-import(
+import (
 	"CPE-691015/internal/models"
-	"github.com/golang-jwt/jwt/v5"
-	"time"
-	"gorm.io/gorm"
 	"errors"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type AuthService interface {
@@ -33,14 +34,19 @@ func (s *authService) Login(input models.LoginInput) (string, *models.User, erro
 		}
 		return "", nil, err
 	}
-	if user.Password != input.Password {
+
+	//  เปลี่ยนมาใช้ bcrypt เทียบรหัสลับในดาต้าเบสกับรหัสผ่านดิบที่ได้มาจากหน้าบ้าน
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+	if err != nil {
+		// ถ้าแฮชไม่ตรงกัน แปลว่ารหัสผ่านผิด
 		return "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 	}
+
 	//jwtToken
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
-		"role":   user.Role,
-	"exp":    time.Now().Add(time.Hour * 1).Unix(), // Token expires in 1 hours
+		"role":    user.Role,
+		"exp":     time.Now().Add(time.Hour * 1).Unix(), // Token expires in 1 hours
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtSecret)

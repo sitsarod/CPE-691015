@@ -4,6 +4,7 @@ import (
 	"CPE-691015/internal/config"
 	"CPE-691015/internal/controllers"
 	"CPE-691015/internal/services"
+	"CPE-691015/internal/midlewares"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,12 +28,22 @@ func SetupRoutes(r *gin.Engine) {
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
 	authController := controllers.NewAuthController(authService)
+	r.Use(midlewares.CORSMiddleware())
 
 	api := r.Group("/api")
 	{
+	
+		authGroup := api.Group("/auth")
+        {
+            authGroup.POST("/login", authController.Login) 
+        }
+		
+		protected := api.Group("")
+        protected.Use(midlewares.AuthMiddleware())
+
 		api.GET("/coaches", coachController.GetCoaches)
 		api.POST("/coaches", coachController.CreateCoach)
-		api.POST("/login", authController.Login)
+
 
 		userGroup := api.Group("/users")
 		{

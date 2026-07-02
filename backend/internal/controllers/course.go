@@ -3,15 +3,15 @@ package controllers
 import (
 	"net/http"
 
-	"backend/internal/dto"
-	"backend/internal/models"
-	"backend/cmd/init"	
+	"CPE-691015/internal/dto"
+	"CPE-691015/internal/models"
+	"CPE-691015/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
 
 func GetAllCourse(c *gin.Context) {
-	db := config.DB()
+	db := config.DB
 
 	var courses []models.Course // แนะนำให้ใช้ชื่อพหูพจน์ (courses) จะได้ไม่สับสนตัวแปรในลูป
 
