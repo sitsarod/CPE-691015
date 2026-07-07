@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
 
@@ -30,13 +31,10 @@ func (ctrl *EnrollmentController) GetAvailableCourses(c *gin.Context) {
 
 // EnrollCourse
 func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
-	var input struct {
-		CustomerID uint `json:"customer_id" binding:"required"`
-		PackageID  uint `json:"package_id" binding:"required"`
-	}
+	var input dto.CreateEnrollmentReq
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน หรือรูปแบบไม่ถูกต้อง"})
 		return
 	}
 
@@ -46,7 +44,13 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "ลงทะเบียนสำเร็จ", "data": enrollment})
+c.JSON(http.StatusCreated, dto.CreateEnrollmentRes{
+		Message: "ลงทะเบียนสำเร็จ",
+		Data: dto.CreateEnrollmentData{
+			EnrollmentID: enrollment.ID,
+			BillingID:    enrollment.BillingID,
+		},
+	})
 }
 
 // GetCustomerEnrollments
@@ -73,13 +77,13 @@ func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
 		return
 	}
 
-	var updateData map[string]interface{}
-	if err := c.ShouldBindJSON(&updateData); err != nil {
+	var input dto.UpdateEnrollmentReq
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
-	enrollment, err := ctrl.service.UpdateEnrollment(uint(id), updateData)
+	enrollment, err := ctrl.service.UpdateEnrollment(uint(id), input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -110,10 +114,19 @@ func (ctrl *EnrollmentController) SetupSchedule(c *gin.Context) {
 		return
 	}
 
-	var schedules []models.WeeklySchedule
-	if err := c.ShouldBindJSON(&schedules); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลตารางเรียนไม่ถูกต้อง"})
+	var input []dto.WeeklyScheduleItemReq
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลตารางเรียนไม่ถูกต้อง (เช่น สะกดวันผิด)"})
 		return
+	}
+
+	var schedules []models.WeeklySchedule
+	for _, req := range input {
+		schedules = append(schedules, models.WeeklySchedule{
+			DayOfWeek: models.DayOfWeek(req.DayOfWeek),
+			StartTime: req.StartTime,
+			EndTime:   req.EndTime,
+		})
 	}
 
 	if err := ctrl.service.SetupWeeklySchedule(uint(id), schedules); err != nil {
@@ -131,14 +144,10 @@ func (ctrl *EnrollmentController) UpdateSchedule(c *gin.Context) {
 		return
 	}
 
-	var input struct {
-		DayOfWeek string `json:"day_of_week"`
-		StartTime string `json:"start_time"`
-		EndTime   string `json:"end_time"`
-	}
+	var input dto.UpdateSingleScheduleReq
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง (เช่น สะกดวันผิด)"})
 		return
 	}
 
