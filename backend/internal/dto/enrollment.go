@@ -70,6 +70,7 @@ type PackageInfoRes struct {
 	CourseID      uint    `json:"course_id"`
 	Price         float64 `json:"price"`
 	SessionsCount uint    `json:"sessions_count"`
+	CourseName    string  `json:"course_name"`
 }
 
 // ScheduleInfoRes โครงสร้างย่อยของตารางเรียน

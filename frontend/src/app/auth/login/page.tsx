@@ -43,6 +43,9 @@ export default function LoginPage() {
       // 🎉 4. ช็อตเด็ด: ล็อกอินผ่านปุ๊บ สั่งยัดของลง localStorage ทันที!
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
+      localStorage.setItem("user_id", data.user.id.toString());
+      localStorage.setItem("user_name", data.user.firstName);
+      localStorage.setItem("user_email", data.user.email);
 
 
       if (data.user.role === "admin") {
