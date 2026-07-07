@@ -21,7 +21,6 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
 func (s *EnrollmentService) GetAvailableCourses() ([]models.Course, error) {
 	var courses []models.Course
-	// ค้นหาคอร์สที่สถานะเป็น active และ Preload ข้อมูล Packages ข้างในมาด้วย
 	err := s.db.Preload("Packages").Where("status = ?", models.CourseStatusActive).Find(&courses).Error
 	return courses, err
 }
@@ -29,34 +28,43 @@ func (s *EnrollmentService) GetAvailableCourses() ([]models.Course, error) {
 // [POST] ลงทะเบียนคอร์สเรียน
 func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*models.Enrollment, error) {
 	var pkg models.Package
-	// 1. ตรวจสอบว่ามีแพ็กเกจนี้อยู่จริง
 	if err := s.db.First(&pkg, packageID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
 	}
 
-	// 2. สร้างข้อมูลการลงทะเบียน
+	var admin models.User
+	if err := s.db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลแอดมินในระบบ")
+	}
+
+	var billingType models.BillingType
+	if err := s.db.Where("billing_type_name = ?", "ค่าคอร์สเรียน").First(&billingType).Error; err != nil {
+		return nil, errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
+	}
+
 	newEnrollment := models.Enrollment{
 		CustomerID:         customerID,
 		PackageID:          packageID,
 		EnrollmentDate:     time.Now(),
-		TotalSessions:      pkg.SessionsCount, // ดึงจำนวนครั้งจาก Package
-		RemainingSessions:  pkg.SessionsCount, // ตั้งค่าเริ่มต้นให้เท่ากับจำนวนครั้งทั้งหมด
+		TotalSessions:      pkg.SessionsCount,
+		RemainingSessions:  pkg.SessionsCount,
 		Status:             models.EnrollmentStatusActive,
-		IsScheduleUnlocked: false,             // แก้เป็น false: ยังไม่อนุญาตให้จัดตารางเรียนจนกว่าจะชำระเงิน
+		IsScheduleUnlocked: false,
 	}
 
-	// 3. บันทึกลง Database (เพิ่ม Transaction ผูกกับระบบบิล)
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&newEnrollment).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
 		}
 
 		newBilling := models.Billing{
-			Description: fmt.Sprintf("ค่าลงทะเบียนเรียนแพ็กเกจ ID: %d", packageID),
-			Amount:      pkg.Price, // สมมติว่ามีฟิลด์ Price ใน Package
-			DueDate:     time.Now().AddDate(0, 0, 3),
-			Status:      models.StatusUnfunded,
-			CustomerID:  customerID,
+			Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", pkg.Course.CourseName, pkg.SessionsCount),
+			Amount:        pkg.Price,
+			DueDate:       time.Now().AddDate(0, 0, 3),
+			Status:        models.StatusUnfunded,
+			CustomerID:    customerID,
+			BillingTypeID: billingType.ID,
+			AdminID:       admin.ID,
 		}
 
 		if err := tx.Create(&newBilling).Error; err != nil {
@@ -89,14 +97,13 @@ func (s *EnrollmentService) GetCustomerEnrollments(customerID uint) ([]models.En
 	return enrollments, err
 }
 
-// [UPDATE] แก้ไขข้อมูลการลงทะเบียน (เช่น แอดมินแก้ไขโควตา หรือสถานะ)
+// [UPDATE] แก้ไขข้อมูลการลงทะเบียน
 func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentReq) (*models.Enrollment, error) {
 	var enrollment models.Enrollment
 	if err := s.db.First(&enrollment, id).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลการลงทะเบียน")
 	}
 
-	// ตรวจสอบจากค่า Pointer ใน DTO แทน
 	if req.Status != nil {
 		enrollment.Status = models.EnrollmentStatus(*req.Status)
 	}
@@ -126,7 +133,7 @@ func (s *EnrollmentService) CancelEnrollment(id uint) error {
 	})
 }
 
-// [CREATE] จัดตารางเรียน (รองรับการส่งมาหลายวันพร้อมกัน)
+// [CREATE] จัดตารางเรียน
 func (s *EnrollmentService) SetupWeeklySchedule(enrollmentID uint, schedules []models.WeeklySchedule) error {
 	if len(schedules) == 0 {
 		return errors.New("กรุณาระบุตารางเรียนอย่างน้อย 1 วัน")
@@ -137,7 +144,6 @@ func (s *EnrollmentService) SetupWeeklySchedule(enrollmentID uint, schedules []m
 		return errors.New("ไม่พบข้อมูลการลงทะเบียน")
 	}
 
-	// ตรวจสอบสถานะการจ่ายเงินจาก Billing
 	if enrollment.Billing == nil || enrollment.Billing.Status != models.StatusPaid {
 		return errors.New("ไม่สามารถจัดตารางเรียนได้ เนื่องจากยังไม่ได้ชำระเงิน หรือแอดมินยังไม่อนุมัติ")
 	}
