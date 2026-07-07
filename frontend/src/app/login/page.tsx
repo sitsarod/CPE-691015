@@ -2,21 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation"; // 💡 อิมพอร์ตตัวย้ายหน้า
+import { useRouter } from "next/navigation"; 
 
 export default function LoginPage() {
-  const router = useRouter(); // 💡 เปิดใช้งานตัวนำทางย้ายหน้า
+  const router = useRouter(); 
   const [showPassword, setShowPassword] = useState(false);
   
-  // 💡 1. สร้างสเตตไว้จับค่าที่ยูสเซอร์พิมพ์กรอกเข้ามา
+ 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState(""); // เอาไว้พ่นคำเตือนเวลาใส่รหัสผิด
+  const [errorMsg, setErrorMsg] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
 
-  // 💡 2. ฟังก์ชันดักจับตอนกดปุ่มยิม Submit ฟอร์ม
+ 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // กันไม่ให้หน้าจอรีเฟรชเอง
+    e.preventDefault();
     setErrorMsg("");
     setIsLoading(true);
 
@@ -28,7 +28,7 @@ export default function LoginPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          Email: email,       // ตัวพิมพ์ใหญ่ตามโครงสร้างโครงโมเดลฝั่ง Go
+          Email: email,       
           Password: password,
         }),
       });
@@ -36,11 +36,11 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        // ถ้าเบ็คเอนด์ตอบกลับมาว่าผิดพลาด ให้เอาคำเตือนมาพ่นโชว์
+      
         throw new Error(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
       }
 
-      // 🎉 4. ช็อตเด็ด: ล็อกอินผ่านปุ๊บ สั่งยัดของลง localStorage ทันที!
+
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
 
@@ -53,9 +53,9 @@ export default function LoginPage() {
         router.push("/customer/dashboard");
       }
       
-      router.refresh(); // บังคับให้ Navbar ตื่นมาอัปเดตสเตตปุ่ม
+      router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message); // พ่นข้อความผิดพลาดบนหน้าจอ
+      setErrorMsg(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -70,17 +70,15 @@ export default function LoginPage() {
           <p className="text-gray-500">Koyama Badminton School</p>
         </div>
 
-        {/* 💡 แจ้งเตือนตัวแดงหน้าฟอร์มเมื่อล็อกอินไม่ผ่าน */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
             {errorMsg}
           </div>
         )}
 
-        {/* 💡 ผูกฟังก์ชัน handleSubmit เข้ากับฟอร์ม */}
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* ช่องกรอกอีเมล */}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               อีเมล หรือ ชื่อผู้ใช้งาน
@@ -88,14 +86,14 @@ export default function LoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)} // ผูกสเตต
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition-all text-black"
               placeholder="admin1@example.com"
               required
             />
           </div>
 
-          {/* ช่องกรอกรหัสผ่าน */}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               รหัสผ่าน
@@ -104,7 +102,7 @@ export default function LoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)} // ผูกสเตต
+                onChange={(e) => setPassword(e.target.value)} 
                 className="w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition-all text-black"
                 placeholder="••••••••"
                 required
@@ -128,7 +126,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* จดจำฉันไว้ & ลืมรหัสผ่าน */}
+
           <div className="flex items-center justify-between">
             <label className="flex items-center cursor-pointer">
               <input 
@@ -142,7 +140,7 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          {/* ปุ่ม Submit */}
+
           <button
             type="submit"
             disabled={isLoading}

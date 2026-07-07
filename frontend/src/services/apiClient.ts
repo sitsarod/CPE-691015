@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;

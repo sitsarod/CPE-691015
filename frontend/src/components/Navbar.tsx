@@ -105,7 +105,7 @@ export default function Navbar() {
           <div className="h-6 w-px bg-gray-400 mx-2"></div>
 
           {!isLoggedIn ? (
-            <Link href="/auth/login" className="hover:text-red-600 transition-colors">
+            <Link href="/login" className="hover:text-red-600 transition-colors">
               เข้าสู่ระบบ
             </Link>
           ) : (
