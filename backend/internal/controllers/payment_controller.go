@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
 
@@ -20,11 +21,7 @@ func NewPaymentController(service *services.PaymentService) *PaymentController {
 
 // CreateInvoice สร้างใบแจ้งหนี้
 func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
-	var input struct {
-		CustomerID uint   `json:"customer_id" binding:"required"`
-		BillingIDs []uint `json:"billing_ids" binding:"required"`
-		Method     string `json:"payment_method" binding:"required"`
-	}
+	var input dto.CreateInvoiceRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
@@ -37,7 +34,10 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "สร้างใบแจ้งหนี้สำเร็จ", "data": invoice})
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "สร้างใบแจ้งหนี้สำเร็จ",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
 }
 
 // UploadSlip อัปโหลดรูปสลิปหลักฐานการโอนเงิน
@@ -48,9 +48,7 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 		return
 	}
 
-	var input struct {
-		SlipURL string `json:"slip_url" binding:"required"`
-	}
+	var input dto.UploadSlipRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ URL ของสลิป"})
@@ -63,7 +61,10 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "แจ้งชำระเงินสำเร็จ กำลังรอตรวจสอบ", "data": invoice})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "แจ้งชำระเงินสำเร็จ กำลังรอตรวจสอบ",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
 }
 
 // ConfirmPayment ยืนยันการชำระเงิน (Admin)
@@ -80,7 +81,10 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ยืนยันยอดชำระเงินสำเร็จแล้ว", "data": invoice})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "ยืนยันยอดชำระเงินสำเร็จแล้ว",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
 }
 
 // GetCustomerInvoices ดึงประวัติใบแจ้งหนี้ของลูกค้า
@@ -97,5 +101,8 @@ func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": invoices})
+	c.JSON(http.StatusOK, gin.H{
+		"data": dto.ToInvoiceDTOs(invoices),
+	})
 }
+

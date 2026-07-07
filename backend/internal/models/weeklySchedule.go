@@ -20,8 +20,8 @@ type WeeklySchedule struct {
 	gorm.Model
 
 	DayOfWeek DayOfWeek `json:"day_of_week" gorm:"type:varchar(20)" valid:"required~dayOfWeek is required"`
-	StartTime string    `json:"start_time" gorm:"type:time" valid:"required~startTime is required"`
-	EndTime   string    `json:"end_time" gorm:"type:time" valid:"required~endTime is required"`
+	StartTime string    `json:"start_time" gorm:"type:varchar(10)" valid:"required"`
+	EndTime   string    `json:"end_time" gorm:"type:varchar(10)" valid:"required"`
 
 	// Foreign Key
 	EnrollmentID uint `json:"enrollment_id" valid:"required~enrollmentId is required"`
