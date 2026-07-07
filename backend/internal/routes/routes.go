@@ -78,8 +78,13 @@ func SetupRoutes(r *gin.Engine) {
 
 		billingGroup := api.Group("/billings")
 		{
+			billingGroup.GET("/", billingController.GetAllBillings)
+			billingGroup.GET("/:id", billingController.GetBillingByID)
+			billingGroup.GET("/customer/:id", billingController.GetCustomerBillings)
 			billingGroup.POST("/", billingController.CreateBilling)
 			billingGroup.POST("/split", billingController.CreateSplitBilling)
+			billingGroup.PATCH("/:id", billingController.UpdateBilling)
+			billingGroup.DELETE("/:id", billingController.DeleteBilling)
 		}
 	}
 }
