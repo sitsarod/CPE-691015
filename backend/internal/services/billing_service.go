@@ -157,3 +157,99 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 		return nil
 	})
 }
+
+// GetAllBillings ดึงรายการบิลทั้งหมดในระบบ (สำหรับ Admin)
+func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
+	var billings []models.Billing
+	err := s.db.Preload("BillingType").
+		Preload("Customer").
+		Preload("Admin").
+		Order("id DESC").
+		Find(&billings).Error
+	return billings, err
+}
+
+// GetBillingsByCustomerID ดึงรายการบิลทั้งหมดของลูกค้ารายเจาะจง (สำหรับ Customer)
+func (s *BillingService) GetBillingsByCustomerID(customerID uint) ([]models.Billing, error) {
+	var billings []models.Billing
+	err := s.db.Preload("BillingType").
+		Preload("Customer").
+		Preload("Admin").
+		Where("customer_id = ?", customerID).
+		Order("id DESC").
+		Find(&billings).Error
+	return billings, err
+}
+
+// GetBillingByID ดึงข้อมูลบิลตาม ID
+func (s *BillingService) GetBillingByID(id uint) (*models.Billing, error) {
+	var billing models.Billing
+	err := s.db.Preload("BillingType").
+		Preload("Customer").
+		Preload("Admin").
+		First(&billing, id).Error
+	if err != nil {
+		return nil, errors.New("ไม่พบข้อมูลบิล")
+	}
+	return &billing, nil
+}
+
+// UpdateBilling แก้ไขบิลโดยสามารถอัปเดตคำอธิบาย ยอดเงิน Due Date หรือสถานะ
+func (s *BillingService) UpdateBilling(id uint, input models.Billing) (*models.Billing, error) {
+	var billing models.Billing
+	if err := s.db.First(&billing, id).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลบิลที่ต้องการแก้ไข")
+	}
+
+	// บิลที่ชำระเงินแล้ว หรือรอแอดมินตรวจเช็ค ไม่ควรยอมให้แก้ไขข้อมูลทางการเงิน
+	if billing.Status == models.StatusPaid || billing.Status == models.StatusWaitCheck {
+		return nil, errors.New("ไม่สามารถแก้ไขบิลที่ชำระเงินแล้วหรือกำลังรอการตรวจสอบได้")
+	}
+
+	// อัปเดตเฉพาะฟิลด์ที่มีการส่งค่าเข้ามา
+	updateData := make(map[string]interface{})
+	if input.Description != "" {
+		updateData["description"] = input.Description
+	}
+	if input.Amount != 0 {
+		updateData["amount"] = input.Amount
+	}
+	if !input.DueDate.IsZero() {
+		updateData["due_date"] = input.DueDate
+	}
+	if input.Status != "" {
+		updateData["status"] = input.Status
+	}
+
+	if len(updateData) > 0 {
+		if err := s.db.Model(&billing).Updates(updateData).Error; err != nil {
+			return nil, errors.New("ไม่สามารถบันทึกการแก้ไขบิลได้")
+		}
+	}
+
+	// โหลดความสัมพันธ์กลับมาส่งผลลัพธ์
+	var result models.Billing
+	if err := s.db.Preload("BillingType").Preload("Customer").Preload("Admin").First(&result, id).Error; err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteBilling ลบบิลตาม ID (ใช้ Soft Delete ของ GORM)
+func (s *BillingService) DeleteBilling(id uint) error {
+	var billing models.Billing
+	if err := s.db.First(&billing, id).Error; err != nil {
+		return errors.New("ไม่พบข้อมูลบิลที่ต้องการลบ")
+	}
+
+	// ป้องกันไม่ให้ลบบิลที่จ่ายแล้ว
+	if billing.Status == models.StatusPaid {
+		return errors.New("ไม่สามารถลบบิลที่ชำระเงินเรียบร้อยแล้วได้")
+	}
+
+	if err := s.db.Delete(&billing).Error; err != nil {
+		return errors.New("ไม่สามารถลบบิลได้")
+	}
+	return nil
+}
+
