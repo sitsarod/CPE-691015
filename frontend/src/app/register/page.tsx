@@ -1,218 +1,100 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 
 export default function RegisterPage() {
-  // 1. สร้าง State สำหรับเก็บข้อมูลในฟอร์ม
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    acceptTerms: false,
+    firstName: '',
+    lastName: '',
   });
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // 2. ฟังก์ชันอัปเดตค่าเมื่อผู้ใช้พิมพ์
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
-  // 3. ฟังก์ชันจัดการเมื่อกด Submit ฟอร์ม
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    // Validation เบื้องต้น
-    if (formData.password !== formData.confirmPassword) {
-      setError('รหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // TODO: ยิง API ไปยัง Backend ของคุณ เช่น /api/register
-      // const res = await fetch('/api/register', { method: 'POST', body: JSON.stringify(formData) })
-      
-      console.log('ส่งข้อมูลสมัครสมาชิก:', formData);
-      
-      // จำลองการรอโหลด 2 วินาที
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      alert('สมัครสมาชิกสำเร็จ!');
-      
-    } catch (err) {
-      setError('เกิดข้อผิดพลาดในการสมัครสมาชิก');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          สร้างบัญชีใหม่ของคุณ
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          หรือ{' '}
-          <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-            เข้าสู่ระบบหากมีบัญชีอยู่แล้ว
-          </Link>
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          
-          {/* แสดงข้อความ Error ถ้ามี */}
-          {error && (
-            <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 rounded text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* ชื่อ-นามสกุล */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                ชื่อ - นามสกุล
-              </label>
-              <div className="mt-1">
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="สมชาย ใจดี"
-                />
-              </div>
-            </div>
-
-            {/* อีเมล */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                อีเมล
-              </label>
-              <div className="mt-1">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-
-            {/* รหัสผ่าน */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                รหัสผ่าน
-              </label>
-              <div className="mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            {/* ยืนยันรหัสผ่าน */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                ยืนยันรหัสผ่าน
-              </label>
-              <div className="mt-1">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            {/* ยอมรับเงื่อนไข */}
-            <div className="flex items-center">
-              <input
-                id="acceptTerms"
-                name="acceptTerms"
-                type="checkbox"
-                required
-                checked={formData.acceptTerms}
-                onChange={handleChange}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              />
-              <label htmlFor="acceptTerms" className="ml-2 block text-sm text-gray-900">
-                ฉันยอมรับ{' '}
-                <Link href="/terms" className="text-indigo-600 hover:text-indigo-500 underline">
-                  เงื่อนไขการให้บริการ
-                </Link>
-              </label>
-            </div>
-
-            {/* ปุ่มสมัครสมาชิกพร้อมสถานะ Loading */}
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  loading ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {loading ? 'กำลังประมวลผล...' : 'สมัครสมาชิก'}
-              </button>
-            </div>
-          </form>
-
-          {/* ปุ่มสมัครผ่าน Social */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">หรือสมัครใช้งานด้วย</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => alert('เชื่อมต่อ Google Sign-In ตรงนี้')}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-              >
-                <span>Google</span>
-              </button>
-            </div>
-          </div>
-
+    // คลุมพื้นที่แบบแยกอิสระ ตัดปัญหาโดนดึงสไตล์จาก Navbar และ Slider ด้วยการล็อก flex ทิศทาง column
+    <div className="w-full min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-4 md:p-8 font-sans">
+      
+      {/* การ์ดสีขาวโครงหลัก (Main Card) บีบขนาดกว้างตรงกลาง ไม่แผ่หลุดขอบจอ */}
+      <div className="w-full max-w-[1000px] bg-white rounded-3xl shadow-sm px-8 sm:px-16 py-12">
+        
+        {/* ปุ่มย้อนกลับ < */}
+        <div className="mb-6">
+          <button type="button" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
         </div>
+
+        {/* ชื่อแบรนด์ */}
+        <h1 className="text-3xl font-bold text-[#3B82F6] mb-10 tracking-wide">
+          KOYAMA
+        </h1>
+
+        {/* columns-2 จะหั่นครึ่งซ้ายขวาให้อัตโนมัติ และใช้ gap-x-8 เพื่อเว้นระยะห่างตรงกลาง */}
+        <form className="w-full text-left">
+          {/* ใช้ตารางแท้ๆ ล็อกโครงสร้างซ้าย-ขวา */}
+          <table className="w-full border-separate border-spacing-x-8 border-spacing-y-6">
+            <tbody>
+              
+              {/* แถวที่ 1: ชื่อ และ นามสกุล */}
+              <tr>
+                <td className="w-1/2 p-0 vertical-align-top">
+                  <div className="flex flex-col space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">ชื่อ</label>
+                    <input type="text" placeholder="ชื่อจริง" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" />
+                  </div>
+                </td>
+                <td className="w-1/2 p-0 vertical-align-top">
+                  <div className="flex flex-col space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">นามสกุล</label>
+                    <input type="text" placeholder="นามสกุล" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" />
+                  </div>
+                </td>
+              </tr>
+
+              {/* แถวที่ 2 */}
+              <tr>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+              </tr>
+
+              {/* แถวที่ 3 */}
+              <tr>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+              </tr>
+
+              {/* แถวที่ 4 */}
+              <tr>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+              </tr>
+
+              {/* แถวที่ 5 (ช่องเดี่ยวฝั่งซ้าย) */}
+              <tr>
+                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
+                <td className="p-0"></td> {/* ปล่อยฝั่งขวาว่างไว้ */}
+              </tr>
+
+            </tbody>
+          </table>
+        </form>
+
+        {/* ปุ่มกดยกเลิก - สร้างบัญชีใหม่ */}
+        <div className="flex justify-end space-x-4 mt-12 w-full">
+          <button 
+            type="button" 
+            className="px-8 py-2.5 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-w-[120px] text-center"
+          >
+            ยกเลิก
+          </button>
+          <button 
+            type="submit" 
+            className="px-8 py-2.5 bg-[#3B82F6] text-white rounded-full text-sm font-medium hover:bg-blue-600 transition-colors min-w-[140px] text-center shadow-sm"
+          >
+            สร้างบัญชีใหม่
+          </button>
+        </div>
+
       </div>
     </div>
   );

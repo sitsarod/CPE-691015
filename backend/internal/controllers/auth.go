@@ -2,7 +2,7 @@ package controllers
 
 import(
 	"net/http"
-	"CPE-691015/internal/models"
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
 	"github.com/gin-gonic/gin"
 	
@@ -20,7 +20,7 @@ func NewAuthController(authService services.AuthService) AuthController {
 }
 
 func (ctrl *authController) Login(c *gin.Context) {
-	var input models.LoginInput
+	var input dto.LoginInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกอีเมลและรหัสผ่านให้ถูกต้อง"})
