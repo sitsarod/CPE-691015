@@ -2,10 +2,12 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
-	"gorm.io/gorm"
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
+	"gorm.io/gorm"
 )
 
 type EnrollmentService struct {
@@ -16,7 +18,6 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 	return &EnrollmentService{db: db}
 }
 
-
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
 func (s *EnrollmentService) GetAvailableCourses() ([]models.Course, error) {
 	var courses []models.Course
@@ -24,7 +25,6 @@ func (s *EnrollmentService) GetAvailableCourses() ([]models.Course, error) {
 	err := s.db.Preload("Packages").Where("status = ?", models.CourseStatusActive).Find(&courses).Error
 	return courses, err
 }
-
 
 // [POST] ลงทะเบียนคอร์สเรียน
 func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*models.Enrollment, error) {
@@ -42,12 +42,37 @@ func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*mode
 		TotalSessions:      pkg.SessionsCount, // ดึงจำนวนครั้งจาก Package
 		RemainingSessions:  pkg.SessionsCount, // ตั้งค่าเริ่มต้นให้เท่ากับจำนวนครั้งทั้งหมด
 		Status:             models.EnrollmentStatusActive,
-		IsScheduleUnlocked: true,              // อนุญาตให้จัดตารางเรียนได้
+		IsScheduleUnlocked: false,             // แก้เป็น false: ยังไม่อนุญาตให้จัดตารางเรียนจนกว่าจะชำระเงิน
 	}
 
-	// 3. บันทึกลง Database
-	if err := s.db.Create(&newEnrollment).Error; err != nil {
-		return nil, errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+	// 3. บันทึกลง Database (เพิ่ม Transaction ผูกกับระบบบิล)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&newEnrollment).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+		}
+
+		newBilling := models.Billing{
+			Description: fmt.Sprintf("ค่าลงทะเบียนเรียนแพ็กเกจ ID: %d", packageID),
+			Amount:      pkg.Price, // สมมติว่ามีฟิลด์ Price ใน Package
+			DueDate:     time.Now().AddDate(0, 0, 3),
+			Status:      models.StatusUnfunded,
+			CustomerID:  customerID,
+		}
+
+		if err := tx.Create(&newBilling).Error; err != nil {
+			return errors.New("ไม่สามารถสร้างใบแจ้งหนี้ได้")
+		}
+
+		newEnrollment.BillingID = &newBilling.ID
+		if err := tx.Save(&newEnrollment).Error; err != nil {
+			return errors.New("ไม่สามารถเชื่อมโยงบิลกับการลงทะเบียนได้")
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &newEnrollment, nil
@@ -64,22 +89,22 @@ func (s *EnrollmentService) GetCustomerEnrollments(customerID uint) ([]models.En
 	return enrollments, err
 }
 
-
 // [UPDATE] แก้ไขข้อมูลการลงทะเบียน (เช่น แอดมินแก้ไขโควตา หรือสถานะ)
-func (s *EnrollmentService) UpdateEnrollment(id uint, updateData map[string]interface{}) (*models.Enrollment, error) {
+func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentReq) (*models.Enrollment, error) {
 	var enrollment models.Enrollment
 	if err := s.db.First(&enrollment, id).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลการลงทะเบียน")
 	}
 
-	if status, ok := updateData["status"].(string); ok {
-		enrollment.Status = models.EnrollmentStatus(status)
+	// ตรวจสอบจากค่า Pointer ใน DTO แทน
+	if req.Status != nil {
+		enrollment.Status = models.EnrollmentStatus(*req.Status)
 	}
-	if remaining, ok := updateData["remaining_sessions"].(float64); ok {
-		enrollment.RemainingSessions = uint(remaining)
+	if req.RemainingSessions != nil {
+		enrollment.RemainingSessions = uint(*req.RemainingSessions)
 	}
-	if unlocked, ok := updateData["is_schedule_unlocked"].(bool); ok {
-		enrollment.IsScheduleUnlocked = unlocked
+	if req.IsScheduleUnlocked != nil {
+		enrollment.IsScheduleUnlocked = *req.IsScheduleUnlocked
 	}
 
 	if err := s.db.Save(&enrollment).Error; err != nil {
@@ -87,7 +112,6 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, updateData map[string]inte
 	}
 	return &enrollment, nil
 }
-
 
 // [DELETE] ยกเลิกการลงทะเบียน
 func (s *EnrollmentService) CancelEnrollment(id uint) error {
@@ -102,21 +126,28 @@ func (s *EnrollmentService) CancelEnrollment(id uint) error {
 	})
 }
 
-
 // [CREATE] จัดตารางเรียน (รองรับการส่งมาหลายวันพร้อมกัน)
 func (s *EnrollmentService) SetupWeeklySchedule(enrollmentID uint, schedules []models.WeeklySchedule) error {
 	if len(schedules) == 0 {
 		return errors.New("กรุณาระบุตารางเรียนอย่างน้อย 1 วัน")
 	}
 
-	
+	var enrollment models.Enrollment
+	if err := s.db.Preload("Billing").First(&enrollment, enrollmentID).Error; err != nil {
+		return errors.New("ไม่พบข้อมูลการลงทะเบียน")
+	}
+
+	// ตรวจสอบสถานะการจ่ายเงินจาก Billing
+	if enrollment.Billing == nil || enrollment.Billing.Status != models.StatusPaid {
+		return errors.New("ไม่สามารถจัดตารางเรียนได้ เนื่องจากยังไม่ได้ชำระเงิน หรือแอดมินยังไม่อนุมัติ")
+	}
+
 	for i := range schedules {
 		schedules[i].EnrollmentID = enrollmentID
 	}
 
 	return s.db.Create(&schedules).Error
 }
-
 
 // [UPDATE] แก้ไขเวลาเรียน (ทีละรายการ)
 func (s *EnrollmentService) UpdateSingleSchedule(scheduleID uint, day models.DayOfWeek, start string, end string) (*models.WeeklySchedule, error) {
