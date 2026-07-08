@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -20,7 +21,6 @@ export default function Navbar() {
     }
   }, []);
 
-
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
@@ -30,7 +30,6 @@ export default function Navbar() {
     router.refresh();
   };
 
-  //  ลอจิกเลือก URL หน้าจัดการตาม Role ของผู้ใช้
   const getDashboardLink = () => {
     switch (userRole) {
       case "admin":
@@ -43,6 +42,14 @@ export default function Navbar() {
         return "/";
     }
   };
+
+  if (
+    pathname?.startsWith("/customer") || 
+    pathname?.startsWith("/admin") || 
+    pathname?.startsWith("/coach")
+  ) {
+    return null; 
+  }
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-white h-24 flex items-center px-4 md:px-12 border-b border-gray-100">
@@ -110,8 +117,6 @@ export default function Navbar() {
             </Link>
           ) : (
             <div className="flex items-center gap-6">
-              
-              
               <button 
                 onClick={handleLogout}
                 className="text-black hover:text-red-600 transition-colors"
@@ -121,7 +126,6 @@ export default function Navbar() {
             </div>
           )}
         </div>
-
       </div>
     </nav>
   );

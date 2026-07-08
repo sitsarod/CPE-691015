@@ -43,6 +43,9 @@ export default function LoginPage() {
 
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
+      localStorage.setItem("user_id", data.user.id.toString());
+      localStorage.setItem("user_name", data.user.firstName);
+      localStorage.setItem("user_email", data.user.email);
 
 
       if (data.user.role === "admin") {
