@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 import React from 'react'
 
 function page() {
@@ -9,4 +7,3 @@ function page() {
 }
 
 export default page
->>>>>>> Stashed changes
