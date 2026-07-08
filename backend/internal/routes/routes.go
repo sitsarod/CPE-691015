@@ -74,6 +74,8 @@ func SetupRoutes(r *gin.Engine) {
 			paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
 			paymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
 			paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
+			paymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
+			paymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 
 		billingGroup := api.Group("/billings")

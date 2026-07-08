@@ -175,3 +175,91 @@ func (s *PaymentService) GetCustomerInvoices(customerID uint) ([]models.Invoice,
 		Find(&invoices).Error
 	return invoices, err
 }
+
+// RejectPayment ปฏิเสธการชำระเงินโดยผู้ดูแลระบบ (Admin)
+func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) {
+	var invoice models.Invoice
+	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+	}
+
+	if invoice.Status == models.InvoiceSuccess {
+		return nil, errors.New("ไม่สามารถปฏิเสธใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
+	}
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		invoice.Status = models.InvoiceRejected
+		if err := tx.Save(&invoice).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกสถานะปฏิเสธการชำระเงินได้")
+		}
+
+		// ดึง PaymentItem ทั้งหมดเพื่อคืนสถานะ Billing เป็น unfunded (ยังไม่ชำระ)
+		var items []models.PaymentItem
+		if err := tx.Where("invoice_id = ?", invoiceID).Find(&items).Error; err != nil {
+			return err
+		}
+
+		for _, item := range items {
+			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusUnfunded).Error; err != nil {
+				return errors.New("ไม่สามารถอัปเดตสถานะบิลกลับเป็นยังไม่ชำระได้")
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result models.Invoice
+	if err := s.db.Preload("PaymentItem").Preload("PaymentItem.Billing").First(&result, invoiceID).Error; err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// CancelInvoice ยกเลิกใบแจ้งหนี้โดยลูกค้าหรือระบบ
+func (s *PaymentService) CancelInvoice(invoiceID uint) (*models.Invoice, error) {
+	var invoice models.Invoice
+	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+	}
+
+	if invoice.Status == models.InvoiceSuccess {
+		return nil, errors.New("ไม่สามารถยกเลิกใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
+	}
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		invoice.Status = models.InvoiceCancelled
+		if err := tx.Save(&invoice).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกสถานะยกเลิกใบแจ้งหนี้ได้")
+		}
+
+		// ดึง PaymentItem ทั้งหมดเพื่อคืนสถานะ Billing เป็น unfunded (ยังไม่ชำระ)
+		var items []models.PaymentItem
+		if err := tx.Where("invoice_id = ?", invoiceID).Find(&items).Error; err != nil {
+			return err
+		}
+
+		for _, item := range items {
+			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusUnfunded).Error; err != nil {
+				return errors.New("ไม่สามารถอัปเดตสถานะบิลกลับเป็นยังไม่ชำระได้")
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result models.Invoice
+	if err := s.db.Preload("PaymentItem").Preload("PaymentItem.Billing").First(&result, invoiceID).Error; err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

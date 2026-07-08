@@ -106,3 +106,43 @@ func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 	})
 }
 
+// RejectPayment ปฏิเสธการชำระเงิน (Admin)
+func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	invoice, err := ctrl.service.RejectPayment(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "ปฏิเสธยอดชำระเงินสำเร็จแล้ว",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
+}
+
+// CancelInvoice ยกเลิกใบแจ้งหนี้ (Customer/Admin/System)
+func (ctrl *PaymentController) CancelInvoice(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	invoice, err := ctrl.service.CancelInvoice(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "ยกเลิกใบแจ้งหนี้สำเร็จแล้ว",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
+}
+
