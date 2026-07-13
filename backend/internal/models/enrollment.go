@@ -26,10 +26,12 @@ type Enrollment struct {
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`
 	CustomerID uint `json:"customer_id" valid:"required~customerId is required"`
+	BillingID  *uint `json:"billing_id"`
 
 	// Relationships
 	Package         *Package         `json:"package" gorm:"foreignKey:PackageID"`
 	Customer        *Customer        `json:"customer" gorm:"foreignKey:CustomerID"`
+	Billing            *Billing            `json:"billing" gorm:"foreignKey:BillingID"`
 	WeeklySchedules []WeeklySchedule `json:"weekly_schedules" gorm:"foreignKey:EnrollmentID"`
 	StudentAttendances []StudentAttendance `json:"student_attendances" gorm:"foreignKey:EnrollmentID"`
 }

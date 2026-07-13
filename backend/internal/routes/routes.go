@@ -4,6 +4,7 @@ import (
 	"CPE-691015/internal/config"
 	"CPE-691015/internal/controllers"
 	"CPE-691015/internal/services"
+	"CPE-691015/internal/midlewares"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,15 +28,25 @@ func SetupRoutes(r *gin.Engine) {
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
 	authController := controllers.NewAuthController(authService)
+	r.Use(midlewares.CORSMiddleware())
 
 	courseService := services.NewCourseService(db)
     courseController := controllers.NewCourseController(courseService)
 
 	api := r.Group("/api")
 	{
+	
+		authGroup := api.Group("/auth")
+        {
+            authGroup.POST("/login", authController.Login) 
+        }
+		
+		protected := api.Group("")
+        protected.Use(midlewares.AuthMiddleware())
+
 		api.GET("/coaches", coachController.GetCoaches)
 		api.POST("/coaches", coachController.CreateCoach)
-		api.POST("/login", authController.Login)
+
 
 		userGroup := api.Group("/users")
 		{
@@ -66,12 +77,19 @@ func SetupRoutes(r *gin.Engine) {
 			paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
 			paymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
 			paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
+			paymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
+			paymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 
 		billingGroup := api.Group("/billings")
 		{
+			billingGroup.GET("/", billingController.GetAllBillings)
+			billingGroup.GET("/:id", billingController.GetBillingByID)
+			billingGroup.GET("/customer/:id", billingController.GetCustomerBillings)
 			billingGroup.POST("/", billingController.CreateBilling)
 			billingGroup.POST("/split", billingController.CreateSplitBilling)
+			billingGroup.PATCH("/:id", billingController.UpdateBilling)
+			billingGroup.DELETE("/:id", billingController.DeleteBilling)
 		}
 
 		courseGroup := api.Group("/courses")

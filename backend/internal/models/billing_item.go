@@ -34,4 +34,5 @@ type Billing struct {
 	Admin   *User `json:"admin" gorm:"foreignKey:AdminID"`
 
 	PaymentItem []PaymentItem `json:"paymentitem" gorm:"foreignKey:BillingID"`
+	Enrollment  *Enrollment   `json:"enrollment" gorm:"foreignKey:BillingID"`
 }
