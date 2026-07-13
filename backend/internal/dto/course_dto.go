@@ -17,12 +17,11 @@ type CourseUserDTO struct {
 }
 
 type CoursePackageDTO struct {
+	ID            uint    `json:"id"` // เพิ่ม ID เพื่อให้ Frontend ส่งกลับมาตอนสมัครเรียนได้
 	SessionsCount uint    `json:"sessions_count"`
 	HoursCount    uint    `json:"hours_count"`
 	Price         float64 `json:"price"` 
 }
-
-
 
 // type CourseImageDTO struct {
 // 	ID      uint   `json:"id"`
