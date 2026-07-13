@@ -28,6 +28,9 @@ func SetupRoutes(r *gin.Engine) {
 	authService := services.NewAuthService(db)
 	authController := controllers.NewAuthController(authService)
 
+	courseService := services.NewCourseService(db)
+    courseController := controllers.NewCourseController(courseService)
+
 	api := r.Group("/api")
 	{
 		api.GET("/coaches", coachController.GetCoaches)
@@ -69,6 +72,15 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			billingGroup.POST("/", billingController.CreateBilling)
 			billingGroup.POST("/split", billingController.CreateSplitBilling)
+		}
+
+		courseGroup := api.Group("/courses")
+		{
+			courseGroup.GET("/", courseController.GetAllCourses)
+			courseGroup.POST("/", courseController.CreateCourse)
+			courseGroup.GET("/:id", courseController.GetCourseByID)
+			courseGroup.PATCH("/:id", courseController.UpdateCourse)
+			courseGroup.DELETE("/:id", courseController.DeleteCourse)
 		}
 	}
 }
