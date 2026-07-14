@@ -390,3 +390,37 @@ func seedCoursesAndPackages(db *gorm.DB) {
 		}
 	}
 }
+
+func seedBankAccounts(db *gorm.DB) {
+	accounts := []models.BankAccount{
+		{
+			BankName:    "ธนาคารกรุงไทย (KTB)",
+			AccountNo:   "6629946995",
+			AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
+			IsActive:    true,
+		},
+		{
+			BankName:    "ธนาคารกรุงไทย (KTB)",
+			AccountNo:   "3350495907",
+			AccountName: "นายธีรศักดิ์  กุลเกตุ",
+			IsActive:    false,
+		},
+	}
+
+	for _, acc := range accounts {
+		var existing models.BankAccount
+		if err := db.Where("account_no = ?", acc.AccountNo).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&acc).Error; err != nil {
+					log.Printf("ไม่สามารถสร้างบัญชีธนาคาร %s ได้: %v", acc.BankName, err)
+				} else {
+					fmt.Printf("Seed บัญชีธนาคาร %s สำเร็จเรียบร้อย!\n", acc.BankName)
+				}
+			} else {
+				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบบัญชีธนาคาร %s: %v", acc.BankName, err)
+			}
+		} else {
+			fmt.Printf("ข้ามขั้นตอนการ Seed บัญชีธนาคาร %s เนื่องจากมีข้อมูลอยู่แล้ว\n", acc.BankName)
+		}
+	}
+}

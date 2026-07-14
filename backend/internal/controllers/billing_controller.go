@@ -136,6 +136,9 @@ func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 	if input.Status != nil {
 		billingModel.Status = models.BillingStatus(*input.Status)
 	}
+	if input.BillingTypeID != nil {
+		billingModel.BillingTypeID = *input.BillingTypeID
+	}
 
 	billing, err := ctrl.service.UpdateBilling(uint(id), billingModel)
 	if err != nil {

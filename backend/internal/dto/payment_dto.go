@@ -47,16 +47,20 @@ func ToBillingTypeDTO(bt *models.BillingType) *BillingTypeDTO {
 
 // BillingDTO represents a billing item response
 type BillingDTO struct {
-	ID          uint            `json:"id"`
-	Description string          `json:"billingdescription"`
-	Amount      float64         `json:"billingamount"`
-	DueDate     time.Time       `json:"billingdue_date"`
-	Status      string          `json:"billingstatus"`
-	BillingType *BillingTypeDTO `json:"billing_type,omitempty"`
-	CustomerID  uint            `json:"customer_id"`
-	Customer    *UserMinDTO     `json:"customer,omitempty"`
-	AdminID     uint            `json:"admin_id"`
-	Admin       *UserMinDTO     `json:"admin,omitempty"`
+	ID            uint            `json:"id"`
+	Description   string          `json:"billingdescription"`
+	Amount        float64         `json:"billingamount"`
+	DueDate       time.Time       `json:"billingdue_date"`
+	Status        string          `json:"billingstatus"`
+	BillingTypeID uint            `json:"billingtype_id"`
+	BillingType   *BillingTypeDTO `json:"billing_type,omitempty"`
+	CustomerID    uint            `json:"customer_id"`
+	Customer      *UserMinDTO     `json:"customer,omitempty"`
+	AdminID       uint            `json:"admin_id"`
+	Admin         *UserMinDTO     `json:"admin,omitempty"`
+	SlipImageUrl  string          `json:"slipurl,omitempty"`
+	InvoiceID     uint            `json:"invoice_id,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 // ToBillingDTO maps models.Billing to BillingDTO
@@ -66,13 +70,15 @@ func ToBillingDTO(b *models.Billing) *BillingDTO {
 	}
 
 	dto := &BillingDTO{
-		ID:          b.ID,
-		Description: b.Description,
-		Amount:      b.Amount,
-		DueDate:     b.DueDate,
-		Status:      string(b.Status),
-		CustomerID:  b.CustomerID,
-		AdminID:     b.AdminID,
+		ID:            b.ID,
+		Description:   b.Description,
+		Amount:        b.Amount,
+		DueDate:       b.DueDate,
+		Status:        string(b.Status),
+		BillingTypeID: b.BillingTypeID,
+		CustomerID:    b.CustomerID,
+		AdminID:       b.AdminID,
+		CreatedAt:     b.CreatedAt,
 	}
 
 	if b.BillingType != nil {
@@ -83,6 +89,10 @@ func ToBillingDTO(b *models.Billing) *BillingDTO {
 	}
 	if b.Admin != nil {
 		dto.Admin = ToUserMinDTO(b.Admin)
+	}
+	if len(b.PaymentItem) > 0 && b.PaymentItem[0].Invoice != nil {
+		dto.SlipImageUrl = b.PaymentItem[0].Invoice.SlipImageUrl
+		dto.InvoiceID = b.PaymentItem[0].InvoiceID
 	}
 
 	return dto
@@ -210,9 +220,10 @@ type UploadSlipRequest struct {
 
 // UpdateBillingRequest represents the request payload for updating billing details
 type UpdateBillingRequest struct {
-	Description *string    `json:"billingdescription"`
-	Amount      *float64   `json:"billingamount"`
-	DueDate     *time.Time `json:"billingdue_date"`
-	Status      *string    `json:"billingstatus"`
+	Description   *string    `json:"billingdescription"`
+	Amount        *float64   `json:"billingamount"`
+	DueDate       *time.Time `json:"billingdue_date"`
+	Status        *string    `json:"billingstatus"`
+	BillingTypeID *uint      `json:"billingtype_id"`
 }
 

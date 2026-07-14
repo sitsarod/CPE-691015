@@ -164,6 +164,8 @@ func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
 	err := s.db.Preload("BillingType").
 		Preload("Customer").
 		Preload("Admin").
+		Preload("PaymentItem").
+		Preload("PaymentItem.Invoice").
 		Order("id DESC").
 		Find(&billings).Error
 	return billings, err
@@ -219,6 +221,9 @@ func (s *BillingService) UpdateBilling(id uint, input models.Billing) (*models.B
 	}
 	if input.Status != "" {
 		updateData["status"] = input.Status
+	}
+	if input.BillingTypeID != 0 {
+		updateData["billingtype_id"] = input.BillingTypeID
 	}
 
 	if len(updateData) > 0 {
