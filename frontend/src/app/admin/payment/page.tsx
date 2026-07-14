@@ -56,7 +56,7 @@ export default function FinancialPortal() {
         fetch("http://localhost:8000/api/billings/", { headers }),
         fetch("http://localhost:8000/api/bank-accounts/", { headers }),
         fetch("http://localhost:8000/api/coaches", { headers }),
-        fetch("http://localhost:8000/api/expenses", { headers })
+        fetch("http://localhost:8000/api/expenses/", { headers })
       ]);
 
       if (!studentsRes.ok || !billingsRes.ok || !bankAccountsRes.ok || !coachesRes.ok || !expensesRes.ok) {
