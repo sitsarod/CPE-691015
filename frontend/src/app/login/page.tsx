@@ -82,14 +82,14 @@ try {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              อีเมล หรือ ชื่อผู้ใช้งาน
+              อีเมล
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition-all text-black"
-              placeholder="admin1@example.com"
+              placeholder="อีเมลของคุณ"
               required
             />
           </div>

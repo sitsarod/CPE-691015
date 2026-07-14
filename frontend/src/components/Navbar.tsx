@@ -111,20 +111,11 @@ export default function Navbar() {
           {/* เส้นกั้นแนวตั้ง */}
           <div className="h-6 w-px bg-gray-400 mx-2"></div>
 
-          {!isLoggedIn ? (
+          {!isLoggedIn && (
             <Link href="/login" className="hover:text-red-600 transition-colors">
               เข้าสู่ระบบ
             </Link>
-          ) : (
-            <div className="flex items-center gap-6">
-              <button 
-                onClick={handleLogout}
-                className="text-black hover:text-red-600 transition-colors"
-              >
-                ออกจากระบบ
-              </button>
-            </div>
-          )}
+           )}
         </div>
       </div>
     </nav>
