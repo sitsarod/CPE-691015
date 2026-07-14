@@ -141,4 +141,5 @@ func (ctrl *AnnouncementController) GetAllCategories(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
+	
 }
