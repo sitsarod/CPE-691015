@@ -1,0 +1,28 @@
+package models
+
+import (
+	"gorm.io/gorm"
+)
+
+// AutoQAMode represents the matching strategy used to serve a bot response
+type AutoQAMode string
+
+const (
+	AutoQAModeKeywordMatch AutoQAMode = "keyword_match"
+	AutoQAModeAIPredict    AutoQAMode = "ai_predict"
+)
+
+// AutoQA stores the bot knowledge base (Q&A pairs) used to serve automated responses
+type AutoQA struct {
+	gorm.Model
+
+	Mode AutoQAMode `json:"mode" gorm:"type:varchar(50)" valid:"required~mode is required,oneof(keyword_match ai_predict)~Invalid mode value"`
+
+	Question        string `json:"question" gorm:"type:text" valid:"required~question is required"`
+	SimilarQuestion string `json:"similar_question" gorm:"type:text"`
+	Answer          string `json:"answer" gorm:"type:text" valid:"required~answer is required"`
+
+	// Optional FK — links the AutoQA response to the session it was triggered in
+	SessionID   *uint        `json:"session_id" gorm:"index"`
+	ChatSession *ChatSession `json:"chat_session,omitempty" gorm:"foreignKey:SessionID"`
+}
