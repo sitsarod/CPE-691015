@@ -13,10 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth" data-scroll-behavior="smooth">
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen flex flex-col bg-[#F3F4F6] font-sans">
         <Navbar />
 
-        <main>
+        <main className="w-full flex-1 block clear-both">
           {children}
         </main>
       </body>

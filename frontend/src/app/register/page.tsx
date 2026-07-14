@@ -1,99 +1,62 @@
 'use client';
-
-import { useState } from 'react';
+//improt { useState } from "react";
+import Link from "next/link";
+import Button from "@/components/Button";
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-  });
+
 
   return (
-    // คลุมพื้นที่แบบแยกอิสระ ตัดปัญหาโดนดึงสไตล์จาก Navbar และ Slider ด้วยการล็อก flex ทิศทาง column
-    <div className="w-full min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center p-4 md:p-8 font-sans">
+
+    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
       
-      {/* การ์ดสีขาวโครงหลัก (Main Card) บีบขนาดกว้างตรงกลาง ไม่แผ่หลุดขอบจอ */}
-      <div className="w-full max-w-[1000px] bg-white rounded-3xl shadow-sm px-8 sm:px-16 py-12">
+
+      <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
         
-        {/* ปุ่มย้อนกลับ < */}
-        <div className="mb-6">
-          <button type="button" className="text-gray-400 hover:text-gray-600 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">KOYAMA</h1>
+        <p className="text-sm text-gray-500 mb-8">สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งานระบบของคุณ</p>
 
-        {/* ชื่อแบรนด์ */}
-        <h1 className="text-3xl font-bold text-[#3B82F6] mb-10 tracking-wide">
-          KOYAMA
-        </h1>
+        <form className="flex flex-row flex-wrap w-full gap-y-5 text-left">
+          
 
-        {/* columns-2 จะหั่นครึ่งซ้ายขวาให้อัตโนมัติ และใช้ gap-x-8 เพื่อเว้นระยะห่างตรงกลาง */}
-        <form className="w-full text-left">
-          {/* ใช้ตารางแท้ๆ ล็อกโครงสร้างซ้าย-ขวา */}
-          <table className="w-full border-separate border-spacing-x-8 border-spacing-y-6">
-            <tbody>
-              
-              {/* แถวที่ 1: ชื่อ และ นามสกุล */}
-              <tr>
-                <td className="w-1/2 p-0 vertical-align-top">
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">ชื่อ</label>
-                    <input type="text" placeholder="ชื่อจริง" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" />
-                  </div>
-                </td>
-                <td className="w-1/2 p-0 vertical-align-top">
-                  <div className="flex flex-col space-y-1.5">
-                    <label className="text-sm font-medium text-gray-700">นามสกุล</label>
-                    <input type="text" placeholder="นามสกุล" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" />
-                  </div>
-                </td>
-              </tr>
+          <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">ชื่อ</label>
+            <input type="text" placeholder="ชื่อจริง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
 
-              {/* แถวที่ 2 */}
-              <tr>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-              </tr>
 
-              {/* แถวที่ 3 */}
-              <tr>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-              </tr>
+          <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">นามสกุล</label>
+            <input type="text" placeholder="นามสกุล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
 
-              {/* แถวที่ 4 */}
-              <tr>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-              </tr>
 
-              {/* แถวที่ 5 (ช่องเดี่ยวฝั่งซ้าย) */}
-              <tr>
-                <td className="p-0"><input type="text" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white" /></td>
-                <td className="p-0"></td> {/* ปล่อยฝั่งขวาว่างไว้ */}
-              </tr>
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">วันเกิด</label>
+            <input type="text" placeholder="วัน / เดือน / ปี" className="w-full px-4 py-3 border border-gray-200 rounded-xl" />
+          </div>
 
-            </tbody>
-          </table>
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">เพศ</label>
+            <input type="text" placeholder="เลือกเพศของคุณ" className="w-full px-4 py-3 border border-gray-200 rounded-xl" />
+          </div>
+
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์มือถือหรืออีเมล</label>
+            <input type="text" placeholder="ระบุเบอร์โทรศัพท์หรืออีเมล" className="w-full px-4 py-3 border border-gray-200 rounded-xl" />
+          </div>
+
+
+          <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">
+            <Button variant="outline" type="button" onClick={() => window.history.back()}>
+              ยกเลิก
+            </Button>
+            <Button variant="secondary" type="submit">
+              สร้างบัญชีใหม่
+            </Button>
+          </div>
+
         </form>
-
-        {/* ปุ่มกดยกเลิก - สร้างบัญชีใหม่ */}
-        <div className="flex justify-end space-x-4 mt-12 w-full">
-          <button 
-            type="button" 
-            className="px-8 py-2.5 border border-gray-300 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-w-[120px] text-center"
-          >
-            ยกเลิก
-          </button>
-          <button 
-            type="submit" 
-            className="px-8 py-2.5 bg-[#3B82F6] text-white rounded-full text-sm font-medium hover:bg-blue-600 transition-colors min-w-[140px] text-center shadow-sm"
-          >
-            สร้างบัญชีใหม่
-          </button>
-        </div>
 
       </div>
     </div>
