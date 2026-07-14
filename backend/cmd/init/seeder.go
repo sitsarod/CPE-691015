@@ -232,7 +232,7 @@ func seedCustomers(db *gorm.DB) {
 			Email:             "student3@example.com",
 			Password:          string(hashedPassword),
 			Nickname:          "นะ",
-			Gender:			   "male",
+			Gender:            "male",
 			PhoneNumber:       "0867890123",
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@example.com",
@@ -288,144 +288,136 @@ func seedCustomers(db *gorm.DB) {
 }
 
 func seedCoursesAndPackages(db *gorm.DB) {
-	var admin models.User
-	if err := db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
-		log.Printf("ไม่สามารถค้นหาแอดมินหลักได้เพื่อสร้างคอร์ส: %v", err)
-		return
-	}
+    var admin models.User
+    if err := db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
+        log.Printf("ไม่สามารถค้นหาแอดมินหลักได้เพื่อสร้างคอร์ส: %v", err)
+        return
+    }
 
-	courseSeeds := []struct {
-		CourseName    string
-		Description   string
-		Status        models.CourseStatus
-		SessionsCount uint
-		HoursCount    uint
-		Price         float64
-		Schedules     []models.PackageSchedule
-	}{
-		{
-			CourseName:    "คอร์สฟุตบอลระดับพื้นฐาน (Basic Football)",
-			Description:   "ฝึกทักษะการเลี้ยงบอล ส่งบอล และโหม่งบอลขั้นพื้นฐานสำหรับผู้เริ่มต้น",
-			Status:        models.CourseStatusActive,
-			SessionsCount: 10,
-			HoursCount:    15,
-			Price:         3500.00,
-			Schedules: []models.PackageSchedule{
-				{DayOfWeek: models.Monday, StartTime: "17:00", EndTime: "18:30"},
-				{DayOfWeek: models.Wednesday, StartTime: "17:00", EndTime: "18:30"},
-			},
-		},
-		{
-			CourseName:    "คอร์สผู้รักษาประตู (Goalkeeper Pro)",
-			Description:   "ฝึกทักษะเฉพาะด้านผู้รักษาประตู การรับลูก การเซฟ และการขว้างบอลเปิดเกม",
-			Status:        models.CourseStatusActive,
-			SessionsCount: 8,
-			HoursCount:    12,
-			Price:         4000.00,
-			Schedules: []models.PackageSchedule{
-				{DayOfWeek: models.Saturday, StartTime: "09:00", EndTime: "10:30"},
-				{DayOfWeek: models.Sunday, StartTime: "09:00", EndTime: "10:30"},
-			},
-		},
-		{
-			CourseName:    "คอร์สทีมเวิร์คและแทคติกการเล่น (Team Tactics)",
-			Description:   "ฝึกทักษะการจัดตำแหน่ง การส่งบอลแบบทะลุช่อง และการเล่นสอดประสานในเกมการแข่งจริง",
-			Status:        models.CourseStatusActive,
-			SessionsCount: 12,
-			HoursCount:    24,
-			Price:         5000.00,
-			Schedules: []models.PackageSchedule{
-				{DayOfWeek: models.Tuesday, StartTime: "18:00", EndTime: "20:00"},
-				{DayOfWeek: models.Thursday, StartTime: "18:00", EndTime: "20:00"},
-			},
-		},
-	}
+    // สร้างข้อมูลตามโปสเตอร์ Koyama Badminton School
+    courseSeeds := []struct {
+        CourseName  string
+        Description string
+        Packages    []struct {
+            SessionsCount uint
+            HoursCount    uint
+            Price         float64
+            StartTime     string
+            EndTime       string
+        }
+    }{
+        {
+            CourseName:  "คอร์สปกติ",
+            Description: "เรียนรวมกลุ่ม (18.00-20.00 น.)",
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
+                {8, 16, 1800, "18:00", "20:00"},
+                {12, 24, 2200, "18:00", "20:00"},
+                {16, 32, 2600, "18:00", "20:00"},
+                {20, 40, 3000, "18:00", "20:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส VIP นักกีฬา",
+            Description: "เรียนรวมกลุ่ม (18.00-21.00 น.) ตีเกม+ตีโต้",
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
+                {8, 16, 2000, "18:00", "21:00"},
+                {12, 24, 2400, "18:00", "21:00"},
+                {16, 32, 2800, "18:00", "21:00"},
+                {20, 40, 3200, "18:00", "21:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส PRIVATE (2 ชม.)",
+            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
+                {8, 16, 0, "10:00", "12:00"},
+                {12, 24, 0, "14:00", "16:00"},
+                {16, 32, 0, "16:00", "18:00"},
+                {20, 40, 0, "21:00", "23:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส PRIVATE (1 ชม.)",
+            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
+                {8, 8, 0, "10:00", "11:00"},
+                {12, 12, 0, "13:00", "14:00"},
+                {16, 16, 0, "15:00", "16:00"},
+                {20, 20, 0, "21:00", "22:00"},
+            },
+        },
+    }
 
-	for _, seed := range courseSeeds {
-		var course models.Course
-		err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
-		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				course = models.Course{
-					CourseName:  seed.CourseName,
-					Description: seed.Description,
-					Status:      seed.Status,
-					UserID:      admin.ID,
-				}
-				if err := db.Create(&course).Error; err != nil {
-					log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)
-					continue
-				}
-				fmt.Printf("Seed คอร์ส %s สำเร็จเรียบร้อย!\n", seed.CourseName)
-			} else {
-				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบคอร์ส %s: %v", seed.CourseName, err)
-				continue
-			}
-		} else {
-			fmt.Printf("ข้ามขั้นตอนการ Seed คอร์ส %s เนื่องจากมีข้อมูลอยู่แล้ว\n", seed.CourseName)
-		}
+    for _, seed := range courseSeeds {
+        var course models.Course
+        err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
+        if err == gorm.ErrRecordNotFound {
+            course = models.Course{
+                CourseName:  seed.CourseName,
+                Description: seed.Description,
+                Status:      models.CourseStatusActive,
+                UserID:      admin.ID,
+            }
+            if err := db.Create(&course).Error; err != nil {
+                log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)
+                continue
+            }
+            fmt.Printf("Seed คอร์ส %s สำเร็จเรียบร้อย!\n", seed.CourseName)
+        }
 
-		var pkg models.Package
-		err = db.Where("course_id = ? AND price = ?", course.ID, seed.Price).First(&pkg).Error
-		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				pkg = models.Package{
-					SessionsCount: seed.SessionsCount,
-					HoursCount:    seed.HoursCount,
-					Price:         seed.Price,
-					CourseID:      course.ID,
-				}
-				if err := db.Create(&pkg).Error; err != nil {
-					log.Printf("ไม่สามารถสร้าง Package สำหรับคอร์ส %s ได้: %v", course.CourseName, err)
-					continue 
-				}
-				fmt.Printf("Seed Package ราคา %.2f สำหรับคอร์ส %s สำเร็จเรียบร้อย!\n", seed.Price, course.CourseName)
+        for _, p := range seed.Packages {
+            pkg := models.Package{
+                SessionsCount: p.SessionsCount,
+                HoursCount:    p.HoursCount,
+                Price:         p.Price,
+                CourseID:      course.ID,
+            }
+            db.Create(&pkg)
 
-				for _, sch := range seed.Schedules {
-					sch.PackageID = pkg.ID 
-					if err := db.Create(&sch).Error; err != nil {
-						log.Printf("ไม่สามารถสร้างตารางเรียนให้แพ็กเกจได้: %v", err)
-					}
-				}
-			} else {
-				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบ Package สำหรับคอร์ส %s: %v", course.CourseName, err)
-			}
-		} else {
-			fmt.Printf("ข้ามขั้นตอนการ Seed Package สำหรับคอร์ส %s เนื่องจากมีข้อมูลอยู่แล้ว\n", course.CourseName)
-		}
-	}
+            // จัดตารางเรียน 3 วัน (ตัวอย่าง: จันทร์ พุธ ศุกร์)
+            days := []models.DayOfWeek{models.Monday, models.Wednesday, models.Friday}
+            for _, d := range days {
+                db.Create(&models.PackageSchedule{
+                    PackageID: pkg.ID,
+                    DayOfWeek: d,
+                    StartTime: p.StartTime,
+                    EndTime:   p.EndTime,
+                })
+            }
+        }
+    }
 }
 
 func seedBankAccounts(db *gorm.DB) {
-	accounts := []models.BankAccount{
-		{
-			BankName:    "ธนาคารกรุงไทย (KTB)",
-			AccountNo:   "6629946995",
-			AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
-			IsActive:    true,
-		},
-		{
-			BankName:    "ธนาคารกรุงไทย (KTB)",
-			AccountNo:   "3350495907",
-			AccountName: "นายธีรศักดิ์  กุลเกตุ",
-			IsActive:    false,
-		},
-	}
+    accounts := []models.BankAccount{
+        {
+            BankName:    "ธนาคารกรุงไทย (KTB)",
+            AccountNo:   "6629946995",
+            AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
+            IsActive:    true,
+        },
+        {
+            BankName:    "ธนาคารกรุงไทย (KTB)",
+            AccountNo:   "3350495907",
+            AccountName: "นายธีรศักดิ์  กุลเกตุ",
+            IsActive:    false,
+        },
+    }
 
-	for _, acc := range accounts {
-		var existing models.BankAccount
-		if err := db.Where("account_no = ?", acc.AccountNo).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&acc).Error; err != nil {
-					log.Printf("ไม่สามารถสร้างบัญชีธนาคาร %s ได้: %v", acc.BankName, err)
-				} else {
-					fmt.Printf("Seed บัญชีธนาคาร %s สำเร็จเรียบร้อย!\n", acc.BankName)
-				}
-			} else {
-				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบบัญชีธนาคาร %s: %v", acc.BankName, err)
-			}
-		} else {
-			fmt.Printf("ข้ามขั้นตอนการ Seed บัญชีธนาคาร %s เนื่องจากมีข้อมูลอยู่แล้ว\n", acc.BankName)
-		}
-	}
+    for _, acc := range accounts {
+        var existing models.BankAccount
+        if err := db.Where("account_no = ?", acc.AccountNo).First(&existing).Error; err != nil {
+            if err == gorm.ErrRecordNotFound {
+                if err := db.Create(&acc).Error; err != nil {
+                    log.Printf("ไม่สามารถสร้างบัญชีธนาคาร %s ได้: %v", acc.BankName, err)
+                } else {
+                    fmt.Printf("Seed บัญชีธนาคาร %s สำเร็จเรียบร้อย!\n", acc.BankName)
+                }
+            } else {
+                log.Printf("เกิดข้อผิดพลาดในการตรวจสอบบัญชีธนาคาร %s: %v", acc.BankName, err)
+            }
+        } else {
+            fmt.Printf("ข้ามขั้นตอนการ Seed บัญชีธนาคาร %s เนื่องจากมีข้อมูลอยู่แล้ว\n", acc.BankName)
+        }
+    }
 }
