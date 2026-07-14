@@ -190,6 +190,7 @@ func seedCustomers(db *gorm.DB) {
 		Email             string
 		Password          string
 		Nickname          string
+		Gender            string
 		PhoneNumber       string
 		BirthDate         time.Time
 		ParentEmail       string
@@ -203,6 +204,7 @@ func seedCustomers(db *gorm.DB) {
 			Email:             "student1@example.com",
 			Password:          string(hashedPassword),
 			Nickname:          "ศักดิ์",
+			Gender:            "male",
 			PhoneNumber:       "0845678901",
 			BirthDate:         time.Date(2010, 1, 15, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent1@example.com",
@@ -216,6 +218,7 @@ func seedCustomers(db *gorm.DB) {
 			Email:             "student2@example.com",
 			Password:          string(hashedPassword),
 			Nickname:          "ดา",
+			Gender:            "female",
 			PhoneNumber:       "0856789012",
 			BirthDate:         time.Date(2012, 5, 20, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent2@example.com",
@@ -229,6 +232,7 @@ func seedCustomers(db *gorm.DB) {
 			Email:             "student3@example.com",
 			Password:          string(hashedPassword),
 			Nickname:          "นะ",
+			Gender:			   "male",
 			PhoneNumber:       "0867890123",
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@example.com",
@@ -257,6 +261,7 @@ func seedCustomers(db *gorm.DB) {
 					customer := models.Customer{
 						UserID:            user.ID,
 						Nickname:          data.Nickname,
+						Gender:            models.Gender(data.Gender),
 						BirthDate:         data.BirthDate,
 						PhoneNumber:       data.PhoneNumber,
 						ParentEmail:       data.ParentEmail,
