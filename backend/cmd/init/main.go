@@ -58,6 +58,8 @@ func main() {
 		&models.Category{},
 		&models.BankAccount{},
 		&models.Expense{},
+		&models.ChatSession{},
+		&models.AutoQA{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)

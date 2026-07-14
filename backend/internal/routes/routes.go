@@ -3,7 +3,6 @@ package routes
 import (
     "CPE-691015/internal/config"
     "CPE-691015/internal/controllers"
-    "CPE-691015/internal/repositories"
     "CPE-691015/internal/services"
     "CPE-691015/internal/midlewares"
     "github.com/gin-gonic/gin"
@@ -47,9 +46,12 @@ func SetupRoutes(r *gin.Engine) {
     packageController := controllers.NewPackageController(packageService)
 
     // Announcement system
-    announcementRepo := repositories.NewAnnouncementRepository(db)
-    announcementService := services.NewAnnouncementService(announcementRepo, db)
+    announcementService := services.NewAnnouncementService(db)
     announcementController := controllers.NewAnnouncementController(announcementService)
+
+    // Automated Q&A system
+    autoQAService := services.NewAutoQAService(db)
+    autoQAController := controllers.NewAutoQAController(autoQAService)
 
     r.Use(midlewares.CORSMiddleware())
 
@@ -153,12 +155,34 @@ func SetupRoutes(r *gin.Engine) {
         api.POST("/announcements/:id/view", announcementController.IncrementViewCount)
         api.GET("/announcements/categories", announcementController.GetAllCategories)
 
+        // Automated Q&A Chat Session public endpoints
+        api.POST("/chat-sessions", autoQAController.CreateChatSession)
+        api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
+        api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
+
         protectedAnnouncementGroup := protected.Group("/announcements")
         {
             protectedAnnouncementGroup.POST("/", announcementController.CreateAnnouncement)
             protectedAnnouncementGroup.PATCH("/:id", announcementController.UpdateAnnouncement)
             protectedAnnouncementGroup.DELETE("/:id", announcementController.DeleteAnnouncement)
             protectedAnnouncementGroup.POST("/categories", announcementController.CreateCategory)
+        }
+
+        // Automated Q&A Chat Session and Knowledge Base protected endpoints
+        protectedChatSessionGroup := protected.Group("/chat-sessions")
+        {
+            protectedChatSessionGroup.GET("/", autoQAController.GetAllChatSessions)
+            protectedChatSessionGroup.PATCH("/:id", autoQAController.UpdateChatSession)
+            protectedChatSessionGroup.DELETE("/:id", autoQAController.DeleteChatSession)
+        }
+
+        protectedAutoQAGroup := protected.Group("/auto-qas")
+        {
+            protectedAutoQAGroup.GET("/", autoQAController.GetAllAutoQAs)
+            protectedAutoQAGroup.GET("/:id", autoQAController.GetAutoQAByID)
+            protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
+            protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
+            protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
         }
     }
 }
