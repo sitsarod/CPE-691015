@@ -10,6 +10,7 @@ const (
 	AdminRole    UserRole = "admin"
 	CustomerRole UserRole = "customer"
 	CoachRole    UserRole = "coach"
+	StudentRole  UserRole = "student"
 )
 
 type User struct {
