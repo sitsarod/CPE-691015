@@ -290,7 +290,7 @@ export default function VerifySlipsTab({
                   </div>
                   <button
                     onClick={() => { setReviewBilling(null); }}
-                    className="p-1 rounded-full text-slate-405 text-slate-400 hover:text-slate-650 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     <X className="w-6 h-6" />
                   </button>

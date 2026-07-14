@@ -162,7 +162,7 @@ export default function FinancialSummaryTab({
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 summaryTimeframe === t.id
                   ? 'bg-[#CD0D13] text-white shadow-md'
-                  : 'bg-slate-50 border border-slate-250 text-slate-650 hover:bg-slate-105'
+                  : 'bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100'
               }`}
             >
               {t.label}

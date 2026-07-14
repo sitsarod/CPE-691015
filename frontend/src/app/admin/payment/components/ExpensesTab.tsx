@@ -50,7 +50,7 @@ export default function ExpensesTab({
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const res = await fetch("http://localhost:8000/api/expenses", {
+      const res = await fetch("http://localhost:8000/api/expenses/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
