@@ -1,36 +1,4 @@
-// types/enrollment.ts
-
-export interface CourseInfo {
-  id: number;
-  course_name: string; 
-}
-
-export interface PackageInfo {
-  id: number;
-  course_id: number;
-  price: number;
-  sessions_count: number;
-  course?: CourseInfo; 
-}
-
-export interface ScheduleInfo {
-  id: number;
-  day_of_week: string;
-  start_time: string;
-  end_time: string;
-}
-
-export interface Enrollment {
-  ID: number; 
-  enrollment_date: string;
-  total_sessions: number;
-  remaining_sessions: number;
-  is_schedule_unlocked: boolean;
-  status: string;
-  billing_id: number | null;
-  package: PackageInfo;
-  weekly_schedules: ScheduleInfo[];
-}
+// frontend/src/types/enrollment.ts
 
 export interface ApiResponse<T> {
   data: T;
@@ -38,11 +6,66 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+export interface CourseInfo {
+  ID: number;
+  course_name: string;
+}
+
+export interface ScheduleInfo {
+  id: number;
+  package_id?: number;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface PackageInfo {
+  ID: number;
+  course_id: number;
+  price: number;
+  sessions_count: number;
+  hours_count?: number;
+  course?: CourseInfo;
+  schedules?: ScheduleInfo[];
+}
+
+export interface Enrollment {
+  ID: number;
+  enrollment_date: string;
+  total_sessions: number;
+  remaining_sessions: number;
+  is_schedule_unlocked: boolean;
+  status: string;
+  billing_id: number | null;
+  package: PackageInfo;
+}
+
 export interface Course {
   ID: number;
   course_name: string;
   description: string;
   status: string;
-  Packages?: PackageInfo[]; 
   packages?: PackageInfo[];
+}
+
+
+
+export interface CreateEnrollmentReq {
+  customer_id: number;
+  package_id: number;
+}
+
+export interface CreateEnrollmentData {
+  enrollment_id: number;
+  billing_id: number | null;
+}
+
+export interface CreateEnrollmentRes {
+  message: string;
+  data: CreateEnrollmentData;
+}
+
+export interface UpdateEnrollmentReq {
+  status?: string; // active, completed, cancelled
+  remaining_sessions?: number;
 }

@@ -45,6 +45,7 @@ try {
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("email", data.user.email);
+      localStorage.setItem("user_id", data.user.id.toString());
 
       if (data.user.role === "admin") {
         router.push("/admin/dashboard");
