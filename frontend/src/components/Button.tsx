@@ -5,6 +5,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline";
   href?: string;
   children: React.ReactNode;
+  className?: string;
 }
 
 export default function Button({ 
@@ -12,15 +13,16 @@ export default function Button({
   href, 
   children, 
   className = "", 
+  
   ...props 
 }: ButtonProps) {
   
-  const baseStyle = "inline-flex items-center justify-center px-6 py-2.5 rounded-full font-bold text-sm transition-all";
+  const baseStyle = "inline-flex items-center justify-center w-full py-2.5 min-w-[140px] rounded-full font-bold text-sm transition-all text-center";
   
   const variants = {
-    primary: "bg-green-600 hover:bg-green-700 text-white shadow-md shadow-green-600/30",
+    primary: "bg-green-500 hover:bg-green-700 text-white shadow-md shadow-green-600/30",
     secondary: "bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/30",
-    outline: "border-2 border-slate-200 text-slate-700 hover:bg-slate-50",
+    outline: "border-1 border-slate-200 text-slate-700 hover:bg-slate-50",
   };
 
   const combinedClassName = `${baseStyle} ${variants[variant]} ${className}`;

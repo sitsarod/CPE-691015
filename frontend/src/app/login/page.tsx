@@ -2,51 +2,49 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation"; // 💡 อิมพอร์ตตัวย้ายหน้า
+import { useRouter } from "next/navigation"; 
+import Button from "@/components/Button";
+import { apiFetch } from "@/services/apiClient";
+
+interface LoginResponse {
+  token: string;
+  user: {
+    id: number;
+    role: string;
+    firstName: string;
+    email: string;
+  };
+}
 
 export default function LoginPage() {
-  const router = useRouter(); // 💡 เปิดใช้งานตัวนำทางย้ายหน้า
+  const router = useRouter(); 
   const [showPassword, setShowPassword] = useState(false);
   
-  // 💡 1. สร้างสเตตไว้จับค่าที่ยูสเซอร์พิมพ์กรอกเข้ามา
+ 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState(""); // เอาไว้พ่นคำเตือนเวลาใส่รหัสผิด
+  const [errorMsg, setErrorMsg] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
 
-  // 💡 2. ฟังก์ชันดักจับตอนกดปุ่มยิม Submit ฟอร์ม
+ 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // กันไม่ให้หน้าจอรีเฟรชเอง
+    e.preventDefault();
     setErrorMsg("");
     setIsLoading(true);
 
-    try {
-
-      const response = await fetch("http://localhost:8000/api/auth/login", {
+try {
+      const data = await apiFetch<LoginResponse>("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          Email: email,       // ตัวพิมพ์ใหญ่ตามโครงสร้างโครงโมเดลฝั่ง Go
+          Email: email,       
           Password: password,
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // ถ้าเบ็คเอนด์ตอบกลับมาว่าผิดพลาด ให้เอาคำเตือนมาพ่นโชว์
-        throw new Error(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-      }
-
-      // 🎉 4. ช็อตเด็ด: ล็อกอินผ่านปุ๊บ สั่งยัดของลง localStorage ทันที!
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
-      localStorage.setItem("user_id", data.user.id.toString());
-      localStorage.setItem("user_name", data.user.firstName);
-      localStorage.setItem("user_email", data.user.email);
-
+      localStorage.setItem("firstName", data.user.firstName);
+      localStorage.setItem("email", data.user.email);
 
       if (data.user.role === "admin") {
         router.push("/admin/dashboard");
@@ -56,16 +54,16 @@ export default function LoginPage() {
         router.push("/customer/dashboard");
       }
       
-      router.refresh(); // บังคับให้ Navbar ตื่นมาอัปเดตสเตตปุ่ม
+      router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message); // พ่นข้อความผิดพลาดบนหน้าจอ
+      setErrorMsg(err.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white font-sans px-4 pb-32">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
         
         <div className="text-center mb-8">
@@ -73,17 +71,15 @@ export default function LoginPage() {
           <p className="text-gray-500">Koyama Badminton School</p>
         </div>
 
-        {/* 💡 แจ้งเตือนตัวแดงหน้าฟอร์มเมื่อล็อกอินไม่ผ่าน */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
             {errorMsg}
           </div>
         )}
 
-        {/* 💡 ผูกฟังก์ชัน handleSubmit เข้ากับฟอร์ม */}
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* ช่องกรอกอีเมล */}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               อีเมล หรือ ชื่อผู้ใช้งาน
@@ -91,14 +87,14 @@ export default function LoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)} // ผูกสเตต
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition-all text-black"
               placeholder="admin1@example.com"
               required
             />
           </div>
 
-          {/* ช่องกรอกรหัสผ่าน */}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               รหัสผ่าน
@@ -107,7 +103,7 @@ export default function LoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)} // ผูกสเตต
+                onChange={(e) => setPassword(e.target.value)} 
                 className="w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition-all text-black"
                 placeholder="••••••••"
                 required
@@ -131,7 +127,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* จดจำฉันไว้ & ลืมรหัสผ่าน */}
+
           <div className="flex items-center justify-between">
             <label className="flex items-center cursor-pointer">
               <input 
@@ -140,19 +136,17 @@ export default function LoginPage() {
               />
               <span className="ml-2 text-sm text-gray-600">จดจำฉันไว้</span>
             </label>
-            <Link href="#" className="text-sm text-red-600 hover:underline">
+            <Link href="/login/identify" className="text-sm text-red-600 hover:underline">
               ลืมรหัสผ่าน?
             </Link>
           </div>
 
-          {/* ปุ่ม Submit */}
-          <button
-            type="submit"
+
+          <Button variant="secondary" type="submit"
             disabled={isLoading}
-            className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md shadow-red-600/30"
           >
             {isLoading ? "กำลังตรวจสอบข้อมูล..." : "เข้าสู่ระบบ"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-8 text-center text-sm text-gray-600 flex flex-col gap-2">

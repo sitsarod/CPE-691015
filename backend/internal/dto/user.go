@@ -1,4 +1,4 @@
-package models
+package dto
 
 // LoginInput ใช้สำหรับรับข้อมูล Email และ Password จากหน้าจอล็อกอินชั่วคราว
 type LoginInput struct {
