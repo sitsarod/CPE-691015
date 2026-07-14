@@ -3,7 +3,6 @@ package services
 import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
-	"CPE-691015/internal/repositories"
 	"errors"
 	"gorm.io/gorm"
 )
@@ -21,12 +20,11 @@ type AnnouncementService interface {
 }
 
 type announcementService struct {
-	repo repositories.AnnouncementRepository
 	db   *gorm.DB
 }
 
-func NewAnnouncementService(repo repositories.AnnouncementRepository, db *gorm.DB) AnnouncementService {
-	return &announcementService{repo: repo, db: db}
+func NewAnnouncementService(db *gorm.DB) AnnouncementService {
+	return &announcementService{db: db}
 }
 
 func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error) {
@@ -41,8 +39,8 @@ func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq)
 	}
 
 	// Validate category existence
-	category, err := s.repo.GetCategoryByID(req.CategoryID)
-	if err != nil || category == nil {
+	var category models.Category
+	if err := s.db.First(&category, req.CategoryID).Error; err != nil {
 		return nil, errors.New("category not found")
 	}
 
@@ -56,7 +54,7 @@ func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq)
 		ViewCount:  0,
 	}
 
-	if err := s.repo.Create(&announcement); err != nil {
+	if err := s.db.Create(&announcement).Error; err != nil {
 		return nil, err
 	}
 
@@ -64,16 +62,18 @@ func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq)
 }
 
 func (s *announcementService) GetAnnouncementByID(id uint) (*dto.AnnouncementDTO, error) {
-	announcement, err := s.repo.GetByID(id)
+	var announcement models.Announcement
+	err := s.db.Preload("User").Preload("Category").First(&announcement, id).Error
 	if err != nil {
 		return nil, err
 	}
-	dtoRes := mapToAnnouncementDTO(announcement)
+	dtoRes := mapToAnnouncementDTO(&announcement)
 	return &dtoRes, nil
 }
 
 func (s *announcementService) GetAllAnnouncements() ([]dto.AnnouncementDTO, error) {
-	announcements, err := s.repo.GetAll()
+	var announcements []models.Announcement
+	err := s.db.Preload("User").Preload("Category").Order("created_at DESC").Find(&announcements).Error
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +86,8 @@ func (s *announcementService) GetAllAnnouncements() ([]dto.AnnouncementDTO, erro
 }
 
 func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnouncementReq) (*dto.AnnouncementDTO, error) {
-	announcement, err := s.repo.GetByID(id)
-	if err != nil {
+	var announcement models.Announcement
+	if err := s.db.First(&announcement, id).Error; err != nil {
 		return nil, err
 	}
 
@@ -105,8 +105,8 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 		announcement.UserID = req.UserID
 	}
 	if req.CategoryID != 0 {
-		category, err := s.repo.GetCategoryByID(req.CategoryID)
-		if err != nil || category == nil {
+		var category models.Category
+		if err := s.db.First(&category, req.CategoryID).Error; err != nil {
 			return nil, errors.New("category not found")
 		}
 		announcement.CategoryID = req.CategoryID
@@ -122,7 +122,7 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 		return nil, errors.New("start date cannot be after end date")
 	}
 
-	if err := s.repo.Update(announcement); err != nil {
+	if err := s.db.Save(&announcement).Error; err != nil {
 		return nil, err
 	}
 
@@ -130,26 +130,26 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 }
 
 func (s *announcementService) DeleteAnnouncement(id uint) error {
-	_, err := s.repo.GetByID(id)
-	if err != nil {
+	var announcement models.Announcement
+	if err := s.db.First(&announcement, id).Error; err != nil {
 		return err
 	}
-	return s.repo.Delete(id)
+	return s.db.Delete(&models.Announcement{}, id).Error
 }
 
 func (s *announcementService) IncrementViewCount(id uint) error {
-	_, err := s.repo.GetByID(id)
-	if err != nil {
+	var announcement models.Announcement
+	if err := s.db.First(&announcement, id).Error; err != nil {
 		return err
 	}
-	return s.repo.IncrementViewCount(id)
+	return s.db.Model(&models.Announcement{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + ?", 1)).Error
 }
 
 func (s *announcementService) CreateCategory(req *dto.CreateCategoryReq) (*dto.CategoryDTO, error) {
 	category := models.Category{
 		Name: req.Name,
 	}
-	if err := s.repo.CreateCategory(&category); err != nil {
+	if err := s.db.Create(&category).Error; err != nil {
 		return nil, err
 	}
 	dtoRes := mapToCategoryDTO(&category)
@@ -157,7 +157,8 @@ func (s *announcementService) CreateCategory(req *dto.CreateCategoryReq) (*dto.C
 }
 
 func (s *announcementService) GetAllCategories() ([]dto.CategoryDTO, error) {
-	categories, err := s.repo.GetAllCategories()
+	var categories []models.Category
+	err := s.db.Order("name ASC").Find(&categories).Error
 	if err != nil {
 		return nil, err
 	}

@@ -3,7 +3,6 @@ package routes
 import (
     "CPE-691015/internal/config"
     "CPE-691015/internal/controllers"
-    "CPE-691015/internal/repositories"
     "CPE-691015/internal/services"
     "CPE-691015/internal/midlewares"
     "github.com/gin-gonic/gin"
@@ -47,8 +46,7 @@ func SetupRoutes(r *gin.Engine) {
     packageController := controllers.NewPackageController(packageService)
 
     // Announcement system
-    announcementRepo := repositories.NewAnnouncementRepository(db)
-    announcementService := services.NewAnnouncementService(announcementRepo, db)
+    announcementService := services.NewAnnouncementService(db)
     announcementController := controllers.NewAnnouncementController(announcementService)
 
     r.Use(midlewares.CORSMiddleware())
