@@ -2,6 +2,7 @@ package services
 
 import (
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/dto"
 	"errors"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 type AuthService interface {
-	Login(input models.LoginInput) (string, *models.User, error)
+	Login(input dto.LoginInput) (string, *models.User, error)
 }
 
 type authService struct {
@@ -25,7 +26,7 @@ func NewAuthService(db *gorm.DB) AuthService {
 // Mock secret key for JWT signing (in a real application, use a secure method to manage secrets)
 var jwtSecret = []byte("my_super_secret_key_1234")
 
-func (s *authService) Login(input models.LoginInput) (string, *models.User, error) {
+func (s *authService) Login(input dto.LoginInput) (string, *models.User, error) {
 	var user models.User
 	err := s.db.Where("email = ?", input.Email).First(&user).Error
 	if err != nil {
