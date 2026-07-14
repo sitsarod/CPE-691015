@@ -78,7 +78,6 @@ func seedAdmins(db *gorm.DB) {
 func seedCoaches(db *gorm.DB) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
-	// แกะข้อมูลออกมาพักไว้ใน Struct จำลองเพื่อแจกจ่ายลง 2 ตาราง
 	coachData := []struct {
 		FirstName      string
 		LastName       string
@@ -142,7 +141,6 @@ func seedCoaches(db *gorm.DB) {
 		if err := db.Where("email = ?", data.Email).First(&existingUser).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				err := db.Transaction(func(tx *gorm.DB) error {
-					// 1. สร้าง User ตัวหลัก
 					user := models.User{
 						FirstName: data.FirstName,
 						LastName:  data.LastName,
@@ -154,7 +152,6 @@ func seedCoaches(db *gorm.DB) {
 						return err
 					}
 
-					// 2. ✅ ยัดข้อมูลลง Coach ตามโมเดลจริง ไม่มีฟิลด์ของ User เกินมาแล้ว
 					coach := models.Coach{
 						UserID:         user.ID,
 						Nickname:       data.Nickname,
@@ -246,7 +243,6 @@ func seedCustomers(db *gorm.DB) {
 		if err := db.Where("email = ?", data.Email).First(&user).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				err := db.Transaction(func(tx *gorm.DB) error {
-					// 1. สร้าง User
 					user = models.User{
 						FirstName: data.FirstName,
 						LastName:  data.LastName,
@@ -258,7 +254,6 @@ func seedCustomers(db *gorm.DB) {
 						return err
 					}
 
-					// 2. ✅ ยัดข้อมูลลง Customer ตามโมเดลจริง (ไม่มีฟิลด์ First/Last Name, Email, Pass แฝง)
 					customer := models.Customer{
 						UserID:            user.ID,
 						Nickname:          data.Nickname,
@@ -301,6 +296,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
 		SessionsCount uint
 		HoursCount    uint
 		Price         float64
+		Schedules     []models.PackageSchedule
 	}{
 		{
 			CourseName:    "คอร์สฟุตบอลระดับพื้นฐาน (Basic Football)",
@@ -309,6 +305,10 @@ func seedCoursesAndPackages(db *gorm.DB) {
 			SessionsCount: 10,
 			HoursCount:    15,
 			Price:         3500.00,
+			Schedules: []models.PackageSchedule{
+				{DayOfWeek: models.Monday, StartTime: "17:00", EndTime: "18:30"},
+				{DayOfWeek: models.Wednesday, StartTime: "17:00", EndTime: "18:30"},
+			},
 		},
 		{
 			CourseName:    "คอร์สผู้รักษาประตู (Goalkeeper Pro)",
@@ -317,6 +317,10 @@ func seedCoursesAndPackages(db *gorm.DB) {
 			SessionsCount: 8,
 			HoursCount:    12,
 			Price:         4000.00,
+			Schedules: []models.PackageSchedule{
+				{DayOfWeek: models.Saturday, StartTime: "09:00", EndTime: "10:30"},
+				{DayOfWeek: models.Sunday, StartTime: "09:00", EndTime: "10:30"},
+			},
 		},
 		{
 			CourseName:    "คอร์สทีมเวิร์คและแทคติกการเล่น (Team Tactics)",
@@ -325,6 +329,10 @@ func seedCoursesAndPackages(db *gorm.DB) {
 			SessionsCount: 12,
 			HoursCount:    24,
 			Price:         5000.00,
+			Schedules: []models.PackageSchedule{
+				{DayOfWeek: models.Tuesday, StartTime: "18:00", EndTime: "20:00"},
+				{DayOfWeek: models.Thursday, StartTime: "18:00", EndTime: "20:00"},
+			},
 		},
 	}
 
@@ -364,8 +372,15 @@ func seedCoursesAndPackages(db *gorm.DB) {
 				}
 				if err := db.Create(&pkg).Error; err != nil {
 					log.Printf("ไม่สามารถสร้าง Package สำหรับคอร์ส %s ได้: %v", course.CourseName, err)
-				} else {
-					fmt.Printf("Seed Package ราคา %.2f สำหรับคอร์ส %s สำเร็จเรียบร้อย!\n", seed.Price, course.CourseName)
+					continue 
+				}
+				fmt.Printf("Seed Package ราคา %.2f สำหรับคอร์ส %s สำเร็จเรียบร้อย!\n", seed.Price, course.CourseName)
+
+				for _, sch := range seed.Schedules {
+					sch.PackageID = pkg.ID 
+					if err := db.Create(&sch).Error; err != nil {
+						log.Printf("ไม่สามารถสร้างตารางเรียนให้แพ็กเกจได้: %v", err)
+					}
 				}
 			} else {
 				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบ Package สำหรับคอร์ส %s: %v", course.CourseName, err)

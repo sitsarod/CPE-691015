@@ -19,16 +19,68 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 }
 
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
-func (s *EnrollmentService) GetAvailableCourses() ([]models.Course, error) {
+func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	var courses []models.Course
-	err := s.db.Preload("Packages").Where("status = ?", models.CourseStatusActive).Find(&courses).Error
-	return courses, err
+	
+	err := s.db.Preload("User").
+		Preload("Packages").
+		Preload("Packages.Schedules").
+		Where("status = ?", models.CourseStatusActive).
+		Order("id ASC").
+		Find(&courses).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	var response []dto.CourseDTO
+	for _, courseItem := range courses {
+		var packagesDTO []dto.CoursePackageDTO
+		for _, pkg := range courseItem.Packages {
+			var schedulesDTO []dto.PackageScheduleInfoDTO
+			for _, sch := range pkg.Schedules {
+				schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
+					DayOfWeek: string(sch.DayOfWeek),
+					StartTime: sch.StartTime,
+					EndTime:   sch.EndTime,
+				})
+			}
+
+			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
+				ID:            pkg.ID,
+				SessionsCount: pkg.SessionsCount,
+				HoursCount:    pkg.HoursCount,
+				Price:         pkg.Price,
+				Schedules:     schedulesDTO,
+			})
+		}
+
+		item := dto.CourseDTO{
+			ID:          courseItem.ID,
+			CourseName:  courseItem.CourseName,
+			Description: courseItem.Description,
+			Status:      string(courseItem.Status),
+			Packages:    packagesDTO,
+		}
+
+		if courseItem.User != nil {
+			item.User = &dto.CourseUserDTO{
+				FirstName: courseItem.User.FirstName,
+				LastName:  courseItem.User.LastName,
+				Email:     courseItem.User.Email,
+			}
+		}
+		response = append(response, item)
+	}
+
+	return response, nil
 }
 
 // [POST] ลงทะเบียนคอร์สเรียน
 func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*models.Enrollment, error) {
 	var pkg models.Package
-	if err := s.db.First(&pkg, packageID).Error; err != nil {
+	
+	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
 	}
 
@@ -49,7 +101,6 @@ func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*mode
 		TotalSessions:      pkg.SessionsCount,
 		RemainingSessions:  pkg.SessionsCount,
 		Status:             models.EnrollmentStatusActive,
-		IsScheduleUnlocked: false,
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -91,7 +142,7 @@ func (s *EnrollmentService) GetCustomerEnrollments(customerID uint) ([]models.En
 	var enrollments []models.Enrollment
 	err := s.db.Preload("Package").
 		Preload("Package.Course").
-		Preload("WeeklySchedules").
+		Preload("Package.Schedules").
 		Where("customer_id = ?", customerID).
 		Find(&enrollments).Error
 	return enrollments, err
@@ -110,9 +161,6 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 	if req.RemainingSessions != nil {
 		enrollment.RemainingSessions = uint(*req.RemainingSessions)
 	}
-	if req.IsScheduleUnlocked != nil {
-		enrollment.IsScheduleUnlocked = *req.IsScheduleUnlocked
-	}
 
 	if err := s.db.Save(&enrollment).Error; err != nil {
 		return nil, errors.New("ไม่สามารถอัปเดตข้อมูลได้")
@@ -123,59 +171,9 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 // [DELETE] ยกเลิกการลงทะเบียน
 func (s *EnrollmentService) CancelEnrollment(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("enrollment_id = ?", id).Delete(&models.WeeklySchedule{}).Error; err != nil {
-			return errors.New("ไม่สามารถลบตารางเรียนที่เกี่ยวข้องได้")
-		}
 		if err := tx.Delete(&models.Enrollment{}, id).Error; err != nil {
 			return errors.New("ไม่สามารถยกเลิกการลงทะเบียนได้")
 		}
 		return nil
 	})
-}
-
-// [CREATE] จัดตารางเรียน
-func (s *EnrollmentService) SetupWeeklySchedule(enrollmentID uint, schedules []models.WeeklySchedule) error {
-	if len(schedules) == 0 {
-		return errors.New("กรุณาระบุตารางเรียนอย่างน้อย 1 วัน")
-	}
-
-	var enrollment models.Enrollment
-	if err := s.db.Preload("Billing").First(&enrollment, enrollmentID).Error; err != nil {
-		return errors.New("ไม่พบข้อมูลการลงทะเบียน")
-	}
-
-	if enrollment.Billing == nil || enrollment.Billing.Status != models.StatusPaid {
-		return errors.New("ไม่สามารถจัดตารางเรียนได้ เนื่องจากยังไม่ได้ชำระเงิน หรือแอดมินยังไม่อนุมัติ")
-	}
-
-	for i := range schedules {
-		schedules[i].EnrollmentID = enrollmentID
-	}
-
-	return s.db.Create(&schedules).Error
-}
-
-// [UPDATE] แก้ไขเวลาเรียน (ทีละรายการ)
-func (s *EnrollmentService) UpdateSingleSchedule(scheduleID uint, day models.DayOfWeek, start string, end string) (*models.WeeklySchedule, error) {
-	var schedule models.WeeklySchedule
-	if err := s.db.First(&schedule, scheduleID).Error; err != nil {
-		return nil, errors.New("ไม่พบตารางเรียนนี้")
-	}
-
-	schedule.DayOfWeek = day
-	schedule.StartTime = start
-	schedule.EndTime = end
-
-	if err := s.db.Save(&schedule).Error; err != nil {
-		return nil, errors.New("ไม่สามารถแก้ไขเวลาเรียนได้")
-	}
-	return &schedule, nil
-}
-
-// [DELETE] ลบตารางเรียน 1 วัน
-func (s *EnrollmentService) DeleteSingleSchedule(scheduleID uint) error {
-	if err := s.db.Delete(&models.WeeklySchedule{}, scheduleID).Error; err != nil {
-		return errors.New("ไม่สามารถลบตารางเรียนได้")
-	}
-	return nil
 }

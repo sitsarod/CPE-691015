@@ -20,7 +20,6 @@ type Enrollment struct {
 	EnrollmentDate     time.Time        `json:"enrollment_date" valid:"required~enrollmentDate is required"`
 	TotalSessions      uint             `json:"total_sessions" valid:"required~totalSessions is required"`
 	RemainingSessions  uint             `json:"remaining_sessions" valid:"required~remainingSessions is required"`
-	IsScheduleUnlocked bool             `json:"is_schedule_unlocked" gorm:"default:false"`
 	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'active'"`
 
 	// Foreign Keys
@@ -32,6 +31,5 @@ type Enrollment struct {
 	Package         *Package         `json:"package" gorm:"foreignKey:PackageID"`
 	Customer        *Customer        `json:"customer" gorm:"foreignKey:CustomerID"`
 	Billing            *Billing            `json:"billing" gorm:"foreignKey:BillingID"`
-	WeeklySchedules []WeeklySchedule `json:"weekly_schedules" gorm:"foreignKey:EnrollmentID"`
 	StudentAttendances []StudentAttendance `json:"student_attendances" gorm:"foreignKey:EnrollmentID"`
 }
