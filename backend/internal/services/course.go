@@ -16,12 +16,13 @@ func NewCourseService(db *gorm.DB) *CourseService {
 	return &CourseService{db: db}
 }
 
-// GetAllCourses - ทำงานถูกต้องแล้ว
+// GetAllCourses
 func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
 	var courses []models.Course
 
 	err := s.db.Preload("User").
 		Preload("Packages").
+		Preload("Packages.Schedules").
 		Order("id ASC").
 		Find(&courses).Error
 
@@ -33,11 +34,21 @@ func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
 	for _, courseItem := range courses {
 		var packagesDTO []dto.CoursePackageDTO
 		for _, pkg := range courseItem.Packages {
+			var schedulesDTO []dto.PackageScheduleInfoDTO
+			for _, sch := range pkg.Schedules {
+				schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
+					DayOfWeek: string(sch.DayOfWeek),
+					StartTime: sch.StartTime,
+					EndTime:   sch.EndTime,
+				})
+			}
+
 			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
 				ID:            pkg.ID,
 				SessionsCount: pkg.SessionsCount,
 				HoursCount:    pkg.HoursCount,
 				Price:         pkg.Price,
+				Schedules:     schedulesDTO,
 			})
 		}
 
@@ -62,25 +73,36 @@ func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
 	return response, nil
 }
 
-// GetCourseByID - ทำงานถูกต้องแล้ว
+// GetCourseByID
 func (s *CourseService) GetCourseByID(id uint) (*dto.CourseDTO, error) {
 	var courseItem models.Course
 
 	err := s.db.Preload("User").
 		Preload("Packages").
+		Preload("Packages.Schedules").
 		First(&courseItem, id).Error
 
 	if err != nil {
-		return nil, err // คืนค่า gorm.ErrRecordNotFound กลับไปให้ Controller เช็กได้
+		return nil, err 
 	}
 
 	var packagesDTO []dto.CoursePackageDTO
 	for _, pkg := range courseItem.Packages {
+		var schedulesDTO []dto.PackageScheduleInfoDTO
+		for _, sch := range pkg.Schedules {
+			schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
+				DayOfWeek: string(sch.DayOfWeek),
+				StartTime: sch.StartTime,
+				EndTime:   sch.EndTime,
+			})
+		}
+
 		packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
 			ID:            pkg.ID,
 			SessionsCount: pkg.SessionsCount,
 			HoursCount:    pkg.HoursCount,
 			Price:         pkg.Price,
+			Schedules:     schedulesDTO,
 		})
 	}
 
@@ -103,10 +125,9 @@ func (s *CourseService) GetCourseByID(id uint) (*dto.CourseDTO, error) {
 	return &response, nil
 }
 
-// CreateCourse - ปรับปรุงการตรวจสอบชื่อซ้ำ
+// CreateCourse 
 func (s *CourseService) CreateCourse(course *models.Course) error {
 	var existingCourse models.Course
-	// ใช้ .Select("id") เพื่อประสิทธิภาพ เพราะเราต้องการเช็กแค่ว่า "มีอยู่ไหม" ไม่ต้องดึงมาทั้ง Object
 	err := s.db.Select("id").Where("course_name = ?", course.CourseName).First(&existingCourse).Error
 	if err == nil {
 		return errors.New("ชื่อคอร์สเรียนนี้มีอยู่ในระบบแล้ว")
@@ -115,7 +136,7 @@ func (s *CourseService) CreateCourse(course *models.Course) error {
 	return s.db.Create(course).Error
 }
 
-// UpdateCourse - ปรับปรุงการ Mapping และตรวจสอบ Type ของ Status
+// UpdateCourse 
 func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseDTO, error) {
 	var courseItem models.Course
 	err := s.db.First(&courseItem, id).Error
@@ -126,11 +147,10 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 	updateData := make(map[string]interface{})
 	if input.CourseName != "" {
 		updateData["course_name"] = input.CourseName
-	}
+    }
 	if input.Description != "" {
 		updateData["description"] = input.Description
 	}
-	// แนะนำแปลงเป็น string ก่อนเทียบเคส หรือเช็กตามโครงสร้างจริง
 	if string(input.Status) != "" {
 		updateData["status"] = input.Status
 	}
@@ -144,7 +164,7 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 	return s.GetCourseByID(id)
 }
 
-// DeleteCourse - ทำงานถูกต้องแล้ว
+// DeleteCourse
 func (s *CourseService) DeleteCourse(id uint) error {
 	var courseItem models.Course
 	if err := s.db.First(&courseItem, id).Error; err != nil {
