@@ -24,12 +24,24 @@ export default function RegisterPage() {
             <input type="text" placeholder="ชื่อจริง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
           </div>
 
-
           <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
             <label className="text-sm font-semibold text-gray-700">นามสกุล</label>
             <input type="text" placeholder="นามสกุล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
           </div>
 
+          <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">ชื่อเล่น</label>
+            <input type="text" placeholder="ชื่อเล่น" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
+
+          <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">เพศ</label>
+            <select className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base">
+              <option value="">เลือกเพศของคุณ</option>
+              <option value="male">ชาย</option>
+              <option value="female">หญิง</option>
+            </select>
+          </div>
 
           <div className="w-full flex flex-col space-y-1.5">
             <label className="text-sm font-semibold text-gray-700">วันเกิด</label>
@@ -37,13 +49,33 @@ export default function RegisterPage() {
           </div>
 
           <div className="w-full flex flex-col space-y-1.5">
-            <label className="text-sm font-semibold text-gray-700">เพศ</label>
-            <input type="text" placeholder="เลือกเพศของคุณ" className="w-full px-4 py-3 border border-gray-200 rounded-xl" />
+            <label className="text-sm font-semibold text-gray-700">อีเมล</label>
+            <input type="email" placeholder="ระบุอีเมล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
+
+          <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">รหัสผ่าน</label>
+            <input type="password" placeholder="รหัสผ่าน" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
+
+          <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">ยืนยันรหัสผ่าน</label>
+            <input type="password" placeholder="ยืนยันรหัสผ่าน" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
           </div>
 
           <div className="w-full flex flex-col space-y-1.5">
-            <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์มือถือหรืออีเมล</label>
-            <input type="text" placeholder="ระบุเบอร์โทรศัพท์หรืออีเมล" className="w-full px-4 py-3 border border-gray-200 rounded-xl" />
+            <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์มือถือ</label>
+            <input type="text" placeholder="ระบุหมายเลขโทรศัพท์มือถือ" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
+
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">อีเมลผู้ปกครอง</label>
+            <input type="email" placeholder="ระบุอีเมลผู้ปกครอง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
+          </div>
+
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์ผู้ปกครอง</label>
+            <input type="text" placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" />
           </div>
 
 

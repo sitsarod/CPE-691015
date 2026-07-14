@@ -3,6 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation"; 
+import Button from "@/components/Button";
+import { apiFetch } from "@/services/apiClient";
+
+interface LoginResponse {
+  token: string;
+  user: {
+    id: number;
+    role: string;
+    firstName: string;
+    email: string;
+  };
+}
 
 export default function LoginPage() {
   const router = useRouter(); 
@@ -20,33 +32,19 @@ export default function LoginPage() {
     setErrorMsg("");
     setIsLoading(true);
 
-    try {
-
-      const response = await fetch("http://localhost:8000/api/auth/login", {
+try {
+      const data = await apiFetch<LoginResponse>("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           Email: email,       
           Password: password,
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-      
-        throw new Error(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-      }
-
-
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
-      localStorage.setItem("user_id", data.user.id.toString());
-      localStorage.setItem("user_name", data.user.firstName);
-      localStorage.setItem("user_email", data.user.email);
-
+      localStorage.setItem("firstName", data.user.firstName);
+      localStorage.setItem("email", data.user.email);
 
       if (data.user.role === "admin") {
         router.push("/admin/dashboard");
@@ -58,7 +56,7 @@ export default function LoginPage() {
       
       router.refresh();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     } finally {
       setIsLoading(false);
     }
@@ -138,19 +136,17 @@ export default function LoginPage() {
               />
               <span className="ml-2 text-sm text-gray-600">จดจำฉันไว้</span>
             </label>
-            <Link href="#" className="text-sm text-red-600 hover:underline">
+            <Link href="/login/identify" className="text-sm text-red-600 hover:underline">
               ลืมรหัสผ่าน?
             </Link>
           </div>
 
 
-          <button
-            type="submit"
+          <Button variant="secondary" type="submit"
             disabled={isLoading}
-            className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md shadow-red-600/30"
           >
             {isLoading ? "กำลังตรวจสอบข้อมูล..." : "เข้าสู่ระบบ"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-8 text-center text-sm text-gray-600 flex flex-col gap-2">
