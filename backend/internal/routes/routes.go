@@ -3,6 +3,7 @@ package routes
 import (
     "CPE-691015/internal/config"
     "CPE-691015/internal/controllers"
+    "CPE-691015/internal/repositories"
     "CPE-691015/internal/services"
     "CPE-691015/internal/midlewares"
     "github.com/gin-gonic/gin"
@@ -44,6 +45,11 @@ func SetupRoutes(r *gin.Engine) {
 
     packageService := services.NewPackageService(db)
     packageController := controllers.NewPackageController(packageService)
+
+    // Announcement system
+    announcementRepo := repositories.NewAnnouncementRepository(db)
+    announcementService := services.NewAnnouncementService(announcementRepo, db)
+    announcementController := controllers.NewAnnouncementController(announcementService)
 
     r.Use(midlewares.CORSMiddleware())
 
@@ -139,6 +145,20 @@ func SetupRoutes(r *gin.Engine) {
             packageGroup.POST("/", packageController.CreatePackage)
             packageGroup.PATCH("/:id", packageController.UpdatePackage)
             packageGroup.DELETE("/:id", packageController.DeletePackage)
+        }
+
+        // Announcement endpoints
+        api.GET("/announcements", announcementController.GetAllAnnouncements)
+        api.GET("/announcements/:id", announcementController.GetAnnouncementByID)
+        api.POST("/announcements/:id/view", announcementController.IncrementViewCount)
+        api.GET("/announcements/categories", announcementController.GetAllCategories)
+
+        protectedAnnouncementGroup := protected.Group("/announcements")
+        {
+            protectedAnnouncementGroup.POST("/", announcementController.CreateAnnouncement)
+            protectedAnnouncementGroup.PATCH("/:id", announcementController.UpdateAnnouncement)
+            protectedAnnouncementGroup.DELETE("/:id", announcementController.DeleteAnnouncement)
+            protectedAnnouncementGroup.POST("/categories", announcementController.CreateCategory)
         }
     }
 }
