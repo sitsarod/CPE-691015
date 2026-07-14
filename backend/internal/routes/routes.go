@@ -28,7 +28,15 @@ func SetupRoutes(r *gin.Engine) {
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
 	authController := controllers.NewAuthController(authService)
+
+	bankAccountService := services.NewBankAccountService(db)
+	bankAccountController := controllers.NewBankAccountController(bankAccountService)
+
+	expenseService := services.NewExpenseService(db)
+	expenseController := controllers.NewExpenseController(expenseService)
+
 	r.Use(midlewares.CORSMiddleware())
+	r.Static("/uploads", "./uploads")
 
 	api := r.Group("/api")
 	{
@@ -87,6 +95,24 @@ func SetupRoutes(r *gin.Engine) {
 			billingGroup.POST("/split", billingController.CreateSplitBilling)
 			billingGroup.PATCH("/:id", billingController.UpdateBilling)
 			billingGroup.DELETE("/:id", billingController.DeleteBilling)
+		}
+
+		bankAccountsGroup := api.Group("/bank-accounts")
+		{
+			bankAccountsGroup.GET("/", bankAccountController.GetAllBankAccounts)
+			bankAccountsGroup.POST("/", bankAccountController.CreateBankAccount)
+			bankAccountsGroup.PATCH("/:id", bankAccountController.UpdateBankAccount)
+			bankAccountsGroup.PATCH("/:id/toggle", bankAccountController.ToggleBankAccount)
+			bankAccountsGroup.DELETE("/:id", bankAccountController.DeleteBankAccount)
+		}
+
+		api.POST("/upload", expenseController.UploadFileHandler)
+
+		expensesGroup := api.Group("/expenses")
+		{
+			expensesGroup.GET("/", expenseController.GetAllExpenses)
+			expensesGroup.POST("/", expenseController.CreateExpense)
+			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
 		}
 	}
 }

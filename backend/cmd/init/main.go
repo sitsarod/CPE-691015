@@ -56,6 +56,8 @@ func main() {
 		&models.PaymentItem{},
 		&models.Announcement{},
 		&models.Category{},
+		&models.BankAccount{},
+		&models.Expense{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)
@@ -67,6 +69,7 @@ func main() {
 	seedCoaches(db)
 	seedCustomers(db)
 	seedCoursesAndPackages(db)
+	seedBankAccounts(db)
 }
 
 
