@@ -1,6 +1,6 @@
 package dto
 
-//เวลาใช้งานใช้อันนี้กับ controller
+
 type CourseDTO struct {
 	ID          uint               `json:"id"`
 	CourseName  string             `json:"course_name"`
@@ -17,13 +17,15 @@ type CourseUserDTO struct {
 }
 
 type CoursePackageDTO struct {
-	ID            uint    `json:"id"` // เพิ่ม ID เพื่อให้ Frontend ส่งกลับมาตอนสมัครเรียนได้
-	SessionsCount uint    `json:"sessions_count"`
-	HoursCount    uint    `json:"hours_count"`
-	Price         float64 `json:"price"` 
+	ID            uint                     `json:"id"`
+	SessionsCount uint                     `json:"sessions_count"`
+	HoursCount    uint                     `json:"hours_count"`
+	Price         float64                  `json:"price"`
+	Schedules     []PackageScheduleInfoDTO `json:"schedules"`
 }
 
-// type CourseImageDTO struct {
-// 	ID      uint   `json:"id"`
-// 	FileURL string `json:"file_url"`
-// }
+type PackageScheduleInfoDTO struct {
+	DayOfWeek string `json:"day_of_week"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
