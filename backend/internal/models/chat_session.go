@@ -27,5 +27,5 @@ type ChatSession struct {
 	User   *User `json:"user,omitempty" gorm:"foreignKey:UserID"`
 
 	// Relationship — messages logged within this session
-	AutoQAs []AutoQA `json:"auto_qas" gorm:"foreignKey:SessionID"`
+	AutoQAs []AutoQA `json:"auto_qas" gorm:"foreignKey:SessionID;constraint:OnDelete:CASCADE;"`
 }
