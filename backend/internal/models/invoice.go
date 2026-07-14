@@ -11,6 +11,7 @@ const (
 	InvoiceSuccess  InvoiceStatus = "success"
 	InvoiceRejected InvoiceStatus = "rejected"
 	InvoiceExpired  InvoiceStatus = "expired"
+	InvoiceCancelled InvoiceStatus = "cancelled"
 )
 
 type PaymentMethod string
