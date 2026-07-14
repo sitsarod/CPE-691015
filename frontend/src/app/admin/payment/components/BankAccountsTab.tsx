@@ -152,7 +152,7 @@ export default function BankAccountsTab({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {bankAccounts.map(account => {
-            let colorClass = "bg-slate-650";
+            let colorClass = "bg-slate-600";
             const nameUpper = account.bank_name.toUpperCase();
             if (account.bank_name.includes("กสิกร") || nameUpper.includes("KBANK")) {
               colorClass = "bg-[#00a859]";
@@ -160,6 +160,8 @@ export default function BankAccountsTab({
               colorClass = "bg-[#4e2a84]";
             } else if (account.bank_name.includes("กรุงเทพ") || nameUpper.includes("BBL")) {
               colorClass = "bg-[#1e3a8a]";
+            } else if (account.bank_name.includes("กรุงไทย") || nameUpper.includes("KTB")) {
+              colorClass = "bg-[#007ad0]";
             }
 
             return (
