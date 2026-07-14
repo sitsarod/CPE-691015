@@ -25,11 +25,19 @@ func SetupRoutes(r *gin.Engine) {
     billingService := services.NewBillingService(db)
     billingController := controllers.NewBillingController(billingService)
 
-    userService := services.NewUserService(db)
-    userController := controllers.NewUserController(userService)
-    
-    authService := services.NewAuthService(db)
-    authController := controllers.NewAuthController(authService)
+	userService := services.NewUserService(db)
+	userController := controllers.NewUserController(userService)
+	authService := services.NewAuthService(db)
+	authController := controllers.NewAuthController(authService)
+
+	bankAccountService := services.NewBankAccountService(db)
+	bankAccountController := controllers.NewBankAccountController(bankAccountService)
+
+	expenseService := services.NewExpenseService(db)
+	expenseController := controllers.NewExpenseController(expenseService)
+
+	r.Use(midlewares.CORSMiddleware())
+	r.Static("/uploads", "./uploads")
     
     courseService := services.NewCourseService(db)
     courseController := controllers.NewCourseController(courseService)
@@ -100,6 +108,24 @@ func SetupRoutes(r *gin.Engine) {
             billingGroup.PATCH("/:id", billingController.UpdateBilling)
             billingGroup.DELETE("/:id", billingController.DeleteBilling)
         }
+
+		bankAccountsGroup := protected.Group("/bank-accounts")
+		{
+			bankAccountsGroup.GET("/", bankAccountController.GetAllBankAccounts)
+			bankAccountsGroup.POST("/", bankAccountController.CreateBankAccount)
+			bankAccountsGroup.PATCH("/:id", bankAccountController.UpdateBankAccount)
+			bankAccountsGroup.PATCH("/:id/toggle", bankAccountController.ToggleBankAccount)
+			bankAccountsGroup.DELETE("/:id", bankAccountController.DeleteBankAccount)
+		}
+
+		api.POST("/upload", expenseController.UploadFileHandler)
+
+		expensesGroup := protected.Group("/expenses")
+		{
+			expensesGroup.GET("/", expenseController.GetAllExpenses)
+			expensesGroup.POST("/", expenseController.CreateExpense)
+			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
+		}
 
         protectedCourseGroup := protected.Group("/courses")
         {
