@@ -10,6 +10,14 @@ import FinancialSummaryTab from "./components/FinancialSummaryTab";
 import BankAccountsTab from "./components/BankAccountsTab";
 import ExpensesTab from "./components/ExpensesTab";
 import EditBillingModal from "./components/EditBillingModal";
+import {
+  fetchCustomers,
+  fetchBillings,
+  fetchBankAccounts,
+  fetchCoaches,
+  fetchExpenses,
+  updateBilling
+} from "@/services/paymentAPI";
 
 export default function FinancialPortal() {
   const [subTab, setSubTab] = useState<'issue' | 'slips' | 'summary' | 'banks' | 'expenses'>('issue');
@@ -21,6 +29,7 @@ export default function FinancialPortal() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
   // UI States
@@ -39,47 +48,37 @@ export default function FinancialPortal() {
 
   // Fetch live backend data
   const fetchData = async () => {
+    const isFirstLoad = students.length === 0 && billings.length === 0;
     try {
-      setIsLoading(true);
+      if (isFirstLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setApiError(null);
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const headers: HeadersInit = {
-        "Content-Type": "application/json"
-      };
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
 
       // Fetch students, billings, bank accounts, coaches, and expenses in parallel
-      const [studentsRes, billingsRes, bankAccountsRes, coachesRes, expensesRes] = await Promise.all([
-        fetch("http://localhost:8000/api/users/role?role=customer", { headers }),
-        fetch("http://localhost:8000/api/billings/", { headers }),
-        fetch("http://localhost:8000/api/bank-accounts/", { headers }),
-        fetch("http://localhost:8000/api/coaches", { headers }),
-        fetch("http://localhost:8000/api/expenses/", { headers })
+      const [studentsData, billingsData, bankAccountsData, coachesData, expensesData] = await Promise.all([
+        fetchCustomers(token || ""),
+        fetchBillings(token || ""),
+        fetchBankAccounts(token || ""),
+        fetchCoaches(token || ""),
+        fetchExpenses(token || "")
       ]);
 
-      if (!studentsRes.ok || !billingsRes.ok || !bankAccountsRes.ok || !coachesRes.ok || !expensesRes.ok) {
-        throw new Error("ดึงข้อมูลจากเซิร์ฟเวอร์หลักไม่สำเร็จ กรุณาตรวจสอบการรันเซิร์ฟเวอร์ Backend");
-      }
-
-      const studentsData = await studentsRes.json();
-      const billingsData = await billingsRes.json();
-      const bankAccountsData = await bankAccountsRes.json();
-      const coachesData = await coachesRes.json();
-      const expensesData = await expensesRes.json();
-
-      setStudents(studentsData.data || []);
-      setBillings(billingsData.data || []);
-      setBankAccounts(bankAccountsData.data || []);
-      setCoaches(coachesData.data || []);
-      setExpenses(expensesData.data || []);
+      setStudents(studentsData);
+      setBillings(billingsData);
+      setBankAccounts(bankAccountsData);
+      setCoaches(coachesData);
+      setExpenses(expensesData);
     } catch (err: any) {
       console.error(err);
       setApiError(err.message);
       triggerToast(err.message, 'error');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -94,24 +93,16 @@ export default function FinancialPortal() {
   ) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const response = await fetch(`http://localhost:8000/api/billings/${billingId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
+      await updateBilling(
+        billingId,
+        {
           billingdescription: form.billingdescription,
           billingamount: parseFloat(form.billingamount),
           billingdue_date: new Date(form.billingdue_date).toISOString(),
           billingtype_id: parseInt(form.billingtype_id)
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "แก้ไขข้อมูลบิลไม่สำเร็จ");
-      }
+        },
+        token || ""
+      );
 
       triggerToast("แก้ไขข้อมูลบิลสำเร็จเรียบร้อย");
       setIsEditBillingModalOpen(false);
@@ -135,9 +126,22 @@ export default function FinancialPortal() {
       )}
 
       {/* Header section */}
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">ระบบการจัดการธุรกรรมและการเงิน</h1>
-        <p className="text-sm text-slate-500 mt-1">ออกใบแจ้งยอดผู้เรียน ตรวจสอบภาพสลิปยอดรับ และบันทึกค่าใช้จ่ายสถาบัน</p>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <span>ระบบการจัดการธุรกรรมและการเงิน</span>
+            {isRefreshing && (
+              <span className="inline-flex items-center text-[10px] md:text-xs font-semibold text-slate-600 bg-slate-100/90 px-2.5 py-1 rounded-full border border-slate-200 shadow-xs select-none">
+                <span className="relative flex h-2 w-2 mr-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                กำลังอัปเดตข้อมูล...
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">ออกใบแจ้งยอดผู้เรียน ตรวจสอบภาพสลิปยอดรับ และบันทึกค่าใช้จ่ายสถาบัน</p>
+        </div>
       </div>
 
       {/* Sub-Navigation Bar */}

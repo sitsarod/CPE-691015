@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, Users, Search, CheckSquare, Tag, Calendar, PlusCircle, AlertCircle, Info, Pencil } from 'lucide-react';
 import { BackendUser, BillingDTO } from './types';
+import { createBilling } from "@/services/paymentAPI";
 
 const BILLING_TYPES = [
   { id: 1, name: "ค่าเรียน / คอร์สเรียน" },
@@ -119,19 +120,7 @@ export default function BillingIssueForm({
         billingdue_date: new Date(dueDate).toISOString()
       };
 
-      const response = await fetch("http://localhost:8000/api/billings/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'ออกบิลไม่สำเร็จ');
-      }
+      await createBilling(payload, token || "");
 
       onTriggerToast(`ออกบิลเรียกเก็บเงินสำเร็จจำนวน ${selectedStudentIds.length} รายการ`);
       
