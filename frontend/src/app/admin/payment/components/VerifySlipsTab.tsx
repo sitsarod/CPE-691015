@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, AlertCircle, Eye, X, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { BillingDTO } from './types';
+import { confirmSlip, rejectSlip } from "@/services/paymentAPI";
 
 export interface VerifySlipsTabProps {
   billings: BillingDTO[];
@@ -47,18 +48,7 @@ export default function VerifySlipsTab({
   const handleApproveSlip = async (invoiceId: number) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const response = await fetch(`http://localhost:8000/api/payments/invoices/${invoiceId}/confirm`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'ยืนยันสลิปไม่สำเร็จ');
-      }
+      await confirmSlip(invoiceId, token || "");
 
       onTriggerToast('อนุมัติยอดเงินโอนเข้าเรียนเรียบร้อยแล้ว');
       setReviewBilling(null);
@@ -71,18 +61,7 @@ export default function VerifySlipsTab({
   const handleRejectSlip = async (invoiceId: number) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const response = await fetch(`http://localhost:8000/api/payments/invoices/${invoiceId}/reject`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'ปฏิเสธสลิปไม่สำเร็จ');
-      }
+      await rejectSlip(invoiceId, token || "");
 
       onTriggerToast('ปฏิเสธหลักฐานการแนบสลิปเรียบร้อยแล้ว');
       setReviewBilling(null);

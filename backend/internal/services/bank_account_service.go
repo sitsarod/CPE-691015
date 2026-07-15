@@ -154,6 +154,10 @@ func (s *BankAccountService) DeleteBankAccount(id uint) error {
 		return errors.New("ไม่พบข้อมูลบัญชีธนาคาร")
 	}
 
+	if account.IsActive {
+		return errors.New("ไม่สามารถลบบัญชีธนาคารที่ตั้งเป็นบัญชีหลักได้")
+	}
+
 	if err := s.db.Unscoped().Delete(&account).Error; err != nil {
 		return errors.New("ไม่สามารถลบข้อมูลบัญชีธนาคารได้")
 	}

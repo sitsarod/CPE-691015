@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Landmark, PlusCircle, Pencil, Trash2, X } from 'lucide-react';
 import { BankAccount } from './types';
+import {
+  toggleBankAccount,
+  deleteBankAccount,
+  createBankAccount,
+  updateBankAccount
+} from "@/services/paymentAPI";
 
 export interface BankAccountsTabProps {
   bankAccounts: BankAccount[];
@@ -27,20 +33,7 @@ export default function BankAccountsTab({
   const handleToggleBank = async (bankId: number) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const response = await fetch(`http://localhost:8000/api/bank-accounts/${bankId}/toggle`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "สลับเปิดปิดบัญชีธนาคารไม่สำเร็จ");
-      }
-
-      const result = await response.json();
+      const result = await toggleBankAccount(bankId, token || "");
       onTriggerToast(`เปลี่ยนบัญชีรับเงินหลักเป็น: ${result.data.bank_name} เรียบร้อยแล้ว`);
       onFetchData();
     } catch (err: any) {
@@ -51,24 +44,20 @@ export default function BankAccountsTab({
   // Delete bank account
   const handleDeleteBank = async (e: React.MouseEvent, bankId: number) => {
     e.stopPropagation();
+
+    const account = bankAccounts.find(acc => acc.ID === bankId);
+    if (account?.is_active) {
+      onTriggerToast("ไม่สามารถลบบัญชีธนาคารที่ตั้งเป็นบัญชีหลักได้", "error");
+      return;
+    }
+
     if (!window.confirm("คุณต้องการลบบัญชีธนาคารนี้อย่างถาวรใช่หรือไม่?")) {
       return;
     }
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const response = await fetch(`http://localhost:8000/api/bank-accounts/${bankId}`, {
-        method: "DELETE",
-        headers: {
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "ลบบัญชีธนาคารไม่สำเร็จ");
-      }
-
+      await deleteBankAccount(bankId, token || "");
       onTriggerToast("ลบบัญชีธนาคารสำเร็จเรียบร้อย");
       onFetchData();
     } catch (err: any) {
@@ -87,11 +76,6 @@ export default function BankAccountsTab({
     setSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const url = editingBank 
-        ? `http://localhost:8000/api/bank-accounts/${editingBank.ID}`
-        : "http://localhost:8000/api/bank-accounts/";
-      
-      const method = editingBank ? "PATCH" : "POST";
       const payload = {
         bank_name: bankForm.bank_name,
         account_name: bankForm.account_name,
@@ -99,18 +83,10 @@ export default function BankAccountsTab({
         ...(editingBank ? { is_active: bankForm.is_active } : {})
       };
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "บันทึกบัญชีธนาคารไม่สำเร็จ");
+      if (editingBank) {
+        await updateBankAccount(editingBank.ID, payload, token || "");
+      } else {
+        await createBankAccount(payload, token || "");
       }
 
       onTriggerToast(editingBank ? "แก้ไขบัญชีธนาคารสำเร็จเรียบร้อย" : "เพิ่มบัญชีธนาคารใหม่สำเร็จเรียบร้อย");
@@ -198,8 +174,10 @@ export default function BankAccountsTab({
                     <button
                       type="button"
                       onClick={(e) => handleDeleteBank(e, account.ID)}
-                      className="p-1 rounded-full bg-white/20 hover:bg-red-650 text-white transition-colors cursor-pointer"
-                      title="ลบบัญชีธนาคาร"
+                      className={`p-1 rounded-full bg-white/20 text-white transition-colors cursor-pointer ${
+                        account.is_active ? 'opacity-40 cursor-not-allowed' : 'hover:bg-red-650'
+                      }`}
+                      title={account.is_active ? "ไม่สามารถลบบัญชีธนาคารหลักได้" : "ลบบัญชีธนาคาร"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

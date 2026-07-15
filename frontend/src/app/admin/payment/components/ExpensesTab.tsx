@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Receipt, Trash2 } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
+import { createExpense, deleteExpense } from "@/services/paymentAPI";
 
 export interface ExpensesTabProps {
   coaches: Coach[];
@@ -50,19 +51,7 @@ export default function ExpensesTab({
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const res = await fetch("http://localhost:8000/api/expenses/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(reqBody)
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "บันทึกค่าใช้จ่ายไม่สำเร็จ");
-      }
+      await createExpense(reqBody, token || "");
 
       onTriggerToast("บันทึกค่าใช้จ่ายสำเร็จเรียบร้อย");
       setExpenseForm({
@@ -84,17 +73,7 @@ export default function ExpensesTab({
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const res = await fetch(`http://localhost:8000/api/expenses/${id}`, {
-        method: "DELETE",
-        headers: {
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "ลบค่าใช้จ่ายไม่สำเร็จ");
-      }
+      await deleteExpense(id, token || "");
 
       onTriggerToast("ลบรายการค่าใช้จ่ายสำเร็จเรียบร้อย");
       onFetchData();

@@ -25,7 +25,7 @@ export default function CustomerSidebar() {
       <div className="flex-1 flex flex-col justify-center min-w-[260px] overflow-x-hidden">
         <nav className="flex flex-col gap-3 w-full">
           <SidebarItem href="/customer/dashboard" icon={<Home />} label="หน้าแรก" active={pathname === "/customer/dashboard"} />
-          <SidebarItem href="/customer/finance" icon={<Wallet />} label="การเงิน" active={pathname === "/customer/finance"} />
+          <SidebarItem href="/customer/payment" icon={<Wallet />} label="การเงิน" active={pathname === "/customer/payment"} />
           <SidebarItem href="/customer/enrollment" icon={<ClipboardList />} label="คอร์สของฉัน" active={pathname === "/customer/enrollment"} />
           <SidebarItem href="/customer/schedule" icon={<Calendar />} label="ตารางเรียน" active={pathname === "/customer/schedule"} />
           <SidebarItem href="/customer/profile" icon={<User />} label="โปรไฟล์" active={pathname === "/customer/profile"} />
