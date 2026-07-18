@@ -14,6 +14,10 @@ interface LoginResponse {
     firstName: string;
     email: string;
   };
+  customer: {
+    nickname: string;
+    qrImage: string;
+  };
 }
 
 export default function LoginPage() {
@@ -46,6 +50,12 @@ try {
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("email", data.user.email);
       localStorage.setItem("user_id", data.user.id.toString());
+      if (data.customer?.qrImage) {
+    localStorage.setItem("qrImage", data.customer.qrImage);
+  } else {
+    
+    localStorage.setItem("qrImage", `data:image/png;base64,...`); 
+  }
 
       if (data.user.role === "admin") {
         router.push("/admin/dashboard");

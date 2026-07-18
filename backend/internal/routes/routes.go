@@ -28,7 +28,7 @@ func SetupRoutes(r *gin.Engine) {
 	userService := services.NewUserService(db)
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
-	authController := controllers.NewAuthController(authService)
+	authController := controllers.NewAuthController(authService, userService)
 
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
@@ -61,6 +61,7 @@ func SetupRoutes(r *gin.Engine) {
         authGroup := api.Group("/auth")
         {
             authGroup.POST("/login", authController.Login) 
+            authGroup.POST("/register", authController.Register)
         }
 
         api.GET("/enrollments/courses", enrollmentController.GetAvailableCourses)
@@ -82,6 +83,8 @@ func SetupRoutes(r *gin.Engine) {
         {
             userGroup.GET("/", userController.GetAllUsersController)
             userGroup.GET("/role", userController.GetUserByRoleController)
+            userGroup.GET("/students", userController.GetActiveStudentsController)
+            
             userGroup.GET("/:id", userController.GetUserProfileController)
             userGroup.POST("/", userController.CreateUserController)
             userGroup.PATCH("/:id", userController.UpdateUserController)

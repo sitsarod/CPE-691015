@@ -3,6 +3,7 @@ package services
 import (
 	
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/dto"
 	"errors"
 	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
@@ -36,59 +37,87 @@ func (s *UserService) GetUserProfile(id uint) (*models.User, error) {
 	return &user, err
 }
 
-// Create inserts a new user into the database [POST]
+// CreateUser inserts a new user and their customer profile into the database [POST]
 func (s *UserService) CreateUser(user *models.User) error {
 	var existingUser models.User
-	// Check if a user with the same email already exists
+
 	if err := s.db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
 		return errors.New("บัญชีผู้ใช้นี้มีอยู่แล้ว")
 	}
-	// Hash the password before saving
+	
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("ไม่สามารถเข้ารหัสผ่านได้")
 	}
-	// เอารหัสที่แฮชเสร็จแล้วยัดกลับไปแทนที่ข้อความดิบ
 	user.Password = string(hashedPassword)
 
-	// Save the user to the database
-	return s.db.Create(user).Error
-}
 
-// Update updates an existing user in the database [PATCH]
-func (s *UserService) UpdateUser(id uint, input models.User) (*models.User, error) {
-	var user models.User
-	err := s.db.Preload("Customer").Preload("Coach").First(&user, id).Error
-	if err != nil {
-		return nil, err
-	}
-	// สร้าง map เก็บเฉพาะฟิลด์ที่จะอัปเดต (ป้องกันค่าว่างวิ่งไปทับของเดิม)
-	updateData := make(map[string]interface{})
-	if input.FirstName != "" {
-		updateData["first_name"] = input.FirstName
-	}
-	if input.LastName != "" {
-		updateData["last_name"] = input.LastName
-	}
-	if input.Email != "" {
-		updateData["email"] = input.Email
-	}
-	
-	if len(updateData) > 0 {
-		err = s.db.Model(&user).Updates(updateData).Error
-		if err != nil {
-			return nil, err
+	if user.Role == models.CustomerRole && user.Customer != nil {
+		user.Customer.Status = models.CustomerStatusActive
+		
+		if user.Customer.PersonalQRCode == "" {
+			user.Customer.PersonalQRCode = "QR_" + user.Email
 		}
 	}
 
-	if user.Role == "customer" && input.Customer != nil {
-		s.db.Model(user.Customer).Updates(input.Customer)
-	}else if user.Role == "coach" && input.Coach != nil {
-		s.db.Model(user.Coach).Updates(input.Coach)
-	}
+	return s.db.Create(user).Error
+}
 
-	s.db.Preload("Customer").Preload("Coach").First(&user, id) //ดึงข้อมูลล่าสุดหลังอัปเดต
-	return &user, nil
+
+// UpdateUser updates an existing user and their customer/coach details [PATCH]
+func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models.User, error) {
+    var user models.User
+
+    err := s.db.Preload("Customer").Preload("Coach").First(&user, id).Error
+    if err != nil {
+        return nil, err
+    }
+
+
+    updateData := make(map[string]interface{})
+    if input.FirstName != "" {
+        updateData["first_name"] = input.FirstName
+    }
+    if input.LastName != "" {
+        updateData["last_name"] = input.LastName
+    }
+    if input.Email != "" {
+    
+        var existingUser models.User
+        if err := s.db.Where("email = ? AND id != ?", input.Email, id).First(&existingUser).Error; err == nil {
+            return nil, errors.New("อีเมลนี้ถูกใช้งานโดยบัญชีอื่นแล้ว")
+        }
+        updateData["email"] = input.Email
+    }
+    
+    if len(updateData) > 0 {
+        err = s.db.Model(&user).Updates(updateData).Error
+        if err != nil {
+            return nil, err
+        }
+    }
+
+    
+    if user.Role == "customer" && user.Customer != nil {
+        customerUpdate := make(map[string]interface{})
+        if input.Nickname != "" {
+            customerUpdate["nickname"] = input.Nickname
+        }
+        if input.PhoneNumber != "" {
+            customerUpdate["phone_number"] = input.PhoneNumber
+        }
+        
+        if len(customerUpdate) > 0 {
+            s.db.Model(user.Customer).Updates(customerUpdate)
+        }
+    } else if user.Role == "coach" {
+        
+    }
+
+   
+    s.db.Preload("Customer").Preload("Coach").First(&user, id) 
+    return &user, nil
 }
 
 // Delete removes a user from the database [DELETE]
@@ -98,4 +127,37 @@ func (s *UserService) DeleteUser(id uint) error {
 		return err
 	}
 	return s.db.Delete(&user).Error
+}
+
+// IsActiveStudent ตรวจสอบว่าลูกค้ามีคอร์สที่กำลังเรียนอยู่หรือไม่
+func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
+	var customer models.Customer
+	err := s.db.Where("user_id = ?", userID).First(&customer).Error
+	if err != nil {
+		return false, nil 
+	}
+
+
+	var count int64
+	err = s.db.Model(&models.Enrollment{}).
+		Where("customer_id = ? AND status = ? AND remaining_sessions > ?", customer.ID, models.EnrollmentStatusActive, 0).
+		Count(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (s *UserService) GetActiveStudents() ([]models.User, error) {
+    var users []models.User
+
+    err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
+        Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
+        Where("enrollments.status = ? AND enrollments.remaining_sessions > ?", models.EnrollmentStatusActive, 0).
+        Group("users.id").
+        Preload("Customer").
+        Find(&users).Error
+
+    return users, err
 }
