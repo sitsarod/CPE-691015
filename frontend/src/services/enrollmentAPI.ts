@@ -8,8 +8,7 @@ import {
   UpdateEnrollmentReq 
 } from "@/types/enrollment";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน (Public)
