@@ -28,7 +28,8 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
 
     try {
 
-      const response = await fetch("http://localhost:8000/api/auth/login", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${baseUrl}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
