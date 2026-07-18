@@ -4,6 +4,7 @@ import (
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -23,8 +24,13 @@ func NewAuthService(db *gorm.DB) AuthService {
 	return &authService{db: db}
 }
 
-// Mock secret key for JWT signing (in a real application, use a secure method to manage secrets)
-var jwtSecret = []byte("my_super_secret_key_1234")
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return []byte("my_super_secret_key_1234")
+	}
+	return []byte(secret)
+}
 
 func (s *authService) Login(input dto.LoginInput) (string, *models.User, error) {
 	var user models.User
@@ -50,7 +56,7 @@ func (s *authService) Login(input dto.LoginInput) (string, *models.User, error) 
 		"exp":     time.Now().Add(time.Hour * 1).Unix(), // Token expires in 1 hours
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(getJWTSecret())
 	if err != nil {
 		return "", nil, errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
 	}

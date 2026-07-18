@@ -25,7 +25,7 @@ func (ctrl *authController) Login(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกอีเมลและรหัสผ่านให้ถูกต้อง"})
 		return
-	}
+	}	
 
 	token, user, err := ctrl.authService.Login(input)
 	if err != nil {
