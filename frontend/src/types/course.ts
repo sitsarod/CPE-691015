@@ -64,3 +64,19 @@ export interface UpdatePackageReq {
   price?: number;
   schedules?: PackageScheduleInfoDTO[];
 }
+
+export interface ScheduleFormInput {
+  id: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface PackageFormInput {
+  id: string;
+  isNew?: boolean;
+  sessions_count: number | "";
+  hours_count: number | "";
+  price: number | "";
+  schedules: ScheduleFormInput[];
+}

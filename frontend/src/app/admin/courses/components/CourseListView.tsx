@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Clock, Calendar, Loader2, BookOpen } from "lucide-react"; // ลบ Edit ออก
-import { fetchAllCourses } from "@/services/courseAPI";
+import { useState, useEffect, useRef } from "react";
+import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2 } from "lucide-react"; 
+import { fetchAllCourses, deleteCourse } from "@/services/courseAPI";
 import { CourseDTO } from "@/types/course";
 
-export default function CourseListView() { 
+export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState<number | null>(null);
 
   const loadCourses = async () => {
     setIsLoading(true);
@@ -27,6 +28,19 @@ export default function CourseListView() {
     loadCourses();
   }, []);
 
+  const handleDelete = async (id: number) => {
+    if (confirm("คุณต้องการลบคอร์สนี้ใช่หรือไม่?")) {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        await deleteCourse(id, token);
+        loadCourses();
+      } catch (err: any) {
+        alert(err.message || "ไม่สามารถลบคอร์สได้");
+      }
+    }
+  };
+
   if (isLoading) return <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#CC0000]" /></div>;
   if (error) return <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">{error}</div>;
   if (courses.length === 0) return <div className="text-center py-20 text-gray-500">ยังไม่มีข้อมูลคอร์สเรียนในระบบ</div>;
@@ -43,6 +57,43 @@ export default function CourseListView() {
                 <p className="text-sm text-gray-500">{course.description}</p>
               </div>
             </div>
+              {onEdit && (
+                <div className="relative">
+                  <button
+                    onClick={() => setDropdownOpen(dropdownOpen === (course.id || course.ID) ? null : (course.id || course.ID))}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors focus:outline-none"
+                  >
+                    <MoreVertical className="w-5 h-5 text-gray-500" />
+                  </button>
+                  
+                  {dropdownOpen === (course.id || course.ID) && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(null)}></div>
+                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden py-1">
+                        <button
+                          onClick={() => {
+                            onEdit(course.id || course.ID);
+                            setDropdownOpen(null);
+                          }}
+                          className="w-full text-left px-4 py-3 flex items-center hover:bg-gray-50 text-gray-700 text-sm font-semibold transition-colors"
+                        >
+                          <Edit className="w-4 h-4 mr-3 text-gray-400" /> แก้ไขข้อมูล
+                        </button>
+                        <div className="h-px bg-gray-100 w-full my-1"></div>
+                        <button
+                          onClick={() => {
+                            handleDelete(course.id || course.ID);
+                            setDropdownOpen(null);
+                          }}
+                          className="w-full text-left px-4 py-3 flex items-center hover:bg-red-50 text-red-600 text-sm font-semibold transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 mr-3" /> ลบข้อมูล
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
           </div>
           
           <div className="p-6">
