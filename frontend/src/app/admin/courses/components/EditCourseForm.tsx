@@ -29,6 +29,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           isNew: false,
           sessions_count: pkg.sessions_count,
           hours_count: pkg.hours_count,
+          max_seats: pkg.max_seats,
           price: pkg.price,
           schedules: (pkg.schedules || []).map((sch: any, i: number) => ({
             id: `sch-${i}-${Date.now()}`,
@@ -49,7 +50,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
     loadCourse();
   }, [courseId]);
 
-  const addPackage = () => setPackages([...packages, { id: `temp-${Date.now()}`, isNew: true, sessions_count: "", hours_count: "", price: "", schedules: [] }]);
+  const addPackage = () => setPackages([...packages, { id: `temp-${Date.now()}`, isNew: true, sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }]);
   
   const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
   
@@ -111,6 +112,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
             course_id: courseId,
             sessions_count: Number(pkg.sessions_count),
             hours_count: Number(pkg.hours_count),
+            max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
             schedules: schedulesDto
           }, token);
@@ -118,6 +120,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           await updatePackage(Number(pkg.id), {
             sessions_count: Number(pkg.sessions_count),
             hours_count: Number(pkg.hours_count),
+            max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
             schedules: schedulesDto
           }, token);
@@ -202,7 +205,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1} {pkg.isNew && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded ml-2">ใหม่</span>}</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
@@ -219,6 +222,13 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
                       className="w-full border border-gray-300 rounded-md pl-9 pr-3 py-2 outline-none focus:border-[#CC0000]"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">ที่นั่งสูงสุด <span className="text-red-500">*</span></label>
+                  <input 
+                    type="number" required min="1" value={pkg.max_seats} onChange={(e) => updatePackageField(pkg.id, "max_seats", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>

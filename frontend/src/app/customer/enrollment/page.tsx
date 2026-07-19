@@ -227,6 +227,12 @@ export default function EnrollmentPage() {
                             Package
                           </span>
                           <h4 className="text-2xl font-black text-gray-900 mt-3 tracking-tight">{pkg.sessions_count} ครั้ง</h4>
+                          <p className="text-xs font-semibold text-gray-500 mt-1">
+                            รับ {pkg.max_seats || 0} คน 
+                            <span className={`ml-1 ${(pkg.max_seats || 0) - (pkg.current_enrollments || 0) <= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                              (เหลือ {(pkg.max_seats || 0) - (pkg.current_enrollments || 0)} ที่)
+                            </span>
+                          </p>
                         </div>
                         <div className="bg-red-50 p-2 rounded-full">
                           <CheckCircle2 className="w-5 h-5 text-[#CC0000]" />
@@ -269,13 +275,16 @@ export default function EnrollmentPage() {
 
                       <Button 
                         variant="secondary"
+                        disabled={(pkg.current_enrollments || 0) >= (pkg.max_seats || 0)}
                         onClick={() => {
-                          setSuccessMessage(null);
-                          setSelectedPackage({ ...pkg, course_name: course.course_name });
+                          if ((pkg.current_enrollments || 0) < (pkg.max_seats || 0)) {
+                            setSuccessMessage(null);
+                            setSelectedPackage({ ...pkg, course_name: course.course_name });
+                          }
                         }}
-                        className="!py-3.5 !rounded-xl text-[15px] gap-2"
+                        className={`!py-3.5 !rounded-xl text-[15px] gap-2 ${(pkg.current_enrollments || 0) >= (pkg.max_seats || 0) ? '!bg-gray-100 !border-gray-200 !text-gray-400 cursor-not-allowed hover:!bg-gray-100 hover:!text-gray-400' : ''}`}
                       >
-                        สมัครเรียนแพ็กเกจนี้
+                        {(pkg.current_enrollments || 0) >= (pkg.max_seats || 0) ? 'ที่นั่งเต็มแล้ว' : 'สมัครเรียนแพ็กเกจนี้'}
                       </Button>
                     </div>
                   ))}

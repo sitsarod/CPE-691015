@@ -44,11 +44,12 @@ func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
 			}
 
 			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-				ID:            pkg.ID,
-				SessionsCount: pkg.SessionsCount,
-				HoursCount:    pkg.HoursCount,
-				Price:         pkg.Price,
-				Schedules:     schedulesDTO,
+				ID:                 pkg.ID,
+				SessionsCount:      pkg.SessionsCount,
+				HoursCount:         pkg.HoursCount,
+				Price:              pkg.Price,
+				MaxSeats:           pkg.MaxSeats,
+				Schedules:          schedulesDTO,
 			})
 		}
 
@@ -98,11 +99,12 @@ func (s *CourseService) GetCourseByID(id uint) (*dto.CourseDTO, error) {
 		}
 
 		packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-			ID:            pkg.ID,
-			SessionsCount: pkg.SessionsCount,
-			HoursCount:    pkg.HoursCount,
-			Price:         pkg.Price,
-			Schedules:     schedulesDTO,
+			ID:                 pkg.ID,
+			SessionsCount:      pkg.SessionsCount,
+			HoursCount:         pkg.HoursCount,
+			Price:              pkg.Price,
+			MaxSeats:           pkg.MaxSeats,
+			Schedules:          schedulesDTO,
 		})
 	}
 

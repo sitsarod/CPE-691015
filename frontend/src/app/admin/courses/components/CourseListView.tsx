@@ -109,6 +109,8 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
                   </div>
                   <div className="flex items-center text-gray-500 text-sm mb-4">
                     <Clock className="w-4 h-4 mr-1" /> รวม {pkg.hours_count} ชม.
+                    <span className="mx-2">•</span>
+                    <span className="font-semibold">รับ {pkg.max_seats || 0} ท่าน</span>
                   </div>
                   
                   <div className="bg-gray-50 rounded p-2 text-xs text-gray-600">
