@@ -53,6 +53,10 @@ func SetupRoutes(r *gin.Engine) {
     autoQAService := services.NewAutoQAService(db)
     autoQAController := controllers.NewAutoQAController(autoQAService)
 
+    // Quiz system
+    quizService := services.NewQuizService(db)
+    quizController := controllers.NewQuizController(quizService)
+
     r.Use(middlewares.CORSMiddleware())
 
     api := r.Group("/api")
@@ -165,6 +169,9 @@ func SetupRoutes(r *gin.Engine) {
         api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
         api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
 
+        // Quiz public endpoints
+        api.GET("/quiz", quizController.GetActiveQuestions)
+
         protectedAnnouncementGroup := protected.Group("/announcements")
         {
             protectedAnnouncementGroup.POST("/", announcementController.CreateAnnouncement)
@@ -188,6 +195,16 @@ func SetupRoutes(r *gin.Engine) {
             protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
             protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
             protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
+        }
+
+        protectedQuizGroup := protected.Group("/admin/quiz")
+        {
+            protectedQuizGroup.GET("/", quizController.GetAllQuestions)
+            protectedQuizGroup.POST("/", quizController.CreateQuestion)
+            protectedQuizGroup.PUT("/:id", quizController.UpdateQuestion)
+            protectedQuizGroup.DELETE("/:id", quizController.DeleteQuestion)
+            protectedQuizGroup.POST("/:id/options", quizController.AddOption)
+            protectedQuizGroup.DELETE("/options/:option_id", quizController.DeleteOption)
         }
     }
 }
