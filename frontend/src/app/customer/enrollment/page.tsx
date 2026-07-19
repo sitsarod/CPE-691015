@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation"; 
-import { FileEdit, LayoutGrid, Loader2, Clock, Calendar, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileEdit, LayoutGrid, Loader2, Clock, Calendar, CheckCircle2, AlertCircle, SearchCode, ArrowRight, CheckCircle } from "lucide-react";
 import { Enrollment, Course, PackageInfo } from "@/types/enrollment";
 import { fetchCustomerEnrollments, fetchAvailableCourses, enrollCourse } from "@/services/enrollmentAPI";
+import { fetchActiveQuestions } from "@/services/quizAPI";
+import { QuizQuestion, QuizOption } from "@/types/quiz";
+import Button from "@/components/Button";
 
 export default function EnrollmentPage() {
   const router = useRouter(); 
@@ -18,6 +21,14 @@ export default function EnrollmentPage() {
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // สำหรับระบบคัดกรอง (Quiz Engine)
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState<QuizOption[]>([]);
+  const [quizResultCourseIds, setQuizResultCourseIds] = useState<number[]>([]);
+  const [isQuizFinished, setIsQuizFinished] = useState(false);
+
   const loadData = async () => {
     try {
         setIsLoading(true);
@@ -29,13 +40,15 @@ export default function EnrollmentPage() {
           return; 
         }
 
-        const [enrollmentsData, coursesData] = await Promise.all([
+        const [enrollmentsData, coursesData, questionsData] = await Promise.all([
           fetchCustomerEnrollments(customerId, token),
-          fetchAvailableCourses(token)
+          fetchAvailableCourses(token),
+          fetchActiveQuestions()
         ]);
         
         setEnrollments(enrollmentsData);
         setRecommendedCourses(coursesData);
+        setQuizQuestions(questionsData);
       } catch (err: unknown) { 
         const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล";
         setError(errorMessage);
@@ -73,6 +86,43 @@ export default function EnrollmentPage() {
       setIsEnrolling(false);
     }
   };
+
+  const handleStartQuiz = () => {
+    setCurrentQuizIndex(0);
+    setQuizAnswers([]);
+    setQuizResultCourseIds([]);
+    setIsQuizFinished(false);
+    setIsQuizOpen(true);
+  };
+
+  const handleSelectQuizOption = (option: QuizOption) => {
+    const newAnswers = [...quizAnswers, option];
+    
+    if (currentQuizIndex < quizQuestions.length - 1) {
+      setQuizAnswers(newAnswers);
+      setCurrentQuizIndex(currentQuizIndex + 1);
+    } else {
+      // ปิด modal ทันที ไม่มีหน่วงเวลา
+      const recommendedIds = newAnswers
+        .map(a => a.recommended_course_id)
+        .filter(id => id != null) as number[];
+      
+      setQuizAnswers(newAnswers);
+      setQuizResultCourseIds(recommendedIds);
+      setIsQuizFinished(true);
+      setIsQuizOpen(false);
+    }
+  };
+
+  const handleClearQuizFilter = () => {
+    setIsQuizFinished(false);
+    setQuizResultCourseIds([]);
+  };
+
+  // กรองคอร์สตามผลลัพธ์ควิซ ถ้าควิซเสร็จแล้ว
+  const displayCourses = isQuizFinished && quizResultCourseIds.length > 0 
+    ? recommendedCourses.filter(c => quizResultCourseIds.includes(c.ID || c.id || 0))
+    : recommendedCourses;
 
   if (isLoading) return <div className="w-full h-[60vh] flex flex-col items-center justify-center text-gray-500"><Loader2 className="w-10 h-10 animate-spin text-[#CC0000] mb-4" /></div>;
   if (error) return <div className="p-6 text-center text-red-600">{error}</div>;
@@ -118,78 +168,115 @@ export default function EnrollmentPage() {
       {/* ---------------- ส่วนที่ 2: แนะนำคอร์ส (แบ่งกลุ่มตามคอร์ส) ---------------- */}
       <div className="mb-10 w-full">
         <div className="flex justify-between items-center mb-10">
-          <h2 className="text-2xl font-bold text-gray-900">คอร์สทั้งหมด</h2>
-          <span className="flex items-center gap-2 text-gray-500 text-sm">
-            <LayoutGrid className="w-5 h-5 text-[#CC0000]" />
-            เลือกแพ็กเกจที่เหมาะกับคุณ
-          </span>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {isQuizFinished && quizResultCourseIds.length > 0 ? "คอร์สที่เหมาะกับคุณ" : "คอร์สทั้งหมด"}
+            </h2>
+            <span className="flex items-center gap-2 text-gray-500 text-sm mt-1">
+              <LayoutGrid className="w-5 h-5 text-[#CC0000]" />
+              {isQuizFinished && quizResultCourseIds.length > 0 
+                ? "ผลลัพธ์จากการประเมินแบบคัดกรองของคุณ" 
+                : "แสดงคอร์สเรียนทั้งหมด"}
+            </span>
+          </div>
+
+          {/* ปุ่มฝั่งขวา */}
+          {isQuizFinished && quizResultCourseIds.length > 0 ? (
+            <button 
+              onClick={handleClearQuizFilter}
+              className="bg-white text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all"
+            >
+              ✕ เลิกคัดกรอง (ดูคอร์สทั้งหมด)
+            </button>
+          ) : (
+            (quizQuestions?.length || 0) > 0 && (
+              <button 
+                onClick={handleStartQuiz}
+                className="bg-[#CC0000] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-red-200 hover:bg-red-700 hover:scale-105 transition-all animate-bounce-slow"
+              >
+                <SearchCode className="w-5 h-5" /> เลือกแพ็กเกจที่เหมาะกับคุณ
+              </button>
+            )
+          )}
         </div>
 
-        {recommendedCourses.length === 0 ? (
+        {displayCourses.length === 0 ? (
           <p className="text-gray-500 text-center py-10">ไม่มีคอร์สแนะนำในขณะนี้</p>
         ) : (
           <div className="space-y-12">
-            {recommendedCourses.map((course, index) => (
-              <div key={`course-${course.ID ?? index}`}>
+            {displayCourses.map((course, index) => (
+              <div key={`course-${course.ID ?? index}`} id={`course-${course.ID || course.id}`}>
                 {/* หัวข้อคอร์ส */}
                 <h3 className="text-3xl font-black text-gray-900 mb-6 border-l-4 border-[#CC0000] pl-4 uppercase tracking-tight">
                   {course.course_name}
                 </h3>
                 
                 {/* รายการแพ็กเกจ */}
-                <div className="flex flex-wrap gap-6">
+                <div className="flex flex-wrap gap-8">
                   {(course.packages ?? []).map((pkg, pkgIdx) => (
                     <div 
                       key={`pkg-${course.ID ?? index}-${pkg.ID ?? pkgIdx}`} 
-                      className="w-[260px] bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all"
+                      className="w-[280px] bg-white border border-gray-100 rounded-2xl p-6 shadow-md relative overflow-hidden"
                     >
-                      <div className="mb-4">
-                        <span className="text-xs font-bold bg-red-100 text-[#CC0000] px-2 py-1 rounded-full uppercase">
-                          แพ็กเกจ
-                        </span>
-                        <h4 className="text-lg font-bold text-gray-900 mt-2">{pkg.sessions_count} ครั้ง</h4>
+                      {/* เส้นแถบสีแดงด้านบน */}
+                      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#CC0000] to-red-400"></div>
+
+                      <div className="mb-5 mt-2 flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-black bg-red-100 text-[#CC0000] px-3 py-1 rounded-full uppercase tracking-widest">
+                            Package
+                          </span>
+                          <h4 className="text-2xl font-black text-gray-900 mt-3 tracking-tight">{pkg.sessions_count} ครั้ง</h4>
+                        </div>
+                        <div className="bg-red-50 p-2 rounded-full">
+                          <CheckCircle2 className="w-5 h-5 text-[#CC0000]" />
+                        </div>
                       </div>
 
-                      <div className="space-y-3 mb-6">
-                        <div className="flex items-center text-gray-600 text-sm">
-                          <Clock className="w-4 h-4 mr-2" />
-                          <span>{pkg.hours_count} ชั่วโมง</span>
+                      <div className="space-y-4 mb-8">
+                        <div className="flex items-center text-gray-600 text-sm font-medium">
+                          <Clock className="w-4 h-4 mr-3 text-gray-400" />
+                          <span>เวลาเรียนรวม {pkg.hours_count} ชั่วโมง</span>
                         </div>
                         
                         {/* ตารางเรียน */}
-                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                          <div className="flex items-center text-gray-700 text-xs font-semibold mb-2">
-                            <Calendar className="w-3 h-3 mr-2" />
-                            ตารางเรียน:
+                        <div className="bg-gradient-to-br from-gray-50 to-red-50/30 p-4 rounded-xl border border-gray-100">
+                          <div className="flex items-center text-gray-800 text-xs font-bold mb-3">
+                            <Calendar className="w-3.5 h-3.5 mr-2 text-[#CC0000]" />
+                            รอบเวลาเรียน:
                           </div>
-                          <div className="space-y-1">
+                          <div className="space-y-2">
                             {pkg.schedules && pkg.schedules.length > 0 ? (
                               pkg.schedules.map((sch, schIdx) => (
-                                <div key={`sch-${pkg.ID ?? pkgIdx}-${schIdx}`} className="text-[11px] text-gray-600 flex justify-between">
-                                  <span>{sch.day_of_week}</span>
-                                  <span>{sch.start_time} - {sch.end_time}</span>
+                                <div key={`sch-${pkg.ID ?? pkgIdx}-${schIdx}`} className="text-xs text-gray-600 flex justify-between items-center border-b border-gray-100/50 pb-1 last:border-0 last:pb-0">
+                                  <span className="font-semibold text-gray-700">{sch.day_of_week}</span>
+                                  <span className="bg-white px-2 py-0.5 rounded text-gray-500 shadow-sm border border-gray-50 text-[10px]">{sch.start_time} - {sch.end_time}</span>
                                 </div>
                               ))
                             ) : (
-                              <p className="text-[11px] text-gray-400">ยังไม่ระบุเวลา</p>
+                              <p className="text-xs text-gray-400 italic">ยังไม่ระบุเวลา</p>
                             )}
                           </div>
                         </div>
 
-                        <p className="text-2xl font-black text-[#CC0000] pt-2">
-                          {pkg.price.toLocaleString()} <span className="text-sm font-normal text-gray-500">บาท</span>
-                        </p>
+                        <div className="pt-2">
+                          <p className="text-sm text-gray-400 font-medium mb-1">ราคาแพ็กเกจ</p>
+                          <p className="text-3xl font-black text-[#CC0000]">
+                            {pkg.price.toLocaleString()} <span className="text-base font-bold text-gray-500 tracking-normal">THB</span>
+                          </p>
+                        </div>
                       </div>
 
-                      <button 
+                      <Button 
+                        variant="secondary"
                         onClick={() => {
                           setSuccessMessage(null);
                           setSelectedPackage({ ...pkg, course_name: course.course_name });
                         }}
-                        className="w-full py-2 rounded-lg bg-[#CC0000] text-white font-bold hover:bg-red-700 transition-colors"
+                        className="!py-3.5 !rounded-xl text-[15px] gap-2"
                       >
-                        สมัครเรียน
-                      </button>
+                        สมัครเรียนแพ็กเกจนี้
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -242,6 +329,73 @@ export default function EnrollmentPage() {
                 >
                   {isEnrolling ? <Loader2 className="w-5 h-5 animate-spin" /> : "ยืนยันการสมัคร"}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- Modal ระบบคัดกรอง (Quiz Engine) - Premium UI ---------------- */}
+      {isQuizOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-md transition-all duration-300">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-col max-h-[90vh] border border-white/20 animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-[#CC0000] via-red-600 to-red-700 p-8 text-white relative overflow-hidden">
+              {/* Decorative Background Elements */}
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4"></div>
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-black/10 rounded-full blur-xl translate-y-1/2 -translate-x-1/4"></div>
+              <div className="absolute top-4 left-1/2 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2"></div>
+              
+              {/* Progress Bar (at bottom of header) */}
+              <div className="absolute bottom-0 left-0 w-full h-1.5 bg-black/20">
+                <div 
+                  className="h-full bg-white transition-all duration-700 ease-out relative"
+                  style={{ width: `${((currentQuizIndex) / quizQuestions.length) * 100}%` }}
+                >
+                  <div className="absolute top-0 right-0 w-3 h-full bg-white blur-[2px] shadow-[0_0_10px_rgba(255,255,255,1)]"></div>
+                </div>
+              </div>
+
+              <div className="relative z-10 flex items-center justify-between">
+                <h3 className="text-2xl font-black flex items-center gap-3 drop-shadow-md tracking-tight">
+                  <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm border border-white/10">
+                    <SearchCode className="w-6 h-6 text-white" />
+                  </div>
+                  แบบประเมินคอร์สที่ใช่
+                </h3>
+              </div>
+
+              <button 
+                onClick={() => setIsQuizOpen(false)}
+                className="absolute top-6 right-6 text-white/70 hover:text-white hover:rotate-90 transition-all duration-300 z-10 bg-black/10 hover:bg-black/20 p-2 rounded-full backdrop-blur-sm border border-white/5"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-10 overflow-y-auto bg-gray-50/30">
+              {/* --- Quiz Questions --- */}
+              <div className="max-w-xl mx-auto">
+                <div className="mb-10 text-center">
+                  <span className="inline-block px-5 py-1.5 rounded-full bg-red-50 border border-red-100 text-[#CC0000] font-bold text-xs tracking-widest uppercase mb-6 shadow-sm">
+                    คำถามที่ {currentQuizIndex + 1} จาก {quizQuestions.length}
+                  </span>
+                  <h2 className="text-3xl font-black text-gray-900 leading-snug">
+                    {quizQuestions[currentQuizIndex]?.text}
+                  </h2>
+                </div>
+                <div className="space-y-4">
+                  {quizQuestions[currentQuizIndex]?.options?.map((opt) => (
+                    <button 
+                      key={opt.id}
+                      onClick={() => handleSelectQuizOption(opt)}
+                      className="w-full text-left p-6 rounded-2xl border-2 border-gray-100 bg-white hover:border-[#CC0000] transition-colors font-bold text-gray-700 hover:text-[#CC0000] text-lg group flex items-center justify-between"
+                    >
+                      <span>{opt.text}</span>
+                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-[#CC0000] transition-colors" />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
