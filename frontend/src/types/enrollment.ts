@@ -44,6 +44,18 @@ export interface Enrollment {
   package: PackageInfo;
 }
 
+export interface FormattedEnrollment {
+  id: number;
+  courseName: string;
+  sessionsCount: number;
+  totalSessions: number;
+  remainingSessions: number;
+  attendedSessions: number;
+  status: string;
+  schedules: ScheduleInfo[];
+  unifiedTime: string;
+}
+
 export interface Course {
   ID?: number;
   id?: number;
