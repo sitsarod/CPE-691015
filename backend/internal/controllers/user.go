@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -25,35 +26,6 @@ func NewUserController(userService *services.UserService) *UserController {
 func (ctrl *UserController) GetUserByRoleController(c *gin.Context) {
 	role := c.Query("role")
 	users, err := ctrl.userService.GetUserByRole(models.UserRole(role))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"data": users})
-}
-
-func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
-	idParam := c.Param("id")
-	userID, err := strconv.ParseUint(idParam, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผู้ใช้งานไม่ถูกต้อง"})
-		return
-	}
-	user, err := ctrl.userService.GetUserProfile(uint(userID))
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
-		return
-	}
-	
-	c.JSON(http.StatusOK, gin.H{"data": user})
-}
-
-func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
-	users, err := ctrl.userService.GetAllUsers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
 		return
@@ -84,7 +56,7 @@ func (c *UserController) UpdateUserController(ctx *gin.Context) {
 		return
 	}
 
-	var input models.User
+	var input dto.UpdateProfileInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
 		return
@@ -119,4 +91,81 @@ func (c *UserController) DeleteUserController(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"message": "ลบผู้ใช้งานสำเร็จแล้ว"})
+}
+
+func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
+    idParam := c.Param("id")
+    userID, err := strconv.ParseUint(idParam, 10, 32)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผู้ใช้งานไม่ถูกต้อง"})
+        return
+    }
+    
+    user, err := ctrl.userService.GetUserProfile(uint(userID))
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+            return 
+        }
+
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
+        return
+    }
+    
+ 
+    isStudent, _ := ctrl.userService.IsActiveStudent(user.ID)
+
+
+    response := dto.UserProfileResponseDTO{
+        ID:        user.ID,
+        Email:     user.Email,
+        FirstName: user.FirstName,
+        LastName:  user.LastName,
+        Role:      string(user.Role),
+        IsStudent: isStudent, 
+    }
+    
+  
+    c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
+	users, err := ctrl.userService.GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+// GetActiveStudentsController ดึงรายชื่อผู้ใช้งานที่เป็นนักเรียนทั้งหมดส่งให้หน้าบ้าน
+func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
+
+	studentUsers, err := ctrl.userService.GetActiveStudents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลนักเรียนได้"})
+		return
+	}
+
+	var response []dto.StudentListResponseDTO
+	for _, u := range studentUsers {
+		nickname := ""
+		phone := ""
+
+		if u.Customer != nil {
+			nickname = u.Customer.Nickname
+			phone = u.Customer.PhoneNumber
+		}
+
+		response = append(response, dto.StudentListResponseDTO{
+			ID:          u.ID,
+			FirstName:   u.FirstName,
+			LastName:    u.LastName,
+			Email:       u.Email,
+			Nickname:    nickname,
+			PhoneNumber: phone,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": response})
 }
