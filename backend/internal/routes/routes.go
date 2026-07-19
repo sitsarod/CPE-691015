@@ -4,7 +4,7 @@ import (
     "CPE-691015/internal/config"
     "CPE-691015/internal/controllers"
     "CPE-691015/internal/services"
-    "CPE-691015/internal/midlewares"
+    "CPE-691015/internal/middlewares"
     "github.com/gin-gonic/gin"
 )
 
@@ -36,7 +36,7 @@ func SetupRoutes(r *gin.Engine) {
 	expenseService := services.NewExpenseService(db)
 	expenseController := controllers.NewExpenseController(expenseService)
 
-	r.Use(midlewares.CORSMiddleware())
+	r.Use(middlewares.CORSMiddleware())
 	r.Static("/uploads", "./uploads")
     
     courseService := services.NewCourseService(db)
@@ -53,7 +53,7 @@ func SetupRoutes(r *gin.Engine) {
     autoQAService := services.NewAutoQAService(db)
     autoQAController := controllers.NewAutoQAController(autoQAService)
 
-    r.Use(midlewares.CORSMiddleware())
+    r.Use(middlewares.CORSMiddleware())
 
     api := r.Group("/api")
     {
@@ -74,7 +74,7 @@ func SetupRoutes(r *gin.Engine) {
         
 
         protected := api.Group("")
-        protected.Use(midlewares.AuthMiddleware())
+        protected.Use(middlewares.AuthMiddleware())
 
         protected.GET("/coaches", coachController.GetCoaches)
         protected.POST("/coaches", coachController.CreateCoach)

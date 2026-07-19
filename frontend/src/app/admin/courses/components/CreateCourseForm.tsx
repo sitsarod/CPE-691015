@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Save, Clock, Calendar, Loader2 } from "lucide-react";
 import { createCourse, createPackage } from "@/services/courseAPI";
-
-type ScheduleInput = { id: string; day_of_week: string; start_time: string; end_time: string };
-type PackageInput = { id: string; sessions_count: number | ""; hours_count: number | ""; price: number | ""; schedules: ScheduleInput[] };
+import { ScheduleFormInput, PackageFormInput } from "@/types/course";
 
 export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,7 +11,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
-  const [packages, setPackages] = useState<PackageInput[]>([
+  const [packages, setPackages] = useState<PackageFormInput[]>([
     { id: Date.now().toString(), sessions_count: "", hours_count: "", price: "", schedules: [] }
   ]);
 
@@ -21,7 +19,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   
   const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
   
-  const updatePackage = (pkgId: string, field: keyof PackageInput, value: string | number) => {
+  const updatePackage = (pkgId: string, field: keyof PackageFormInput, value: string | number) => {
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, [field]: value } : pkg));
   };
 
@@ -33,7 +31,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, schedules: pkg.schedules.filter(sch => sch.id !== schId) } : pkg));
   };
   
-  const updateSchedule = (pkgId: string, schId: string, field: keyof ScheduleInput, value: string) => {
+  const updateSchedule = (pkgId: string, schId: string, field: keyof ScheduleFormInput, value: string) => {
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, schedules: pkg.schedules.map(sch => sch.id === schId ? { ...sch, [field]: value } : sch) } : pkg));
   };
 
