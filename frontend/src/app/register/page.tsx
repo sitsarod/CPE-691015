@@ -176,7 +176,7 @@ export default function RegisterPage() {
             <Button variant="outline" type="button" onClick={() => window.history.back()}>
               ยกเลิก
             </Button>
-            <Button  variant="secondary" type="submit" disabled={isLoading}>
+            <Button  variant="primary" type="submit" disabled={isLoading}>
               {isLoading ? "กำลังสร้างบัญชี..." : "สร้างบัญชีใหม่"}
             </Button>
           </div>

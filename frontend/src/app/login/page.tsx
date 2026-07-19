@@ -153,7 +153,7 @@ try {
           </div>
 
 
-          <Button variant="secondary" type="submit"
+          <Button variant="primary" type="submit"
             disabled={isLoading}
           >
             {isLoading ? "กำลังตรวจสอบข้อมูล..." : "เข้าสู่ระบบ"}
