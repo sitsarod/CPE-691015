@@ -30,11 +30,12 @@ export async function fetchAvailableCourses(token?: string): Promise<Course[]> {
 
 // [GET] ดึงประวัติการลงทะเบียนของลูกค้า (Protected)
 export async function fetchCustomerEnrollments(customerId: string | number, token: string): Promise<Enrollment[]> {
+  const cleanToken = token.trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/customer/${customerId}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
+      "Authorization": `Bearer ${cleanToken}`
     }
   });
 
@@ -45,13 +46,32 @@ export async function fetchCustomerEnrollments(customerId: string | number, toke
   return resData.data || [];
 }
 
+// [GET] ดึงประวัติการลงทะเบียนทั้งหมด (สำหรับแอดมิน)
+export async function fetchAllEnrollments(token: string): Promise<Enrollment[]> {
+  const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
+  const response = await fetch(`${BASE_URL}/enrollments/`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cleanToken}`
+    }
+  });
+
+  const resData: ApiResponse<Enrollment[]> = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลได้");
+  }
+  return resData.data || [];
+}
+
 // [POST] ลูกค้ากดสมัครเรียน (Protected)
 export async function enrollCourse(data: CreateEnrollmentReq, token: string): Promise<CreateEnrollmentRes> {
+  const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
+      "Authorization": `Bearer ${cleanToken}`
     },
     body: JSON.stringify(data)
   });
@@ -65,11 +85,12 @@ export async function enrollCourse(data: CreateEnrollmentReq, token: string): Pr
 
 // [PATCH] แอดมินแก้ไขข้อมูลการลงทะเบียน เช่น ตัดโควตา หรือเปลี่ยนสถานะ (Protected)
 export async function updateEnrollment(id: number, data: UpdateEnrollmentReq, token: string): Promise<Enrollment> {
+  const cleanToken = token.trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/${id}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
+      "Authorization": `Bearer ${cleanToken}`
     },
     body: JSON.stringify(data)
   });
@@ -81,12 +102,31 @@ export async function updateEnrollment(id: number, data: UpdateEnrollmentReq, to
   return resData.data;
 }
 
+// [PATCH] อนุมัติการลงทะเบียนและสร้างบิล
+export async function approveEnrollment(id: number, token: string): Promise<Enrollment> {
+  const cleanToken = token.trim().replace(/[\r\n]/g, '');
+  const response = await fetch(`${BASE_URL}/enrollments/${id}/approve`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cleanToken}`
+    }
+  });
+
+  const resData: ApiResponse<Enrollment> = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถอนุมัติได้");
+  }
+  return resData.data;
+}
+
 // [DELETE] ยกเลิกการลงทะเบียน (Protected)
 export async function cancelEnrollment(id: number, token: string): Promise<string> {
+  const cleanToken = token.trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/${id}`, {
     method: "DELETE",
     headers: {
-      "Authorization": `Bearer ${token}`
+      "Authorization": `Bearer ${cleanToken}`
     }
   });
 

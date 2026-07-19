@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, User,Users , UserCircle } from "lucide-react";
+import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, User,Users , UserCircle, Book } from "lucide-react";
 
 export default function CustomerSidebar() {
   const pathname = usePathname();
@@ -33,6 +33,8 @@ export default function CustomerSidebar() {
           <SidebarItem href="/admin/studentmanagement" icon={<Users />} label="จัดการข้อมูลนักเรียน" active={pathname === "/admin/studentmanagement"} />
           <SidebarItem href="/admin/coachmanagement" icon={<User />} label="จัดการข้อมูลโค้ช" active={pathname === "/admin/coachmanagement"} />
           <SidebarItem href="/admin/usermanagement" icon={<BookUser />} label="จัดการข้อมูลผู้ใช้งาน" active={pathname === "/admin/usermanagement"} />
+          <SidebarItem href="/admin/enrollments" icon={<Book />} label="การลงทะเบียนเรียน" active={pathname === "/admin/enrollments"} />
+
         </nav>
       </div>
 
