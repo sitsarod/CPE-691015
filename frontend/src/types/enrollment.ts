@@ -7,7 +7,8 @@ export interface ApiResponse<T> {
 }
 
 export interface CourseInfo {
-  ID: number;
+  ID?: number;
+  id?: number;
   course_name: string;
 }
 
@@ -20,17 +21,20 @@ export interface ScheduleInfo {
 }
 
 export interface PackageInfo {
-  ID: number;
-  course_id: number;
+  ID?: number;
+  id?: number;
+  course_id?: number;
   price: number;
   sessions_count: number;
   hours_count?: number;
   course?: CourseInfo;
   schedules?: ScheduleInfo[];
+  course_name?: string;
 }
 
 export interface Enrollment {
-  ID: number;
+  ID?: number;
+  id?: number;
   enrollment_date: string;
   total_sessions: number;
   remaining_sessions: number;
@@ -41,7 +45,8 @@ export interface Enrollment {
 }
 
 export interface Course {
-  ID: number;
+  ID?: number;
+  id?: number;
   course_name: string;
   description: string;
   status: string;

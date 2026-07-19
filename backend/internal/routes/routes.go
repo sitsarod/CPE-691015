@@ -93,9 +93,11 @@ func SetupRoutes(r *gin.Engine) {
 
         enrollmentGroup := protected.Group("/enrollments")
         {
+            enrollmentGroup.GET("/", enrollmentController.GetAllEnrollments)
             enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
             enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
             enrollmentGroup.PATCH("/:id", enrollmentController.UpdateEnrollment)
+            enrollmentGroup.PATCH("/:id/approve", enrollmentController.ApproveEnrollment)
             enrollmentGroup.DELETE("/:id", enrollmentController.DeleteEnrollment)
         }
 

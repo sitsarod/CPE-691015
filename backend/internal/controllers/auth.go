@@ -39,11 +39,14 @@ func (ctrl *authController) Login(c *gin.Context) {
 		return
 	}
 
-
-	pngBytes, err := qrcode.Encode(user.Customer.PersonalQRCode, qrcode.Medium, 256)
 	var qrBase64 string
-	if err == nil {
-		qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
+	var nickname string
+	if user.Customer != nil {
+		nickname = user.Customer.Nickname
+		pngBytes, err := qrcode.Encode(user.Customer.PersonalQRCode, qrcode.Medium, 256)
+		if err == nil {
+			qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -55,7 +58,7 @@ func (ctrl *authController) Login(c *gin.Context) {
 			"role":      user.Role,
 			"email":     user.Email,
 			"customer": gin.H{
-				"nickname":  user.Customer.Nickname,
+				"nickname":  nickname,
 				"qrImage":   qrBase64, 
 			},
 		},
@@ -78,12 +81,14 @@ func (ctrl *authController) Register(c *gin.Context) {
 		return
 	}
 
-	pngBytes, err := qrcode.Encode(input.Customer.PersonalQRCode, qrcode.Medium, 256)
-	
 	var qrBase64 string
-	if err == nil {
-
-		qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
+	var nickname string
+	if input.Customer != nil {
+		nickname = input.Customer.Nickname
+		pngBytes, err := qrcode.Encode(input.Customer.PersonalQRCode, qrcode.Medium, 256)
+		if err == nil {
+			qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
+		}
 	}
 
 
@@ -108,7 +113,7 @@ func (ctrl *authController) Register(c *gin.Context) {
 			"role":      user.Role,
 			"email":     user.Email,
 			"customer": gin.H{
-				"nickname":  input.Customer.Nickname,
+				"nickname":  nickname,
 				"qrImage":   qrBase64,
 			},
 		},

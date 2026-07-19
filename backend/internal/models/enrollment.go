@@ -9,6 +9,7 @@ import (
 type EnrollmentStatus string
 
 const (
+	EnrollmentStatusPending   EnrollmentStatus = "pending"
 	EnrollmentStatusActive    EnrollmentStatus = "active"
 	EnrollmentStatusCompleted EnrollmentStatus = "completed"
 	EnrollmentStatusCancelled EnrollmentStatus = "cancelled"
@@ -20,7 +21,7 @@ type Enrollment struct {
 	EnrollmentDate     time.Time        `json:"enrollment_date" valid:"required~enrollmentDate is required"`
 	TotalSessions      uint             `json:"total_sessions" valid:"required~totalSessions is required"`
 	RemainingSessions  uint             `json:"remaining_sessions" valid:"required~remainingSessions is required"`
-	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'active'"`
+	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`
 
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`

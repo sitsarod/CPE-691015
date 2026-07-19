@@ -76,22 +76,12 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	return response, nil
 }
 
-// [POST] ลงทะเบียนคอร์สเรียน
+// [POST] ลงทะเบียนคอร์สเรียน (เปลี่ยนเป็นสถานะ Pending และยังไม่สร้างบิล)
 func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*models.Enrollment, error) {
 	var pkg models.Package
 	
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
-	}
-
-	var admin models.User
-	if err := s.db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลแอดมินในระบบ")
-	}
-
-	var billingType models.BillingType
-	if err := s.db.Where("billing_type_name = ?", "ค่าคอร์สเรียน").First(&billingType).Error; err != nil {
-		return nil, errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
 	}
 
 	newEnrollment := models.Enrollment{
@@ -100,31 +90,52 @@ func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*mode
 		EnrollmentDate:     time.Now(),
 		TotalSessions:      pkg.SessionsCount,
 		RemainingSessions:  pkg.SessionsCount,
-		Status:             models.EnrollmentStatusActive,
+		Status:             models.EnrollmentStatusPending, // รอแอดมินอนุมัติ
+	}
+
+	if err := s.db.Create(&newEnrollment).Error; err != nil {
+		return nil, errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+	}
+
+	return &newEnrollment, nil
+}
+
+// [POST] อนุมัติการลงทะเบียนและสร้างบิล
+func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (*models.Enrollment, error) {
+	var enrollment models.Enrollment
+	
+	if err := s.db.Preload("Package").Preload("Package.Course").First(&enrollment, enrollmentID).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลการลงทะเบียน")
+	}
+
+	if enrollment.Status != models.EnrollmentStatusPending {
+		return nil, errors.New("การลงทะเบียนนี้ไม่ได้อยู่ในสถานะรออนุมัติ")
+	}
+
+	var billingType models.BillingType
+	if err := s.db.Where("billing_type_name = ?", "ค่าคอร์สเรียน").First(&billingType).Error; err != nil {
+		return nil, errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&newEnrollment).Error; err != nil {
-			return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
-		}
-
 		newBilling := models.Billing{
-			Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", pkg.Course.CourseName, pkg.SessionsCount),
-			Amount:        pkg.Price,
-			DueDate:       time.Now().AddDate(0, 0, 3),
+			Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", enrollment.Package.Course.CourseName, enrollment.Package.SessionsCount),
+			Amount:        enrollment.Package.Price,
+			DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
 			Status:        models.StatusUnfunded,
-			CustomerID:    customerID,
+			CustomerID:    enrollment.CustomerID,
 			BillingTypeID: billingType.ID,
-			AdminID:       admin.ID,
+			AdminID:       adminID,
 		}
 
 		if err := tx.Create(&newBilling).Error; err != nil {
 			return errors.New("ไม่สามารถสร้างใบแจ้งหนี้ได้")
 		}
 
-		newEnrollment.BillingID = &newBilling.ID
-		if err := tx.Save(&newEnrollment).Error; err != nil {
-			return errors.New("ไม่สามารถเชื่อมโยงบิลกับการลงทะเบียนได้")
+		enrollment.Status = models.EnrollmentStatusActive
+		enrollment.BillingID = &newBilling.ID
+		if err := tx.Save(&enrollment).Error; err != nil {
+			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
 		}
 
 		return nil
@@ -134,7 +145,7 @@ func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*mode
 		return nil, err
 	}
 
-	return &newEnrollment, nil
+	return &enrollment, nil
 }
 
 // [READ] ดึงประวัติการลงทะเบียนของนักเรียน
@@ -144,6 +155,18 @@ func (s *EnrollmentService) GetCustomerEnrollments(customerID uint) ([]models.En
 		Preload("Package.Course").
 		Preload("Package.Schedules").
 		Where("customer_id = ?", customerID).
+		Find(&enrollments).Error
+	return enrollments, err
+}
+
+// [READ] ดึงข้อมูลการลงทะเบียนทั้งหมด (สำหรับแอดมิน)
+func (s *EnrollmentService) GetAllEnrollments() ([]models.Enrollment, error) {
+	var enrollments []models.Enrollment
+	err := s.db.Preload("Customer").
+		Preload("Package").
+		Preload("Package.Course").
+		Preload("Package.Schedules").
+		Order("created_at desc").
 		Find(&enrollments).Error
 	return enrollments, err
 }
