@@ -77,7 +77,7 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">เลือกบัญชีของคุณ</h1>
                 <p className="text-sm text-gray-500 mb-8">โปรไฟล์นี้ตรงกับอีเมลหรือหมายเลขโทรศัพท์มือถือที่คุณป้อน</p>
 
-                <Button onClick={() => onNext({ email: 'test@email.com' })} variant="secondary">
+                <Button onClick={() => onNext({ email: 'test@email.com' })} variant="primary" type="submit">
                   ดำเนินการต่อ
                 </Button>
             </div>

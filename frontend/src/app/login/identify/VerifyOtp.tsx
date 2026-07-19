@@ -85,7 +85,7 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
 
                     
                 <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">
-                    <Button onClick={() => onNext({ email: 'test@email.com' })} variant="secondary" type="submit">
+                    <Button onClick={() => onNext({ email: 'test@email.com' })} variant="primary" type="submit">
                         ดำเนินการต่อ
                     </Button>
                 </div>
