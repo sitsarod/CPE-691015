@@ -17,11 +17,13 @@ type CourseUserDTO struct {
 }
 
 type CoursePackageDTO struct {
-	ID            uint                     `json:"id"`
-	SessionsCount uint                     `json:"sessions_count"`
-	HoursCount    uint                     `json:"hours_count"`
-	Price         float64                  `json:"price"`
-	Schedules     []PackageScheduleInfoDTO `json:"schedules"`
+	ID                 uint                     `json:"id"`
+	SessionsCount      uint                     `json:"sessions_count"`
+	HoursCount         uint                     `json:"hours_count"`
+	Price              float64                  `json:"price"`
+	MaxSeats           uint                     `json:"max_seats"`
+	CurrentEnrollments uint                     `json:"current_enrollments"`
+	Schedules          []PackageScheduleInfoDTO `json:"schedules"`
 }
 
 type PackageScheduleInfoDTO struct {

@@ -22,6 +22,7 @@ type Package struct {
     SessionsCount uint      `json:"sessions_count" valid:"required~sessionsCount is required"`
     HoursCount    uint      `json:"hours_count" valid:"required~hoursCount is required"`
     Price         float64   `json:"price" gorm:"type:decimal(10,2)" valid:"required~price is required"`
+    MaxSeats      uint      `json:"max_seats" gorm:"default:10"`
     
     // Foreign Key
     CourseID uint    `json:"course_id" valid:"required~courseId is required"`

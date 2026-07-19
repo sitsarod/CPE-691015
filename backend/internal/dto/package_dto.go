@@ -12,6 +12,7 @@ type CreatePackageReq struct {
 	CourseID      uint                 `json:"course_id" binding:"required"`
 	SessionsCount uint                 `json:"sessions_count" binding:"required"`
 	HoursCount    uint                 `json:"hours_count" binding:"required"`
+	MaxSeats      uint                 `json:"max_seats" binding:"required"`
 	Price         float64              `json:"price" binding:"required"`
 	Schedules     []PackageScheduleReq `json:"schedules" binding:"required,dive"`
 }
@@ -20,6 +21,7 @@ type CreatePackageReq struct {
 type UpdatePackageReq struct {
 	SessionsCount *uint                 `json:"sessions_count" binding:"omitempty"`
 	HoursCount    *uint                 `json:"hours_count" binding:"omitempty"`
+	MaxSeats      *uint                 `json:"max_seats" binding:"omitempty"`
 	Price         *float64              `json:"price" binding:"omitempty"`
 	Schedules     *[]PackageScheduleReq `json:"schedules" binding:"omitempty,dive"`
 }

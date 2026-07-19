@@ -27,6 +27,8 @@ export interface PackageInfo {
   price: number;
   sessions_count: number;
   hours_count?: number;
+  max_seats?: number;
+  current_enrollments?: number;
   course?: CourseInfo;
   schedules?: ScheduleInfo[];
   course_name?: string;

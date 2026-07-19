@@ -12,10 +12,10 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
   const [packages, setPackages] = useState<PackageFormInput[]>([
-    { id: Date.now().toString(), sessions_count: "", hours_count: "", price: "", schedules: [] }
+    { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }
   ]);
 
-  const addPackage = () => setPackages([...packages, { id: Date.now().toString(), sessions_count: "", hours_count: "", price: "", schedules: [] }]);
+  const addPackage = () => setPackages([...packages, { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }]);
   
   const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
   
@@ -65,6 +65,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
             course_id: newCourse.id, // ใช้ ID ของคอร์สที่เพิ่งสร้าง
             sessions_count: Number(pkg.sessions_count),
             hours_count: Number(pkg.hours_count),
+            max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
             schedules: pkg.schedules.map(s => ({
               day_of_week: s.day_of_week,
@@ -136,7 +137,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1}</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
@@ -153,6 +154,13 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
                       className="w-full border border-gray-300 rounded-md pl-9 pr-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เช่น 16"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">ที่นั่งสูงสุด <span className="text-red-500">*</span></label>
+                  <input 
+                    type="number" required min="1" value={pkg.max_seats} onChange={(e) => updatePackage(pkg.id, "max_seats", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เช่น 10"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>

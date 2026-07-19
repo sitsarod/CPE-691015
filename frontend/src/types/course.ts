@@ -22,6 +22,7 @@ export interface CoursePackageDTO {
   id: number;
   sessions_count: number;
   hours_count: number;
+  max_seats?: number;
   price: number;
   schedules: PackageScheduleInfoDTO[];
 }
@@ -54,6 +55,7 @@ export interface CreatePackageReq {
   course_id: number;
   sessions_count: number;
   hours_count: number;
+  max_seats: number;
   price: number;
   schedules: PackageScheduleInfoDTO[];
 }
@@ -61,6 +63,7 @@ export interface CreatePackageReq {
 export interface UpdatePackageReq {
   sessions_count?: number;
   hours_count?: number;
+  max_seats?: number;
   price?: number;
   schedules?: PackageScheduleInfoDTO[];
 }
@@ -77,6 +80,7 @@ export interface PackageFormInput {
   isNew?: boolean;
   sessions_count: number | "";
   hours_count: number | "";
+  max_seats: number | "";
   price: number | "";
   schedules: ScheduleFormInput[];
 }

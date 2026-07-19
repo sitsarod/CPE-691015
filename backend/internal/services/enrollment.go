@@ -25,6 +25,7 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	err := s.db.Preload("User").
 		Preload("Packages").
 		Preload("Packages.Schedules").
+		Preload("Packages.Enrollments", "status = ?", models.EnrollmentStatusActive).
 		Where("status = ?", models.CourseStatusActive).
 		Order("id ASC").
 		Find(&courses).Error
@@ -47,11 +48,13 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 			}
 
 			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-				ID:            pkg.ID,
-				SessionsCount: pkg.SessionsCount,
-				HoursCount:    pkg.HoursCount,
-				Price:         pkg.Price,
-				Schedules:     schedulesDTO,
+				ID:                 pkg.ID,
+				SessionsCount:      pkg.SessionsCount,
+				HoursCount:         pkg.HoursCount,
+				Price:              pkg.Price,
+				MaxSeats:           pkg.MaxSeats,
+				CurrentEnrollments: uint(len(pkg.Enrollments)),
+				Schedules:          schedulesDTO,
 			})
 		}
 
@@ -110,6 +113,16 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 
 	if enrollment.Status != models.EnrollmentStatusPending {
 		return nil, errors.New("การลงทะเบียนนี้ไม่ได้อยู่ในสถานะรออนุมัติ")
+	}
+
+	// เช็คว่าที่นั่งเต็มหรือยัง (นับเฉพาะ Active)
+	var activeCount int64
+	s.db.Model(&models.Enrollment{}).
+		Where("package_id = ? AND status = ?", enrollment.PackageID, models.EnrollmentStatusActive).
+		Count(&activeCount)
+
+	if uint(activeCount) >= enrollment.Package.MaxSeats {
+		return nil, errors.New("ไม่สามารถอนุมัติได้ เนื่องจากแพ็กเกจนี้ที่นั่งเต็มแล้ว กรุณาขยายจำนวนที่นั่งสูงสุดก่อน")
 	}
 
 	var billingType models.BillingType

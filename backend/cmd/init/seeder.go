@@ -302,6 +302,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
             SessionsCount uint
             HoursCount    uint
             Price         float64
+            MaxSeats      uint
             StartTime     string
             EndTime       string
         }
@@ -309,41 +310,41 @@ func seedCoursesAndPackages(db *gorm.DB) {
         {
             CourseName:  "คอร์สปกติ",
             Description: "เรียนรวมกลุ่ม (18.00-20.00 น.)",
-            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
-                {8, 16, 1800, "18:00", "20:00"},
-                {12, 24, 2200, "18:00", "20:00"},
-                {16, 32, 2600, "18:00", "20:00"},
-                {20, 40, 3000, "18:00", "20:00"},
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 1800, 10, "18:00", "20:00"},
+                {12, 24, 2200, 10, "18:00", "20:00"},
+                {16, 32, 2600, 10, "18:00", "20:00"},
+                {20, 40, 3000, 10, "18:00", "20:00"},
             },
         },
         {
             CourseName:  "คอร์ส VIP นักกีฬา",
             Description: "เรียนรวมกลุ่ม (18.00-21.00 น.) ตีเกม+ตีโต้",
-            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
-                {8, 16, 2000, "18:00", "21:00"},
-                {12, 24, 2400, "18:00", "21:00"},
-                {16, 32, 2800, "18:00", "21:00"},
-                {20, 40, 3200, "18:00", "21:00"},
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 2000, 10, "18:00", "21:00"},
+                {12, 24, 2400, 10, "18:00", "21:00"},
+                {16, 32, 2800, 10, "18:00", "21:00"},
+                {20, 40, 3200, 10, "18:00", "21:00"},
             },
         },
         {
             CourseName:  "คอร์ส PRIVATE (2 ชม.)",
             Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
-            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
-                {8, 16, 0, "10:00", "12:00"},
-                {12, 24, 0, "14:00", "16:00"},
-                {16, 32, 0, "16:00", "18:00"},
-                {20, 40, 0, "21:00", "23:00"},
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 0, 2, "10:00", "12:00"},
+                {12, 24, 0, 2, "14:00", "16:00"},
+                {16, 32, 0, 2, "16:00", "18:00"},
+                {20, 40, 0, 2, "21:00", "23:00"},
             },
         },
         {
             CourseName:  "คอร์ส PRIVATE (1 ชม.)",
             Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
-            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; StartTime, EndTime string }{
-                {8, 8, 0, "10:00", "11:00"},
-                {12, 12, 0, "13:00", "14:00"},
-                {16, 16, 0, "15:00", "16:00"},
-                {20, 20, 0, "21:00", "22:00"},
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 8, 0, 2, "10:00", "11:00"},
+                {12, 12, 0, 2, "13:00", "14:00"},
+                {16, 16, 0, 2, "15:00", "16:00"},
+                {20, 20, 0, 2, "21:00", "22:00"},
             },
         },
     }
@@ -370,6 +371,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
                 SessionsCount: p.SessionsCount,
                 HoursCount:    p.HoursCount,
                 Price:         p.Price,
+                MaxSeats:      p.MaxSeats,
                 CourseID:      course.ID,
             }
             db.Create(&pkg)

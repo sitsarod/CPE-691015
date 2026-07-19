@@ -32,6 +32,7 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 		SessionsCount: req.SessionsCount,
 		HoursCount:    req.HoursCount,
 		Price:         req.Price,
+		MaxSeats:      req.MaxSeats,
 		Schedules:     schedules,
 	}
 
@@ -55,6 +56,9 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 		}
 		if req.HoursCount != nil {
 			pkg.HoursCount = *req.HoursCount
+		}
+		if req.MaxSeats != nil {
+			pkg.MaxSeats = *req.MaxSeats
 		}
 		if req.Price != nil {
 			pkg.Price = *req.Price
