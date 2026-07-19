@@ -53,7 +53,7 @@ func (s *authService) Login(input dto.LoginInput) (string, *models.User, error) 
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 1).Unix(), // Token expires in 1 hours
+		"exp":     time.Now().Add(time.Hour * 1).Unix(), 
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(getJWTSecret())
