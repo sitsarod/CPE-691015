@@ -83,6 +83,7 @@ export default function RegisterPage() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("firstName", data.user.firstName);
+      localStorage.setItem("lastName", data.user.lastName ?? "");
       localStorage.setItem("email", data.user.email);
       localStorage.setItem("user_id", data.user.id.toString());
       if (data.customer?.qrImage) {

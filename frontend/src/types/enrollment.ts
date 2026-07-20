@@ -46,6 +46,38 @@ export interface Enrollment {
   package: PackageInfo;
 }
 
+
+
+export interface AdminEnrollmentCustomer {
+  first_name: string;
+  last_name: string;
+  email: string;
+  nickname: string;
+}
+
+export interface AdminEnrollmentCourse {
+  id: number;
+  course_name: string;
+}
+
+export interface AdminEnrollmentPackage {
+  id: number;
+  sessions_count: number;
+  price: number;
+  course: AdminEnrollmentCourse | null;
+}
+
+export interface AdminEnrollment {
+  id: number;
+  enrollment_date: string;
+  total_sessions: number;
+  remaining_sessions: number;
+  status: string;
+  billing_id: number | null;
+  customer: AdminEnrollmentCustomer | null;
+  package: AdminEnrollmentPackage | null;
+}
+
 export interface FormattedEnrollment {
   id: number;
   courseName: string;

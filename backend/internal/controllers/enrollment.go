@@ -123,7 +123,7 @@ func (ctrl *EnrollmentController) GetAllEnrollments(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": enrollments})
+    c.JSON(http.StatusOK, gin.H{"data": dto.ToAdminEnrollmentDTOs(enrollments)})
 }
 
 // UpdateEnrollment

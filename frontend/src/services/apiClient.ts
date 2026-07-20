@@ -1,21 +1,41 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
-  
-  const headers = {
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options?.headers || {}),
+    ...((options?.headers as Record<string, string>) || {}),
   };
+
+  if (typeof window !== 'undefined' && !headers['Authorization']) {
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token.trim().replace(/[\r\n]/g, '')}`;
+    }
+  }
 
   const response = await fetch(url, {
     ...options,
     headers,
   });
 
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText} (${response.status})`);
+ 
+  const text = await response.text();
+  let payload: any = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
   }
 
-  return response.json() as Promise<T>;
+  if (!response.ok) {
+    const message =
+      payload?.error || payload?.message || `API error: ${response.statusText} (${response.status})`;
+    throw new Error(message);
+  }
+
+  return payload as T;
 }

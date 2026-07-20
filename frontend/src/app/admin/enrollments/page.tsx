@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { Loader2, CheckCircle, Clock, AlertCircle, Search } from "lucide-react";
 import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
+import type { AdminEnrollment } from "@/types/enrollment";
 
 
 export default function AdminEnrollmentsPage() {
-  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<AdminEnrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +89,7 @@ export default function AdminEnrollmentsPage() {
           </thead>
           <tbody>
             {filteredEnrollments.map((item) => (
-              <tr key={item.ID} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+              <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                 <td className="p-4">
                   <div className="font-semibold text-gray-900">{item.customer?.first_name} {item.customer?.last_name}</div>
                   <div className="text-xs text-gray-500">{item.customer?.email}</div>
@@ -121,11 +122,11 @@ export default function AdminEnrollmentsPage() {
                 <td className="p-4 text-center">
                   {item.status === 'pending' ? (
                     <button 
-                      onClick={() => handleApprove(item.ID)}
-                      disabled={processingId === item.ID}
+                      onClick={() => handleApprove(item.id)}
+                      disabled={processingId === item.id}
                       className="px-4 py-1.5 bg-[#CC0000] text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                     >
-                      {processingId === item.ID ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "อนุมัติ"}
+                      {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "อนุมัติ"}
                     </button>
                   ) : (
                     <span className="text-sm text-gray-400">-</span>

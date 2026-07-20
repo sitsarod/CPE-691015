@@ -57,6 +57,7 @@ func (ctrl *authController) Login(c *gin.Context) {
 		"user": gin.H{
 			"id":        user.ID,
 			"firstName": user.FirstName,
+			"lastName":  user.LastName,
 			"role":      user.Role,
 			"email":     user.Email,
 			"customer": gin.H{
@@ -110,6 +111,7 @@ func (ctrl *authController) Register(c *gin.Context) {
 		"user": gin.H{
 			"id":        user.ID,
 			"firstName": user.FirstName,
+			"lastName":  user.LastName,
 			"role":      user.Role,
 			"email":     user.Email,
 			"customer": gin.H{

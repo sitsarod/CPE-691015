@@ -35,6 +35,7 @@ export interface UserInfoDTO {
   id: number;
   role: string;
   firstName: string;
+  lastName: string;
   email: string;
 }
 

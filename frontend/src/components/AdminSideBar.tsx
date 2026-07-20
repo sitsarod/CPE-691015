@@ -12,10 +12,12 @@ export default function CustomerSidebar() {
   const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
-    const storedName = localStorage.getItem("firstName");
+    const storedFirstName = localStorage.getItem("firstName");
+    const storedLastName = localStorage.getItem("lastName");
     const storedEmail = localStorage.getItem("email");
 
-    if (storedName) setUserName(storedName);
+    const fullName = [storedFirstName, storedLastName].filter(Boolean).join(" ");
+    if (fullName) setUserName(fullName);
     if (storedEmail) setUserEmail(storedEmail);
   }, []);
 

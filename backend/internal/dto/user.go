@@ -1,6 +1,6 @@
 package dto
 
-
+import "time"
 
 // TokenResponse ใช้สำหรับพ่นตั๋ว JWT และข้อมูลคนล็อกอินกลับไปให้ฝั่ง Frontend
 type TokenResponse struct {
@@ -8,13 +8,25 @@ type TokenResponse struct {
     Role  string `json:"role"`
 }
 
+// UserProfileResponseDTO ข้อมูลโปรไฟล์ที่หน้าโปรไฟล์ผู้เรียนใช้แสดงผล
+//
+// ฟิลด์ชุดล่างมาจากตาราง customers จึงมีเฉพาะผู้ใช้ role = customer
+// ใช้ omitempty เพื่อไม่ให้แอดมิน/โค้ชได้ฟิลด์ว่างเปล่าติดไปด้วย
 type UserProfileResponseDTO struct {
 	ID        uint   `json:"id"`
 	Email     string `json:"email"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
-	Role      string `json:"role"`      
-	IsStudent bool   `json:"isStudent"` 
+	Role      string `json:"role"`
+	IsStudent bool   `json:"isStudent"`
+
+	Nickname          string     `json:"nickname,omitempty"`
+	PhoneNumber       string     `json:"phoneNumber,omitempty"`
+	BirthDate         *time.Time `json:"birthDate,omitempty"`
+	Gender            string     `json:"gender,omitempty"`
+	ParentEmail       string     `json:"parentEmail,omitempty"`
+	ParentPhoneNumber string     `json:"parentPhoneNumber,omitempty"`
+	Status            string     `json:"status,omitempty"`
 }
 
 
