@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -28,8 +29,19 @@ func (ctrl *CoachAvailabilityController) GetAvailability(c *gin.Context) {
 		return
 	}
 
-	availabilities, err := ctrl.service.GetByCoachID(uint(coachID))
+	// ตรวจสิทธิ์: coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	availabilities, err := ctrl.service.GetByCoachID(uint(coachID), userID, role)
 	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve availability: " + err.Error()})
 		return
 	}
@@ -57,8 +69,25 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 		return
 	}
 
-	availabilities, err := ctrl.service.UpdateAvailability(uint(coachID), req)
+	// ดึงตัวตนผู้เรียกจาก JWT เพื่อตรวจสิทธิ์ความเป็นเจ้าของ (กัน IDOR)
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	availabilities, err := ctrl.service.UpdateAvailability(uint(coachID), userID, role, req)
 	if err != nil {
+		// ErrCoachForbidden = coach คนอื่น, ErrCoachSelfOnly = admin (ห้ามแก้เวลาว่างของโค้ช) — ทั้งคู่ตอบ 403
+		if errors.Is(err, services.ErrCoachForbidden) || errors.Is(err, services.ErrCoachSelfOnly) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		// ErrInvalidAvailability = client ส่งเวลา/วันไม่ถูกต้อง — ตอบ 400
+		if errors.Is(err, services.ErrInvalidAvailability) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update availability: " + err.Error()})
 		return
 	}

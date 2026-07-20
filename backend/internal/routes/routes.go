@@ -96,36 +96,33 @@ func SetupRoutes(r *gin.Engine) {
 
         adminOnly := api.Group("")
         adminOnly.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("admin"))
-
+        
         // --- Coach ---
-        // ทุกคนที่ login แล้วดูรายชื่อ/รายละเอียด coach ได้ (ใช้ตอน filter หา coach ด้วย)
+        // การดูรายละเอียด/เวลาว่าง/ตารางของ coach 1 คน อยู่ใต้ protected แต่ handler ตรวจสิทธิ์เอง
+        // (coach เห็นเฉพาะของตัวเอง, admin เห็นได้ทุกคน) และ PATCH/PUT ก็ตรวจความเป็นเจ้าของกัน IDOR
         coachGroup := protected.Group("/coaches")
         {
-            coachGroup.GET("", coachController.GetCoaches)
-            coachGroup.GET("/:id", coachController.GetCoachByID)
-            coachGroup.PATCH("/:id", coachController.UpdateCoach) // coach แก้ข้อมูลตัวเอง
-            coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)
-            coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability) // coach ยืนยันเวลาว่าง
-            coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)
+            coachGroup.GET("/:id", coachController.GetCoachByID)                                  // เจ้าของ หรือ admin
+            coachGroup.PATCH("/:id", coachController.UpdateCoach)                                 // เจ้าของ หรือ admin (บาง field)
+            coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)      // เจ้าของ หรือ admin
+            coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)   // เจ้าของเท่านั้น (admin แก้ไม่ได้)
+            coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)     // เจ้าของ หรือ admin
         }
-        // เฉพาะ admin: เพิ่ม/ลบ coach ได้เท่านั้น
+        // เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
         adminCoachGroup := adminOnly.Group("/coaches")
         {
+            adminCoachGroup.GET("", coachController.GetCoaches)
             adminCoachGroup.POST("", coachController.CreateCoach)
             adminCoachGroup.DELETE("/:id", coachController.DeleteCoach)
             adminCoachGroup.PATCH("/:id/level", coachController.AdminUpdateCoach)
         }
- 
+
         // --- Work schedule ---
-        // ทุกคนที่ login แล้วดูปฏิทินงานได้ (admin เห็นภาพรวม, coach เห็นของตัวเองผ่าน /coaches/:id/work-schedules ด้านบน)
-        workScheduleGroup := protected.Group("/work-schedules")
-        {
-            workScheduleGroup.GET("", workScheduleController.GetSchedules)
-            workScheduleGroup.GET("/:id", workScheduleController.GetScheduleByID)
-        }
-        // เฉพาะ admin: assign/แก้ไข/ลบ ตารางงาน
+        // ปฏิทินรวมของทุก coach เป็นของ admin (coach ดูของตัวเองผ่าน /coaches/:id/work-schedules ด้านบน)
         adminWorkScheduleGroup := adminOnly.Group("/work-schedules")
         {
+            adminWorkScheduleGroup.GET("", workScheduleController.GetSchedules)
+            adminWorkScheduleGroup.GET("/:id", workScheduleController.GetScheduleByID)
             adminWorkScheduleGroup.POST("", workScheduleController.CreateSchedule)
             adminWorkScheduleGroup.PATCH("/:id", workScheduleController.UpdateSchedule)
             adminWorkScheduleGroup.DELETE("/:id", workScheduleController.DeleteSchedule)

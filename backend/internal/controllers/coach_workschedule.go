@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,7 @@ import (
 	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type WorkScheduleController struct {
@@ -39,8 +41,19 @@ func (ctrl *WorkScheduleController) GetSchedulesByCoach(c *gin.Context) {
 		return
 	}
 
-	schedules, err := ctrl.service.GetByCoachID(uint(coachID))
+	// ตรวจสิทธิ์: coach ดูตารางได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	schedules, err := ctrl.service.GetByCoachID(uint(coachID), userID, role)
 	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work schedules: " + err.Error()})
 		return
 	}
@@ -74,9 +87,14 @@ func (ctrl *WorkScheduleController) CreateSchedule(c *gin.Context) {
 
 	schedule, err := ctrl.service.AssignWorkSchedule(req)
 	if err != nil {
-		// error พวก "coach ไม่ว่าง" หรือ "เวลาชนกัน" เป็น business rule violation ไม่ใช่ server error
-		// จึงตอบ 400 แทน 500 เพื่อให้ frontend รู้ว่าต้องแก้ input ไม่ใช่ระบบล่ม
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, services.ErrScheduleInvalid):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrScheduleConflict):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work schedule: " + err.Error()})
+		}
 		return
 	}
 
@@ -99,7 +117,16 @@ func (ctrl *WorkScheduleController) UpdateSchedule(c *gin.Context) {
 
 	schedule, err := ctrl.service.Update(uint(id), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work schedule: " + err.Error()})
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "work schedule not found"})
+		case errors.Is(err, services.ErrScheduleInvalid):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrScheduleConflict):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work schedule: " + err.Error()})
+		}
 		return
 	}
 

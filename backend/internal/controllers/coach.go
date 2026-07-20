@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -85,8 +86,19 @@ func (ctrl *CoachController) GetCoachByID(c *gin.Context) {
 		return
 	}
 
-	coach, err := ctrl.service.GetByID(uint(id))
+	// ตรวจสิทธิ์: coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	coach, err := ctrl.service.GetByID(uint(id), userID, role)
 	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "coach not found"})
 		return
 	}
@@ -109,7 +121,14 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 
 	coach, err := ctrl.service.Create(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create coach: " + err.Error()})
+		switch {
+		case errors.Is(err, services.ErrCoachUserNotFound), errors.Is(err, services.ErrCoachUserNotCoach):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCoachDuplicateUser), errors.Is(err, services.ErrCoachDuplicateUID):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create coach: " + err.Error()})
+		}
 		return
 	}
 
@@ -131,8 +150,19 @@ func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 		return
 	}
 
-	coach, err := ctrl.service.Update(uint(id), req)
+	// ดึงตัวตนผู้เรียกจาก JWT เพื่อตรวจสิทธิ์ความเป็นเจ้าของ (กัน IDOR)
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	coach, err := ctrl.service.Update(uint(id), userID, role, req)
 	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update coach: " + err.Error()})
 		return
 	}

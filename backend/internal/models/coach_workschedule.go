@@ -8,10 +8,10 @@ type WorkSchedule struct {
 	gorm.Model
 
 	Date        string `json:"date" gorm:"type:date" valid:"required~date is required"`
-	StartTime   string `json:"start_time" gorm:"type:time" valid:"required~startTime is required"`
-	EndTime     string `json:"end_time" gorm:"type:time" valid:"required~endTime is required"`
+	StartTime   string `json:"start_time" gorm:"type:varchar(10)" valid:"required~startTime is required"`
+	EndTime     string `json:"end_time" gorm:"type:varchar(10)" valid:"required~endTime is required"`
 	Description string `json:"description" gorm:"type:text" valid:"required~description is required"`
-	Courtnumber string `json:"court_number" gorm:"type:varchar(10)" valid:"required~courtNumber is required"`
+	Courtnumber string `json:"court_number" gorm:"column:court_number;type:varchar(10)" valid:"required~courtNumber is required"`
 
 	CoachID uint   `json:"coach_id" gorm:"not null" valid:"required~coachId is required"`
 	Coach   *Coach `json:"coach,omitempty" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
