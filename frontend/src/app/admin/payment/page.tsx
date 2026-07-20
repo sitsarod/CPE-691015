@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { PlusCircle, ClipboardCheck, PieChart, Landmark, Receipt } from "lucide-react";
 import { BackendUser, BillingDTO, BankAccount, Expense, Coach } from "./components/types";
 import Toast from "@/components/Toast";
@@ -86,6 +86,20 @@ export default function FinancialPortal() {
     fetchData();
   }, []);
 
+  // The backend returns one row per (billing, invoice) pairing so VerifySlipsTab
+  // can group slips by invoice. For every other view a billing should only ever
+  // appear once, reflecting its most recent invoice attempt (highest invoice_id).
+  const dedupedBillings = useMemo(() => {
+    const byId = new Map<number, BillingDTO>();
+    for (const b of billings) {
+      const existing = byId.get(b.id);
+      if (!existing || (b.invoice_id || 0) > (existing.invoice_id || 0)) {
+        byId.set(b.id, b);
+      }
+    }
+    return Array.from(byId.values());
+  }, [billings]);
+
   // Save billing edits
   const handleSaveBillingEdit = async (
     billingId: number,
@@ -149,7 +163,7 @@ export default function FinancialPortal() {
         <div className="flex overflow-x-auto">
           {[
             { id: 'issue', label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
-            { id: 'slips', label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: billings.filter(b => b.billingstatus === 'waitcheck').length },
+            { id: 'slips', label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: dedupedBillings.filter(b => b.billingstatus === 'waitcheck').length },
             { id: 'summary', label: 'สรุปรายรับและการเงิน', icon: PieChart },
             { id: 'expenses', label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
             { id: 'banks', label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }
@@ -199,7 +213,7 @@ export default function FinancialPortal() {
           {subTab === 'issue' && (
             <BillingIssueForm
               students={students}
-              billings={billings}
+              billings={dedupedBillings}
               onFetchData={fetchData}
               onTriggerToast={triggerToast}
               onOpenEditBilling={(b) => {
@@ -219,7 +233,7 @@ export default function FinancialPortal() {
 
           {subTab === 'summary' && (
             <FinancialSummaryTab
-              billings={billings}
+              billings={dedupedBillings}
               expenses={expenses}
             />
           )}

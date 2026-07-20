@@ -98,6 +98,21 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 	if invoice.Status == models.InvoiceSuccess {
 		return nil, errors.New("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
 	}
+	if invoice.Status == models.InvoiceCancelled {
+		return nil, errors.New("ใบแจ้งหนี้นี้ถูกยกเลิกไปแล้ว ไม่สามารถแนบสลิปได้")
+	}
+
+	// กันไม่ให้แนบสลิปกับใบแจ้งหนี้เก่าที่บิลถูกชำระผ่านใบแจ้งหนี้อื่นไปแล้ว
+	var paidElsewhereCount int64
+	if err := s.db.Model(&models.PaymentItem{}).
+		Joins("JOIN billings ON billings.id = payment_items.billing_id").
+		Where("payment_items.invoice_id = ? AND billings.status = ?", invoiceID, models.StatusPaid).
+		Count(&paidElsewhereCount).Error; err != nil {
+		return nil, err
+	}
+	if paidElsewhereCount > 0 {
+		return nil, errors.New("บิลในใบแจ้งหนี้นี้ได้รับการชำระเงินผ่านใบแจ้งหนี้อื่นไปแล้ว")
+	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		invoice.SlipImageUrl = slipURL
@@ -107,7 +122,7 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 			return errors.New("ไม่สามารถบันทึกข้อมูลสลิปได้")
 		}
 
-		// ดึง PaymentItem ทั้งหมดมาอัปเดต Billing เป็น waitcheck (รอตรวจสอบสลิป)
+		// ดึง PaymentItem ทั้งหมดมาอัปเดต Billing เป็น waitcheck (รอตรวจสอบ)
 		var items []models.PaymentItem
 		if err := tx.Where("invoice_id = ?", invoiceID).Find(&items).Error; err != nil {
 			return err
