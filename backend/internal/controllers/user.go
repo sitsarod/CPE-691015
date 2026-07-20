@@ -56,6 +56,11 @@ func (c *UserController) UpdateUserController(ctx *gin.Context) {
 		return
 	}
 
+	if !CheckIDOR(ctx, uint(id)) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		return
+	}
+
 	var input dto.UpdateProfileInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
@@ -100,6 +105,11 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผู้ใช้งานไม่ถูกต้อง"})
         return
     }
+
+	if !CheckIDOR(c, uint(userID)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		return
+	}
     
     user, err := ctrl.userService.GetUserProfile(uint(userID))
     if err != nil {

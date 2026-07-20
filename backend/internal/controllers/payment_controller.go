@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -25,6 +26,11 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
+		return
+	}
+
+	if !CheckIDOR(c, input.CustomerID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์สร้างใบแจ้งหนี้ให้ผู้อื่น"})
 		return
 	}
 
@@ -55,9 +61,22 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 		return
 	}
 
-	invoice, err := ctrl.service.UploadSlip(uint(id), input.SlipURL)
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	invoice, err := ctrl.service.UploadSlip(uint(id), input.SlipURL, userID, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, services.ErrForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrInvoiceNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -92,6 +111,11 @@ func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	if !CheckIDOR(c, uint(id)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 

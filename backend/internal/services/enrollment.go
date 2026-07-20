@@ -18,6 +18,39 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 	return &EnrollmentService{db: db}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// การแปลง ID ระหว่าง users กับ customers
+//
+// ระบบนี้มี "ลูกค้า" อยู่ 2 ความหมายที่ไม่ตรงกัน:
+//   - Billing.CustomerID / Invoice.CustomerID  → อ้างถึง users.id
+//   - Enrollment.CustomerID                    → อ้างถึง customers.id
+//
+// ข้อตกลงของโปรเจคนี้คือ **API ทุกเส้นรับ-ส่ง User.ID เสมอ** (ตรงกับ user_id
+// ที่ frontend เก็บไว้ใน localStorage และตรงกับ claim user_id ใน JWT)
+// การแปลงเป็น customers.id จะทำที่ชั้น service เท่านั้น ผ่านสองฟังก์ชันข้างล่างนี้
+//
+// อย่าส่ง customers.id ออกไปให้ controller หรือ frontend เห็นเด็ดขาด
+// เพราะ CheckIDOR เทียบกับ User.ID จาก JWT — ถ้าปนกันจะกลายเป็นช่องโหว่ IDOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+// toCustomerID แปลง users.id → customers.id
+func (s *EnrollmentService) toCustomerID(userID uint) (uint, error) {
+	var customer models.Customer
+	if err := s.db.Where("user_id = ?", userID).First(&customer).Error; err != nil {
+		return 0, errors.New("ไม่พบโปรไฟล์ลูกค้าของผู้ใช้งานนี้")
+	}
+	return customer.ID, nil
+}
+
+// toUserID แปลง customers.id → users.id
+func (s *EnrollmentService) toUserID(customerID uint) (uint, error) {
+	var customer models.Customer
+	if err := s.db.First(&customer, customerID).Error; err != nil {
+		return 0, errors.New("ไม่พบข้อมูลลูกค้า")
+	}
+	return customer.UserID, nil
+}
+
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
 func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	var courses []models.Course
@@ -80,11 +113,18 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 }
 
 // [POST] ลงทะเบียนคอร์สเรียน (เปลี่ยนเป็นสถานะ Pending และยังไม่สร้างบิล)
-func (s *EnrollmentService) EnrollCourse(customerID uint, packageID uint) (*models.Enrollment, error) {
+//
+// userID ที่รับเข้ามาคือ users.id — จะถูกแปลงเป็น customers.id ก่อนบันทึกลง enrollments
+func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.Enrollment, error) {
 	var pkg models.Package
-	
+
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
+	}
+
+	customerID, err := s.toCustomerID(userID)
+	if err != nil {
+		return nil, err
 	}
 
 	newEnrollment := models.Enrollment{
@@ -130,13 +170,21 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		return nil, errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
 	}
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	// Billing.CustomerID อ้างถึง users.id แต่ enrollment.CustomerID เป็น customers.id
+	// จึงต้องแปลงก่อน มิฉะนั้นบิลจะไปผูกกับผู้ใช้ผิดคน (คนที่ users.id บังเอิญ
+	// เท่ากับ customers.id นั้นพอดี) ซึ่งเป็นบั๊กที่มองไม่เห็นจนกว่าจะมีข้อมูลจริง
+	billingUserID, err := s.toUserID(enrollment.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		newBilling := models.Billing{
 			Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", enrollment.Package.Course.CourseName, enrollment.Package.SessionsCount),
 			Amount:        enrollment.Package.Price,
 			DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
 			Status:        models.StatusUnfunded,
-			CustomerID:    enrollment.CustomerID,
+			CustomerID:    billingUserID,
 			BillingTypeID: billingType.ID,
 			AdminID:       adminID,
 		}
@@ -162,9 +210,18 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 }
 
 // [READ] ดึงประวัติการลงทะเบียนของนักเรียน
-func (s *EnrollmentService) GetCustomerEnrollments(customerID uint) ([]models.Enrollment, error) {
+//
+// userID ที่รับเข้ามาคือ users.id — ต้องแปลงเป็น customers.id ก่อน query
+// (ก่อนหน้านี้เอา users.id ไป query ตรง ๆ กับคอลัมน์ enrollments.customer_id
+// ทำให้ได้ข้อมูลของลูกค้าคนอื่นหรือได้ผลลัพธ์ว่างโดยไม่มี error)
+func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]models.Enrollment, error) {
+	customerID, err := s.toCustomerID(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	var enrollments []models.Enrollment
-	err := s.db.Preload("Package").
+	err = s.db.Preload("Package").
 		Preload("Package.Course").
 		Preload("Package.Schedules").
 		Where("customer_id = ?", customerID).

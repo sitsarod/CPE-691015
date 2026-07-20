@@ -37,6 +37,13 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
         return
     }
 
+	// input.CustomerID คือ users.id (service จะแปลงเป็น customers.id ให้เอง)
+	// จึงเทียบกับ JWT ผ่าน CheckIDOR ได้ตรงชนิด
+	if !CheckIDOR(c, input.CustomerID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์ลงทะเบียนให้ผู้อื่น"})
+		return
+	}
+
     enrollment, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -87,12 +94,19 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
 }
 
 // GetCustomerEnrollments
+//
+// :id ในเส้นทางนี้คือ users.id (service แปลงเป็น customers.id ให้เอง)
 func (ctrl *EnrollmentController) GetCustomerEnrollments(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
+
+	if !CheckIDOR(c, uint(id)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		return
+	}
 
     enrollments, err := ctrl.service.GetCustomerEnrollments(uint(id))
     if err != nil {

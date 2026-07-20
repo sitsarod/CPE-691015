@@ -6,6 +6,13 @@ import (
 	"CPE-691015/internal/models"
 )
 
+// Sentinel errors — ใช้แยกประเภทความผิดพลาดเพื่อให้ controller ตอบ HTTP status ได้ถูกต้อง
+// (เดิม error ทุกชนิดถูกตอบกลับเป็น 500 หมด ทำให้แยก "ไม่มีสิทธิ์" กับ "ระบบพัง" ไม่ออก)
+var (
+	ErrInvoiceNotFound = errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+	ErrForbidden       = errors.New("ไม่มีสิทธิ์ดำเนินการกับใบแจ้งหนี้นี้")
+)
+
 type PaymentService struct {
 	db *gorm.DB
 }
@@ -77,10 +84,15 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 }
 
 // UploadSlip อัปโหลดสลิปเพื่อแจ้งโอนเงิน
-func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string) (*models.Invoice, error) {
+func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint, role string) (*models.Invoice, error) {
 	var invoice models.Invoice
 	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+		return nil, ErrInvoiceNotFound
+	}
+
+	// Invoice.CustomerID อ้างถึง User.ID (ดู models.Invoice: Customer *User) จึงเทียบกับ userID จาก JWT ได้ตรง
+	if role != string(models.AdminRole) && invoice.CustomerID != userID {
+		return nil, ErrForbidden
 	}
 
 	if invoice.Status == models.InvoiceSuccess {

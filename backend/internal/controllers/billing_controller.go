@@ -82,6 +82,11 @@ func (ctrl *BillingController) GetCustomerBillings(c *gin.Context) {
 		return
 	}
 
+	if !CheckIDOR(c, uint(id)) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		return
+	}
+
 	billings, err := ctrl.service.GetBillingsByCustomerID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลรายการบิลของนักเรียนได้"})
@@ -102,6 +107,11 @@ func (ctrl *BillingController) GetBillingByID(c *gin.Context) {
 	billing, err := ctrl.service.GetBillingByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !CheckIDOR(c, billing.CustomerID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 

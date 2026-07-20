@@ -3,6 +3,10 @@ package dto
 import "time"
 
 // CreateEnrollmentReq รับข้อมูลตอนผู้ใช้กด "สมัครเรียน"
+//
+// CustomerID ที่ส่งเข้ามาคือ users.id (ค่าเดียวกับ user_id ใน localStorage และ JWT)
+// ไม่ใช่ customers.id — ชั้น service จะแปลงให้เอง ดู EnrollmentService.toCustomerID
+// (คงชื่อ json เป็น customer_id ไว้เพื่อไม่ให้ frontend ที่ใช้อยู่พัง)
 type CreateEnrollmentReq struct {
     CustomerID uint `json:"customer_id" binding:"required"`
     PackageID  uint `json:"package_id" binding:"required"`
