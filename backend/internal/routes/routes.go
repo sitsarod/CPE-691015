@@ -86,79 +86,92 @@ func SetupRoutes(r *gin.Engine) {
         protected := api.Group("")
         protected.Use(middlewares.AuthMiddleware())
 
+        adminOnly := api.Group("")
+        adminOnly.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("admin"))
+
         protected.GET("/coaches", coachController.GetCoaches)
-        protected.POST("/coaches", coachController.CreateCoach)
+        adminOnly.POST("/coaches", coachController.CreateCoach)
 
         userGroup := protected.Group("/users")
         {
-            userGroup.GET("/", userController.GetAllUsersController)
-            userGroup.GET("/role", userController.GetUserByRoleController)
-            userGroup.GET("/students", userController.GetActiveStudentsController)
-            
             userGroup.GET("/:id", userController.GetUserProfileController)
-            userGroup.POST("/", userController.CreateUserController)
             userGroup.PATCH("/:id", userController.UpdateUserController)
-            userGroup.DELETE("/:id", userController.DeleteUserController)
-
+        }
+        adminUserGroup := adminOnly.Group("/users")
+        {
+            adminUserGroup.GET("/", userController.GetAllUsersController)
+            adminUserGroup.GET("/role", userController.GetUserByRoleController)
+            adminUserGroup.GET("/students", userController.GetActiveStudentsController)
+            adminUserGroup.POST("/", userController.CreateUserController)
+            adminUserGroup.DELETE("/:id", userController.DeleteUserController)
         }
 
         enrollmentGroup := protected.Group("/enrollments")
         {
-            enrollmentGroup.GET("/", enrollmentController.GetAllEnrollments)
             enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
             enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
-            enrollmentGroup.PATCH("/:id", enrollmentController.UpdateEnrollment)
-            enrollmentGroup.PATCH("/:id/approve", enrollmentController.ApproveEnrollment)
-            enrollmentGroup.DELETE("/:id", enrollmentController.DeleteEnrollment)
+        }
+        adminEnrollmentGroup := adminOnly.Group("/enrollments")
+        {
+            adminEnrollmentGroup.GET("/", enrollmentController.GetAllEnrollments)
+            adminEnrollmentGroup.PATCH("/:id", enrollmentController.UpdateEnrollment)
+            adminEnrollmentGroup.PATCH("/:id/approve", enrollmentController.ApproveEnrollment)
+            adminEnrollmentGroup.DELETE("/:id", enrollmentController.DeleteEnrollment)
         }
 
         paymentGroup := protected.Group("/payments")
         {
             paymentGroup.POST("/invoices", paymentController.CreateInvoice)
             paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
-            paymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
             paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
-            paymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
-            paymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
+        }
+        adminPaymentGroup := adminOnly.Group("/payments")
+        {
+            adminPaymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
+            adminPaymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
+            adminPaymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
         }
 
         billingGroup := protected.Group("/billings")
         {
-            billingGroup.GET("/", billingController.GetAllBillings)
             billingGroup.GET("/:id", billingController.GetBillingByID)
             billingGroup.GET("/customer/:id", billingController.GetCustomerBillings)
-            billingGroup.POST("/", billingController.CreateBilling)
-            billingGroup.POST("/split", billingController.CreateSplitBilling)
-            billingGroup.PATCH("/:id", billingController.UpdateBilling)
-            billingGroup.DELETE("/:id", billingController.DeleteBilling)
+        }
+        adminBillingGroup := adminOnly.Group("/billings")
+        {
+            adminBillingGroup.GET("/", billingController.GetAllBillings)
+            adminBillingGroup.POST("/", billingController.CreateBilling)
+            adminBillingGroup.POST("/split", billingController.CreateSplitBilling)
+            adminBillingGroup.PATCH("/:id", billingController.UpdateBilling)
+            adminBillingGroup.DELETE("/:id", billingController.DeleteBilling)
         }
 
-		bankAccountsGroup := protected.Group("/bank-accounts")
-		{
-			bankAccountsGroup.GET("/", bankAccountController.GetAllBankAccounts)
-			bankAccountsGroup.POST("/", bankAccountController.CreateBankAccount)
-			bankAccountsGroup.PATCH("/:id", bankAccountController.UpdateBankAccount)
-			bankAccountsGroup.PATCH("/:id/toggle", bankAccountController.ToggleBankAccount)
-			bankAccountsGroup.DELETE("/:id", bankAccountController.DeleteBankAccount)
-		}
+        bankAccountsGroup := adminOnly.Group("/bank-accounts")
+        {
+            bankAccountsGroup.GET("/", bankAccountController.GetAllBankAccounts)
+            bankAccountsGroup.POST("/", bankAccountController.CreateBankAccount)
+            bankAccountsGroup.PATCH("/:id", bankAccountController.UpdateBankAccount)
+            bankAccountsGroup.PATCH("/:id/toggle", bankAccountController.ToggleBankAccount)
+            bankAccountsGroup.DELETE("/:id", bankAccountController.DeleteBankAccount)
+        }
 
-		api.POST("/upload", expenseController.UploadFileHandler)
+        protected.POST("/upload", expenseController.UploadFileHandler)
 
-		expensesGroup := protected.Group("/expenses")
-		{
-			expensesGroup.GET("/", expenseController.GetAllExpenses)
-			expensesGroup.POST("/", expenseController.CreateExpense)
-			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
-		}
+        expensesGroup := adminOnly.Group("/expenses")
+        {
+            expensesGroup.GET("/", expenseController.GetAllExpenses)
+            expensesGroup.POST("/", expenseController.CreateExpense)
+            expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
+        }
 
-        protectedCourseGroup := protected.Group("/courses")
+        protectedCourseGroup := adminOnly.Group("/courses")
         {
             protectedCourseGroup.POST("/", courseController.CreateCourse)
             protectedCourseGroup.PATCH("/:id", courseController.UpdateCourse)
             protectedCourseGroup.DELETE("/:id", courseController.DeleteCourse)
         }
 
-        packageGroup := protected.Group("/packages")
+        packageGroup := adminOnly.Group("/packages")
         {
             packageGroup.POST("/", packageController.CreatePackage)
             packageGroup.PATCH("/:id", packageController.UpdatePackage)
@@ -179,7 +192,7 @@ func SetupRoutes(r *gin.Engine) {
         // Quiz public endpoints
         api.GET("/quiz", quizController.GetActiveQuestions)
 
-        protectedAnnouncementGroup := protected.Group("/announcements")
+        protectedAnnouncementGroup := adminOnly.Group("/announcements")
         {
             protectedAnnouncementGroup.POST("/", announcementController.CreateAnnouncement)
             protectedAnnouncementGroup.PATCH("/:id", announcementController.UpdateAnnouncement)
@@ -188,14 +201,14 @@ func SetupRoutes(r *gin.Engine) {
         }
 
         // Automated Q&A Chat Session and Knowledge Base protected endpoints
-        protectedChatSessionGroup := protected.Group("/chat-sessions")
+        protectedChatSessionGroup := adminOnly.Group("/chat-sessions")
         {
             protectedChatSessionGroup.GET("/", autoQAController.GetAllChatSessions)
             protectedChatSessionGroup.PATCH("/:id", autoQAController.UpdateChatSession)
             protectedChatSessionGroup.DELETE("/:id", autoQAController.DeleteChatSession)
         }
 
-        protectedAutoQAGroup := protected.Group("/auto-qas")
+        protectedAutoQAGroup := adminOnly.Group("/auto-qas")
         {
             protectedAutoQAGroup.GET("/", autoQAController.GetAllAutoQAs)
             protectedAutoQAGroup.GET("/:id", autoQAController.GetAutoQAByID)
@@ -204,7 +217,7 @@ func SetupRoutes(r *gin.Engine) {
             protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
         }
 
-        protectedQuizGroup := protected.Group("/admin/quiz")
+        protectedQuizGroup := adminOnly.Group("/admin/quiz")
         {
             protectedQuizGroup.GET("/", quizController.GetAllQuestions)
             protectedQuizGroup.POST("/", quizController.CreateQuestion)
