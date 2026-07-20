@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"CPE-691015/internal/models"
+)
 
 // CreateEnrollmentReq รับข้อมูลตอนผู้ใช้กด "สมัครเรียน"
 //
@@ -40,6 +44,99 @@ type EnrollmentRes struct {
     BillingID          *uint             `json:"billing_id"`
     
     Schedules     []PackageScheduleInfoDTO `json:"schedules"`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DTO สำหรับหน้าแอดมิน "จัดการคำขอสมัครเรียน"
+//
+// ต้องแมปเป็น DTO ไม่ส่ง models.Enrollment ดิบ เพราะการแสดงชื่อผู้สมัครต้อง
+// Preload("Customer.User") ซึ่งจะลาก models.User ทั้งก้อนออกไปด้วย และ
+// models.User.Password ยังใช้ tag json:"password" อยู่ (ไม่ใช่ json:"-")
+// ถ้าส่งดิบ bcrypt hash ของผู้ใช้ทุกคนจะรั่วออกไปที่ browser
+// ─────────────────────────────────────────────────────────────────────────────
+
+// AdminEnrollmentCustomerDTO ข้อมูลผู้สมัครเท่าที่หน้าแอดมินต้องใช้
+type AdminEnrollmentCustomerDTO struct {
+    FirstName string `json:"first_name"`
+    LastName  string `json:"last_name"`
+    Email     string `json:"email"`
+    Nickname  string `json:"nickname"`
+}
+
+// AdminEnrollmentCourseDTO ชื่อคอร์สที่ผูกกับแพ็กเกจ
+type AdminEnrollmentCourseDTO struct {
+    ID         uint   `json:"id"`
+    CourseName string `json:"course_name"`
+}
+
+// AdminEnrollmentPackageDTO ข้อมูลแพ็กเกจที่ผู้สมัครเลือก
+type AdminEnrollmentPackageDTO struct {
+    ID            uint                      `json:"id"`
+    SessionsCount uint                      `json:"sessions_count"`
+    Price         float64                   `json:"price"`
+    Course        *AdminEnrollmentCourseDTO `json:"course"`
+}
+
+// AdminEnrollmentDTO หนึ่งแถวในตารางคำขอสมัครเรียน
+type AdminEnrollmentDTO struct {
+    ID                uint                        `json:"id"`
+    EnrollmentDate    time.Time                   `json:"enrollment_date"`
+    TotalSessions     uint                        `json:"total_sessions"`
+    RemainingSessions uint                        `json:"remaining_sessions"`
+    Status            string                      `json:"status"`
+    BillingID         *uint                       `json:"billing_id"`
+    Customer          *AdminEnrollmentCustomerDTO `json:"customer"`
+    Package           *AdminEnrollmentPackageDTO  `json:"package"`
+}
+
+// ToAdminEnrollmentDTO แปลงหนึ่งรายการ (ต้อง Preload Customer.User และ Package.Course มาก่อน)
+func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
+    item := AdminEnrollmentDTO{
+        ID:                e.ID,
+        EnrollmentDate:    e.EnrollmentDate,
+        TotalSessions:     e.TotalSessions,
+        RemainingSessions: e.RemainingSessions,
+        Status:            string(e.Status),
+        BillingID:         e.BillingID,
+    }
+
+    if e.Customer != nil {
+        customer := &AdminEnrollmentCustomerDTO{
+            Nickname: e.Customer.Nickname,
+        }
+        if e.Customer.User != nil {
+            customer.FirstName = e.Customer.User.FirstName
+            customer.LastName = e.Customer.User.LastName
+            customer.Email = e.Customer.User.Email
+        }
+        item.Customer = customer
+    }
+
+    if e.Package != nil {
+        pkg := &AdminEnrollmentPackageDTO{
+            ID:            e.Package.ID,
+            SessionsCount: e.Package.SessionsCount,
+            Price:         e.Package.Price,
+        }
+        if e.Package.Course != nil {
+            pkg.Course = &AdminEnrollmentCourseDTO{
+                ID:         e.Package.Course.ID,
+                CourseName: e.Package.Course.CourseName,
+            }
+        }
+        item.Package = pkg
+    }
+
+    return item
+}
+
+// ToAdminEnrollmentDTOs แปลงทั้งรายการ
+func ToAdminEnrollmentDTOs(enrollments []models.Enrollment) []AdminEnrollmentDTO {
+    result := make([]AdminEnrollmentDTO, 0, len(enrollments))
+    for i := range enrollments {
+        result = append(result, ToAdminEnrollmentDTO(&enrollments[i]))
+    }
+    return result
 }
 
 // PackageInfoRes โครงสร้างย่อยของแพ็กเกจ

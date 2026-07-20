@@ -1,11 +1,12 @@
 // frontend/src/services/enrollmentAPI.ts
-import { 
-  ApiResponse, 
-  Enrollment, 
-  Course, 
-  CreateEnrollmentReq, 
-  CreateEnrollmentRes, 
-  UpdateEnrollmentReq 
+import {
+  ApiResponse,
+  Enrollment,
+  AdminEnrollment,
+  Course,
+  CreateEnrollmentReq,
+  CreateEnrollmentRes,
+  UpdateEnrollmentReq
 } from "@/types/enrollment";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -47,7 +48,7 @@ export async function fetchCustomerEnrollments(customerId: string | number, toke
 }
 
 // [GET] ดึงประวัติการลงทะเบียนทั้งหมด (สำหรับแอดมิน)
-export async function fetchAllEnrollments(token: string): Promise<Enrollment[]> {
+export async function fetchAllEnrollments(token: string): Promise<AdminEnrollment[]> {
   const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/`, {
     method: "GET",
@@ -57,7 +58,7 @@ export async function fetchAllEnrollments(token: string): Promise<Enrollment[]> 
     }
   });
 
-  const resData: ApiResponse<Enrollment[]> = await response.json();
+  const resData: ApiResponse<AdminEnrollment[]> = await response.json();
   if (!response.ok) {
     throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลได้");
   }

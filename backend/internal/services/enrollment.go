@@ -230,9 +230,11 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]models.Enroll
 }
 
 // [READ] ดึงข้อมูลการลงทะเบียนทั้งหมด (สำหรับแอดมิน)
+
 func (s *EnrollmentService) GetAllEnrollments() ([]models.Enrollment, error) {
 	var enrollments []models.Enrollment
 	err := s.db.Preload("Customer").
+		Preload("Customer.User").
 		Preload("Package").
 		Preload("Package.Course").
 		Preload("Package.Schedules").

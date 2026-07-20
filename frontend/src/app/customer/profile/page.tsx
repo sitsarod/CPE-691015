@@ -2,31 +2,73 @@
 
 import React, { useEffect, useState } from 'react';
 import Button from '@/components/Button';
+import { getUserProfileAPI, type UserProfileResponseDTO } from '@/services/userAPI';
+
+function formatBirthDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function genderLabel(value?: string) {
+  if (value === 'male') return 'ชาย';
+  if (value === 'female') return 'หญิง';
+  return null;
+}
 
 export default function ProfilePage() {
-  const [firstName, setFirstName] = useState<string>("นักเรียน");
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [profile, setProfile] = useState<UserProfileResponseDTO | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'posts' |  'tagged'>('posts');
 
   useEffect(() => {
-    const savedName = localStorage.getItem("firstName");
-    const savedEmail = localStorage.getItem("email");
-
-    if (savedName) setFirstName(savedName);
-
-    if (savedEmail) {
-      const qrValue = `QR_${savedEmail}`;
-      const generatedUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrValue)}`;
-      setQrCodeUrl(generatedUrl);
-    } else {
-      setQrCodeUrl(null);
+    const userId = localStorage.getItem("user_id");
+    if (!userId) {
+      setError("ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่");
+      setIsLoading(false);
+      return;
     }
+
+    getUserProfileAPI(Number(userId))
+      .then(setProfile)
+      .catch((err: any) => setError(err.message || "ไม่สามารถดึงข้อมูลโปรไฟล์ได้"))
+      .finally(() => setIsLoading(false));
   }, []);
+
+  const fullName =
+    [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || "นักเรียน";
+
+  const details = [
+    { label: "ชื่อเล่น", value: profile?.nickname },
+    { label: "อีเมล", value: profile?.email },
+    { label: "เบอร์โทรศัพท์", value: profile?.phoneNumber },
+    { label: "วันเกิด", value: formatBirthDate(profile?.birthDate) },
+    { label: "เพศ", value: genderLabel(profile?.gender) },
+    { label: "อีเมลผู้ปกครอง", value: profile?.parentEmail },
+    { label: "เบอร์ผู้ปกครอง", value: profile?.parentPhoneNumber },
+  ].filter((item) => item.value);
+
+  if (isLoading) {
+    return (
+      <div className="w-full min-h-[calc(100vh-96px)] flex items-center justify-center text-gray-500">
+        กำลังโหลดข้อมูลโปรไฟล์...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full min-h-[calc(100vh-96px)] flex items-center justify-center p-8">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-6 py-4 rounded-xl">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      
+
       <div className="bg-white w-full max-w-5xl p-10 md:p-16 rounded-3xl shadow-sm text-left">
 
         {/* Profile Section สไตล์ IG */}
@@ -45,10 +87,18 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex flex-col space-y-4 w-full">
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tight">{firstName}</h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tight">{fullName}</h2>
+                {profile?.nickname && (
+                  <span className="text-lg md:text-2xl text-gray-500 font-medium">({profile.nickname})</span>
+                )}
+                {profile?.isStudent && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                    กำลังเรียน
+                  </span>
+                )}
               </div>
-              
+
               <div className="flex flex-row items-center gap-6 text-sm md:text-lg text-gray-600 font-medium">
                 <span><strong className="text-gray-900 font-bold">0</strong> posts</span>
                 <span><strong className="text-gray-900 font-bold">182</strong> followers</span>
@@ -78,6 +128,23 @@ export default function ProfilePage() {
           </div>
 
         </div>
+
+        {/* ข้อมูลส่วนตัวของผู้เรียน (ดึงจาก /api/users/:id) */}
+        {details.length > 0 && (
+          <div className="w-full border-t border-gray-200 pt-8 mb-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-6">ข้อมูลส่วนตัว</h3>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
+              {details.map((item) => (
+                <div key={item.label} className="flex flex-col gap-1">
+                  <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {item.label}
+                  </dt>
+                  <dd className="text-base text-gray-900 font-medium break-words">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
 
         {/* แถบจัด Tab Menu สไตล์ IG สลับสถานะไฮไลต์เส้นบนอัตโนมัติ */}
         <div className="w-full border-t border-gray-200 flex justify-center gap-12 md:gap-16 text-gray-400">

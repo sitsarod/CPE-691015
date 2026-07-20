@@ -132,10 +132,24 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
         FirstName: user.FirstName,
         LastName:  user.LastName,
         Role:      string(user.Role),
-        IsStudent: isStudent, 
+        IsStudent: isStudent,
     }
-    
-  
+
+    // ข้อมูลผู้เรียนอยู่ในตาราง customers (GetUserProfile preload มาให้แล้ว)
+    if user.Customer != nil {
+        response.Nickname = user.Customer.Nickname
+        response.PhoneNumber = user.Customer.PhoneNumber
+        response.Gender = string(user.Customer.Gender)
+        response.ParentEmail = user.Customer.ParentEmail
+        response.ParentPhoneNumber = user.Customer.ParentPhoneNumber
+        response.Status = string(user.Customer.Status)
+
+        if !user.Customer.BirthDate.IsZero() {
+            birthDate := user.Customer.BirthDate
+            response.BirthDate = &birthDate
+        }
+    }
+
     c.JSON(http.StatusOK, gin.H{"data": response})
 }
 

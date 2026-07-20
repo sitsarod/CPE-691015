@@ -8,6 +8,14 @@ export interface UserProfileResponseDTO {
   lastName: string;
   role: string;
   isStudent: boolean;
+
+  nickname?: string;
+  phoneNumber?: string;
+  birthDate?: string;
+  gender?: string;
+  parentEmail?: string;
+  parentPhoneNumber?: string;
+  status?: string;
 }
 
 export interface StudentListResponseDTO {
@@ -27,27 +35,35 @@ export interface UpdateProfileInput {
   phoneNumber?: string;
 }
 
+// backend ห่อ response ไว้ใน { data: ... } ทุกเส้นของ user
+interface Wrapped<T> {
+  data: T;
+}
+
 // [GET] ดึงข้อมูลโปรไฟล์ผู้ใช้ตาม ID
 export async function getUserProfileAPI(userId: number): Promise<UserProfileResponseDTO> {
-  return await apiFetch<UserProfileResponseDTO>(`/users/${userId}`, {
+  const res = await apiFetch<Wrapped<UserProfileResponseDTO>>(`/users/${userId}`, {
     method: "GET",
   });
+  return res.data;
 }
 
 // [PATCH] อัปเดตข้อมูลโปรไฟล์ส่วนตัว
 export async function updateUserProfileAPI(
-  userId: number, 
+  userId: number,
   data: UpdateProfileInput
 ): Promise<UserProfileResponseDTO> {
-  return await apiFetch<UserProfileResponseDTO>(`/users/${userId}`, {
+  const res = await apiFetch<Wrapped<UserProfileResponseDTO>>(`/users/${userId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+  return res.data;
 }
 
 // [GET] ดึงรายชื่อนักเรียนทั้งหมด (สำหรับ Coach / Admin)
 export async function getActiveStudentsAPI(): Promise<StudentListResponseDTO[]> {
-  return await apiFetch<StudentListResponseDTO[]>("/users/students", {
+  const res = await apiFetch<Wrapped<StudentListResponseDTO[]>>("/users/students", {
     method: "GET",
   });
+  return res.data || [];
 }
