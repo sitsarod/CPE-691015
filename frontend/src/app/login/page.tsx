@@ -1,10 +1,11 @@
+// frontend/src/app/login/page.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation"; 
 import Button from "@/components/Button";
-import { apiFetch } from "@/services/apiClient";
+import { loginAPI } from "@/services/authAPI";
 
 interface LoginResponse {
   token: string;
@@ -37,13 +38,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
 try {
-      const data = await apiFetch<LoginResponse>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({
-          Email: email,       
-          Password: password,
-        }),
-      });
+      const data = await loginAPI({ email, password });
 
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.user.role);

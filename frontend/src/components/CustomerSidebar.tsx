@@ -12,8 +12,8 @@ export default function CustomerSidebar() {
   const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
-    const storedName = localStorage.getItem("user_name");
-    const storedEmail = localStorage.getItem("user_email");
+    const storedName = localStorage.getItem("firstName");
+    const storedEmail = localStorage.getItem("email");
 
     if (storedName) setUserName(storedName);
     if (storedEmail) setUserEmail(storedEmail);
@@ -32,15 +32,17 @@ export default function CustomerSidebar() {
         </nav>
       </div>
 
-      <div className="border-t border-gray-200 flex items-center gap-4 flex-shrink-0 min-w-[260px] cursor-pointer hover:bg-gray-50 px-[22px] py-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
-          <UserCircle className="w-8 h-8" />
+      <Link href="/customer/profile">
+        <div className="border-t border-gray-200 flex items-center gap-4 flex-shrink-0 min-w-[260px] cursor-pointer hover:bg-gray-50 px-[22px] py-6 transition-colors">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
+            <UserCircle className="w-8 h-8" />
+          </div>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+            <p className="text-[15px] font-bold text-gray-800 leading-tight truncate w-[160px]">{userName}</p>
+            <p className="text-[12px] text-gray-500 mt-0.5 truncate w-[160px]">{userEmail}</p>
+          </div>
         </div>
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-          <p className="text-[15px] font-bold text-gray-800 leading-tight truncate w-[160px]">{userName}</p>
-          <p className="text-[12px] text-gray-500 mt-0.5 truncate w-[160px]">{userEmail}</p>
-        </div>
-      </div>
+      </Link>
 
     </aside>
   );

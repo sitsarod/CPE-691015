@@ -169,3 +169,43 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
+
+func (h *UserController) FindAccount(c *gin.Context) {
+	var input struct {
+		Identifier string `json:"identifier" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุอีเมลหรือหมายเลขโทรศัพท์"})
+		return
+	}
+
+	// ค้นหา User จาก DB
+	user, err := h.userService.FindAccountByIdentifier(input.Identifier)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		return
+	}
+
+	// แกะข้อมูล Nickname และ PhoneNumber ออกมาจาก Customer Struct (ถ้ามี)
+	nickname := ""
+	phoneNumber := ""
+	if user.Customer != nil {
+		nickname = user.Customer.Nickname
+		phoneNumber = user.Customer.PhoneNumber
+	}
+
+	// ส่งกลับไปให้ React/Next.js นำไปแสดงผล
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"user": gin.H{
+			"id":          user.ID,
+			"firstName":   user.FirstName,
+			"lastName":    user.LastName,
+			"nickname":    nickname,
+			"email":       user.Email,
+			"phoneNumber": phoneNumber,
+			"role":        user.Role,
+		},
+	})
+}

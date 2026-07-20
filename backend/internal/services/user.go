@@ -161,3 +161,39 @@ func (s *UserService) GetActiveStudents() ([]models.User, error) {
 
     return users, err
 }
+
+// FindAccountByIdentifier ค้นหาบัญชีผู้ใช้จาก Email หรือ PhoneNumber
+func (s *UserService) FindAccountByIdentifier(identifier string) (*models.User, error) {
+	var user models.User
+
+	// 1. ลองค้นหาด้วย Email ในตาราง users ก่อน
+	err := s.db.Preload("Customer").Preload("Coach").
+		Where("email = ?", identifier).
+		First(&user).Error
+
+	if err == nil {
+		return &user, nil
+	}
+
+	// 2. ถ้าหาด้วย Email ไม่เจอ ให้ Join ไปค้นหาที่ตาราง customers ด้วย phone_number
+	err = s.db.Preload("Customer").Preload("Coach").
+		Joins("JOIN customers ON customers.user_id = users.id").
+		Where("customers.phone_number = ?", identifier).
+		First(&user).Error
+
+	if err == nil {
+		return &user, nil
+	}
+
+	// 3. ถ้าหาด้วยเบอร์โค้ชด้วย (ถ้าตาราง coaches มีเบอร์โทรศัพท์)
+	err = s.db.Preload("Customer").Preload("Coach").
+		Joins("JOIN coaches ON coaches.user_id = users.id").
+		Where("coaches.phone_number = ?", identifier).
+		First(&user).Error
+
+	if err == nil {
+		return &user, nil
+	}
+
+	return nil, errors.New("ไม่พบบัญชีผู้ใช้นี้ในระบบ")
+}
