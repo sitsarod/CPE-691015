@@ -1,7 +1,6 @@
 'use client';
+
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation"; 
 import Button from "@/components/Button";
 
 interface SelectVerificationProps {
@@ -11,59 +10,31 @@ interface SelectVerificationProps {
 }
 
 export default function SelectVerification({ userData, onNext, onBack }: SelectVerificationProps) {
-    const router = useRouter(); 
-  const [showPassword, setShowPassword] = useState(false);
-  
- 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
- 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
+  const handleConfirm = async () => {
     setIsLoading(true);
+    setErrorMsg("");
 
     try {
-
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${baseUrl}/auth/login`, {
+
+      // 🌟 ยิง API ไปสั่งให้ Backend ส่ง OTP เข้าอีเมล
+      const response = await fetch(`${baseUrl}/auth/send-otp`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          Email: email,       
-          Password: password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userData?.email }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-      
-        throw new Error(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+        throw new Error(data.message || "ไม่สามารถส่ง OTP ได้ กรุณาลองใหม่อีกครั้ง");
       }
 
-
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.user.role);
-      localStorage.setItem("user_id", data.user.id.toString());
-      localStorage.setItem("user_name", data.user.firstName);
-      localStorage.setItem("user_email", data.user.email);
-
-
-      if (data.user.role === "admin") {
-        router.push("/admin/dashboard");
-      } else if (data.user.role === "coach") {
-        router.push("/coach/dashboard");
-      } else {
-        router.push("/customer/dashboard");
-      }
-      
-      router.refresh();
+      // ส่ง OTP สำเร็จ! เดินหน้าไปหน้ากรอก OTP (พร้อมส่งข้อมูล user ต่อไป)
+      onNext(userData);
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -73,14 +44,50 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
 
   return (
     <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-            <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">เลือกบัญชีของคุณ</h1>
-                <p className="text-sm text-gray-500 mb-8">โปรไฟล์นี้ตรงกับอีเมลหรือหมายเลขโทรศัพท์มือถือที่คุณป้อน</p>
+      <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">เลือกบัญชีของคุณ</h1>
+        <p className="text-sm text-gray-500 mb-8">โปรไฟล์นี้ตรงกับอีเมลหรือหมายเลขโทรศัพท์มือถือที่คุณป้อน</p>
 
-                <Button onClick={() => onNext({ email: 'test@email.com' })} variant="primary" type="submit">
-                  ดำเนินการต่อ
-                </Button>
-            </div>
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium">
+            {errorMsg}
+          </div>
+        )}
+
+        {/* การ์ดแสดงข้อมูลโปรไฟล์ */}
+        <div className="flex items-center gap-4 p-5 bg-gray-50 border border-gray-200 rounded-2xl mb-8">
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border border-gray-300 flex-shrink-0">
+            <img 
+              src={userData?.avatarUrl || "/slide3.jpg"} 
+              alt="User Avatar" 
+              className="w-full h-full object-cover" 
+            />
+          </div>
+
+          <div className="flex flex-col text-left space-y-0.5">
+            <h3 className="text-lg font-bold text-gray-900">
+              {userData?.firstName} {userData?.lastName}
+            </h3>
+            {userData?.nickname && (
+              <p className="text-sm font-semibold text-orange-600">
+                ชื่อเล่น: {userData?.nickname}
+              </p>
+            )}
+            <p className="text-xs text-gray-500">{userData?.email}</p>
+          </div>
         </div>
+
+        {/* ปุ่มควบคุม */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+          <Button variant="outline" type="button" onClick={onBack} disabled={isLoading}>
+            ไม่ใช่บัญชีของฉัน
+          </Button>
+          <Button variant="primary" type="button" onClick={handleConfirm} disabled={isLoading}>
+            {isLoading ? "กำลังส่ง OTP..." : "ใช่ ดำเนินการต่อ"}
+          </Button>
+        </div>
+
+      </div>
+    </div>
   );
 }

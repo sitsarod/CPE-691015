@@ -12,8 +12,8 @@ export default function CustomerSidebar() {
   const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
-    const storedName = localStorage.getItem("user_name");
-    const storedEmail = localStorage.getItem("user_email");
+    const storedName = localStorage.getItem("firstName");
+    const storedEmail = localStorage.getItem("email");
 
     if (storedName) setUserName(storedName);
     if (storedEmail) setUserEmail(storedEmail);

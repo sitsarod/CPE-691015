@@ -72,7 +72,7 @@ export default function EditForm() {
         </Button>
       </div>
 
-      {/* อินพุตฟอร์มแก้ไขข้อมูล */}
+
       <form onSubmit={handleSave} className="flex flex-row flex-wrap w-full gap-y-5 text-left bg-white">
         
         {/* ชื่อจริง */}
@@ -113,18 +113,6 @@ export default function EditForm() {
         <div className="w-full flex flex-col space-y-1.5">
           <label className="text-sm font-semibold text-gray-700">อีเมล</label>
           <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="ระบุอีเมล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* รหัสผ่าน */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">รหัสผ่าน</label>
-          <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="รหัสผ่าน" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* ยืนยันรหัสผ่าน */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">ยืนยันรหัสผ่าน</label>
-          <input name="confirmPassword" type="password" required value={formData.confirmPassword} onChange={handleChange} placeholder="ยืนยันรหัสผ่าน" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
         </div>
 
         {/* หมายเลขโทรศัพท์มือถือ */}

@@ -1,69 +1,48 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation"; 
 import Button from "@/components/Button";
 
 interface FindAccountProps {
   onNext: (data?: any) => void;
-
 }
 
 export default function FindAccount({ onNext }: FindAccountProps) {
-  const router = useRouter(); 
-  const [showPassword, setShowPassword] = useState(false);
-  
- 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [identifier, setIdentifier] = useState(""); // สำหรับเก็บ Email หรือ Phone
   const [errorMsg, setErrorMsg] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
 
- 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!identifier) {
+      setErrorMsg("กรุณากรอกอีเมลหรือหมายเลขโทรศัพท์");
+      return;
+    }
+
     setErrorMsg("");
     setIsLoading(true);
 
     try {
-
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${baseUrl}/auth/login`, {
+      
+
+      const response = await fetch(`${baseUrl}/users/find`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          Email: email,       
-          Password: password,
-        }),
+        body: JSON.stringify({ identifier }), 
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-      
-        throw new Error(data.error || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+        throw new Error(data.message || "ไม่พบบัญชีผู้ใช้นี้ในระบบ");
       }
 
+      // 🌟 ค้นหาเจอ! ส่งข้อมูลผู้ใช้ (userData) ต่อไปยังหน้าถัดไป
+      onNext(data.user);
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.user.role);
-      localStorage.setItem("user_id", data.user.id.toString());
-      localStorage.setItem("user_name", data.user.firstName);
-      localStorage.setItem("user_email", data.user.email);
-
-
-      if (data.user.role === "admin") {
-        router.push("/admin/dashboard");
-      } else if (data.user.role === "coach") {
-        router.push("/coach/dashboard");
-      } else {
-        router.push("/customer/dashboard");
-      }
-      
-      router.refresh();
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -73,30 +52,36 @@ export default function FindAccount({ onNext }: FindAccountProps) {
 
   return (
     <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-        <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">ค้นหาบัญชีของคุณ</h1>
-            <p className="text-sm text-gray-500 mb-8">ป้อนอีเมลหรือหมายเลขโทรศัพท์ของคุณเพื่อค้นหาบัญชี</p>
+      <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">ค้นหาบัญชีของคุณ</h1>
+        <p className="text-sm text-gray-500 mb-8">ป้อนอีเมลหรือหมายเลขโทรศัพท์ของคุณเพื่อค้นหาบัญชี</p>
 
-            <form onSubmit={handleSubmit} className="flex flex-row flex-wrap w-full gap-y-5 text-left">
-                <div className="w-full flex flex-col space-y-1.5">
-                    <label className="text-sm font-semibold text-gray-700">อีเมลหรือหมายเลขโทรศัพท์</label>
-                    <input 
-                        type="text" 
-                        placeholder="ระบุอีเมลหรือหมายเลขโทรศัพท์" 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" 
-                    />
-                </div>
+        {/* แสดงข้อความแจ้งเตือนถ้าไม่พบบัญชี */}
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium">
+            {errorMsg}
+          </div>
+        )}
 
-                <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">
-                            <Button onClick={() => onNext({ email: 'test@email.com' })} variant="primary" type="submit">
-                              ดำเนินการต่อ
-                            </Button>
-                </div>
+        <form onSubmit={handleSubmit} className="flex flex-col w-full gap-y-5 text-left">
+          <div className="w-full flex flex-col space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">อีเมลหรือหมายเลขโทรศัพท์</label>
+            <input 
+              type="text" 
+              placeholder="ระบุอีเมลหรือหมายเลขโทรศัพท์" 
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base" 
+            />
+          </div>
 
-            </form>
-        </div>
+          <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">
+            <Button variant="primary" type="submit" disabled={isLoading}>
+              {isLoading ? "กำลังค้นหา..." : "ดำเนินการต่อ"}
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

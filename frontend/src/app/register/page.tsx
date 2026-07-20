@@ -1,3 +1,4 @@
+// frontend/src/app/register/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -5,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation"; 
 import Button from "@/components/Button";
 import { apiFetch } from "@/services/apiClient"; 
+import { registerAPI } from "@/services/authAPI";
 
 interface RegisterResponse {
   token: string;
@@ -75,10 +77,7 @@ export default function RegisterPage() {
 
     try {
 
-      const data = await apiFetch<RegisterResponse>("/api/auth/register", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const data = await registerAPI(payload);
 
 
       localStorage.setItem("token", data.token);
@@ -86,7 +85,9 @@ export default function RegisterPage() {
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("email", data.user.email);
       localStorage.setItem("user_id", data.user.id.toString());
-      localStorage.setItem("qrImage", data.customer.qrImage);
+      if (data.customer?.qrImage) {
+        localStorage.setItem("qrImage", data.customer.qrImage);
+      }
       
       router.push("/login");
       router.refresh();

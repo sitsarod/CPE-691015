@@ -66,6 +66,12 @@ func SetupRoutes(r *gin.Engine) {
         {
             authGroup.POST("/login", authController.Login) 
             authGroup.POST("/register", authController.Register)
+            authGroup.POST("/send-otp", authController.SendOTP)
+            authGroup.POST("/verify-otp", authController.VerifyOTP)
+        }
+        publicUserGroup := api.Group("/users")
+        {
+            publicUserGroup.POST("/find", userController.FindAccount)
         }
 
         api.GET("/enrollments/courses", enrollmentController.GetAvailableCourses)
@@ -93,6 +99,7 @@ func SetupRoutes(r *gin.Engine) {
             userGroup.POST("/", userController.CreateUserController)
             userGroup.PATCH("/:id", userController.UpdateUserController)
             userGroup.DELETE("/:id", userController.DeleteUserController)
+
         }
 
         enrollmentGroup := protected.Group("/enrollments")
