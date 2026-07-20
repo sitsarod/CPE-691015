@@ -18,6 +18,7 @@ type Coach struct {
 	Specialization string `json:"specialization" gorm:"type:varchar(255)" valid:"required~specialization is required"`
 	BankAccount    string `json:"bank_account" gorm:"type:varchar(255)" valid:"required~bankAccount is required"`
 	PaymentInfo    string `json:"payment_info" gorm:"type:varchar(255)" valid:"required~paymentInfo is required"`
+	PayRatePerSession float64 `json:"pay_rate_per_session" gorm:"type:decimal(10,2);default:0"`
 
 	CoachAvailability []CoachAvailability `json:"coach_availability" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	WorkSchedules     []WorkSchedule      `json:"work_schedules" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`

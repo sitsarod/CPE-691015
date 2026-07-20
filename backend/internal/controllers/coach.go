@@ -2,9 +2,13 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
+
+	"github.com/asaskevich/govalidator"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,28 +21,162 @@ func NewCoachController(s *services.CoachService) *CoachController {
 	return &CoachController{service: s}
 }
 
-// GetCoaches handles GET /api/coaches request
+// toCoachResponse แปลง models.Coach เป็น dto.CoachResponse (ใช้กับหน้า list)
+func toCoachResponse(coach *models.Coach) dto.CoachResponse {
+	return dto.CoachResponse{
+		ID:             coach.ID,
+		UserID:         coach.UserID,
+		Nickname:       coach.Nickname,
+		Specialization: coach.Specialization,
+		ProfilePicture: coach.ProfilePicture,
+		Phone:          coach.Phone,
+	}
+}
+
+// toCoachDetailResponse แปลง models.Coach (พร้อม User ที่ preload มาแล้ว) เป็น dto.CoachDetailResponse
+// ใช้กับหน้า detail/edit ที่ต้องการฟิลด์ครบกว่า list รวมถึง pay_rate_per_session ที่โชว์ได้ (read-only)
+func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
+	resp := dto.CoachDetailResponse{
+		ID:                coach.ID,
+		UserID:            coach.UserID,
+		Nickname:          coach.Nickname,
+		Phone:             coach.Phone,
+		Uid:               coach.Uid,
+		Address:           coach.Address,
+		BirthDate:         coach.BirthDate,
+		Specialization:    coach.Specialization,
+		ProfilePicture:    coach.ProfilePicture,
+		PayRatePerSession: coach.PayRatePerSession,
+	}
+
+	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service
+	// เช็ค nil ก่อนเสมอ กันกรณี preload ไม่เจอ user จริง (ไม่ควรเกิด แต่กันไว้ไม่ให้ panic)
+	if coach.User != nil {
+		resp.FirstName = coach.User.FirstName
+		resp.LastName = coach.User.LastName
+		resp.Email = coach.User.Email
+	}
+
+	return resp
+}
+
+// GetCoaches handles GET /api/coaches
 func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 	coaches, err := ctrl.service.GetAll()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve coaches: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, coaches)
+
+	responses := make([]dto.CoachResponse, 0, len(coaches))
+	for i := range coaches {
+		responses = append(responses, toCoachResponse(&coaches[i]))
+	}
+
+	c.JSON(http.StatusOK, responses)
 }
 
-// CreateCoach handles POST /api/coaches request
+// GetCoachByID handles GET /api/coaches/:id
+// คืน CoachDetailResponse (ฟิลด์ครบกว่า) เพราะ endpoint นี้ใช้กับหน้า detail/edit ของ coach คนเดียว
+func (ctrl *CoachController) GetCoachByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	coach, err := ctrl.service.GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "coach not found"})
+		return
+	}
+	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
+}
+
+// CreateCoach handles POST /api/coaches
+// รับ dto.CreateCoachRequest (ไม่ใช่ models.Coach ตรงๆ) เพื่อ validate input ก่อนแตะ DB
 func (ctrl *CoachController) CreateCoach(c *gin.Context) {
-	var coach models.Coach
-	if err := c.ShouldBindJSON(&coach); err != nil {
+	var req dto.CreateCoachRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := ctrl.service.Create(&coach); err != nil {
+	if _, err := govalidator.ValidateStruct(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	coach, err := ctrl.service.Create(req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create coach: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, coach)
+	c.JSON(http.StatusCreated, toCoachResponse(coach))
+}
+
+// UpdateCoach handles PATCH /api/coaches/:id
+// coach แก้ข้อมูลตัวเอง (ไม่รวม specialization/pay_rate_per_session ตาม UpdateCoachRequest ที่ตัดออกแล้ว)
+func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	var req dto.UpdateCoachRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	coach, err := ctrl.service.Update(uint(id), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update coach: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, toCoachResponse(coach))
+}
+
+// AdminUpdateCoach handles PATCH /api/coaches/:id/level
+// เฉพาะ admin เท่านั้นที่แก้ specialization (ระดับ) และ pay_rate_per_session (ค่าจ้างต่อครั้ง) ได้
+// route ต้องผูกกับ adminOnly middleware (RequireRole("admin")) เท่านั้น
+func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	var req dto.AdminUpdateCoachRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	coach, err := ctrl.service.AdminUpdate(uint(id), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, toCoachResponse(coach))
+}
+
+// DeleteCoach handles DELETE /api/coaches/:id
+func (ctrl *CoachController) DeleteCoach(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	if err := ctrl.service.Delete(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete coach: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "coach deleted"})
 }
