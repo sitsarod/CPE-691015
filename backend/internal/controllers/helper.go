@@ -33,6 +33,11 @@ func IsAdmin(c *gin.Context) bool {
 	return ok && role == string(models.AdminRole)
 }
 
+func IsCoach(c *gin.Context) bool {
+	_, role, ok := GetAuthContext(c)
+	return ok && role == string(models.CoachRole)
+}
+
 // CheckIDOR verifies if the current user is an admin or if their ID matches the target ID.
 //
 // หมายเหตุสำคัญ: targetID ต้องเป็น users.id เสมอ เพราะฟังก์ชันนี้เทียบกับ claim
@@ -47,6 +52,9 @@ func CheckIDOR(c *gin.Context, targetID uint) bool {
 
 	if role == string(models.AdminRole) {
 		return true // Admin can access everything
+	}
+	if role == string(models.CoachRole) {
+		return true // Coach can access their own data
 	}
 
 	return userID == targetID
