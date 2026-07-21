@@ -13,8 +13,16 @@ func SetupRoutes(r *gin.Engine) {
     db := config.DB
     
     // Initialize services and controllers
-    coachService := services.NewCoachService()
+    // แก้จาก NewCoachService() เป็น NewCoachService(db) เพราะ struct เปลี่ยนไปใช้ DI pattern แล้ว
+    coachService := services.NewCoachService(db)
     coachController := controllers.NewCoachController(coachService)
+
+    // เพิ่มใหม่: CoachAvailability และ WorkSchedule ที่ยังไม่เคย wire เข้า router
+    coachAvailabilityService := services.NewCoachAvailabilityService(db)
+    coachAvailabilityController := controllers.NewCoachAvailabilityController(coachAvailabilityService)
+ 
+    workScheduleService := services.NewWorkScheduleService(db)
+    workScheduleController := controllers.NewWorkScheduleController(workScheduleService)
 
     enrollmentService := services.NewEnrollmentService(db)
     enrollmentController := controllers.NewEnrollmentController(enrollmentService)
@@ -88,9 +96,37 @@ func SetupRoutes(r *gin.Engine) {
 
         adminOnly := api.Group("")
         adminOnly.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("admin"))
+        
+        // --- Coach ---
+        // การดูรายละเอียด/เวลาว่าง/ตารางของ coach 1 คน อยู่ใต้ protected แต่ handler ตรวจสิทธิ์เอง
+        // (coach เห็นเฉพาะของตัวเอง, admin เห็นได้ทุกคน) และ PATCH/PUT ก็ตรวจความเป็นเจ้าของกัน IDOR
+        coachGroup := protected.Group("/coaches")
+        {
+            coachGroup.GET("/:id", coachController.GetCoachByID)                                  // เจ้าของ หรือ admin
+            coachGroup.PATCH("/:id", coachController.UpdateCoach)                                 // เจ้าของ หรือ admin (บาง field)
+            coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)      // เจ้าของ หรือ admin
+            coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)   // เจ้าของเท่านั้น (admin แก้ไม่ได้)
+            coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)     // เจ้าของ หรือ admin
+        }
+        // เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
+        adminCoachGroup := adminOnly.Group("/coaches")
+        {
+            adminCoachGroup.GET("", coachController.GetCoaches)
+            adminCoachGroup.POST("", coachController.CreateCoach)
+            adminCoachGroup.DELETE("/:id", coachController.DeleteCoach)
+            adminCoachGroup.PATCH("/:id/level", coachController.AdminUpdateCoach)
+        }
 
-        protected.GET("/coaches", coachController.GetCoaches)
-        adminOnly.POST("/coaches", coachController.CreateCoach)
+        // --- Work schedule ---
+        // ปฏิทินรวมของทุก coach เป็นของ admin (coach ดูของตัวเองผ่าน /coaches/:id/work-schedules ด้านบน)
+        adminWorkScheduleGroup := adminOnly.Group("/work-schedules")
+        {
+            adminWorkScheduleGroup.GET("", workScheduleController.GetSchedules)
+            adminWorkScheduleGroup.GET("/:id", workScheduleController.GetScheduleByID)
+            adminWorkScheduleGroup.POST("", workScheduleController.CreateSchedule)
+            adminWorkScheduleGroup.PATCH("/:id", workScheduleController.UpdateSchedule)
+            adminWorkScheduleGroup.DELETE("/:id", workScheduleController.DeleteSchedule)
+        }
 
         userGroup := protected.Group("/users")
         {

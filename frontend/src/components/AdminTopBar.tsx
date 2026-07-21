@@ -72,7 +72,7 @@ export default function CustomerTopbar() {
             <div className="absolute right-0 mt-6 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 flex flex-col z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               
               <Link
-                href="/customer/profile"
+                href="/admin/profile"
                 onClick={() => setIsSettingsOpen(false)}
                 className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
               >
