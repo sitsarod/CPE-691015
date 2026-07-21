@@ -18,6 +18,31 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 	return &EnrollmentService{db: db}
 }
 
+var (
+	ErrEnrollmentNotFound      = errors.New("ไม่พบข้อมูลการลงทะเบียน")
+	ErrEnrollmentNotPending    = errors.New("การลงทะเบียนนี้ไม่ได้อยู่ในสถานะรออนุมัติ")
+	ErrPackageSeatsFull        = errors.New("ไม่สามารถอนุมัติได้ เนื่องจากแพ็กเกจนี้ที่นั่งเต็มแล้ว กรุณาขยายจำนวนที่นั่งสูงสุดก่อน")
+	ErrEnrollmentBillingLocked = errors.New("ไม่สามารถยกเลิกได้ เนื่องจากบิลที่เกี่ยวข้องถูกชำระหรือกำลังตรวจสอบอยู่ กรุณาจัดการการชำระเงินก่อน")
+)
+
+
+func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
+	if billingID == nil {
+		return nil
+	}
+	var billing models.Billing
+	if err := tx.First(&billing, *billingID).Error; err != nil {
+		return nil
+	}
+	if billing.Status == models.StatusPaid || billing.Status == models.StatusWaitCheck {
+		return ErrEnrollmentBillingLocked
+	}
+	if err := tx.Delete(&models.Billing{}, *billingID).Error; err != nil {
+		return errors.New("ไม่สามารถยกเลิกบิลที่ผูกกับการลงทะเบียนได้")
+	}
+	return nil
+}
+
 
 func (s *EnrollmentService) toCustomerID(userID uint) (uint, error) {
 	var customer models.Customer
@@ -43,7 +68,7 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	err := s.db.Preload("User").
 		Preload("Packages").
 		Preload("Packages.Schedules").
-		Preload("Packages.Enrollments", "status = ?", models.EnrollmentStatusActive).
+		Preload("Packages.Enrollments", "status IN ?", enrollmentSeatStatuses).
 		Where("status = ?", models.CourseStatusActive).
 		Order("id ASC").
 		Find(&courses).Error
@@ -145,11 +170,11 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 	var enrollment models.Enrollment
 	
 	if err := s.db.Preload("Package").Preload("Package.Course").First(&enrollment, enrollmentID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลการลงทะเบียน")
+		return nil, ErrEnrollmentNotFound
 	}
 
 	if enrollment.Status != models.EnrollmentStatusPending {
-		return nil, errors.New("การลงทะเบียนนี้ไม่ได้อยู่ในสถานะรออนุมัติ")
+		return nil, ErrEnrollmentNotPending
 	}
 
 	// เช็คว่าที่นั่งเต็มหรือยัง (นับเฉพาะ Active)
@@ -159,7 +184,7 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		Count(&activeCount)
 
 	if uint(activeCount) >= enrollment.Package.MaxSeats {
-		return nil, errors.New("ไม่สามารถอนุมัติได้ เนื่องจากแพ็กเกจนี้ที่นั่งเต็มแล้ว กรุณาขยายจำนวนที่นั่งสูงสุดก่อน")
+		return nil, ErrPackageSeatsFull
 	}
 
 	var billingType models.BillingType
@@ -244,7 +269,24 @@ func (s *EnrollmentService) GetAllEnrollments() ([]models.Enrollment, error) {
 func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentReq) (*models.Enrollment, error) {
 	var enrollment models.Enrollment
 	if err := s.db.First(&enrollment, id).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลการลงทะเบียน")
+		return nil, ErrEnrollmentNotFound
+	}
+
+	if req.Status != nil && models.EnrollmentStatus(*req.Status) == models.EnrollmentStatusCancelled {
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := releaseLinkedBilling(tx, enrollment.BillingID); err != nil {
+				return err
+			}
+			enrollment.Status = models.EnrollmentStatusCancelled
+			if req.RemainingSessions != nil {
+				enrollment.RemainingSessions = uint(*req.RemainingSessions)
+			}
+			return tx.Save(&enrollment).Error
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &enrollment, nil
 	}
 
 	if req.Status != nil {
@@ -261,9 +303,23 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 }
 
 // [DELETE] ยกเลิกการลงทะเบียน
+
 func (s *EnrollmentService) CancelEnrollment(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&models.Enrollment{}, id).Error; err != nil {
+		var enrollment models.Enrollment
+		if err := tx.First(&enrollment, id).Error; err != nil {
+			return ErrEnrollmentNotFound
+		}
+
+		if err := releaseLinkedBilling(tx, enrollment.BillingID); err != nil {
+			return err
+		}
+
+		enrollment.Status = models.EnrollmentStatusCancelled
+		if err := tx.Save(&enrollment).Error; err != nil {
+			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
+		}
+		if err := tx.Delete(&enrollment).Error; err != nil {
 			return errors.New("ไม่สามารถยกเลิกการลงทะเบียนได้")
 		}
 		return nil
