@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit2, Save, X, PlusCircle, CheckCircle2 } from "lucide-react";
-import { 
-  fetchAllQuestions, 
-  createQuestion, 
-  updateQuestion, 
-  deleteQuestion, 
-  addOption, 
-  deleteOption 
+import {
+  fetchAllQuestions,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
+  addOption,
+  deleteOption,
+  addOptionCourse,
+  deleteOptionCourse
 } from "@/services/quizAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
 import { QuizQuestion, QuizOption } from "@/types/quiz";
@@ -25,7 +27,10 @@ export default function QuizManagerPage() {
   // Options State
   const [addingOptionForId, setAddingOptionForId] = useState<number | null>(null);
   const [newOptionText, setNewOptionText] = useState("");
-  const [newOptionCourseId, setNewOptionCourseId] = useState<string>("0");
+
+  const [addingCourseForOptionId, setAddingCourseForOptionId] = useState<number | null>(null);
+  const [newCourseId, setNewCourseId] = useState<string>("0");
+  const [newCourseWeight, setNewCourseWeight] = useState<number>(1);
 
   useEffect(() => {
     loadData();
@@ -49,6 +54,17 @@ export default function QuizManagerPage() {
     }
   };
 
+
+  const refreshQuestions = async () => {
+    try {
+      const token = localStorage.getItem("token") || "";
+      const qData = await fetchAllQuestions(token);
+      setQuestions(qData);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleCreateQuestion = async () => {
     if (!newQuestionText.trim()) return;
     try {
@@ -59,7 +75,7 @@ export default function QuizManagerPage() {
         is_active: true 
       }, token);
       setNewQuestionText("");
-      loadData();
+      refreshQuestions();
     } catch (err) {
       alert("Error creating question");
     }
@@ -70,7 +86,7 @@ export default function QuizManagerPage() {
     try {
       const token = localStorage.getItem("token") || "";
       await deleteQuestion(id, token);
-      loadData();
+      refreshQuestions();
     } catch (err) {
       alert("Error deleting question");
     }
@@ -80,7 +96,7 @@ export default function QuizManagerPage() {
     try {
       const token = localStorage.getItem("token") || "";
       await updateQuestion(q.id, { is_active: !q.is_active }, token);
-      loadData();
+      refreshQuestions();
     } catch (err) {
       alert("Error updating question");
     }
@@ -90,16 +106,10 @@ export default function QuizManagerPage() {
     if (!newOptionText.trim()) return;
     try {
       const token = localStorage.getItem("token") || "";
-      const courseId = parseInt(newOptionCourseId);
-      await addOption(questionId, { 
-        text: newOptionText, 
-        recommended_course_id: courseId > 0 ? courseId : null 
-      }, token);
-      
+      await addOption(questionId, { text: newOptionText }, token);
       setNewOptionText("");
-      setNewOptionCourseId("0");
       setAddingOptionForId(null);
-      loadData();
+      refreshQuestions();
     } catch (err) {
       alert("Error adding option");
     }
@@ -109,9 +119,37 @@ export default function QuizManagerPage() {
     try {
       const token = localStorage.getItem("token") || "";
       await deleteOption(optionId, token);
-      loadData();
+      refreshQuestions();
     } catch (err) {
       alert("Error deleting option");
+    }
+  };
+
+  const handleAddOptionCourse = async (optionId: number) => {
+    const courseId = parseInt(newCourseId);
+    if (courseId <= 0) {
+      alert("กรุณาเลือกคอร์ส");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token") || "";
+      await addOptionCourse(optionId, { course_id: courseId, weight: newCourseWeight }, token);
+      setNewCourseId("0");
+      setNewCourseWeight(1);
+      setAddingCourseForOptionId(null);
+      refreshQuestions();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error adding recommended course");
+    }
+  };
+
+  const handleDeleteOptionCourse = async (id: number) => {
+    try {
+      const token = localStorage.getItem("token") || "";
+      await deleteOptionCourse(id, token);
+      refreshQuestions();
+    } catch (err) {
+      alert("Error deleting recommended course");
     }
   };
 
@@ -170,20 +208,64 @@ export default function QuizManagerPage() {
                 
                 <div className="space-y-3 mb-4">
                   {q.options && q.options.map(opt => (
-                    <div key={opt.id} className="flex justify-between items-center p-3 border border-gray-200 rounded-xl hover:bg-gray-50">
-                      <div>
+                    <div key={opt.id} className="p-3 border border-gray-200 rounded-xl hover:bg-gray-50">
+                      <div className="flex justify-between items-center">
                         <span className="font-semibold text-gray-800">{opt.text}</span>
-                        {opt.recommended_course_id ? (
-                          <span className="ml-3 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-bold">
-                            ➔ แนะนำ: {courses.find(c => c.id === opt.recommended_course_id)?.course_name || 'ไม่พบคอร์ส'}
+                        <button onClick={() => handleDeleteOption(opt.id)} className="text-red-400 hover:text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {(opt.recommended_courses ?? []).map(rc => (
+                          <span key={rc.id} className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-bold">
+                            {rc.course_name || `คอร์ส #${rc.course_id}`}
+                            <span className="bg-blue-600 text-white rounded px-1">×{rc.weight}</span>
+                            <button onClick={() => handleDeleteOptionCourse(rc.id)} className="text-blue-500 hover:text-red-600 ml-0.5">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                        {(opt.recommended_courses ?? []).length === 0 && (
+                          <span className="text-xs text-gray-400">- ยังไม่ผูกคอร์ส -</span>
+                        )}
+
+                        {addingCourseForOptionId === opt.id ? (
+                          <span className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
+                            <select
+                              value={newCourseId}
+                              onChange={e => setNewCourseId(e.target.value)}
+                              className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+                            >
+                              <option value="0">-- เลือกคอร์ส --</option>
+                              {courses.map(c => (
+                                <option key={c.id} value={c.id}>{c.course_name}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={newCourseWeight}
+                              onChange={e => setNewCourseWeight(parseInt(e.target.value))}
+                              className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+                              title="น้ำหนักแต้ม"
+                            >
+                              {[1, 2, 3, 4, 5].map(w => <option key={w} value={w}>น้ำหนัก {w}</option>)}
+                            </select>
+                            <button onClick={() => handleAddOptionCourse(opt.id)} className="text-green-600 hover:text-green-800">
+                              <Save className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setAddingCourseForOptionId(null)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </span>
                         ) : (
-                          <span className="ml-3 text-xs text-gray-400">- ไม่มีการผูกคอร์ส -</span>
+                          <button
+                            onClick={() => { setAddingCourseForOptionId(opt.id); setNewCourseId("0"); setNewCourseWeight(1); }}
+                            className="text-xs text-[#CC0000] font-bold hover:underline inline-flex items-center gap-0.5"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" /> เพิ่มคอร์ส
+                          </button>
                         )}
                       </div>
-                      <button onClick={() => handleDeleteOption(opt.id)} className="text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   ))}
                   {(!q.options || q.options.length === 0) && (
@@ -193,23 +275,13 @@ export default function QuizManagerPage() {
 
                 {addingOptionForId === q.id ? (
                   <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200 mt-4">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={newOptionText}
                       onChange={e => setNewOptionText(e.target.value)}
-                      placeholder="ข้อความตัวเลือก..." 
+                      placeholder="ข้อความตัวเลือก... (ผูกคอร์สทีหลังได้หลายคอร์ส)"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     />
-                    <select 
-                      value={newOptionCourseId}
-                      onChange={e => setNewOptionCourseId(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white min-w-[200px]"
-                    >
-                      <option value="0">-- ไม่โยงผลลัพธ์ --</option>
-                      {courses.map(c => (
-                        <option key={c.id} value={c.id}>{c.course_name}</option>
-                      ))}
-                    </select>
                     <button onClick={() => handleAddOption(q.id)} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700">
                       <Save className="w-4 h-4" />
                     </button>

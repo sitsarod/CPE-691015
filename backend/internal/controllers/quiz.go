@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -18,6 +19,16 @@ func NewQuizController(quizService *services.QuizService) *QuizController {
 	return &QuizController{quizService: quizService}
 }
 
+// parseUintParam (Q-F) อ่าน path param เป็น uint (> 0) — ถ้าไม่ถูกต้องตอบ 400 แล้วคืน false
+func parseUintParam(ctx *gin.Context, name string) (uint, bool) {
+	v, err := strconv.Atoi(ctx.Param(name))
+	if err != nil || v <= 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขที่ถูกต้อง"})
+		return 0, false
+	}
+	return uint(v), true
+}
+
 // [GET] /api/quiz
 func (c *QuizController) GetActiveQuestions(ctx *gin.Context) {
 	questions, err := c.quizService.GetActiveQuestions()
@@ -26,6 +37,23 @@ func (c *QuizController) GetActiveQuestions(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"data": questions})
+}
+
+// [POST] /api/quiz/recommend — คัดกรอง: ส่ง option ที่เลือก → คืนคอร์สจัดอันดับ (public)
+func (c *QuizController) Recommend(ctx *gin.Context) {
+	var req dto.QuizRecommendReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		return
+	}
+
+	results, fallback, err := c.quizService.Recommend(req.OptionIDs)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถประมวลผลการคัดกรองได้"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.QuizRecommendResponse{Data: results, Fallback: fallback})
 }
 
 // [GET] /api/admin/quiz
@@ -56,15 +84,22 @@ func (c *QuizController) CreateQuestion(ctx *gin.Context) {
 
 // [PUT] /api/admin/quiz/:id
 func (c *QuizController) UpdateQuestion(ctx *gin.Context) {
-	id, _ := strconv.Atoi(ctx.Param("id"))
+	id, ok := parseUintParam(ctx, "id")
+	if !ok {
+		return
+	}
 	var req dto.UpdateQuizQuestionReq
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
-	question, err := c.quizService.UpdateQuestion(uint(id), req)
+	question, err := c.quizService.UpdateQuestion(id, req)
 	if err != nil {
+		if errors.Is(err, services.ErrQuizQuestionNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -73,9 +108,15 @@ func (c *QuizController) UpdateQuestion(ctx *gin.Context) {
 
 // [DELETE] /api/admin/quiz/:id
 func (c *QuizController) DeleteQuestion(ctx *gin.Context) {
-	id, _ := strconv.Atoi(ctx.Param("id"))
-	err := c.quizService.DeleteQuestion(uint(id))
-	if err != nil {
+	id, ok := parseUintParam(ctx, "id")
+	if !ok {
+		return
+	}
+	if err := c.quizService.DeleteQuestion(id); err != nil {
+		if errors.Is(err, services.ErrQuizQuestionNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -84,26 +125,83 @@ func (c *QuizController) DeleteQuestion(ctx *gin.Context) {
 
 // [POST] /api/admin/quiz/:id/options
 func (c *QuizController) AddOption(ctx *gin.Context) {
-	questionID, _ := strconv.Atoi(ctx.Param("id"))
+	questionID, ok := parseUintParam(ctx, "id")
+	if !ok {
+		return
+	}
 	var req dto.CreateQuizOptionReq
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
-	option, err := c.quizService.AddOption(uint(questionID), req)
+	option, err := c.quizService.AddOption(questionID, req)
 	if err != nil {
+		if errors.Is(err, services.ErrQuizQuestionNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	ctx.JSON(http.StatusCreated, gin.H{"message": "เพิ่มตัวเลือกสำเร็จ", "data": option})
 }
 
+// [POST] /api/admin/quiz/options/:option_id/courses — แมปคอร์สที่แนะนำ + น้ำหนัก ให้ตัวเลือก
+func (c *QuizController) AddOptionCourse(ctx *gin.Context) {
+	optionID, ok := parseUintParam(ctx, "option_id")
+	if !ok {
+		return
+	}
+	var req dto.AddOptionCourseReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		return
+	}
+
+	row, err := c.quizService.AddOptionCourse(optionID, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrQuizOptionNotFound):
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrQuizCourseNotActive):
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	ctx.JSON(http.StatusCreated, gin.H{"message": "เพิ่มคอร์สที่แนะนำสำเร็จ", "data": row})
+}
+
+// [DELETE] /api/admin/quiz/option-courses/:id — ลบการแมปคอร์สออกจากตัวเลือก
+func (c *QuizController) DeleteOptionCourse(ctx *gin.Context) {
+	id, ok := parseUintParam(ctx, "id")
+	if !ok {
+		return
+	}
+	if err := c.quizService.DeleteOptionCourse(id); err != nil {
+		if errors.Is(err, services.ErrQuizOptionCourseNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "ลบคอร์สที่แนะนำสำเร็จ"})
+}
+
 // [DELETE] /api/admin/quiz/options/:option_id
 func (c *QuizController) DeleteOption(ctx *gin.Context) {
-	optionID, _ := strconv.Atoi(ctx.Param("option_id"))
-	err := c.quizService.DeleteOption(uint(optionID))
-	if err != nil {
+	optionID, ok := parseUintParam(ctx, "option_id")
+	if !ok {
+		return
+	}
+	if err := c.quizService.DeleteOption(optionID); err != nil {
+		if errors.Is(err, services.ErrQuizOptionNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
