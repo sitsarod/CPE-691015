@@ -3,6 +3,7 @@ package controllers
 import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -50,6 +51,34 @@ func (ctrl *ExpenseController) GetAllExpenses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"data": dto.ToExpenseDTOs(expenses),
 	})
+}
+
+// GetExpensesByCoach handles GET /api/coaches/:id/expenses
+// ใช้ในหน้า coach ดูประวัติค่าจ้างของตัวเอง (admin ดูของโค้ชคนไหนก็ได้)
+func (ctrl *ExpenseController) GetExpensesByCoach(c *gin.Context) {
+	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	expenses, err := ctrl.service.GetByCoachID(uint(coachID), userID, role)
+	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": dto.ToExpenseDTOs(expenses)})
 }
 
 func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {

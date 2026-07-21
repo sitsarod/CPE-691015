@@ -38,6 +38,8 @@ type AdminUpdateCoachRequest struct {
 type CoachResponse struct {
 	ID             uint   `json:"id"`
 	UserID         uint   `json:"user_id"`
+	FirstName      string `json:"firstName"`
+	LastName       string `json:"lastName"`
 	Nickname       string `json:"nickname"`
 	Specialization string `json:"specialization"`
 	ProfilePicture string `json:"profile_picture"`

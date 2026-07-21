@@ -222,7 +222,7 @@ export default function FinancialSummaryTab({
           colorScheme="amber"
         />
         <StatsCard
-          title="รอการตรวจสอบสลิป"
+          title="รอการตรวจสอบ"
           value={summaryStats.totalPending}
           icon={Clock}
           colorScheme="slate"
