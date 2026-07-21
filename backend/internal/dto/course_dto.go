@@ -1,5 +1,10 @@
 package dto
 
+type CreateCourseReq struct {
+	CourseName  string `json:"course_name" binding:"required"`
+	Description string `json:"description" binding:"required"`
+	Status      string `json:"status" binding:"omitempty,oneof=active inactive draft"`
+}
 
 type CourseDTO struct {
 	ID          uint               `json:"id"`

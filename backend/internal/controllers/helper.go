@@ -53,9 +53,6 @@ func CheckIDOR(c *gin.Context, targetID uint) bool {
 	if role == string(models.AdminRole) {
 		return true // Admin can access everything
 	}
-	if role == string(models.CoachRole) {
-		return true // Coach can access their own data
-	}
 
 	return userID == targetID
 }

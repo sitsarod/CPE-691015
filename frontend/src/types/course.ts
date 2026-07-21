@@ -42,7 +42,7 @@ export interface CreateCourseReq {
   course_name: string;
   description: string;
   status: string;
-  user_id: number;
+  // เจ้าของคอร์สถูกกำหนดจาก JWT ที่ backend (C2) — ไม่ส่ง user_id จาก client อีกต่อไป
 }
 
 export interface UpdateCourseReq {

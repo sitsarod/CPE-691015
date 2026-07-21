@@ -17,14 +17,23 @@ func NewCourseService(db *gorm.DB) *CourseService {
 }
 
 // GetAllCourses
-func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
+//
+// onlyActive = true  → คืนเฉพาะคอร์สสถานะ active (สำหรับเส้นทาง public /courses)
+// onlyActive = false → คืนทุกสถานะรวม draft/inactive (สำหรับหน้าจัดการของแอดมิน)
+// (C1) เดิม public เห็นคอร์ส draft/inactive ด้วย จึงต้องแยกเงื่อนไขตาม caller
+func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) {
 	var courses []models.Course
 
-	err := s.db.Preload("User").
+	query := s.db.Preload("User").
 		Preload("Packages").
 		Preload("Packages.Schedules").
-		Order("id ASC").
-		Find(&courses).Error
+		Order("id ASC")
+
+	if onlyActive {
+		query = query.Where("status = ?", models.CourseStatusActive)
+	}
+
+	err := query.Find(&courses).Error
 
 	if err != nil {
 		return nil, err
@@ -75,16 +84,25 @@ func (s *CourseService) GetAllCourses() ([]dto.CourseDTO, error) {
 }
 
 // GetCourseByID
-func (s *CourseService) GetCourseByID(id uint) (*dto.CourseDTO, error) {
+//
+// onlyActive = true  → หาเฉพาะคอร์ส active (public) — ถ้าเป็น draft/inactive จะคืน
+//                      gorm.ErrRecordNotFound เหมือนไม่มีคอร์สนี้ (กันคอร์สที่ยังไม่เปิดหลุด)
+// onlyActive = false → หาได้ทุกสถานะ (แอดมิน/ใช้ภายในหลังสร้างคอร์ส)
+func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO, error) {
 	var courseItem models.Course
 
-	err := s.db.Preload("User").
+	query := s.db.Preload("User").
 		Preload("Packages").
-		Preload("Packages.Schedules").
-		First(&courseItem, id).Error
+		Preload("Packages.Schedules")
+
+	if onlyActive {
+		query = query.Where("status = ?", models.CourseStatusActive)
+	}
+
+	err := query.First(&courseItem, id).Error
 
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 
 	var packagesDTO []dto.CoursePackageDTO
@@ -163,7 +181,8 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 		}
 	}
 
-	return s.GetCourseByID(id)
+	// แอดมินต้องเห็นผลแม้คอร์สจะเป็น draft/inactive → onlyActive = false
+	return s.GetCourseByID(id, false)
 }
 
 // DeleteCourse

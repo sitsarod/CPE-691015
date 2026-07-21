@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Save, Clock, Calendar, Loader2, X } from "lucide-react";
-import { fetchCourseByID, updateCourse, createPackage, updatePackage, deletePackage } from "@/services/courseAPI";
+import { fetchCourseByIDAdmin, updateCourse, createPackage, updatePackage, deletePackage } from "@/services/courseAPI";
 import { ScheduleFormInput, PackageFormInput } from "@/types/course";
 
 export default function EditCourseForm({ courseId, onSuccess, onCancel }: { courseId: number, onSuccess: () => void, onCancel: () => void }) {
@@ -19,7 +19,8 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const data = await fetchCourseByID(courseId);
+        const token = localStorage.getItem("token") || "";
+        const data = await fetchCourseByIDAdmin(courseId, token);
         setCourseName(data.course_name);
         setDescription(data.description);
         setStatus(data.status);

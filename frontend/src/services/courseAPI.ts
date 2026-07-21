@@ -24,11 +24,45 @@ export async function fetchAllCourses(): Promise<CourseDTO[]> {
   return resData.data || [];
 }
 
-// [GET] ดึงคอร์สเรียนตาม ID (Public)
+// [GET] ดึงคอร์สเรียนตาม ID (Public — เห็นเฉพาะคอร์ส active)
 export async function fetchCourseByID(id: number): Promise<CourseDTO> {
   const response = await fetch(`${BASE_URL}/courses/${id}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" }
+  });
+
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่พบข้อมูลคอร์สเรียน");
+  }
+  return resData.data;
+}
+
+// [GET] ดึงคอร์สทั้งหมดสำหรับหน้าจัดการแอดมิน (เห็นทุกสถานะรวม draft/inactive)
+export async function fetchAllCoursesAdmin(token: string): Promise<CourseDTO[]> {
+  const response = await fetch(`${BASE_URL}/admin/courses`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลคอร์สเรียนได้");
+  }
+  return resData.data || [];
+}
+
+// [GET] ดึงคอร์สตาม ID สำหรับหน้าแก้ไขของแอดมิน (เห็นทุกสถานะ)
+export async function fetchCourseByIDAdmin(id: number, token: string): Promise<CourseDTO> {
+  const response = await fetch(`${BASE_URL}/admin/courses/${id}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
   });
 
   const resData = await response.json();

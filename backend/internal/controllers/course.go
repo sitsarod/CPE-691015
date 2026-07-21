@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
 
@@ -20,8 +21,19 @@ func NewCourseController(courseService *services.CourseService) *CourseControlle
 	return &CourseController{courseService: courseService}
 }
 
+// GetAllCourse (public) — คืนเฉพาะคอร์ส active
 func (ctrl *CourseController) GetAllCourse(c *gin.Context) {
-	response, err := ctrl.courseService.GetAllCourses()
+	response, err := ctrl.courseService.GetAllCourses(true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลคอร์สเรียนได้"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+// GetAllCourseAdmin (adminOnly) — คืนคอร์สทุกสถานะรวม draft/inactive สำหรับหน้าจัดการ
+func (ctrl *CourseController) GetAllCourseAdmin(c *gin.Context) {
+	response, err := ctrl.courseService.GetAllCourses(false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลคอร์สเรียนได้"})
 		return
@@ -37,7 +49,30 @@ func (ctrl *CourseController) GetCourseByID(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.courseService.GetCourseByID(uint(courseID))
+	// public → เห็นเฉพาะ active (draft/inactive จะได้ 404 เหมือนไม่มีคอร์ส)
+	response, err := ctrl.courseService.GetCourseByID(uint(courseID), true)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลคอร์สเรียนนี้ในระบบ"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลคอร์สเรียนได้"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+// GetCourseByIDAdmin (adminOnly) — เห็นคอร์สทุกสถานะ สำหรับหน้าแก้ไขคอร์ส
+func (ctrl *CourseController) GetCourseByIDAdmin(c *gin.Context) {
+	idParam := c.Param("id")
+	courseID, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสคอร์สเรียนไม่ถูกต้อง"})
+		return
+	}
+
+	response, err := ctrl.courseService.GetCourseByID(uint(courseID), false)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลคอร์สเรียนนี้ในระบบ"})
@@ -52,11 +87,31 @@ func (ctrl *CourseController) GetCourseByID(c *gin.Context) {
 
 // CreateCourse - ปรับปรุงให้หลังจากบันทึกแล้ว จะดึง DTO ตัวเต็มมาแสดงผลแทน
 func (ctrl *CourseController) CreateCourse(c *gin.Context) {
-	var courseInput models.Course
+	var req dto.CreateCourseReq
 
-	if err := c.ShouldBindJSON(&courseInput); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง หรือไม่ครบถ้วน"})
 		return
+	}
+
+	// (C2) เจ้าของคอร์ส = users.id ของแอดมินที่ล็อกอิน (จาก JWT) ไม่รับจาก client
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งานที่ยืนยันตัวตนแล้ว"})
+		return
+	}
+
+	// สถานะเริ่มต้นเป็น draft ถ้าไม่ได้ระบุมา (ค่าที่รับได้ถูก validate ด้วย binding oneof แล้ว)
+	status := models.CourseStatus(req.Status)
+	if status == "" {
+		status = models.CourseStatusDraft
+	}
+
+	courseInput := models.Course{
+		CourseName:  req.CourseName,
+		Description: req.Description,
+		Status:      status,
+		UserID:      userID,
 	}
 
 	if err := ctrl.courseService.CreateCourse(&courseInput); err != nil {
@@ -66,7 +121,8 @@ func (ctrl *CourseController) CreateCourse(c *gin.Context) {
 	}
 
 	// 🌟 ดึงข้อมูลตัวเต็มหลังจากสร้างเสร็จผ่าน GetCourseByID เพื่อให้ได้ DTO รูปแบบเดียวกับ Get อื่นๆ
-	newCourseDTO, err := ctrl.courseService.GetCourseByID(courseInput.ID)
+	// คอร์สที่เพิ่งสร้างอาจเป็น draft → onlyActive = false เพื่อให้ดึงกลับมาได้เสมอ
+	newCourseDTO, err := ctrl.courseService.GetCourseByID(courseInput.ID, false)
 	if err != nil {
 		c.JSON(http.StatusCreated, gin.H{"message": "สร้างคอร์สเรียนสำเร็จแล้ว", "data": courseInput})
 		return

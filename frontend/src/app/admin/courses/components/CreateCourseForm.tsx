@@ -41,21 +41,19 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
     setError(null);
 
     const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("user_id"); // ดึง user_id เพื่อใช้เชื่อมกับคอร์สที่สร้าง
 
-    if (!token || !userId) {
+    if (!token) {
       setError("ไม่พบข้อมูลการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
       setIsLoading(false);
       return;
     }
 
     try {
-      // Step 1: สร้างคอร์ส
+      // Step 1: สร้างคอร์ส (เจ้าของคอร์สกำหนดจาก JWT ที่ฝั่ง backend)
       const newCourse = await createCourse({
         course_name: courseName,
         description: description,
         status: "active",
-        user_id: Number(userId),
       }, token);
 
       // Step 2: สร้างแพ็กเกจของคอร์สนี้

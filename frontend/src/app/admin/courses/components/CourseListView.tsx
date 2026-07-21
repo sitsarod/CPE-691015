@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2 } from "lucide-react"; 
-import { fetchAllCourses, deleteCourse } from "@/services/courseAPI";
+import { fetchAllCoursesAdmin, deleteCourse } from "@/services/courseAPI";
 import { CourseDTO } from "@/types/course";
 
 export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
@@ -15,7 +15,8 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchAllCourses();
+      const token = localStorage.getItem("token") || "";
+      const data = await fetchAllCoursesAdmin(token);
       setCourses(data);
     } catch (err: any) {
       setError(err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
