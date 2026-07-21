@@ -83,6 +83,16 @@ func (s *CoachService) GetAll() ([]models.Coach, error) {
 	return coaches, err
 }
 
+// GetMe ดึงข้อมูลโค้ชของผู้ใช้ที่ล็อกอินอยู่ (resolve จาก userID ใน JWT แทนที่จะรับ coach id มาจาก client)
+// ใช้กับหน้าโปรไฟล์/แดชบอร์ดของโค้ชเอง ที่ยังไม่รู้ coaches.id ล่วงหน้า
+func (s *CoachService) GetMe(userID uint) (*models.Coach, error) {
+	var coach models.Coach
+	if err := s.db.Preload("User").Where("user_id = ?", userID).First(&coach).Error; err != nil {
+		return nil, err
+	}
+	return &coach, nil
+}
+
 // GetByID retrieves a single coach by id
 // coach ดูได้เฉพาะข้อมูลของตัวเอง, admin ดูได้ทุกคน (กัน IDOR ตอนอ่านข้อมูล)
 func (s *CoachService) GetByID(id uint, userID uint, role string) (*models.Coach, error) {

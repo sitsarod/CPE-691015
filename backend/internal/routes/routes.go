@@ -102,11 +102,13 @@ func SetupRoutes(r *gin.Engine) {
         // (coach เห็นเฉพาะของตัวเอง, admin เห็นได้ทุกคน) และ PATCH/PUT ก็ตรวจความเป็นเจ้าของกัน IDOR
         coachGroup := protected.Group("/coaches")
         {
+            coachGroup.GET("/me", coachController.GetMyCoach)                                     // โค้ชที่ล็อกอินอยู่ resolve coach_id ของตัวเองจาก JWT
             coachGroup.GET("/:id", coachController.GetCoachByID)                                  // เจ้าของ หรือ admin
             coachGroup.PATCH("/:id", coachController.UpdateCoach)                                 // เจ้าของ หรือ admin (บาง field)
             coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)      // เจ้าของ หรือ admin
             coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)   // เจ้าของเท่านั้น (admin แก้ไม่ได้)
             coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)     // เจ้าของ หรือ admin
+            coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)                 // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
         }
         // เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
         adminCoachGroup := adminOnly.Group("/coaches")

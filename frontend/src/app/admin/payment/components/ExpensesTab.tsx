@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Receipt, Trash2 } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
-import { createExpense, deleteExpense, CreateExpenseReq } from "@/services/paymentAPI";
+import { createExpense, deleteExpense } from "@/services/paymentAPI";
+import { CreateExpenseReq } from "@/types/payment";
 
 export interface ExpensesTabProps {
   coaches: Coach[];
@@ -25,9 +26,11 @@ export default function ExpensesTab({
     coach_id: '',
     receipturl: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!expenseForm.expenseamount || !expenseForm.expensedate) {
       onTriggerToast("กรุณากรอกจำนวนเงินและเลือกวันที่ทำรายการ", 'error');
       return;
@@ -49,6 +52,7 @@ export default function ExpensesTab({
       reqBody.coach_id = parseInt(expenseForm.coach_id);
     }
 
+    setIsSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       await createExpense(reqBody, token || "");
@@ -65,6 +69,8 @@ export default function ExpensesTab({
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'บันทึกค่าใช้จ่ายไม่สำเร็จ', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -162,7 +168,7 @@ export default function ExpensesTab({
 
           {/* Using the Global Reusable SlipUploader Component */}
           <SlipUploader
-            label="แนบหลักฐานชำระเงิน (ถ้ามี)"
+            label="แนบหลักฐานชำระเงิน (ควรมี)"
             currentUrl={expenseForm.receipturl}
             onUploadSuccess={(url) => setExpenseForm(prev => ({ ...prev, receipturl: url }))}
             onError={(msg) => onTriggerToast(msg, 'error')}
@@ -170,9 +176,10 @@ export default function ExpensesTab({
 
           <button
             type="submit"
-            className="w-full bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md hover:shadow-lg cursor-pointer text-center"
+            disabled={isSubmitting}
+            className="w-full bg-[#CD0D13] hover:bg-[#A30A0E] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md hover:shadow-lg cursor-pointer text-center"
           >
-            บันทึกค่าใช้จ่าย
+            {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกค่าใช้จ่าย'}
           </button>
         </form>
       </div>

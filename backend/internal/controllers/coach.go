@@ -24,7 +24,7 @@ func NewCoachController(s *services.CoachService) *CoachController {
 
 // toCoachResponse แปลง models.Coach เป็น dto.CoachResponse (ใช้กับหน้า list)
 func toCoachResponse(coach *models.Coach) dto.CoachResponse {
-	return dto.CoachResponse{
+	resp := dto.CoachResponse{
 		ID:             coach.ID,
 		UserID:         coach.UserID,
 		Nickname:       coach.Nickname,
@@ -32,6 +32,14 @@ func toCoachResponse(coach *models.Coach) dto.CoachResponse {
 		ProfilePicture: coach.ProfilePicture,
 		Phone:          coach.Phone,
 	}
+
+	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service เช็ค nil ก่อนเสมอกันกรณี preload ไม่เจอ user จริง
+	if coach.User != nil {
+		resp.FirstName = coach.User.FirstName
+		resp.LastName = coach.User.LastName
+	}
+
+	return resp
 }
 
 // toCoachDetailResponse แปลง models.Coach (พร้อม User ที่ preload มาแล้ว) เป็น dto.CoachDetailResponse
@@ -74,7 +82,24 @@ func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 		responses = append(responses, toCoachResponse(&coaches[i]))
 	}
 
-	c.JSON(http.StatusOK, responses)
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// GetMyCoach handles GET /api/coaches/me
+// โค้ชที่ล็อกอินอยู่ดูข้อมูลโปรไฟล์ตัวเอง โดย resolve coach_id จาก JWT เอง ไม่ต้องรู้ id ล่วงหน้า
+func (ctrl *CoachController) GetMyCoach(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	coach, err := ctrl.service.GetMe(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชสำหรับผู้ใช้งานนี้"})
+		return
+	}
+	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
 }
 
 // GetCoachByID handles GET /api/coaches/:id

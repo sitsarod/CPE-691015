@@ -11,7 +11,7 @@ export interface SlipUploaderProps {
 export default function SlipUploader({
   onUploadSuccess,
   currentUrl = '',
-  label = 'แนบหลักฐานชำระเงิน (ถ้ามี)',
+  label = 'แนบหลักฐานชำระเงิน (ควรมี)',
   onError
 }: SlipUploaderProps) {
   const [uploading, setUploading] = useState(false);

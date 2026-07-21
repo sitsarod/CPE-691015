@@ -52,6 +52,20 @@ func (s *ExpenseService) GetAllExpenses() ([]models.Expense, error) {
 	return expenses, nil
 }
 
+// GetByCoachID ดึงประวัติค่าจ้างของ coach คนเดียว ใช้กับหน้า "การเงิน" ที่โค้ชดูรายได้ตัวเอง
+// coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน (กัน IDOR เหมือน endpoint อื่นของ coach)
+func (s *ExpenseService) GetByCoachID(coachID uint, userID uint, role string) ([]models.Expense, error) {
+	if err := VerifyCoachOwnership(s.db, coachID, userID, role); err != nil {
+		return nil, err
+	}
+
+	var expenses []models.Expense
+	if err := s.db.Where("coach_id = ?", coachID).Preload("Coach").Preload("Coach.User").Order("date DESC, id DESC").Find(&expenses).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงข้อมูลค่าใช้จ่ายได้")
+	}
+	return expenses, nil
+}
+
 func (s *ExpenseService) DeleteExpense(id uint) error {
 	var expense models.Expense
 	if err := s.db.First(&expense, id).Error; err != nil {
