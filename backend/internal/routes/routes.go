@@ -182,6 +182,8 @@ func SetupRoutes(r *gin.Engine) {
             adminBillingGroup.DELETE("/:id", billingController.DeleteBilling)
         }
 
+        protected.GET("/bank-accounts/active", bankAccountController.GetActiveBankAccounts)
+
         bankAccountsGroup := adminOnly.Group("/bank-accounts")
         {
             bankAccountsGroup.GET("/", bankAccountController.GetAllBankAccounts)

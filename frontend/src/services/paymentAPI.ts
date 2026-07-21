@@ -1,7 +1,40 @@
 // frontend/src/services/paymentAPI.ts
 import { BackendUser, BillingDTO, BankAccount, Coach, Expense } from "@/app/admin/payment/components/types";
+import { InvoiceDTO } from "@/app/customer/payment/components/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ;
+
+export interface CreateBillingReq {
+  customer_ids: number[];
+  admin_id: number;
+  billingtype_id: number;
+  billingdescription: string;
+  billingamount: number;
+  billingdue_date: string;
+}
+
+export interface UpdateBillingReq {
+  billingdescription: string;
+  billingamount: number;
+  billingdue_date: string;
+  billingtype_id: number;
+}
+
+export interface CreateExpenseReq {
+  expenseamount: number;
+  expensetype: string;
+  expensedescription: string;
+  expensedate: string;
+  receipturl: string;
+  coach_id?: number;
+}
+
+export interface BankAccountReq {
+  bank_name: string;
+  account_name: string;
+  account_no: string;
+  is_active?: boolean;
+}
 
 // Fetch customers
 export async function fetchCustomers(token: string): Promise<BackendUser[]> {
@@ -35,9 +68,25 @@ export async function fetchBillings(token: string): Promise<BillingDTO[]> {
   return resData.data || [];
 }
 
-// Fetch bank accounts
+// Fetch bank accounts (admin only - full list including inactive)
 export async function fetchBankAccounts(token: string): Promise<BankAccount[]> {
   const response = await fetch(`${BASE_URL}/bank-accounts/`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลบัญชีธนาคารได้");
+  }
+  return resData.data || [];
+}
+
+// Fetch the active bank account(s) - any authenticated user (customers included)
+export async function fetchActiveBankAccounts(token: string): Promise<BankAccount[]> {
+  const response = await fetch(`${BASE_URL}/bank-accounts/active`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -84,7 +133,7 @@ export async function fetchExpenses(token: string): Promise<Expense[]> {
 }
 
 // Create billing
-export async function createBilling(payload: any, token: string): Promise<any> {
+export async function createBilling(payload: CreateBillingReq, token: string): Promise<{ message?: string; data: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/billings/`, {
     method: "POST",
     headers: {
@@ -101,7 +150,7 @@ export async function createBilling(payload: any, token: string): Promise<any> {
 }
 
 // Update billing
-export async function updateBilling(billingId: number, payload: any, token: string): Promise<any> {
+export async function updateBilling(billingId: number, payload: UpdateBillingReq, token: string): Promise<{ message?: string; data: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/billings/${billingId}`, {
     method: "PATCH",
     headers: {
@@ -118,7 +167,7 @@ export async function updateBilling(billingId: number, payload: any, token: stri
 }
 
 // Create expense
-export async function createExpense(payload: any, token: string): Promise<any> {
+export async function createExpense(payload: CreateExpenseReq, token: string): Promise<{ message?: string; data: Expense }> {
   const response = await fetch(`${BASE_URL}/expenses/`, {
     method: "POST",
     headers: {
@@ -135,7 +184,7 @@ export async function createExpense(payload: any, token: string): Promise<any> {
 }
 
 // Delete expense
-export async function deleteExpense(id: number, token: string): Promise<any> {
+export async function deleteExpense(id: number, token: string): Promise<{ message?: string }> {
   const response = await fetch(`${BASE_URL}/expenses/${id}`, {
     method: "DELETE",
     headers: {
@@ -150,7 +199,7 @@ export async function deleteExpense(id: number, token: string): Promise<any> {
 }
 
 // Toggle bank account
-export async function toggleBankAccount(bankId: number, token: string): Promise<any> {
+export async function toggleBankAccount(bankId: number, token: string): Promise<{ message?: string; data: BankAccount }> {
   const response = await fetch(`${BASE_URL}/bank-accounts/${bankId}/toggle`, {
     method: "PATCH",
     headers: {
@@ -166,7 +215,7 @@ export async function toggleBankAccount(bankId: number, token: string): Promise<
 }
 
 // Delete bank account
-export async function deleteBankAccount(bankId: number, token: string): Promise<any> {
+export async function deleteBankAccount(bankId: number, token: string): Promise<{ message?: string }> {
   const response = await fetch(`${BASE_URL}/bank-accounts/${bankId}`, {
     method: "DELETE",
     headers: {
@@ -181,7 +230,7 @@ export async function deleteBankAccount(bankId: number, token: string): Promise<
 }
 
 // Create bank account
-export async function createBankAccount(payload: any, token: string): Promise<any> {
+export async function createBankAccount(payload: BankAccountReq, token: string): Promise<{ message?: string; data: BankAccount }> {
   const response = await fetch(`${BASE_URL}/bank-accounts/`, {
     method: "POST",
     headers: {
@@ -198,7 +247,7 @@ export async function createBankAccount(payload: any, token: string): Promise<an
 }
 
 // Update bank account
-export async function updateBankAccount(bankId: number, payload: any, token: string): Promise<any> {
+export async function updateBankAccount(bankId: number, payload: BankAccountReq, token: string): Promise<{ message?: string; data: BankAccount }> {
   const response = await fetch(`${BASE_URL}/bank-accounts/${bankId}`, {
     method: "PATCH",
     headers: {
@@ -215,7 +264,7 @@ export async function updateBankAccount(bankId: number, payload: any, token: str
 }
 
 // Approve/Confirm payment slip
-export async function confirmSlip(invoiceId: number, token: string): Promise<any> {
+export async function confirmSlip(invoiceId: number, token: string): Promise<{ message?: string; data?: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/confirm`, {
     method: "POST",
     headers: {
@@ -231,7 +280,7 @@ export async function confirmSlip(invoiceId: number, token: string): Promise<any
 }
 
 // Reject payment slip
-export async function rejectSlip(invoiceId: number, token: string): Promise<any> {
+export async function rejectSlip(invoiceId: number, token: string): Promise<{ message?: string; data?: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/reject`, {
     method: "PATCH",
     headers: {
@@ -263,7 +312,7 @@ export async function fetchCustomerBillings(customerId: string | number, token: 
 }
 
 // Fetch customer invoices
-export async function fetchCustomerInvoices(customerId: string | number, token: string): Promise<any[]> {
+export async function fetchCustomerInvoices(customerId: string | number, token: string): Promise<InvoiceDTO[]> {
   const response = await fetch(`${BASE_URL}/payments/invoices/customer/${customerId}`, {
     method: "GET",
     headers: {
@@ -279,7 +328,7 @@ export async function fetchCustomerInvoices(customerId: string | number, token: 
 }
 
 // Create invoice from multiple billings
-export async function createInvoice(customerId: number, billingIds: number[], method: string, token: string): Promise<any> {
+export async function createInvoice(customerId: number, billingIds: number[], method: string, token: string): Promise<InvoiceDTO> {
   const response = await fetch(`${BASE_URL}/payments/invoices`, {
     method: "POST",
     headers: {
@@ -300,7 +349,7 @@ export async function createInvoice(customerId: number, billingIds: number[], me
 }
 
 // Upload slip for invoice
-export async function uploadSlip(invoiceId: number, slipUrl: string, token: string): Promise<any> {
+export async function uploadSlip(invoiceId: number, slipUrl: string, token: string): Promise<InvoiceDTO> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/slip`, {
     method: "POST",
     headers: {
@@ -319,7 +368,7 @@ export async function uploadSlip(invoiceId: number, slipUrl: string, token: stri
 }
 
 // Cancel invoice
-export async function cancelInvoice(invoiceId: number, token: string): Promise<any> {
+export async function cancelInvoice(invoiceId: number, token: string): Promise<InvoiceDTO> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/cancel`, {
     method: "PATCH",
     headers: {

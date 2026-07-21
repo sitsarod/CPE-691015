@@ -80,8 +80,8 @@ export default function EnrollmentPage() {
       setSuccessMessage("สมัครคอร์สเรียนสำเร็จ! ระบบกำลังดำเนินการภายใน 3-7 วัน");
       setSelectedPackage(null);
       loadData(); // รีเฟรชข้อมูลคอร์สใหม่
-    } catch (err: any) {
-      alert(err.message || "เกิดข้อผิดพลาดในการสมัครเรียน");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครเรียน");
     } finally {
       setIsEnrolling(false);
     }

@@ -76,8 +76,8 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
       
       alert("สร้างคอร์สและแพ็กเกจสำเร็จ!");
       onSuccess(); // กลับไปหน้า List
-    } catch (err: any) {
-      setError(err.message || "ไม่สามารถสร้างคอร์สได้ โปรดลองอีกครั้ง");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถสร้างคอร์สได้ โปรดลองอีกครั้ง");
     } finally {
       setIsLoading(false);
     }

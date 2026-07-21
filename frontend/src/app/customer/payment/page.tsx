@@ -15,9 +15,9 @@ import {
   fetchCustomerBillings, 
   fetchCustomerInvoices, 
   createInvoice, 
-  uploadSlip, 
+  uploadSlip,
   cancelInvoice,
-  fetchBankAccounts
+  fetchActiveBankAccounts
 } from "@/services/paymentAPI";
 import Toast from "@/components/Toast";
 
@@ -80,7 +80,7 @@ export default function CustomerPaymentPage() {
       const [billingsData, invoicesData, bankAccountsData] = await Promise.all([
         fetchCustomerBillings(customerId, token),
         fetchCustomerInvoices(customerId, token),
-        fetchBankAccounts(token)
+        fetchActiveBankAccounts(token)
       ]);
 
       setBillings(billingsData);

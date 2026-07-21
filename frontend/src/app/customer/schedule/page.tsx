@@ -82,8 +82,8 @@ export default function CustomerSchedulePage() {
         });
 
         setEnrollments(formatted);
-      } catch (err: any) {
-        setError(err.message || "เกิดข้อผิดพลาดในการโหลดตารางเรียน");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดตารางเรียน");
       } finally {
         setIsLoading(false);
       }

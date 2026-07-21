@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2 } from "lucide-react"; 
 import { fetchAllCoursesAdmin, deleteCourse } from "@/services/courseAPI";
-import { CourseDTO } from "@/types/course";
+import { CourseDTO ,CoursePackageDTO , PackageScheduleInfoDTO} from "@/types/course";
 
 export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
   const [courses, setCourses] = useState<CourseDTO[]>([]);
@@ -18,8 +18,9 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
       const token = localStorage.getItem("token") || "";
       const data = await fetchAllCoursesAdmin(token);
       setCourses(data);
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -36,8 +37,9 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
       try {
         await deleteCourse(id, token);
         loadCourses();
-      } catch (err: any) {
-        alert(err.message || "ไม่สามารถลบคอร์สได้");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "ไม่สามารถลบคอร์สได้";
+        alert(message);
       }
     }
   };
@@ -48,8 +50,8 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
 
   return (
     <div className="space-y-8">
-      {courses.map((course: any) => (
-        <div key={course.id || course.ID} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      {courses.map((course: CourseDTO) => (
+        <div key={course.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <div className="bg-gray-50 p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center">
               <BookOpen className="w-6 h-6 text-[#CC0000] mr-3" />
@@ -61,19 +63,19 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
               {onEdit && (
                 <div className="relative">
                   <button
-                    onClick={() => setDropdownOpen(dropdownOpen === (course.id || course.ID) ? null : (course.id || course.ID))}
+                    onClick={() => setDropdownOpen(dropdownOpen === course.id ? null : course.id)}
                     className="p-2 hover:bg-gray-200 rounded-full transition-colors focus:outline-none"
                   >
                     <MoreVertical className="w-5 h-5 text-gray-500" />
                   </button>
-                  
-                  {dropdownOpen === (course.id || course.ID) && (
+
+                  {dropdownOpen === course.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(null)}></div>
                       <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden py-1">
                         <button
                           onClick={() => {
-                            onEdit(course.id || course.ID);
+                            onEdit(course.id);
                             setDropdownOpen(null);
                           }}
                           className="w-full text-left px-4 py-3 flex items-center hover:bg-gray-50 text-gray-700 text-sm font-semibold transition-colors"
@@ -83,7 +85,7 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
                         <div className="h-px bg-gray-100 w-full my-1"></div>
                         <button
                           onClick={() => {
-                            handleDelete(course.id || course.ID);
+                            handleDelete(course.id);
                             setDropdownOpen(null);
                           }}
                           className="w-full text-left px-4 py-3 flex items-center hover:bg-red-50 text-red-600 text-sm font-semibold transition-colors"
@@ -100,8 +102,8 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
           <div className="p-6">
             <h4 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">แพ็กเกจในคอร์สนี้</h4>
             <div className="flex flex-wrap gap-4">
-              {(course.packages ?? []).map((pkg: any) => (
-                <div key={pkg.id || pkg.ID} className="w-[280px] bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              {(course.packages ?? []).map((pkg: CoursePackageDTO) => (
+                <div key={pkg.id} className="w-[280px] bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-bold text-lg text-gray-900">{pkg.sessions_count} ครั้ง</span>
                     <span className="bg-red-100 text-[#CC0000] text-xs font-bold px-2 py-1 rounded">
@@ -120,7 +122,7 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
                     </div>
                     {pkg.schedules && pkg.schedules.length > 0 ? (
                       <ul className="space-y-1 pl-4 list-disc marker:text-gray-300">
-                        {pkg.schedules.map((sch: any, i: number) => (
+                        {pkg.schedules.map((sch: PackageScheduleInfoDTO, i: number) => (
                           <li key={i}>{sch.day_of_week} ({sch.start_time}-{sch.end_time})</li>
                         ))}
                       </ul>

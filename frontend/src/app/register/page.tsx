@@ -92,8 +92,8 @@ export default function RegisterPage() {
       
       router.push("/login");
       router.refresh();
-    } catch (err: any) {
-      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการลงทะเบียน");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลงทะเบียน");
     } finally {
       setIsLoading(false);
     }

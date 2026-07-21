@@ -127,8 +127,8 @@ export default function VerifySlipsTab({
       onTriggerToast('อนุมัติยอดเงินโอนเข้าเรียนเรียบร้อยแล้ว');
       setReviewBilling(null);
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'อนุมัติสลิปไม่สำเร็จ', 'error');
     }
   };
 
@@ -140,8 +140,8 @@ export default function VerifySlipsTab({
       onTriggerToast('ปฏิเสธหลักฐานการแนบสลิปเรียบร้อยแล้ว');
       setReviewBilling(null);
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'ปฏิเสธสลิปไม่สำเร็จ', 'error');
     }
   };
 
@@ -169,14 +169,14 @@ export default function VerifySlipsTab({
           {/* Status Filter Tab Buttons */}
           <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto max-w-full">
             {[
-              { id: 'all', label: 'ทั้งหมด (ส่งสลิป)' },
-              { id: 'pending', label: 'รอตรวจสอบ' },
-              { id: 'approved', label: 'อนุมัติแล้ว' },
-              { id: 'rejected', label: 'ปฏิเสธแล้ว' }
+              { id: 'all' as const, label: 'ทั้งหมด (ส่งสลิป)' },
+              { id: 'pending' as const, label: 'รอตรวจสอบ' },
+              { id: 'approved' as const, label: 'อนุมัติแล้ว' },
+              { id: 'rejected' as const, label: 'ปฏิเสธแล้ว' }
             ].map(f => (
               <button
                 key={f.id}
-                onClick={() => setSlipFilter(f.id as any)}
+                onClick={() => setSlipFilter(f.id)}
                 className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer text-center ${
                   slipFilter === f.id
                     ? 'bg-white text-[#CD0D13] shadow-xs font-bold'

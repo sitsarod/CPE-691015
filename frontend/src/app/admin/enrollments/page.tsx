@@ -20,8 +20,8 @@ export default function AdminEnrollmentsPage() {
       if (!token) return;
       const data = await fetchAllEnrollments(token);
       setEnrollments(data);
-    } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล");
     } finally {
       setIsLoading(false);
     }
@@ -40,8 +40,8 @@ export default function AdminEnrollmentsPage() {
       await approveEnrollment(id, token);
       alert("อนุมัติสำเร็จ!");
       loadData();
-    } catch (err: any) {
-      alert(err.message || "ไม่สามารถอนุมัติได้");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถอนุมัติได้");
     } finally {
       setProcessingId(null);
     }

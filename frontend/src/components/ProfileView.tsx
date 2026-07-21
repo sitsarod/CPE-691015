@@ -53,7 +53,7 @@ export default function ProfileView({
 
     getUserProfileAPI(Number(userId))
       .then(setProfile)
-      .catch((err: any) => setError(err.message || "ไม่สามารถดึงข้อมูลโปรไฟล์ได้"))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลโปรไฟล์ได้"))
       .finally(() => setIsLoading(false));
   }, []);
 

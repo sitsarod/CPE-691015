@@ -57,6 +57,22 @@ export interface VerifyOTPResponseDTO {
   resetToken: string;
 }
 
+export interface RegisterCustomerReq {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: string;
+  customer: {
+    nickname: string;
+    gender: string;
+    birthDate: string | null;
+    phoneNumber: string;
+    parentEmail: string | null;
+    parentPhoneNumber: string | null;
+  };
+}
+
 
 // [POST] เข้าสู่ระบบ
 export async function loginAPI(data: LoginReq): Promise<AuthResponseDTO> {
@@ -67,7 +83,7 @@ export async function loginAPI(data: LoginReq): Promise<AuthResponseDTO> {
 }
 
 // [POST] สมัครสมาชิก
-export async function registerAPI(data: any): Promise<AuthResponseDTO> {
+export async function registerAPI(data: RegisterCustomerReq): Promise<AuthResponseDTO> {
   return await apiFetch<AuthResponseDTO>("/auth/register", {
     method: "POST",
     body: JSON.stringify(data),

@@ -41,10 +41,10 @@ export default function SlipUploader({
 
       const data = await res.json();
       onUploadSuccess(data.url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       if (onError) {
-        onError(err.message || "อัปโหลดล้มเหลว");
+        onError(err instanceof Error ? err.message : "อัปโหลดล้มเหลว");
       }
     } finally {
       setUploading(false);
