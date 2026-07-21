@@ -133,12 +133,12 @@ func SetupRoutes(r *gin.Engine) {
             userGroup.GET("/:id", userController.GetUserProfileController)
             userGroup.PATCH("/:id", userController.UpdateUserController)
         }
-        adminUserGroup := adminOnly.Group("/users")
+        adminUserGroup := adminOnly.Group("/admin")
         {
-            adminUserGroup.GET("/", userController.GetAllUsersController)
+            adminUserGroup.GET("/users", userController.GetAllUsersController)
             adminUserGroup.GET("/role", userController.GetUserByRoleController)
             adminUserGroup.GET("/students", userController.GetActiveStudentsController)
-            adminUserGroup.POST("/", userController.CreateUserController)
+            adminUserGroup.POST("/create", userController.CreateUserController)
             adminUserGroup.DELETE("/:id", userController.DeleteUserController)
         }
 
