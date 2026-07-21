@@ -18,7 +18,7 @@ type User struct {
 	Role				UserRole 		`json:"role" valid:"required~Role is required,oneof(admin customer coach)~Invalid role value"`
 	FirstName			string 			`json:"firstName" valid:"required~First name is required"`
 	LastName  			string 			`json:"lastName" valid:"required~Last name is required"`
-	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,email~Invalid email format"`
+	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,matches(^[a-zA-Z0-9._%+-]+@gmail\\.com$)~Email must be @gmail.com only"`
 	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
 	Customer          *Customer          `json:"customer" gorm:"foreignKey:UserID"`

@@ -1,6 +1,6 @@
 package dto
 
-import "time"
+
 
 // TokenResponse ใช้สำหรับพ่นตั๋ว JWT และข้อมูลคนล็อกอินกลับไปให้ฝั่ง Frontend
 type TokenResponse struct {
@@ -14,7 +14,7 @@ type TokenResponse struct {
 // ใช้ omitempty เพื่อไม่ให้แอดมิน/โค้ชได้ฟิลด์ว่างเปล่าติดไปด้วย
 type UserProfileResponseDTO struct {
 	ID        uint   `json:"id"`
-	Email     string `json:"email"`
+	Email     string `json:"email" binding:"required,email,endswith=@gmail.com"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Role      string `json:"role"`
@@ -22,7 +22,7 @@ type UserProfileResponseDTO struct {
 
 	Nickname          string     `json:"nickname,omitempty"`
 	PhoneNumber       string     `json:"phoneNumber,omitempty"`
-	BirthDate         *time.Time `json:"birthDate,omitempty"`
+	BirthDate         *string `json:"birthDate,omitempty"`
 	Gender            string     `json:"gender,omitempty"`
 	ParentEmail       string     `json:"parentEmail,omitempty"`
 	ParentPhoneNumber string     `json:"parentPhoneNumber,omitempty"`
@@ -40,14 +40,14 @@ type StudentListResponseDTO struct {
 }
 
 type UpdateProfileInput struct {
-
-	Email     string `json:"email" binding:"omitempty,email"`
+	Email     string `json:"email" binding:"omitempty,email,endswith=@gmail.com"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 
-	
-	Nickname    string `json:"nickname"`
-	PhoneNumber string `json:"phoneNumber" binding:"omitempty,numeric,length=10"`
+	Nickname          string `json:"nickname"`
+	PhoneNumber       string `json:"phoneNumber" binding:"omitempty,numeric,len=10"`
+	ParentEmail       string `json:"parentEmail" binding:"omitempty,email,endswith=@gmail.com"` 
+	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10"`
 }
 
 
@@ -70,4 +70,5 @@ type RegisterResponseDTO struct {
     User     UserInfoDTO     `json:"user"`
     Customer CustomerInfoDTO `json:"customer"`
 }
+
 

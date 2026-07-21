@@ -5,6 +5,7 @@ import (
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
 	"errors"
+	"strings"
 	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -39,12 +40,18 @@ func (s *UserService) GetUserProfile(id uint) (*models.User, error) {
 
 // CreateUser inserts a new user and their customer profile into the database [POST]
 func (s *UserService) CreateUser(user *models.User) error {
+	
+	cleanEmail := strings.ToLower(strings.TrimSpace(user.Email))
+	if !strings.HasSuffix(cleanEmail, "@gmail.com") {
+		return errors.New("กรุณาใช้อีเมลที่เป็น @gmail.com เท่านั้น")
+	}
+	user.Email = cleanEmail // อัปเดตอีเมลที่จัดฟอร์แมตแล้วกลับเข้าไป
+
 	var existingUser models.User
 
 	if err := s.db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
 		return errors.New("บัญชีผู้ใช้นี้มีอยู่แล้ว")
 	}
-	
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -52,10 +59,9 @@ func (s *UserService) CreateUser(user *models.User) error {
 	}
 	user.Password = string(hashedPassword)
 
-
 	if user.Role == models.CustomerRole && user.Customer != nil {
 		user.Customer.Status = models.CustomerStatusActive
-		
+
 		if user.Customer.PersonalQRCode == "" {
 			user.Customer.PersonalQRCode = "QR_" + user.Email
 		}
