@@ -18,22 +18,7 @@ func NewEnrollmentService(db *gorm.DB) *EnrollmentService {
 	return &EnrollmentService{db: db}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// การแปลง ID ระหว่าง users กับ customers
-//
-// ระบบนี้มี "ลูกค้า" อยู่ 2 ความหมายที่ไม่ตรงกัน:
-//   - Billing.CustomerID / Invoice.CustomerID  → อ้างถึง users.id
-//   - Enrollment.CustomerID                    → อ้างถึง customers.id
-//
-// ข้อตกลงของโปรเจคนี้คือ **API ทุกเส้นรับ-ส่ง User.ID เสมอ** (ตรงกับ user_id
-// ที่ frontend เก็บไว้ใน localStorage และตรงกับ claim user_id ใน JWT)
-// การแปลงเป็น customers.id จะทำที่ชั้น service เท่านั้น ผ่านสองฟังก์ชันข้างล่างนี้
-//
-// อย่าส่ง customers.id ออกไปให้ controller หรือ frontend เห็นเด็ดขาด
-// เพราะ CheckIDOR เทียบกับ User.ID จาก JWT — ถ้าปนกันจะกลายเป็นช่องโหว่ IDOR
-// ─────────────────────────────────────────────────────────────────────────────
 
-// toCustomerID แปลง users.id → customers.id
 func (s *EnrollmentService) toCustomerID(userID uint) (uint, error) {
 	var customer models.Customer
 	if err := s.db.Where("user_id = ?", userID).First(&customer).Error; err != nil {
@@ -125,6 +110,18 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 	customerID, err := s.toCustomerID(userID)
 	if err != nil {
 		return nil, err
+	}
+
+	var existingCount int64
+	if err := s.db.Model(&models.Enrollment{}).
+		Where("customer_id = ? AND package_id = ? AND status IN ?",
+			customerID, packageID,
+			[]models.EnrollmentStatus{models.EnrollmentStatusPending, models.EnrollmentStatusActive}).
+		Count(&existingCount).Error; err != nil {
+		return nil, errors.New("ไม่สามารถตรวจสอบการลงทะเบียนเดิมได้")
+	}
+	if existingCount > 0 {
+		return nil, errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
 	}
 
 	newEnrollment := models.Enrollment{

@@ -207,6 +207,14 @@ func SetupRoutes(r *gin.Engine) {
             protectedCourseGroup.DELETE("/:id", courseController.DeleteCourse)
         }
 
+        // (C1) เส้นทางเฉพาะแอดมินสำหรับดูคอร์สทุกสถานะ (รวม draft/inactive)
+        // แยก path เป็น /admin/courses เพื่อไม่ชนกับ GET /courses ที่เป็น public (active-only)
+        adminCourseGroup := adminOnly.Group("/admin/courses")
+        {
+            adminCourseGroup.GET("", courseController.GetAllCourseAdmin)
+            adminCourseGroup.GET("/:id", courseController.GetCourseByIDAdmin)
+        }
+
         packageGroup := adminOnly.Group("/packages")
         {
             packageGroup.POST("/", packageController.CreatePackage)
