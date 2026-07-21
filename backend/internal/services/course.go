@@ -8,6 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
+var enrollmentSeatStatuses = []models.EnrollmentStatus{
+	models.EnrollmentStatusPending,
+	models.EnrollmentStatusActive,
+}
+
 type CourseService struct {
 	db *gorm.DB
 }
@@ -27,6 +32,7 @@ func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) 
 	query := s.db.Preload("User").
 		Preload("Packages").
 		Preload("Packages.Schedules").
+		Preload("Packages.Enrollments", "status IN ?", enrollmentSeatStatuses).
 		Order("id ASC")
 
 	if onlyActive {
@@ -58,6 +64,7 @@ func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) 
 				HoursCount:         pkg.HoursCount,
 				Price:              pkg.Price,
 				MaxSeats:           pkg.MaxSeats,
+				CurrentEnrollments: uint(len(pkg.Enrollments)),
 				Schedules:          schedulesDTO,
 			})
 		}
@@ -93,7 +100,8 @@ func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO,
 
 	query := s.db.Preload("User").
 		Preload("Packages").
-		Preload("Packages.Schedules")
+		Preload("Packages.Schedules").
+		Preload("Packages.Enrollments", "status IN ?", enrollmentSeatStatuses)
 
 	if onlyActive {
 		query = query.Where("status = ?", models.CourseStatusActive)
@@ -122,6 +130,7 @@ func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO,
 			HoursCount:         pkg.HoursCount,
 			Price:              pkg.Price,
 			MaxSeats:           pkg.MaxSeats,
+			CurrentEnrollments: uint(len(pkg.Enrollments)),
 			Schedules:          schedulesDTO,
 		})
 	}

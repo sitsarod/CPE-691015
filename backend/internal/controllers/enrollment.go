@@ -1,6 +1,7 @@
 package controllers
 
 import (
+    "errors"
     "net/http"
     "strconv"
 
@@ -83,12 +84,19 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
 
     enrollment, err := ctrl.service.ApproveEnrollment(uint(id), adminID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        switch {
+        case errors.Is(err, services.ErrEnrollmentNotFound):
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+        case errors.Is(err, services.ErrEnrollmentNotPending), errors.Is(err, services.ErrPackageSeatsFull):
+            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+        default:
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        }
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "message": "อนุมัติการลงทะเบียนและสร้างบิลเรียบร้อยแล้ว", 
+        "message": "อนุมัติการลงทะเบียนและสร้างบิลเรียบร้อยแล้ว",
         "data": enrollment,
     })
 }
@@ -142,7 +150,14 @@ func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
 
     enrollment, err := ctrl.service.UpdateEnrollment(uint(id), input)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        switch {
+        case errors.Is(err, services.ErrEnrollmentNotFound):
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+        case errors.Is(err, services.ErrEnrollmentBillingLocked):
+            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+        default:
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        }
         return
     }
     c.JSON(http.StatusOK, gin.H{"message": "อัปเดตสำเร็จ", "data": enrollment})
@@ -157,7 +172,14 @@ func (ctrl *EnrollmentController) DeleteEnrollment(c *gin.Context) {
     }
 
     if err := ctrl.service.CancelEnrollment(uint(id)); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ลบข้อมูลไม่สำเร็จ"})
+        switch {
+        case errors.Is(err, services.ErrEnrollmentNotFound):
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+        case errors.Is(err, services.ErrEnrollmentBillingLocked):
+            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+        default:
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "ลบข้อมูลไม่สำเร็จ"})
+        }
         return
     }
     c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการลงทะเบียนสำเร็จ"})
