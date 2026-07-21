@@ -247,6 +247,9 @@ func (s *CourseService) DeleteCourse(id uint) error {
 				return err
 			}
 		}
+		if err := tx.Where("course_id = ?", id).Delete(&models.QuizOptionCourse{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Delete(&courseItem).Error; err != nil {
 			return err
 		}

@@ -239,6 +239,7 @@ func SetupRoutes(r *gin.Engine) {
 
         // Quiz public endpoints
         api.GET("/quiz", quizController.GetActiveQuestions)
+        api.POST("/quiz/recommend", quizController.Recommend) 
 
         protectedAnnouncementGroup := adminOnly.Group("/announcements")
         {
@@ -273,6 +274,8 @@ func SetupRoutes(r *gin.Engine) {
             protectedQuizGroup.DELETE("/:id", quizController.DeleteQuestion)
             protectedQuizGroup.POST("/:id/options", quizController.AddOption)
             protectedQuizGroup.DELETE("/options/:option_id", quizController.DeleteOption)
+            protectedQuizGroup.POST("/options/:option_id/courses", quizController.AddOptionCourse)
+            protectedQuizGroup.DELETE("/option-courses/:id", quizController.DeleteOptionCourse)
         }
     }
 }
