@@ -1,6 +1,5 @@
 import { apiFetch } from "@/services/apiClient";
 
-
 export interface UserProfileResponseDTO {
   id: number;
   email: string;
@@ -33,7 +32,7 @@ export interface UpdateProfileInput {
   lastName?: string;
   nickname?: string;
   phoneNumber?: string;
-  parentEmail?: string;        
+  parentEmail?: string;
   parentPhoneNumber?: string;
 }
 
@@ -42,12 +41,20 @@ interface Wrapped<T> {
   data: T;
 }
 
-// [GET] ดึงข้อมูลโปรไฟล์ผู้ใช้ตาม ID
+// [GET] ดึงข้อมูลโปรไฟล์ผู้ใช้ตาม ID (สำหรับหน้าแก้ไข Profile)
 export async function getUserProfileAPI(userId: number): Promise<UserProfileResponseDTO> {
   const res = await apiFetch<Wrapped<UserProfileResponseDTO>>(`/users/${userId}`, {
     method: "GET",
   });
   return res.data;
+}
+
+// [GET] ดึงข้อมูลสมาชิก/ผู้ใช้ทั้งหมดในระบบ ( Admin / Coach / Customer )
+export async function getAllUsersAPI(): Promise<UserProfileResponseDTO[]> {
+  const res = await apiFetch<Wrapped<UserProfileResponseDTO[]>>("/admin/users", {
+    method: "GET",
+  });
+  return res.data || [];
 }
 
 // [PATCH] อัปเดตข้อมูลโปรไฟล์ส่วนตัว

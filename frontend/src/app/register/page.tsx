@@ -10,6 +10,7 @@ import { registerAPI } from "@/services/authAPI";
 export default function RegisterPage() {
   const router = useRouter(); 
   const [errorMsg, setErrorMsg] = useState(""); 
+  const [errors, setErrors] = useState<Record<string, string>>({}); 
   const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -25,14 +26,29 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setErrors({});
+
+    const newErrors: Record<string, string> = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(formData.email)) {
+      newErrors.email = "กรุณาระบุรูปแบบอีเมลให้ถูกต้อง (เช่น example@gmail.com)";
+    }
+
+    if (formData.parentEmail && !emailRegex.test(formData.parentEmail)) {
+      newErrors.parentEmail = "กรุณาระบุรูปแบบอีเมลผู้ปกครองให้ถูกต้อง";
+    }
 
     if (formData.password !== formData.confirmPassword) {
-      setErrorMsg("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง");
-      return;
+      newErrors.confirmPassword = "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน";
     }
 
     if (formData.phoneNumber.length !== 10) {
-      setErrorMsg("กรุณาระบุหมายเลขโทรศัพท์มือถือให้ครบ 10 หลัก");
+      newErrors.phoneNumber = "กรุณาระบุหมายเลขโทรศัพท์มือถือให้ครบ 10 หลัก";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -74,6 +90,7 @@ export default function RegisterPage() {
   return (
     <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
       <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
+        
         <h1 className="text-3xl font-bold text-gray-900 mb-2">KOYAMA</h1>
         <p className="text-sm text-gray-500 mb-8">สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งานระบบของคุณ</p>
 
@@ -83,29 +100,73 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-row flex-wrap w-full gap-y-5 text-left">
-          <InputField label="ชื่อ" name="firstName" placeholder="ชื่อจริง" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" />
-          <InputField label="นามสกุล" name="lastName" placeholder="นามสกุล" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)]" />
-          <InputField label="ชื่อเล่น" name="nickname" placeholder="ชื่อเล่น" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" />
-          <SelectField label="เพศ" name="gender" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)]" options={[{ label: "ชาย", value: "male" }, { label: "หญิง", value: "female" }]} />
-          <InputField label="วันเกิด" name="birthDate" type="date" required onChange={handleChange} />
-          <InputField label="อีเมล" name="email" type="email" placeholder="ระบุอีเมล" required onChange={handleChange} />          
-          <InputField label="รหัสผ่าน" name="password" type="password" placeholder="รหัสผ่าน" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" />
-          <InputField label="ยืนยันรหัสผ่าน" name="confirmPassword" type="password" placeholder="ยืนยันรหัสผ่าน" required onChange={handleChange} 
-                      containerClassName="w-full sm:w-[calc(50%-0.75rem)]" />          
-          <InputField label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" placeholder="ระบุหมายเลขโทรศัพท์มือถือ (10 หลัก)" required onChange={handleChange} />
-          <InputField label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" placeholder="ระบุอีเมลผู้ปกครอง" onChange={handleChange} />
-          <InputField label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" onChange={handleChange} />
+        <form onSubmit={handleSubmit} noValidate className="flex flex-row flex-wrap w-full gap-y-5 text-left">
+          
+          <InputField 
+            label="ชื่อ" name="firstName" placeholder="ชื่อจริง" required onChange={handleChange} 
+            error={errors.firstName} containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
+          />
+
+          <InputField 
+            label="นามสกุล" name="lastName" placeholder="นามสกุล" required onChange={handleChange} 
+            error={errors.lastName} containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
+          />
+
+          <InputField 
+            label="ชื่อเล่น" name="nickname" placeholder="ชื่อเล่น" required onChange={handleChange} 
+            error={errors.nickname} containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
+          />
+
+          <SelectField 
+            label="เพศ" name="gender" required onChange={handleChange} 
+            error={errors.gender} containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
+            options={[{ label: "ชาย", value: "male" }, { label: "หญิง", value: "female" }]} 
+          />
+
+          <InputField 
+            label="วันเกิด" name="birthDate" type="date" required onChange={handleChange} 
+            error={errors.birthDate} 
+          />
+
+          <InputField 
+            label="อีเมล" name="email" type="email" placeholder="ระบุอีเมล" required onChange={handleChange} 
+            error={errors.email} 
+          />
+
+          <InputField 
+            label="รหัสผ่าน" name="password" type="password" placeholder="รหัสผ่าน" required onChange={handleChange} 
+            error={errors.password} containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
+          />
+
+          <InputField 
+            label="ยืนยันรหัสผ่าน" name="confirmPassword" type="password" placeholder="ยืนยันรหัสผ่าน" required onChange={handleChange} 
+            error={errors.confirmPassword} containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
+          />
+
+          <InputField 
+            label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" placeholder="ระบุหมายเลขโทรศัพท์มือถือ (10 หลัก)" required onChange={handleChange} 
+            error={errors.phoneNumber} 
+          />
+
+          <InputField 
+            label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" placeholder="ระบุอีเมลผู้ปกครอง" onChange={handleChange} 
+            error={errors.parentEmail} 
+          />
+
+          <InputField 
+            label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" onChange={handleChange} 
+            error={errors.parentPhoneNumber} 
+          />
 
           <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">
-            <Button variant="outline" type="button" onClick={() => window.history.back()}>ยกเลิก</Button>
-            <Button variant="primary" type="submit" disabled={isLoading}>{isLoading ? "กำลังสร้างบัญชี..." : "สร้างบัญชีใหม่"}</Button>
+            <Button variant="outline" type="button" onClick={() => window.history.back()}>
+              ยกเลิก
+            </Button>
+            <Button variant="primary" type="submit" disabled={isLoading}>
+              {isLoading ? "กำลังสร้างบัญชี..." : "สร้างบัญชีใหม่"}
+            </Button>
           </div>
+
         </form>
       </div>
     </div>
