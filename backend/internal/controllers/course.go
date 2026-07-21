@@ -147,11 +147,14 @@ func (ctrl *CourseController) UpdateCourse(c *gin.Context) {
 
 	updatedCourse, err := ctrl.courseService.UpdateCourse(uint(courseID), input)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลคอร์สเรียน"})
-			return
+		case errors.Is(err, services.ErrInvalidCourseStatus): // (C4)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})
 		return
 	}
 
@@ -167,11 +170,14 @@ func (ctrl *CourseController) DeleteCourse(c *gin.Context) {
 	}
 
 	if err := ctrl.courseService.DeleteCourse(uint(courseID)); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลคอร์สเรียนที่ต้องการลบ"})
-			return
+		case errors.Is(err, services.ErrCourseHasActiveEnrollments):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลคอร์สเรียนได้"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลคอร์สเรียนได้"})
 		return
 	}
 

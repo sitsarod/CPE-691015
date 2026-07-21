@@ -13,6 +13,20 @@ var enrollmentSeatStatuses = []models.EnrollmentStatus{
 	models.EnrollmentStatusActive,
 }
 
+var (
+	ErrInvalidCourseStatus = errors.New("สถานะคอร์สไม่ถูกต้อง (ต้องเป็น active, inactive หรือ draft)")
+	ErrCourseHasActiveEnrollments = errors.New("ไม่สามารถลบคอร์สได้ เนื่องจากยังมีนักเรียนลงทะเบียนอยู่ กรุณายกเลิกการลงทะเบียนที่ค้างก่อน")
+)
+
+func isValidCourseStatus(s models.CourseStatus) bool {
+	switch s {
+	case models.CourseStatusActive, models.CourseStatusInactive, models.CourseStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
 type CourseService struct {
 	db *gorm.DB
 }
@@ -181,6 +195,9 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 		updateData["description"] = input.Description
 	}
 	if string(input.Status) != "" {
+		if !isValidCourseStatus(input.Status) {
+			return nil, ErrInvalidCourseStatus
+		}
 		updateData["status"] = input.Status
 	}
 
@@ -194,12 +211,45 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 	return s.GetCourseByID(id, false)
 }
 
-// DeleteCourse
+
 func (s *CourseService) DeleteCourse(id uint) error {
 	var courseItem models.Course
-	if err := s.db.First(&courseItem, id).Error; err != nil {
+	if err := s.db.Preload("Packages").First(&courseItem, id).Error; err != nil {
 		return err
 	}
-	
-	return s.db.Delete(&courseItem).Error
+
+	packageIDs := make([]uint, 0, len(courseItem.Packages))
+	for _, p := range courseItem.Packages {
+		packageIDs = append(packageIDs, p.ID)
+	}
+
+	// กันลบคอร์สที่ยังมีการลงทะเบียน pending/active ค้างอยู่
+	if len(packageIDs) > 0 {
+		var activeEnroll int64
+		if err := s.db.Model(&models.Enrollment{}).
+			Where("package_id IN ? AND status IN ?", packageIDs, enrollmentSeatStatuses).
+			Count(&activeEnroll).Error; err != nil {
+			return err
+		}
+		if activeEnroll > 0 {
+			return ErrCourseHasActiveEnrollments
+		}
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if len(packageIDs) > 0 {
+			// PackageSchedule ไม่มี soft delete (ไม่มี gorm.Model) → hard delete
+			if err := tx.Where("package_id IN ?", packageIDs).Delete(&models.PackageSchedule{}).Error; err != nil {
+				return err
+			}
+			// Package มี gorm.Model → soft delete
+			if err := tx.Where("course_id = ?", id).Delete(&models.Package{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Delete(&courseItem).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
