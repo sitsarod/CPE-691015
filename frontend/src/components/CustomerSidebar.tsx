@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, User, UserCircle } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle } from "lucide-react";
 
 export default function CustomerSidebar() {
   const pathname = usePathname();
@@ -30,7 +30,7 @@ export default function CustomerSidebar() {
           <SidebarItem href="/customer/payment" icon={<Wallet />} label="การเงิน" active={pathname === "/customer/payment"} />
           <SidebarItem href="/customer/enrollment" icon={<ClipboardList />} label="คอร์สของฉัน" active={pathname === "/customer/enrollment"} />
           <SidebarItem href="/customer/schedule" icon={<Calendar />} label="ตารางเรียน" active={pathname === "/customer/schedule"} />
-          <SidebarItem href="/customer/profile" icon={<User />} label="โปรไฟล์" active={pathname === "/customer/profile"} />
+          <SidebarItem href="/customer/feedback" icon={<StarCheck />} label="ข้อเสนอแนะ" active={pathname === "/customer/feedback"} />
         </nav>
       </div>
 

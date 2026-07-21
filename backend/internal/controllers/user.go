@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"errors"
 	"strconv"
+	"strings"
 
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
@@ -40,10 +41,12 @@ func (ctrl *UserController) CreateUserController(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ครบถ้วน"})
 		return
 	}
+
 	if err := ctrl.userService.CreateUser(&user); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "ไม่สามารถสร้างผู้ใช้ได้"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusCreated, gin.H{"message": "สร้างผู้ใช้สำเร็จ", "data": user})
 }
 
@@ -135,18 +138,18 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
         IsStudent: isStudent,
     }
 
-    // ข้อมูลผู้เรียนอยู่ในตาราง customers (GetUserProfile preload มาให้แล้ว)
-    if user.Customer != nil {
+	if user.Customer != nil {
         response.Nickname = user.Customer.Nickname
         response.PhoneNumber = user.Customer.PhoneNumber
-        response.Gender = string(user.Customer.Gender)
+        response.Gender = strings.ToLower(string(user.Customer.Gender))
+        
         response.ParentEmail = user.Customer.ParentEmail
         response.ParentPhoneNumber = user.Customer.ParentPhoneNumber
         response.Status = string(user.Customer.Status)
 
         if !user.Customer.BirthDate.IsZero() {
-            birthDate := user.Customer.BirthDate
-            response.BirthDate = &birthDate
+            formattedBirthDate := user.Customer.BirthDate.Format("2006-01-02") 
+            response.BirthDate = &formattedBirthDate
         }
     }
 

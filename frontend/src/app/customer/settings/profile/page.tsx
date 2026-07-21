@@ -2,32 +2,67 @@
 
 import React, { useEffect, useState } from 'react';
 import Button from '@/components/Button';
+import InputField from '@/components/InputField';
+import SelectField from '@/components/SelectField';
+import { 
+  getUserProfileAPI, 
+  updateUserProfileAPI, 
+  UserProfileResponseDTO 
+} from '@/services/userAPI';
 
 export default function EditForm() {
+  const [userId, setUserId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
   const [formData, setFormData] = useState({
-    firstName: "นักเรียน",
+    firstName: "",
     lastName: "",
     nickname: "",
     gender: "",
     birthDate: "",
     email: "",
-    password: "",
-    confirmPassword: "",
     phoneNumber: "",
     parentEmail: "",
     parentPhoneNumber: ""
   });
 
   useEffect(() => {
-    const savedData: Partial<typeof formData> = {};
-    const keys = Object.keys(formData) as Array<keyof typeof formData>;
-    
-    keys.forEach(key => {
-      const value = localStorage.getItem(key);
-      if (value) savedData[key] = value;
-    });
+    const fetchUserData = async () => {
+      try {
+        setIsLoading(true);
+        const storedUserId = localStorage.getItem("user_id");
 
-    setFormData(prev => ({ ...prev, ...savedData }));
+        if (!storedUserId) {
+          setErrorMsg("ไม่พบข้อมูลผู้ใช้งาน กรุณาล็อกอินใหม่อีกครั้ง");
+          return;
+        }
+
+        const id = parseInt(storedUserId, 10);
+        setUserId(id);
+
+        const profile: UserProfileResponseDTO = await getUserProfileAPI(id);
+
+        setFormData({
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+          nickname: profile.nickname || "",
+          gender: profile.gender || "",
+          birthDate: profile.birthDate ? profile.birthDate.split("T")[0] : "",
+          email: profile.email || "",
+          phoneNumber: profile.phoneNumber || "",
+          parentEmail: profile.parentEmail || "",
+          parentPhoneNumber: profile.parentPhoneNumber || ""
+        });
+      } catch (err: any) {
+        setErrorMsg(err.message || "ไม่สามารถดึงข้อมูลโปรไฟล์ได้");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserData();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -35,31 +70,52 @@ export default function EditForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      alert("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกันคัป!");
-      return;
+    if (!userId) return;
+
+    try {
+      setIsSaving(true);
+      setErrorMsg("");
+
+      await updateUserProfileAPI(userId, {
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+        parentEmail: formData.parentEmail,
+        parentPhoneNumber: formData.parentPhoneNumber,
+      });
+
+      window.history.back();
+    } catch (err: any) {
+      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } finally {
+      setIsSaving(false);
     }
-    Object.entries(formData).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
-    });
-    alert("บันทึกข้อมูลเรียบร้อยแล้วคัป!");
-    window.history.back(); 
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 p-6 md:p-12 text-center text-gray-500 font-medium">
+        กำลังโหลดข้อมูลโปรไฟล์จากระบบ...
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 p-6 md:p-12 overflow-y-auto max-w-4xl">
       <h1 className="text-2xl font-black mb-8">Edit profile</h1>
 
-      {/* ส่วนแสดงรูปโปรไฟล์เดิม */}
+      {errorMsg && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Profile Header */}
       <div className="w-full bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex items-center justify-between mb-8 shadow-xs">
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0">
             <img src="/slide3.jpg" alt="Avatar" className="w-full h-full object-cover" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-bold text-base text-gray-900 truncate">{formData.firstName}</h3>
           </div>
         </div>
         <Button 
@@ -72,74 +128,59 @@ export default function EditForm() {
         </Button>
       </div>
 
-
       <form onSubmit={handleSave} className="flex flex-row flex-wrap w-full gap-y-5 text-left bg-white">
         
-        {/* ชื่อจริง */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">ชื่อ</label>
-          <input name="firstName" type="text" required value={formData.firstName} onChange={handleChange} placeholder="ชื่อจริง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
+        {/* (ReadOnly) */}
+        <InputField 
+          label="ชื่อ" name="firstName" value={formData.firstName} readOnly disabled 
+          containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
+        />
+        <InputField 
+          label="นามสกุล" name="lastName" value={formData.lastName} readOnly disabled 
+          containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
+        />
+        <InputField 
+          label="ชื่อเล่น" name="nickname" value={formData.nickname} readOnly disabled 
+          containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
+        />
+        <SelectField 
+          label="เพศ" name="gender" value={formData.gender} disabled 
+          containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
+          options={[{ label: "ชาย", value: "male" }, { label: "หญิง", value: "female" }]} 
+        />
+        <InputField 
+          label="วันเกิด" name="birthDate" type="date" value={formData.birthDate} readOnly disabled 
+        />
 
-        {/* นามสกุล */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">นามสกุล</label>
-          <input name="lastName" type="text" required value={formData.lastName} onChange={handleChange} placeholder="นามสกุล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
+        <InputField 
+          label="อีเมล" name="email" type="email" value={formData.email} required 
+          onChange={handleChange} placeholder="ระบุอีเมล" 
+        />
+        <InputField 
+          label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" type="text" value={formData.phoneNumber} required 
+          onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ" 
+        />
+        <InputField 
+          label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" value={formData.parentEmail} 
+          onChange={handleChange} placeholder="ระบุอีเมลผู้ปกครอง" 
+        />
+        <InputField 
+          label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" type="text" value={formData.parentPhoneNumber} 
+          onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" 
+        />
 
-        {/* ชื่อเล่น */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">ชื่อเล่น</label>
-          <input name="nickname" type="text" required value={formData.nickname} onChange={handleChange} placeholder="ชื่อเล่น" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* เพศ */}
-        <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">เพศ</label>
-          <select name="gender" required value={formData.gender} onChange={handleChange} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900">
-            <option value="">เลือกเพศของคุณ</option>
-            <option value="male">ชาย</option>
-            <option value="female">หญิง</option>
-          </select>
-        </div>
-
-        {/* วันเกิด */}
-        <div className="w-full flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">วันเกิด</label>
-          <input name="birthDate" type="date" required value={formData.birthDate} onChange={handleChange} className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900" />
-        </div>
-
-        {/* อีเมล */}
-        <div className="w-full flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">อีเมล</label>
-          <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="ระบุอีเมล" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* หมายเลขโทรศัพท์มือถือ */}
-        <div className="w-full flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์มือถือ</label>
-          <input name="phoneNumber" type="text" required value={formData.phoneNumber} onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* อีเมลผู้ปกครอง */}
-        <div className="w-full flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">อีเมลผู้ปกครอง (ถ้ามี)</label>
-          <input name="parentEmail" type="email" value={formData.parentEmail} onChange={handleChange} placeholder="ระบุอีเมลผู้ปกครอง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* หมายเลขโทรศัพท์ผู้ปกครอง */}
-        <div className="w-full flex flex-col space-y-1.5">
-          <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)</label>
-          <input name="parentPhoneNumber" type="text" value={formData.parentPhoneNumber} onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
-        </div>
-
-        {/* กลุ่มปุ่มกดยืนยันบันทึกข้อมูล */}
         <div className="flex flex-row gap-3 pt-6 border-t border-gray-200 justify-end w-full mt-4">
-          <Button variant="outline" type="button" onClick={() => window.history.back()} className="bg-transparent border border-gray-300 hover:bg-gray-50 text-gray-700">
+          <Button 
+            variant="outline" type="button" onClick={() => window.history.back()} disabled={isSaving}
+            className="bg-transparent border border-gray-300 hover:bg-gray-50 text-gray-700"
+          >
             ยกเลิก
           </Button>
-          <Button variant="primary" type="submit" className="bg-[#3B82F6] hover:bg-blue-700 text-white shadow-xs">
-            บันทึกข้อมูล
+          <Button 
+            variant="primary" type="submit" disabled={isSaving}
+            className="bg-[#3B82F6] hover:bg-blue-700 text-white shadow-xs"
+          >
+            {isSaving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
           </Button>
         </div>
 

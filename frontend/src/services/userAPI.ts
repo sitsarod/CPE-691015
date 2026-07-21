@@ -33,6 +33,8 @@ export interface UpdateProfileInput {
   lastName?: string;
   nickname?: string;
   phoneNumber?: string;
+  parentEmail?: string;        
+  parentPhoneNumber?: string;
 }
 
 // backend ห่อ response ไว้ใน { data: ... } ทุกเส้นของ user
