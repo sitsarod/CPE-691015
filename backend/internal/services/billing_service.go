@@ -163,6 +163,7 @@ func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
 	var billings []models.Billing
 	err := s.db.Preload("BillingType").
 		Preload("Customer").
+		Preload("Customer.Customer").
 		Preload("Admin").
 		Preload("PaymentItem").
 		Preload("PaymentItem.Invoice").
@@ -176,6 +177,7 @@ func (s *BillingService) GetBillingsByCustomerID(customerID uint) ([]models.Bill
 	var billings []models.Billing
 	err := s.db.Preload("BillingType").
 		Preload("Customer").
+		Preload("Customer.Customer").
 		Preload("Admin").
 		Where("customer_id = ?", customerID).
 		Order("id DESC").
@@ -188,6 +190,7 @@ func (s *BillingService) GetBillingByID(id uint) (*models.Billing, error) {
 	var billing models.Billing
 	err := s.db.Preload("BillingType").
 		Preload("Customer").
+		Preload("Customer.Customer").
 		Preload("Admin").
 		First(&billing, id).Error
 	if err != nil {
@@ -234,7 +237,7 @@ func (s *BillingService) UpdateBilling(id uint, input models.Billing) (*models.B
 
 	// โหลดความสัมพันธ์กลับมาส่งผลลัพธ์
 	var result models.Billing
-	if err := s.db.Preload("BillingType").Preload("Customer").Preload("Admin").First(&result, id).Error; err != nil {
+	if err := s.db.Preload("BillingType").Preload("Customer").Preload("Customer.Customer").Preload("Admin").First(&result, id).Error; err != nil {
 		return nil, err
 	}
 	return &result, nil

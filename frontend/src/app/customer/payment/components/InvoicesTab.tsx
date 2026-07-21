@@ -1,0 +1,222 @@
+import React from "react";
+import { ChevronDown, ChevronUp, ExternalLink, FileText } from "lucide-react";
+import { InvoiceDTO } from "./types";
+
+interface InvoicesTabProps {
+  invoices: InvoiceDTO[];
+  expandedInvoiceIds: Record<number, boolean>;
+  onToggleExpand: (id: number) => void;
+  onPayExistingInvoice: (invoice: InvoiceDTO) => void;
+  onCancelInvoice: (id: number) => void;
+}
+
+export default function InvoicesTab({
+  invoices,
+  expandedInvoiceIds,
+  onToggleExpand,
+  onPayExistingInvoice,
+  onCancelInvoice
+}: InvoicesTabProps) {
+  // Format date helper
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  const formatDueDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      {invoices.length === 0 ? (
+        <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
+          <div className="w-16 h-16 rounded-full bg-gray-100 text-gray-405 flex items-center justify-center">
+            <FileText className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-800">ไม่มีประวัติการชำระเงิน</h3>
+          <p className="text-gray-500 text-sm max-w-xs">
+            คุณยังไม่มีการสร้างใบแจ้งหนี้หรือทำรายการชำระเงินในระบบ ณ ขณะนี้
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {invoices.map((inv) => {
+            const isExpanded = !!expandedInvoiceIds[inv.id];
+            
+            // An older invoice (rejected/cancelled/pending) is stale once its billing
+            // has already been settled through a different, newer invoice.
+            const isSuperseded = inv.invoicestatus !== "success" &&
+              inv.paymentitems.some(item => item.billing?.billingstatus === "paid");
+
+            // Derive client-side status based on whether a slip has been uploaded
+            // Backend keeps status as "pending" for invoices that have slips but are not yet approved/rejected by admin
+            const invoiceStatus = isSuperseded
+              ? "superseded"
+              : (inv.invoicestatus === "pending" && inv.slipurl) ? "waitcheck" : inv.invoicestatus;
+
+            // Status Color Setup
+            let statusBg = "bg-gray-100 text-gray-700 border-gray-200";
+            let statusText = "ไม่ทราบสถานะ";
+            if (invoiceStatus === "superseded") {
+              statusBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
+              statusText = "ชำระเงินแล้ว (ผ่านใบแจ้งหนี้อื่น)";
+            } else if (invoiceStatus === "pending") {
+              statusBg = "bg-amber-50 text-amber-700 border-amber-205";
+              statusText = "รอแนบสลิป";
+            } else if (invoiceStatus === "waitcheck") {
+              statusBg = "bg-blue-50 text-blue-700 border-blue-200";
+              statusText = "รอตรวจสอบ";
+            } else if (invoiceStatus === "success") {
+              statusBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
+              statusText = "ชำระเงินสำเร็จ";
+            } else if (invoiceStatus === "rejected") {
+              statusBg = "bg-rose-50 text-rose-700 border-rose-200";
+              statusText = "สลิปไม่ถูกต้อง (ถูกปฏิเสธ)";
+            } else if (invoiceStatus === "cancelled") {
+              statusBg = "bg-gray-100 text-gray-650 border-gray-200";
+              statusText = "ยกเลิกแล้ว";
+            }
+
+            return (
+              <div key={`invoice-${inv.id}`} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden transition-all">
+                {/* Invoice Card Header */}
+                <div 
+                  onClick={() => onToggleExpand(inv.id)}
+                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-gray-900 text-base">ใบแจ้งหนี้ #{inv.id}</span>
+                      <span className="text-gray-300">|</span>
+                      <span className="text-xs text-gray-500">{formatDate(inv.created_at)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${statusBg}`}>
+                        {statusText}
+                      </span>
+                      <span className="text-[10px] font-bold bg-gray-150 text-gray-600 px-2 py-0.5 rounded capitalize">
+                        ช่องทาง: {inv.paymentmethod === "qr" ? "PromptPay QR" : inv.paymentmethod === "bank_transfer" ? "โอนเงินธนาคาร" : inv.paymentmethod}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between md:justify-end gap-6">
+                    <div className="text-left md:text-right">
+                      <span className="text-[10px] font-bold text-gray-450 block">ยอดเงินรวม:</span>
+                      <span className="text-lg font-black text-gray-900">
+                        ฿{inv.invoicetotalamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      {invoiceStatus === "pending" && (
+                        <>
+                          <button
+                            onClick={() => onPayExistingInvoice(inv)}
+                            className="px-3.5 py-1.5 bg-[#CC0000] hover:bg-[#A30000] text-white text-xs font-black rounded-lg transition-all cursor-pointer"
+                          >
+                            แนบหลักฐานสลิป
+                          </button>
+                          <button
+                            onClick={() => onCancelInvoice(inv.id)}
+                            className="px-2.5 py-1.5 border border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-555 hover:text-black text-xs font-bold rounded-lg transition-all cursor-pointer"
+                          >
+                            ยกเลิก
+                          </button>
+                        </>
+                      )}
+                      
+                      {invoiceStatus === "waitcheck" && (
+                        <>
+                          <button
+                            onClick={() => onPayExistingInvoice(inv)}
+                            className="px-3.5 py-1.5 border border-[#CC0000] hover:bg-[#FFF0F0] text-[#CC0000] text-xs font-bold rounded-lg transition-all cursor-pointer"
+                          >
+                            แก้ไข/เปลี่ยนรูปสลิป
+                          </button>
+                        </>
+                      )}
+
+                      {invoiceStatus === "rejected" && (
+                        <>
+                          <button
+                            onClick={() => onPayExistingInvoice(inv)}
+                            className="px-3.5 py-1.5 bg-[#CC0000] hover:bg-[#A30000] text-white text-xs font-black rounded-lg transition-all cursor-pointer"
+                          >
+                            ส่งหลักฐานสลิปใหม่
+                          </button>
+                        </>
+                      )}
+
+                      {(invoiceStatus === "waitcheck" || invoiceStatus === "success" || invoiceStatus === "rejected") && inv.slipurl && (
+                        <a
+                          href={inv.slipurl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3.5 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          ดูรูปสลิปเดิม
+                          <ExternalLink className="w-3 h-3 text-gray-400" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => onToggleExpand(inv.id)}
+                        className="p-1 text-gray-400 hover:text-gray-655 hover:bg-gray-100 rounded-lg cursor-pointer"
+                      >
+                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Items */}
+                {isExpanded && (
+                  <div className="border-t border-gray-150 bg-gray-55/50 p-5 space-y-4">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">รายการที่รวมชำระ ({inv.paymentitems.length})</h4>
+                    <div className="space-y-2">
+                      {inv.paymentitems.map((item, idx) => (
+                        <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between p-3.5 bg-white border border-gray-150 rounded-xl">
+                          <div>
+                            <span className="text-[10px] font-bold text-gray-400">BILL-{item.billing_id}</span>
+                            <h5 className="font-bold text-gray-800 text-sm mt-0.5">{item.billing?.billingdescription || "รายการเก็บเงินย่อย"}</h5>
+                            {item.billing?.billingdue_date && (
+                              <span className="text-[10px] text-gray-500 block mt-0.5">
+                                ครบกำหนด: {formatDueDate(item.billing.billingdue_date)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-bold text-gray-900 text-sm">
+                            ฿{item.billing?.billingamount?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "-"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {inv.transactionid && (
+                      <div className="text-[11px] text-gray-500 bg-white border border-gray-150 p-3 rounded-xl flex items-center justify-between">
+                        <span className="font-bold">Transaction Reference ID:</span>
+                        <code className="font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded">{inv.transactionid}</code>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

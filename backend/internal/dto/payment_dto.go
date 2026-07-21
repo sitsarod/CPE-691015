@@ -12,6 +12,7 @@ type UserMinDTO struct {
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	Nickname  string `json:"nickname"`
 }
 
 // ToUserMinDTO maps models.User to UserMinDTO
@@ -19,12 +20,17 @@ func ToUserMinDTO(u *models.User) *UserMinDTO {
 	if u == nil {
 		return nil
 	}
+	nickname := ""
+	if u.Customer != nil {
+		nickname = u.Customer.Nickname
+	}
 	return &UserMinDTO{
 		ID:        u.ID,
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Email:     u.Email,
 		Role:      string(u.Role),
+		Nickname:  nickname,
 	}
 }
 
@@ -69,6 +75,33 @@ func ToBillingDTO(b *models.Billing) *BillingDTO {
 		return nil
 	}
 
+	// Find the latest active invoice if present to keep default behavior
+	var latestInvoice *models.Invoice
+	if len(b.PaymentItem) > 0 {
+		selectedIndex := -1
+		for i := len(b.PaymentItem) - 1; i >= 0; i-- {
+			if b.PaymentItem[i].Invoice != nil {
+				if b.PaymentItem[i].Invoice.Status != models.InvoiceCancelled {
+					selectedIndex = i
+					break
+				}
+			}
+		}
+		if selectedIndex == -1 {
+			selectedIndex = len(b.PaymentItem) - 1
+		}
+		latestInvoice = b.PaymentItem[selectedIndex].Invoice
+	}
+
+	return toBillingDTOWithInvoice(b, latestInvoice)
+}
+
+// toBillingDTOWithInvoice maps models.Billing to BillingDTO with a specific invoice reference
+func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *BillingDTO {
+	if b == nil {
+		return nil
+	}
+
 	dto := &BillingDTO{
 		ID:            b.ID,
 		Description:   b.Description,
@@ -90,9 +123,25 @@ func ToBillingDTO(b *models.Billing) *BillingDTO {
 	if b.Admin != nil {
 		dto.Admin = ToUserMinDTO(b.Admin)
 	}
-	if len(b.PaymentItem) > 0 && b.PaymentItem[0].Invoice != nil {
-		dto.SlipImageUrl = b.PaymentItem[0].Invoice.SlipImageUrl
-		dto.InvoiceID = b.PaymentItem[0].InvoiceID
+
+	if invoice != nil {
+		dto.InvoiceID = invoice.ID
+		dto.SlipImageUrl = invoice.SlipImageUrl
+		
+		// Derive status from the invoice status for this specific transaction mapping
+		if invoice.Status == models.InvoiceSuccess {
+			dto.Status = "paid"
+		} else if invoice.Status == models.InvoicePending {
+			if invoice.SlipImageUrl != "" {
+				dto.Status = "waitcheck"
+			} else {
+				dto.Status = "unfunded"
+			}
+		} else if invoice.Status == models.InvoiceRejected {
+			dto.Status = "unfunded"
+		} else if invoice.Status == models.InvoiceCancelled {
+			dto.Status = "unfunded"
+		}
 	}
 
 	return dto
@@ -102,7 +151,30 @@ func ToBillingDTO(b *models.Billing) *BillingDTO {
 func ToBillingDTOs(billings []models.Billing) []BillingDTO {
 	var dtos []BillingDTO
 	for _, b := range billings {
-		dtos = append(dtos, *ToBillingDTO(&b))
+		if len(b.PaymentItem) > 0 {
+			// If linked to invoices, create a DTO for each invoice it belongs to
+			var lastCancelled *models.Invoice
+			added := false
+			for _, item := range b.PaymentItem {
+				if item.Invoice != nil {
+					// Skip cancelled invoices to keep the list clean
+					if item.Invoice.Status == models.InvoiceCancelled {
+						lastCancelled = item.Invoice
+						continue
+					}
+					dtos = append(dtos, *toBillingDTOWithInvoice(&b, item.Invoice))
+					added = true
+				}
+			}
+			// If every invoice for this billing was cancelled, still surface it as
+			// unfunded instead of silently dropping the billing from the list.
+			if !added {
+				dtos = append(dtos, *toBillingDTOWithInvoice(&b, lastCancelled))
+			}
+		} else {
+			// If not linked to any invoice, just map it directly
+			dtos = append(dtos, *toBillingDTOWithInvoice(&b, nil))
+		}
 	}
 	return dtos
 }

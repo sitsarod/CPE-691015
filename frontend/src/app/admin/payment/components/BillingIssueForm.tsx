@@ -421,7 +421,7 @@ export default function BillingIssueForm({
             </div>
           ) : (
             billings.slice(0, 15).map(b => (
-              <div key={b.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:border-slate-350 transition-all flex flex-col justify-between">
+              <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:border-slate-350 transition-all flex flex-col justify-between">
                 <div className="flex items-start justify-between gap-1">
                   <div className="min-w-0 pr-2">
                     <span className="text-[10px] font-bold text-slate-400 block">BILL-{b.id} • {b.billingdue_date?.split('T')[0]}</span>
@@ -438,7 +438,7 @@ export default function BillingIssueForm({
                         ? 'bg-amber-50 text-amber-600 border border-amber-250'
                         : 'bg-rose-50 text-rose-600 border border-rose-250'
                     }`}>
-                      {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอสลิป' : 'ค้างชำระ'}
+                      {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
                     </span>
                     {(b.billingstatus !== 'paid' && b.billingstatus !== 'waitcheck') && (
                       <button

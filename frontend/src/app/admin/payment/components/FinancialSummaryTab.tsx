@@ -286,7 +286,7 @@ export default function FinancialSummaryTab({
                   </tr>
                 ) : (
                   filteredSummaryLogs.map(b => (
-                    <tr key={b.id} className="hover:bg-slate-50/50 text-xs transition-colors">
+                    <tr key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="hover:bg-slate-50/50 text-xs transition-colors">
                       <td className="py-3.5 px-5 font-semibold text-slate-550">BILL-{b.id}</td>
                       <td className="py-3.5 px-5 font-bold text-slate-800">
                         {b.customer ? `${b.customer.firstName} ${b.customer.lastName}` : "ผู้เรียน"}
@@ -307,7 +307,7 @@ export default function FinancialSummaryTab({
                             ? 'bg-amber-50 text-amber-600 border border-amber-100'
                             : 'bg-rose-50 text-rose-600 border border-rose-100'
                         }`}>
-                          {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอสลิป' : 'ค้างชำระ'}
+                          {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
                         </span>
                       </td>
                     </tr>

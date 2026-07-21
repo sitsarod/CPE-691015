@@ -31,6 +31,7 @@ export interface BillingDTO {
     firstName: string;
     lastName: string;
     email: string;
+    nickname?: string;
   };
   billing_type?: {
     billingtypename: string;

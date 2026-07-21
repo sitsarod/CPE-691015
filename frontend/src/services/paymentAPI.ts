@@ -1,7 +1,7 @@
 // frontend/src/services/paymentAPI.ts
 import { BackendUser, BillingDTO, BankAccount, Coach, Expense } from "@/app/admin/payment/components/types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ;
 
 // Fetch customers
 export async function fetchCustomers(token: string): Promise<BackendUser[]> {
@@ -245,3 +245,92 @@ export async function rejectSlip(invoiceId: number, token: string): Promise<any>
   }
   return resData;
 }
+
+// Fetch customer billings
+export async function fetchCustomerBillings(customerId: string | number, token: string): Promise<BillingDTO[]> {
+  const response = await fetch(`${BASE_URL}/billings/customer/${customerId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลบิลของลูกค้าได้");
+  }
+  return resData.data || [];
+}
+
+// Fetch customer invoices
+export async function fetchCustomerInvoices(customerId: string | number, token: string): Promise<any[]> {
+  const response = await fetch(`${BASE_URL}/payments/invoices/customer/${customerId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลใบแจ้งหนี้ของลูกค้าได้");
+  }
+  return resData.data || [];
+}
+
+// Create invoice from multiple billings
+export async function createInvoice(customerId: number, billingIds: number[], method: string, token: string): Promise<any> {
+  const response = await fetch(`${BASE_URL}/payments/invoices`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      customer_id: customerId,
+      billing_ids: billingIds,
+      payment_method: method
+    })
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "สร้างใบแจ้งหนี้ไม่สำเร็จ");
+  }
+  return resData.data || resData;
+}
+
+// Upload slip for invoice
+export async function uploadSlip(invoiceId: number, slipUrl: string, token: string): Promise<any> {
+  const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/slip`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      slip_url: slipUrl
+    })
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "อัปโหลดสลิปไม่สำเร็จ");
+  }
+  return resData.data || resData;
+}
+
+// Cancel invoice
+export async function cancelInvoice(invoiceId: number, token: string): Promise<any> {
+  const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/cancel`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ยกเลิกใบแจ้งหนี้ไม่สำเร็จ");
+  }
+  return resData.data || resData;
+}
+
