@@ -1,9 +1,11 @@
 'use client';
 
+import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
+
 // 1. ประกาศบอก TypeScript ว่า คอมโพเนนต์นี้จะรับอะไรเข้ามาบ้าง
 interface ResetPasswordProps {
-  userData: any;
-  onNext: (data?: any) => void;
+  userData: IdentifyUserData;
+  onNext: IdentifyNextHandler;
   onBack: () => void;
 }
 

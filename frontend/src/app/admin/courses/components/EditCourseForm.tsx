@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Save, Clock, Calendar, Loader2, X } from "lucide-react";
 import { fetchCourseByIDAdmin, updateCourse, createPackage, updatePackage, deletePackage } from "@/services/courseAPI";
-import { ScheduleFormInput, PackageFormInput } from "@/types/course";
+import { ScheduleFormInput, PackageFormInput, CoursePackageDTO, PackageScheduleInfoDTO } from "@/types/course";
 
 export default function EditCourseForm({ courseId, onSuccess, onCancel }: { courseId: number, onSuccess: () => void, onCancel: () => void }) {
   const [isFetching, setIsFetching] = useState(true);
@@ -25,25 +25,25 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         setDescription(data.description);
         setStatus(data.status);
         
-        const loadedPackages = (data.packages || []).map((pkg: any) => ({
-          id: pkg.id?.toString() || pkg.ID?.toString(),
+        const loadedPackages = (data.packages || []).map((pkg: CoursePackageDTO) => ({
+          id: pkg.id?.toString(),
           isNew: false,
           sessions_count: pkg.sessions_count,
           hours_count: pkg.hours_count,
-          max_seats: pkg.max_seats,
+          max_seats: pkg.max_seats ?? ("" as const),
           price: pkg.price,
-          schedules: (pkg.schedules || []).map((sch: any, i: number) => ({
+          schedules: (pkg.schedules || []).map((sch: PackageScheduleInfoDTO, i: number) => ({
             id: `sch-${i}-${Date.now()}`,
             day_of_week: sch.day_of_week,
             start_time: sch.start_time,
             end_time: sch.end_time
           }))
         }));
-        
+
         setPackages(loadedPackages);
-        setInitialPackageIds(loadedPackages.map((p: any) => p.id));
-      } catch (err: any) {
-        setError(err.message || "ดึงข้อมูลคอร์สเรียนไม่สำเร็จ");
+        setInitialPackageIds(loadedPackages.map((p) => p.id));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "ดึงข้อมูลคอร์สเรียนไม่สำเร็จ");
       } finally {
         setIsFetching(false);
       }
@@ -130,8 +130,8 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
       
       alert("บันทึกการแก้ไขคอร์สสำเร็จ!");
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || "ไม่สามารถอัปเดตข้อมูลคอร์สได้ โปรดลองอีกครั้ง");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถอัปเดตข้อมูลคอร์สได้ โปรดลองอีกครั้ง");
     } finally {
       setIsSaving(false);
     }

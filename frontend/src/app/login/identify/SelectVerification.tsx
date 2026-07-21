@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
 
 interface SelectVerificationProps {
-  userData: any;
-  onNext: (data?: any) => void;
+  userData: IdentifyUserData;
+  onNext: IdentifyNextHandler;
   onBack: () => void;
 }
 
@@ -35,8 +36,8 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
 
       // ส่ง OTP สำเร็จ! เดินหน้าไปหน้ากรอก OTP (พร้อมส่งข้อมูล user ต่อไป)
       onNext(userData);
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setIsLoading(false);
     }

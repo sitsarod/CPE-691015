@@ -26,6 +26,16 @@ func (ctrl *BankAccountController) GetAllBankAccounts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": accounts})
 }
 
+// GetActiveBankAccounts handles GET /api/bank-accounts/active
+func (ctrl *BankAccountController) GetActiveBankAccounts(c *gin.Context) {
+	accounts, err := ctrl.service.GetActiveBankAccounts()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลบัญชีธนาคารได้"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": accounts})
+}
+
 // ToggleBankAccount handles PATCH /api/bank-accounts/:id/toggle
 func (ctrl *BankAccountController) ToggleBankAccount(c *gin.Context) {
 	idParam := c.Param("id")

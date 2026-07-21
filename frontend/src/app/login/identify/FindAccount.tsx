@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { IdentifyNextHandler } from "@/types/identify";
 
 interface FindAccountProps {
-  onNext: (data?: any) => void;
+  onNext: IdentifyNextHandler;
 }
 
 export default function FindAccount({ onNext }: FindAccountProps) {
@@ -43,8 +44,8 @@ export default function FindAccount({ onNext }: FindAccountProps) {
       // 🌟 ค้นหาเจอ! ส่งข้อมูลผู้ใช้ (userData) ต่อไปยังหน้าถัดไป
       onNext(data.user);
 
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setIsLoading(false);
     }

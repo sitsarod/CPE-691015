@@ -22,6 +22,13 @@ func (s *BankAccountService) GetAllBankAccounts() ([]models.BankAccount, error) 
 	return accounts, err
 }
 
+// GetActiveBankAccounts returns only the currently active bank account(s), safe for any authenticated user to read
+func (s *BankAccountService) GetActiveBankAccounts() ([]models.BankAccount, error) {
+	var accounts []models.BankAccount
+	err := s.db.Where("is_active = ?", true).Order("id ASC").Find(&accounts).Error
+	return accounts, err
+}
+
 // ToggleBankAccount sets the selected bank account as active, and all other bank accounts as inactive
 func (s *BankAccountService) ToggleBankAccount(id uint) (*models.BankAccount, error) {
 	var targetAccount models.BankAccount

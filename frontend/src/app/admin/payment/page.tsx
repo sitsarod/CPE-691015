@@ -72,10 +72,11 @@ export default function FinancialPortal() {
       setBankAccounts(bankAccountsData);
       setCoaches(coachesData);
       setExpenses(expensesData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setApiError(err.message);
-      triggerToast(err.message, 'error');
+      const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดึงข้อมูล";
+      setApiError(message);
+      triggerToast(message, 'error');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -121,8 +122,8 @@ export default function FinancialPortal() {
       triggerToast("แก้ไขข้อมูลบิลสำเร็จเรียบร้อย");
       setIsEditBillingModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      triggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      triggerToast(err instanceof Error ? err.message : "แก้ไขข้อมูลบิลไม่สำเร็จ", 'error');
       throw err;
     }
   };
@@ -162,18 +163,18 @@ export default function FinancialPortal() {
       <div className="bg-white border-b border-slate-200 rounded-xl mb-6 shadow-sm overflow-hidden">
         <div className="flex overflow-x-auto">
           {[
-            { id: 'issue', label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
-            { id: 'slips', label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: dedupedBillings.filter(b => b.billingstatus === 'waitcheck').length },
-            { id: 'summary', label: 'สรุปรายรับและการเงิน', icon: PieChart },
-            { id: 'expenses', label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
-            { id: 'banks', label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }
+            { id: 'issue' as const, label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
+            { id: 'slips' as const, label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: dedupedBillings.filter(b => b.billingstatus === 'waitcheck').length },
+            { id: 'summary' as const, label: 'สรุปรายรับและการเงิน', icon: PieChart },
+            { id: 'expenses' as const, label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
+            { id: 'banks' as const, label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = subTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setSubTab(tab.id as any)}
+                onClick={() => setSubTab(tab.id)}
                 className={`flex items-center space-x-2 px-6 py-4 border-b-2 font-medium text-sm transition-all whitespace-nowrap ${
                   isActive
                     ? 'border-[#CD0D13] text-[#CD0D13] bg-rose-50/50 font-bold'

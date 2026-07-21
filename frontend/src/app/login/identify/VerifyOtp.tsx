@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
 
 interface VerifyOtpProps {
-  userData: any;
-  onNext: (data?: any) => void;
+  userData: IdentifyUserData;
+  onNext: IdentifyNextHandler;
   onBack: () => void;
 }
 
@@ -46,8 +47,8 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
       // OTP ถูกต้อง! ผ่านไปยังขั้นตอนตั้งรหัสผ่านใหม่ (Reset Password)
       onNext({ ...userData, resetToken: data.resetToken });
 
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setIsLoading(false);
     }

@@ -150,15 +150,15 @@ export default function FinancialSummaryTab({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {[
-            { id: 'today', label: 'วันนี้' },
-            { id: 'week', label: 'สัปดาห์นี้' },
-            { id: 'month', label: 'เดือนนี้' },
-            { id: 'year', label: 'ปีนี้' },
-            { id: 'custom', label: 'เลือกช่วงเวลาเอง' }
+            { id: 'today' as const, label: 'วันนี้' },
+            { id: 'week' as const, label: 'สัปดาห์นี้' },
+            { id: 'month' as const, label: 'เดือนนี้' },
+            { id: 'year' as const, label: 'ปีนี้' },
+            { id: 'custom' as const, label: 'เลือกช่วงเวลาเอง' }
           ].map(t => (
             <button
               key={t.id}
-              onClick={() => setSummaryTimeframe(t.id as any)}
+              onClick={() => setSummaryTimeframe(t.id)}
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 summaryTimeframe === t.id
                   ? 'bg-[#CD0D13] text-white shadow-md'
@@ -253,7 +253,7 @@ export default function FinancialSummaryTab({
 
               <select
                 value={summaryFilterStatus}
-                onChange={(e: any) => setSummaryFilterStatus(e.target.value)}
+                onChange={(e) => setSummaryFilterStatus(e.target.value as 'all' | 'pending' | 'paid' | 'unpaid')}
                 className="w-full sm:w-auto px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-700"
               >
                 <option value="all">สถานะ: ทั้งหมด</option>

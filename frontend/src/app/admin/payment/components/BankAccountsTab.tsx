@@ -36,8 +36,8 @@ export default function BankAccountsTab({
       const result = await toggleBankAccount(bankId, token || "");
       onTriggerToast(`เปลี่ยนบัญชีรับเงินหลักเป็น: ${result.data.bank_name} เรียบร้อยแล้ว`);
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'สลับบัญชีไม่สำเร็จ', 'error');
     }
   };
 
@@ -60,8 +60,8 @@ export default function BankAccountsTab({
       await deleteBankAccount(bankId, token || "");
       onTriggerToast("ลบบัญชีธนาคารสำเร็จเรียบร้อย");
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'ลบบัญชีไม่สำเร็จ', 'error');
     }
   };
 
@@ -92,8 +92,8 @@ export default function BankAccountsTab({
       onTriggerToast(editingBank ? "แก้ไขบัญชีธนาคารสำเร็จเรียบร้อย" : "เพิ่มบัญชีธนาคารใหม่สำเร็จเรียบร้อย");
       setIsBankModalOpen(false);
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'บันทึกบัญชีไม่สำเร็จ', 'error');
     } finally {
       setSubmitting(false);
     }

@@ -62,8 +62,8 @@ try {
       }
       
       router.refresh();
-    } catch (err: any) {
-      setErrorMsg(err.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     } finally {
       setIsLoading(false);
     }

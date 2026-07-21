@@ -5,12 +5,13 @@ import FindAccount from './FindAccount';
 import SelectVerification from './SelectVerification';
 import VerifyOtp from './VerifyOtp';
 import ResetPassword from './ResetPassword';
+import { IdentifyUserData } from '@/types/identify';
 
 export default function IdentifyPage() {
   const [step, setStep] = useState<number>(1);
-  const [userData, setUserData] = useState<any>({});
-  const nextStep = (data?: any) => {
-    setUserData((prev: any) => ({ ...prev, ...data }));
+  const [userData, setUserData] = useState<IdentifyUserData>({});
+  const nextStep = (data?: IdentifyUserData) => {
+    setUserData((prev) => ({ ...prev, ...data }));
     setStep((prev) => prev + 1);
   };
   const prevStep = () => {

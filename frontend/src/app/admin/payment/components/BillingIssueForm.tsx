@@ -135,8 +135,8 @@ export default function BillingIssueForm({
       setStudentSearchQuery('');
 
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'ออกบิลไม่สำเร็จ', 'error');
     }
   };
 

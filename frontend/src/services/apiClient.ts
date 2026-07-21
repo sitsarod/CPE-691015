@@ -22,7 +22,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 
  
   const text = await response.text();
-  let payload: any = null;
+  let payload: { error?: string; message?: string } | null = null;
   if (text) {
     try {
       payload = JSON.parse(text);

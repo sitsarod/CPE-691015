@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Receipt, Trash2 } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
-import { createExpense, deleteExpense } from "@/services/paymentAPI";
+import { createExpense, deleteExpense, CreateExpenseReq } from "@/services/paymentAPI";
 
 export interface ExpensesTabProps {
   coaches: Coach[];
@@ -33,7 +33,7 @@ export default function ExpensesTab({
       return;
     }
 
-    const reqBody: any = {
+    const reqBody: CreateExpenseReq = {
       expenseamount: parseFloat(expenseForm.expenseamount),
       expensetype: expenseForm.expensetype,
       expensedescription: expenseForm.expensedescription,
@@ -63,8 +63,8 @@ export default function ExpensesTab({
         receipturl: ''
       });
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'บันทึกค่าใช้จ่ายไม่สำเร็จ', 'error');
     }
   };
 
@@ -77,8 +77,8 @@ export default function ExpensesTab({
 
       onTriggerToast("ลบรายการค่าใช้จ่ายสำเร็จเรียบร้อย");
       onFetchData();
-    } catch (err: any) {
-      onTriggerToast(err.message, 'error');
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'ลบรายการไม่สำเร็จ', 'error');
     }
   };
 
@@ -96,7 +96,7 @@ export default function ExpensesTab({
             <label className="text-xs font-semibold text-slate-600 block">ประเภทรายจ่าย</label>
             <select
               value={expenseForm.expensetype}
-              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensetype: e.target.value as any, coach_id: '' }))}
+              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensetype: e.target.value, coach_id: '' }))}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
             >
               <option value="court_rental">ค่าเช่าสนาม</option>
