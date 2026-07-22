@@ -12,7 +12,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ;
 
 // Fetch customers
 export async function fetchCustomers(token: string): Promise<BackendUser[]> {
-  const response = await fetch(`${BASE_URL}/users/role?role=customer`, {
+  const response = await fetch(`${BASE_URL}/admin/role?role=customer`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
