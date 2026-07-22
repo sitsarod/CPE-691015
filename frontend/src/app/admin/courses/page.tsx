@@ -46,13 +46,6 @@ export default function AdminCoursesPage() {
           <PlusCircle className="w-4 h-4 mr-2" />
           สร้างคอร์สใหม่
         </button>
-        {activeTab === "edit" && (
-          <button
-            className="flex items-center px-6 py-3 font-bold text-sm transition-colors border-b-2 border-[#CC0000] text-[#CC0000]"
-          >
-            แก้ไขคอร์ส
-          </button>
-        )}
       </div>
 
       {/* ---------------- Tab Content ---------------- */}
