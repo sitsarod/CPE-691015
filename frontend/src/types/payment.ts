@@ -26,8 +26,9 @@ export interface CreateExpenseReq {
 }
 
 export interface BankAccountReq {
-  bank_name: string;
-  account_name: string;
-  account_no: string;
+  bank_name?: string;
+  account_name?: string;
+  account_no?: string;
   is_active?: boolean;
+  auto_verify_enabled?: boolean;
 }

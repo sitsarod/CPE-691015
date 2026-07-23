@@ -1,6 +1,8 @@
 package routes
 
 import (
+    "log"
+
     "CPE-691015/internal/config"
     "CPE-691015/internal/controllers"
     "CPE-691015/internal/services"
@@ -27,7 +29,13 @@ func SetupRoutes(r *gin.Engine) {
     enrollmentService := services.NewEnrollmentService(db)
     enrollmentController := controllers.NewEnrollmentController(enrollmentService)
 
-    paymentService := services.NewPaymentService(db)
+    slipOkService := services.NewSlipOkService()
+    if slipOkService.Enabled() {
+        log.Println("[SlipOK] ตั้งค่า SLIPOK_API_KEY / SLIPOK_BRANCH_ID ครบแล้ว พร้อมตรวจสลิปอัตโนมัติ")
+    } else {
+        log.Println("[SlipOK] ไม่พบ SLIPOK_API_KEY และ/หรือ SLIPOK_BRANCH_ID ใน environment — จะข้ามการตรวจสลิปอัตโนมัติทุกครั้ง")
+    }
+    paymentService := services.NewPaymentService(db, slipOkService)
     paymentController := controllers.NewPaymentController(paymentService)
 
     billingService := services.NewBillingService(db)

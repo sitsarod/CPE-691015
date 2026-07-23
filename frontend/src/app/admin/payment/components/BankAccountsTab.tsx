@@ -25,7 +25,8 @@ export default function BankAccountsTab({
     bank_name: '',
     account_name: '',
     account_no: '',
-    is_active: false
+    is_active: false,
+    auto_verify_enabled: false
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,6 +39,23 @@ export default function BankAccountsTab({
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'สลับบัญชีไม่สำเร็จ', 'error');
+    }
+  };
+
+  // Toggle SlipOK auto slip-verification for a bank account
+  const handleToggleAutoVerify = async (e: React.MouseEvent, account: BankAccount) => {
+    e.stopPropagation();
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+      await updateBankAccount(account.ID, { auto_verify_enabled: !account.auto_verify_enabled }, token || "");
+      onTriggerToast(
+        !account.auto_verify_enabled
+          ? `เปิดตรวจสลิปอัตโนมัติ (SlipOK) สำหรับ ${account.bank_name} แล้ว`
+          : `ปิดตรวจสลิปอัตโนมัติ (SlipOK) สำหรับ ${account.bank_name} แล้ว`
+      );
+      onFetchData();
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'สลับการตรวจสลิปอัตโนมัติไม่สำเร็จ', 'error');
     }
   };
 
@@ -80,7 +98,7 @@ export default function BankAccountsTab({
         bank_name: bankForm.bank_name,
         account_name: bankForm.account_name,
         account_no: bankForm.account_no,
-        ...(editingBank ? { is_active: bankForm.is_active } : {})
+        ...(editingBank ? { is_active: bankForm.is_active, auto_verify_enabled: bankForm.auto_verify_enabled } : {})
       };
 
       if (editingBank) {
@@ -110,7 +128,7 @@ export default function BankAccountsTab({
           type="button"
           onClick={() => {
             setEditingBank(null);
-            setBankForm({ bank_name: '', account_name: '', account_no: '', is_active: false });
+            setBankForm({ bank_name: '', account_name: '', account_no: '', is_active: false, auto_verify_enabled: false });
             setIsBankModalOpen(true);
           }}
           className="bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
@@ -162,7 +180,8 @@ export default function BankAccountsTab({
                           bank_name: account.bank_name,
                           account_name: account.account_name,
                           account_no: account.account_no,
-                          is_active: account.is_active
+                          is_active: account.is_active,
+                          auto_verify_enabled: account.auto_verify_enabled
                         });
                         setIsBankModalOpen(true);
                       }}
@@ -199,6 +218,21 @@ export default function BankAccountsTab({
                           : 'translate-x-0 bg-white/70'
                       }`} />
                     </div>
+                  </div>
+                </div>
+
+                <div
+                  className="mt-3 flex justify-between items-center border-t border-white/20 pt-3 cursor-pointer"
+                  onClick={(e) => handleToggleAutoVerify(e, account)}
+                  title="เปิด/ปิดการตรวจสลิปอัตโนมัติผ่าน SlipOK สำหรับบัญชีนี้"
+                >
+                  <span className="text-[10px] opacity-75 font-semibold">ตรวจสลิปอัตโนมัติ (SlipOK)</span>
+                  <div className={`w-9 h-5 rounded-full p-0.5 transition-all duration-300 ${account.auto_verify_enabled ? 'bg-white' : 'bg-white/20'}`}>
+                    <div className={`w-4 h-4 rounded-full transition-transform duration-300 ${
+                      account.auto_verify_enabled
+                        ? 'translate-x-4 bg-[#CD0D13]'
+                        : 'translate-x-0 bg-white/70'
+                    }`} />
                   </div>
                 </div>
               </div>

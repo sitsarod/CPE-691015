@@ -113,6 +113,9 @@ func (s *BankAccountService) UpdateBankAccount(id uint, req dto.UpdateBankAccoun
 		if req.AccountName != nil {
 			updates["account_name"] = *req.AccountName
 		}
+		if req.AutoVerifyEnabled != nil {
+			updates["auto_verify_enabled"] = *req.AutoVerifyEnabled
+		}
 
 		if len(updates) > 0 {
 			if err := tx.Model(&account).Updates(updates).Error; err != nil {
