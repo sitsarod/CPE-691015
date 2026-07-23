@@ -62,6 +62,17 @@ export default function InvoicesTab({
             const isSuperseded = inv.invoicestatus !== "success" &&
               inv.paymentitems.some(item => item.billing?.billingstatus === "paid");
 
+            // If a newer (higher-id), non-cancelled invoice already covers the same billing(s),
+            // resubmitting a slip against this older rejected invoice would just create a duplicate
+            // payment attempt for a bill that's already being handled elsewhere.
+            const hasNewerInvoiceForSameBilling = invoices.some(other =>
+              other.id > inv.id &&
+              other.invoicestatus !== "cancelled" &&
+              other.paymentitems.some(otherItem =>
+                inv.paymentitems.some(item => item.billing_id === otherItem.billing_id)
+              )
+            );
+
             // Derive client-side status based on whether a slip has been uploaded
             // Backend keeps status as "pending" for invoices that have slips but are not yet approved/rejected by admin
             const invoiceStatus = isSuperseded
@@ -150,7 +161,7 @@ export default function InvoicesTab({
                         </>
                       )}
 
-                      {invoiceStatus === "rejected" && (
+                      {invoiceStatus === "rejected" && !hasNewerInvoiceForSameBilling && (
                         <>
                           <button
                             onClick={() => onPayExistingInvoice(inv)}

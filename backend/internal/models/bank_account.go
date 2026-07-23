@@ -6,8 +6,9 @@ import (
 
 type BankAccount struct {
 	gorm.Model
-	BankName    string `json:"bank_name" gorm:"not null"`
-	AccountNo   string `json:"account_no" gorm:"unique;not null"`
-	AccountName string `json:"account_name" gorm:"not null"`
-	IsActive    bool   `json:"is_active" gorm:"default:false"`
+	BankName          string `json:"bank_name" gorm:"not null"`
+	AccountNo         string `json:"account_no" gorm:"unique;not null"`
+	AccountName       string `json:"account_name" gorm:"not null"`
+	IsActive          bool   `json:"is_active" gorm:"default:false"`
+	AutoVerifyEnabled bool   `json:"auto_verify_enabled" gorm:"default:false"` // เปิด/ปิดการตรวจสลิปอัตโนมัติผ่าน SlipOK สำหรับบัญชีนี้
 }

@@ -7,8 +7,9 @@ type CreateBankAccountRequest struct {
 }
 
 type UpdateBankAccountRequest struct {
-	BankName    *string `json:"bank_name"`
-	AccountNo   *string `json:"account_no"`
-	AccountName *string `json:"account_name"`
-	IsActive    *bool   `json:"is_active"`
+	BankName          *string `json:"bank_name"`
+	AccountNo         *string `json:"account_no"`
+	AccountName       *string `json:"account_name"`
+	IsActive          *bool   `json:"is_active"`
+	AutoVerifyEnabled *bool   `json:"auto_verify_enabled"`
 }
