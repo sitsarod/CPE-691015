@@ -44,21 +44,18 @@ func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
 }
 
 
+// toCustomerID แปลง users.id → customers.id
+//
+// ตรรกะจริงย้ายไปอยู่ที่ ResolveCustomerID ใน customer_resolver.go แล้ว เพื่อให้ service
+// ตัวอื่น (เช่น ConsentService) ใช้ตัวเดียวกันได้ ไม่ต้องเขียนตรรกะแปลง id ซ้ำหลายที่
+// ซึ่งเป็นจุดที่เคยเกิดบั๊กผูกข้อมูลผิดคนมาแล้ว
 func (s *EnrollmentService) toCustomerID(userID uint) (uint, error) {
-	var customer models.Customer
-	if err := s.db.Where("user_id = ?", userID).First(&customer).Error; err != nil {
-		return 0, errors.New("ไม่พบโปรไฟล์ลูกค้าของผู้ใช้งานนี้")
-	}
-	return customer.ID, nil
+	return ResolveCustomerID(s.db, userID)
 }
 
 // toUserID แปลง customers.id → users.id
 func (s *EnrollmentService) toUserID(customerID uint) (uint, error) {
-	var customer models.Customer
-	if err := s.db.First(&customer, customerID).Error; err != nil {
-		return 0, errors.New("ไม่พบข้อมูลลูกค้า")
-	}
-	return customer.UserID, nil
+	return ResolveUserID(s.db, customerID)
 }
 
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
