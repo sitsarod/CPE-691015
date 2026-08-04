@@ -6,6 +6,7 @@ import (
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -133,6 +134,46 @@ func (ctrl *AnnouncementController) CreateCategory(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"data": res})
 }
 
+func (ctrl *AnnouncementController) UpdateCategory(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+		return
+	}
+
+	var req dto.UpdateCategoryReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := ctrl.service.UpdateCategory(uint(id), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+func (ctrl *AnnouncementController) DeleteCategory(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+		return
+	}
+
+	err = ctrl.service.DeleteCategory(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
+}
+
 func (ctrl *AnnouncementController) GetAllCategories(c *gin.Context) {
 	res, err := ctrl.service.GetAllCategories()
 	if err != nil {
@@ -141,5 +182,5 @@ func (ctrl *AnnouncementController) GetAllCategories(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
-	
+
 }

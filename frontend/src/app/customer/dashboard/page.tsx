@@ -1,9 +1,318 @@
-import React from 'react'
+'use client';
 
-function page() {
+import React, { useEffect, useState, useRef } from 'react';
+import { announcementAPI } from '@/services/announcementAPI';
+import { Announcement, Category } from '@/types/announcement';
+import { ChevronLeft, ChevronRight, Calendar, Eye, X } from 'lucide-react';
+
+export default function CustomerDashboardPage() {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Hero Carousel State
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Modal State
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [annData, catData] = await Promise.all([
+        announcementAPI.getAllAnnouncements(),
+        announcementAPI.getAllCategories(),
+      ]);
+      setAnnouncements(annData || []);
+      setCategories(catData || []);
+    } catch (error) {
+      console.error('Failed to fetch announcements:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Carousel auto-slide logic
+  const featuredAnnouncements = announcements.slice(0, 5); // top 5 for hero
+  
+  const resetTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCurrentSlide((prev) => (prev === featuredAnnouncements.length - 1 ? 0 : prev + 1));
+    }, 5000);
+  };
+
+  useEffect(() => {
+    if (featuredAnnouncements.length > 0) {
+      resetTimer();
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [featuredAnnouncements.length, currentSlide]);
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev === featuredAnnouncements.length - 1 ? 0 : prev + 1));
+    resetTimer();
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev === 0 ? featuredAnnouncements.length - 1 : prev - 1));
+    resetTimer();
+  };
+
+  const handleOpenModal = async (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement);
+    try {
+      await announcementAPI.incrementViewCount(announcement.id);
+      setAnnouncements(prev => prev.map(a => 
+        a.id === announcement.id ? { ...a, view_count: a.view_count + 1 } : a
+      ));
+    } catch (error) {
+      console.error('Failed to increment view count:', error);
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedAnnouncement(null);
+  };
+
+  const displayedAnnouncements = selectedCategory
+    ? announcements.filter((a) => a.category_id === selectedCategory)
+    : announcements;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center rounded-2xl">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CC0000]"></div>
+      </div>
+    );
+  }
+
   return (
-    <div>page</div>
-  )
-}
+    <div className="min-h-[calc(100vh-80px)] bg-gray-50 text-gray-900 font-sans selection:bg-[#CC0000] selection:text-white pb-20 rounded-2xl overflow-hidden shadow-sm">
+      
+      {/* Hero Cinematic Section (Kept Dark for Image Visibility) */}
+      <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden group">
+        {featuredAnnouncements.length > 0 ? (
+          <>
+            {/* Slides */}
+            {featuredAnnouncements.map((ann, idx) => (
+              <div
+                key={ann.id}
+                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                  idx === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                }`}
+              >
+                {/* Background Image or Gradient */}
+                {ann.image_url ? (
+                  <img src={ann.image_url} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-90" />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 opacity-90" />
+                )}
+                
+                <div className="absolute inset-0 bg-black/40" /> 
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+                
+                <div className="absolute bottom-0 left-0 w-full p-8 md:p-16 flex flex-col items-start justify-end h-full">
+                  <span className="px-3 py-1 bg-white text-gray-900 text-xs font-bold uppercase tracking-wider rounded-md mb-4 shadow-sm">
+                    {ann.category?.name || 'Announcement'}
+                  </span>
+                  <h1 className="text-4xl md:text-5xl font-extrabold mb-4 max-w-4xl leading-tight text-white drop-shadow-lg">
+                    {ann.title}
+                  </h1>
+                  <p className="text-gray-200 text-lg md:text-xl max-w-2xl mb-8 line-clamp-2 drop-shadow-md">
+                    {ann.content}
+                  </p>
+                  <button 
+                    onClick={() => handleOpenModal(ann)}
+                    className="flex items-center gap-2 px-8 py-3 bg-[#CC0000] hover:bg-[#990000] transition-all duration-300 text-white font-semibold rounded-full shadow-lg shadow-[#CC0000]/30 hover:scale-105"
+                  >
+                    อ่านเพิ่มเติม
+                  </button>
+                </div>
+              </div>
+            ))}
 
-export default page
+            {/* Navigation Arrows */}
+            <button
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/30 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm border border-white/20"
+            >
+              <ChevronLeft size={32} />
+            </button>
+            <button
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-black/30 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm border border-white/20"
+            >
+              <ChevronRight size={32} />
+            </button>
+
+            {/* Indicators */}
+            <div className="absolute bottom-6 right-8 z-20 flex gap-2">
+              {featuredAnnouncements.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setCurrentSlide(idx);
+                    resetTimer();
+                  }}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                    idx === currentSlide ? 'w-8 bg-[#CC0000]' : 'w-4 bg-white/60 hover:bg-white'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
+            ไม่มีประกาศในขณะนี้
+          </div>
+        )}
+      </div>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-30">
+        {/* Category Filters */}
+        <div className="flex items-center gap-3 overflow-x-auto py-6 no-scrollbar">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`whitespace-nowrap px-6 py-2 rounded-full font-medium transition-colors duration-300 ${
+              selectedCategory === null
+                ? 'bg-[#CC0000] text-white shadow-md shadow-[#CC0000]/30'
+                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            ประกาศทั้งหมด
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`whitespace-nowrap px-6 py-2 rounded-full font-medium transition-colors duration-300 ${
+                selectedCategory === cat.id
+                  ? 'bg-[#CC0000] text-white shadow-md shadow-[#CC0000]/30'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Announcements Grid */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-900">
+            <span className="text-[#CC0000]">|</span> ประกาศอื่นๆ ที่น่าสนใจ
+          </h2>
+          
+          {displayedAnnouncements.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {displayedAnnouncements.map((ann) => (
+                <div 
+                  key={ann.id}
+                  onClick={() => handleOpenModal(ann)}
+                  className="bg-white border border-gray-100 rounded-2xl cursor-pointer hover:border-[#CC0000]/50 hover:shadow-lg transition-all duration-300 group flex flex-col h-full overflow-hidden shadow-sm"
+                >
+                  {ann.image_url && (
+                    <div className="w-full h-40 overflow-hidden bg-gray-100">
+                      <img src={ann.image_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    </div>
+                  )}
+                  <div className="p-6 flex flex-col flex-grow">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md tracking-wider">
+                        {ann.category?.name}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                        <Eye size={14} /> {ann.view_count}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-[#CC0000] transition-colors line-clamp-2">
+                      {ann.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-6 line-clamp-3 flex-grow">
+                      {ann.content}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-auto pt-4 border-t border-gray-100">
+                      <Calendar size={14} />
+                      <span>
+                        {new Date(ann.start_date).toLocaleDateString('th-TH', {
+                          month: 'short', day: 'numeric', year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 text-gray-500 bg-white rounded-2xl border border-gray-100 shadow-sm">
+              ไม่พบประกาศในหมวดหมู่นี้
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Detail Modal */}
+      {selectedAnnouncement && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={closeModal}
+          ></div>
+          <div className="relative bg-white border border-gray-100 shadow-2xl rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <button 
+              onClick={closeModal}
+              className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur shadow-sm hover:bg-[#CC0000] rounded-full text-gray-600 hover:text-white transition-colors z-10"
+            >
+              <X size={20} />
+            </button>
+            
+            {/* Header Image if available */}
+            {selectedAnnouncement.image_url && (
+              <div className="w-full h-64 md:h-80 overflow-hidden bg-gray-100">
+                <img src={selectedAnnouncement.image_url} alt="Cover" className="w-full h-full object-cover" />
+              </div>
+            )}
+            
+            <div className="p-8 md:p-12">
+               <div className="flex flex-wrap items-center gap-4 mb-6">
+                 <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-md border border-gray-200">
+                    {selectedAnnouncement.category?.name}
+                 </span>
+                 <span className="flex items-center gap-1 text-sm text-gray-500">
+                    <Calendar size={16} />
+                    {new Date(selectedAnnouncement.start_date).toLocaleDateString('th-TH', {
+                      month: 'long', day: 'numeric', year: 'numeric'
+                    })}
+                 </span>
+                 <span className="flex items-center gap-1 text-sm text-gray-500 ml-auto">
+                    <Eye size={16} /> {selectedAnnouncement.view_count} ครั้ง
+                 </span>
+               </div>
+               
+               <h2 className="text-3xl md:text-4xl font-extrabold mb-8 text-gray-900 leading-tight">
+                 {selectedAnnouncement.title}
+               </h2>
+               
+               <div className="prose max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
+                 {selectedAnnouncement.content}
+               </div>
+
+               <div className="mt-12 pt-6 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
+                 <p>ประกาศโดย: {selectedAnnouncement.user?.firstName} {selectedAnnouncement.user?.lastName}</p>
+                 <p>ใช้งานถึง: {new Date(selectedAnnouncement.end_date).toLocaleDateString('th-TH')}</p>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
