@@ -112,6 +112,7 @@ func (ctrl *CourseController) CreateCourse(c *gin.Context) {
 		Description: req.Description,
 		Status:      status,
 		UserID:      userID,
+		LearningOutcomes: services.JoinLearningOutcomes(req.LearningOutcomes),
 	}
 
 	if err := ctrl.courseService.CreateCourse(&courseInput); err != nil {
@@ -139,7 +140,9 @@ func (ctrl *CourseController) UpdateCourse(c *gin.Context) {
 		return
 	}
 
-	var input models.Course
+	// bind DTO ไม่ใช่ models.Course ดิบ — กันไม่ให้ client แก้ฟิลด์ที่ไม่ควรแก้ (เช่น user_id)
+	// และเพื่อให้รับ learning_outcomes เป็น array ได้
+	var input dto.UpdateCourseReq
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
 		return

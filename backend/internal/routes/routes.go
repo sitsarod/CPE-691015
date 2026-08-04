@@ -169,6 +169,12 @@ func SetupRoutes(r *gin.Engine) {
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
 		}
+
+		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
+		{
+			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
+		}
+
 		adminEnrollmentGroup := adminOnly.Group("/enrollments")
 		{
 			adminEnrollmentGroup.GET("/", enrollmentController.GetAllEnrollments)

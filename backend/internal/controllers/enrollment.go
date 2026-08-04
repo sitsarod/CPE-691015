@@ -124,6 +124,29 @@ func (ctrl *EnrollmentController) GetCustomerEnrollments(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"data": enrollments})
 }
 
+// GetEnrollmentReview ดึงข้อมูลตรวจสอบผู้สมัครแบบละเอียดก่อนอนุมัติ (adminOnly)
+//
+// [GET] /api/admin/enrollments/:id
+func (ctrl *EnrollmentController) GetEnrollmentReview(c *gin.Context) {
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        return
+    }
+
+    review, err := ctrl.service.GetEnrollmentReview(uint(id))
+    if err != nil {
+        if errors.Is(err, services.ErrEnrollmentNotFound) {
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้สมัครได้"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"data": review})
+}
+
 // GetAllEnrollments
 func (ctrl *EnrollmentController) GetAllEnrollments(c *gin.Context) {
     enrollments, err := ctrl.service.GetAllEnrollments()

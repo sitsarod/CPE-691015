@@ -34,6 +34,55 @@ type UpdateEnrollmentReq struct {
     RemainingSessions  *float64 `json:"remaining_sessions" binding:"omitempty,min=0"`
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DTO สำหรับหน้า "คอร์สของฉัน" ฝั่งผู้เรียน
+//
+// เดิม GetCustomerEnrollments คืน models.Enrollment ดิบ ซึ่งมีปัญหาสองข้อ:
+//   1. ลาก relation ที่ไม่ได้ใช้ติดไปด้วย และถ้าวันไหนมีการ Preload("...User")
+//      เพิ่มเข้ามา bcrypt hash จะรั่วทันที (models.User.Password ยังเป็น json:"password")
+//   2. models.Course.LearningOutcomes ตั้ง json:"-" ไว้ (เพราะ DB เก็บเป็น text บรรทัดละข้อ)
+//      ผู้เรียนจึงไม่มีทางเห็น "สิ่งที่จะได้เรียนรู้" ของคอร์สที่ตัวเองสมัคร
+//
+// DTO ชุดนี้แก้ทั้งสองข้อ โดยแปลง LearningOutcomes เป็น array ให้เรียบร้อย
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CustomerEnrollmentCourseDTO ข้อมูลคอร์สเท่าที่หน้า "คอร์สของฉัน" ต้องใช้
+//
+// การ์ดในหน้านั้นแสดงแค่ ชื่อคอร์ส / แพ็กเกจ / เวลาเรียน / ราคา จึงส่งเท่าที่ใช้จริง
+// (รายละเอียดคอร์สแบบเต็มอยู่ที่หน้าเลือกคอร์สด้านล่างของหน้าเดียวกันอยู่แล้ว)
+type CustomerEnrollmentCourseDTO struct {
+    ID         uint   `json:"id"`
+    CourseName string `json:"course_name"`
+}
+
+// CustomerEnrollmentPackageDTO แพ็กเกจที่ผู้เรียนสมัครไว้ พร้อมตารางเรียน
+type CustomerEnrollmentPackageDTO struct {
+    ID            uint                     `json:"id"`
+    SessionsCount uint                     `json:"sessions_count"`
+    HoursCount    uint                     `json:"hours_count"`
+    Price         float64                  `json:"price"`
+    Schedules     []PackageScheduleInfoDTO `json:"schedules"`
+    Course        *CustomerEnrollmentCourseDTO `json:"course"`
+}
+
+// CustomerEnrollmentDTO หนึ่งรายการในหน้า "คอร์สของฉัน"
+type CustomerEnrollmentDTO struct {
+    ID                uint      `json:"id"`
+    Status            string    `json:"status"`
+    EnrollmentDate    time.Time `json:"enrollment_date"`
+    TotalSessions     uint      `json:"total_sessions"`
+    RemainingSessions uint      `json:"remaining_sessions"`
+
+    // AttendedSessions = TotalSessions - RemainingSessions
+    //
+    // ⚠️ ตอนนี้จะเป็น 0 เสมอ เพราะระบบยังไม่มี endpoint เช็คชื่อที่หัก remaining_sessions
+    // (CODE_REVIEW ข้อ E6 — เลื่อนไว้) ค่านี้จะเริ่มขยับเมื่อทำระบบเช็คชื่อเสร็จ
+    AttendedSessions uint `json:"attended_sessions"`
+
+    BillingID *uint                         `json:"billing_id"`
+    Package   *CustomerEnrollmentPackageDTO `json:"package"`
+}
+
 // EnrollmentRes โครงสร้างที่จะส่งกลับไปตอนดึงประวัติการลงทะเบียน
 type EnrollmentRes struct {
     ID                 uint              `json:"id"`

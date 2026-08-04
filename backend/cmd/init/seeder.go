@@ -295,10 +295,12 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }
 
     // สร้างข้อมูลตามโปสเตอร์ Koyama Badminton School
+    // LearningOutcomes เก็บเป็นข้อความหลายบรรทัด บรรทัดละ 1 ข้อ (ดู models.Course.LearningOutcomes)
     courseSeeds := []struct {
-        CourseName  string
-        Description string
-        Packages    []struct {
+        CourseName       string
+        Description      string
+        LearningOutcomes string
+        Packages         []struct {
             SessionsCount uint
             HoursCount    uint
             Price         float64
@@ -309,7 +311,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }{
         {
             CourseName:  "คอร์สปกติ",
-            Description: "เรียนรวมกลุ่ม (18.00-20.00 น.)",
+            Description: "คอร์สเรียนรวมกลุ่มสำหรับผู้เริ่มต้นถึงระดับกลาง เน้นปูพื้นฐานให้แน่นตั้งแต่การจับไม้ การยืน ไปจนถึงลูกตีพื้นฐานครบทุกแบบ เรียนกับโค้ชผู้มีประสบการณ์ในบรรยากาศเป็นกันเอง",
+            LearningOutcomes: `การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง
+ฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม
+ลูกโยนหลัง (Clear) และลูกหยอดหน้าเน็ต (Net Drop)
+ลูกตบ (Smash) และการรับลูกตบเบื้องต้น
+การเสิร์ฟสั้นและเสิร์ฟยาวให้แม่นยำ
+กติกาการแข่งขันและการนับคะแนน`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 1800, 10, "18:00", "20:00"},
                 {12, 24, 2200, 10, "18:00", "20:00"},
@@ -319,7 +327,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส VIP นักกีฬา",
-            Description: "เรียนรวมกลุ่ม (18.00-21.00 น.) ตีเกม+ตีโต้",
+            Description: "คอร์สเข้มข้นสำหรับผู้ที่มีพื้นฐานแล้วและต้องการลงแข่งขันจริงจัง เพิ่มเวลาเป็น 3 ชั่วโมงต่อครั้ง เน้นตีโต้และตีเกมจริงเพื่อสร้างความอึดและไหวพริบในสนาม",
+            LearningOutcomes: `เทคนิคการตีขั้นสูง ลูกดาด (Drive) ลูกตัดหยอด (Drop Shot) และลูกหลอก
+ฟุตเวิร์กความเร็วสูงและการทรงตัวขณะตีลูกยาก
+การวางแผนเกมและอ่านทางคู่ต่อสู้
+การเล่นคู่ ตำแหน่งยืนและการสลับหน้า-หลังกับคู่ขา
+โปรแกรมเสริมสร้างความแข็งแรงและความอึดเฉพาะนักแบดมินตัน
+การเตรียมตัวและการวางแผนก่อนลงแข่งขันรายการจริง`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 2000, 10, "18:00", "21:00"},
                 {12, 24, 2400, 10, "18:00", "21:00"},
@@ -329,7 +343,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (2 ชม.)",
-            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Description: "เรียนตัวต่อตัวกับโค้ชแบบเต็ม 2 ชั่วโมงต่อครั้ง โค้ชออกแบบเนื้อหาให้ตรงกับจุดอ่อนของผู้เรียนแต่ละคนโดยเฉพาะ เหมาะกับผู้ที่ต้องการพัฒนาเร็วหรือมีเวลาจำกัด",
+            LearningOutcomes: `แผนการฝึกที่ออกแบบเฉพาะบุคคลจากการประเมินฝีมือจริง
+แก้ไขท่าทางที่ผิดแบบตัวต่อตัว ได้รับคำแนะนำทันทีทุกลูก
+ฝึกซ้ำเฉพาะจุดที่เป็นจุดอ่อนจนกว่าจะแก้ได้
+ตีโต้กับโค้ชเพื่อสร้างความสม่ำเสมอของลูก
+ตีเกมจริงกับโค้ชพร้อมวิเคราะห์หลังจบเกม
+ติดตามพัฒนาการรายครั้งตลอดคอร์ส`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 0, 2, "10:00", "12:00"},
                 {12, 24, 0, 2, "14:00", "16:00"},
@@ -339,7 +359,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (1 ชม.)",
-            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Description: "เรียนตัวต่อตัวแบบกระชับ 1 ชั่วโมงต่อครั้ง เหมาะกับผู้ที่มีเวลาน้อยแต่อยากได้คำแนะนำแบบใกล้ชิด เน้นแก้จุดอ่อนทีละเรื่องให้เห็นผลชัดในแต่ละครั้ง",
+            LearningOutcomes: `เลือกโฟกัสได้ครั้งละ 1 ทักษะ ทำให้เห็นพัฒนาการชัดเจน
+แก้ไขท่าทางเฉพาะจุดโดยโค้ชดูแลใกล้ชิด
+ฝึกความแม่นยำของลูกเสิร์ฟและลูกหยอด
+เพิ่มความเร็วของฟุตเวิร์กด้วยแบบฝึกเฉพาะทาง
+ได้รับการบ้านไปฝึกต่อเองระหว่างรอคาบถัดไป
+ยืดหยุ่นเรื่องเวลา เลือกช่วงที่สะดวกได้`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 8, 0, 2, "10:00", "11:00"},
                 {12, 12, 0, 2, "13:00", "14:00"},
@@ -354,10 +380,11 @@ func seedCoursesAndPackages(db *gorm.DB) {
         err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
         if err == gorm.ErrRecordNotFound {
             course = models.Course{
-                CourseName:  seed.CourseName,
-                Description: seed.Description,
-                Status:      models.CourseStatusActive,
-                UserID:      admin.ID,
+                CourseName:       seed.CourseName,
+                Description:      seed.Description,
+                LearningOutcomes: seed.LearningOutcomes,
+                Status:           models.CourseStatusActive,
+                UserID:           admin.ID,
             }
             if err := db.Create(&course).Error; err != nil {
                 log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)

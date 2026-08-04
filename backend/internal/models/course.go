@@ -19,6 +19,8 @@ type Course struct {
 	Description   string         `json:"description" gorm:"type:text" valid:"required~description is required"`
 	Status        CourseStatus   `json:"status" gorm:"type:varchar(20);not null;default:'draft'"`
 
+	LearningOutcomes string `json:"-" gorm:"type:text"`
+
 	UserID        uint           `json:"user_id" valid:"required~userID is required"`
 	User          *User          `json:"user" gorm:"foreignKey:UserID"`
 	
