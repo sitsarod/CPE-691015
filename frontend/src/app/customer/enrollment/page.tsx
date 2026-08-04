@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FileEdit, LayoutGrid, Loader2, Clock, Calendar, CheckCircle2, AlertCircle, SearchCode, ArrowRight, CheckCircle } from "lucide-react";
 import { Enrollment, Course, PackageInfo } from "@/types/enrollment";
 import { fetchCustomerEnrollments, fetchAvailableCourses, enrollCourse } from "@/services/enrollmentAPI";
-import { fetchActiveQuestions } from "@/services/quizAPI";
+import { fetchActiveQuestions, recommendCourses } from "@/services/quizAPI";
 import { QuizQuestion, QuizOption } from "@/types/quiz";
 import Button from "@/components/Button";
 
@@ -95,22 +95,26 @@ export default function EnrollmentPage() {
     setIsQuizOpen(true);
   };
 
-  const handleSelectQuizOption = (option: QuizOption) => {
+  const handleSelectQuizOption = async (option: QuizOption) => {
     const newAnswers = [...quizAnswers, option];
-    
+
     if (currentQuizIndex < quizQuestions.length - 1) {
       setQuizAnswers(newAnswers);
       setCurrentQuizIndex(currentQuizIndex + 1);
-    } else {
-      // ปิด modal ทันที ไม่มีหน่วงเวลา
-      const recommendedIds = newAnswers
-        .map(a => a.recommended_course_id)
-        .filter(id => id != null) as number[];
-      
-      setQuizAnswers(newAnswers);
-      setQuizResultCourseIds(recommendedIds);
+      return;
+    }
+
+    setQuizAnswers(newAnswers);
+    setIsQuizOpen(false);
+    try {
+      const optionIds = newAnswers.map(a => a.id);
+      const res = await recommendCourses(optionIds);
+      const rankedIds = res.data.map(r => r.course_id);
+      setQuizResultCourseIds(res.fallback ? [] : rankedIds);
+    } catch {
+      setQuizResultCourseIds([]);
+    } finally {
       setIsQuizFinished(true);
-      setIsQuizOpen(false);
     }
   };
 
@@ -119,9 +123,10 @@ export default function EnrollmentPage() {
     setQuizResultCourseIds([]);
   };
 
-  // กรองคอร์สตามผลลัพธ์ควิซ ถ้าควิซเสร็จแล้ว
-  const displayCourses = isQuizFinished && quizResultCourseIds.length > 0 
-    ? recommendedCourses.filter(c => quizResultCourseIds.includes(c.ID || c.id || 0))
+  const displayCourses = isQuizFinished && quizResultCourseIds.length > 0
+    ? quizResultCourseIds
+        .map(id => recommendedCourses.find(c => (c.ID || c.id) === id))
+        .filter((c): c is Course => c != null)
     : recommendedCourses;
 
   if (isLoading) return <div className="w-full h-[60vh] flex flex-col items-center justify-center text-gray-500"><Loader2 className="w-10 h-10 animate-spin text-[#CC0000] mb-4" /></div>;

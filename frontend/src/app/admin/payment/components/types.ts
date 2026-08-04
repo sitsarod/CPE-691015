@@ -38,6 +38,7 @@ export interface BillingDTO {
   };
   slipurl?: string;
   invoice_id?: number;
+  transactionid?: string;
   created_at: string;
 }
 
@@ -47,6 +48,7 @@ export interface BankAccount {
   account_no: string;
   account_name: string;
   is_active: boolean;
+  auto_verify_enabled: boolean;
 }
 
 export interface Coach {

@@ -66,6 +66,7 @@ type BillingDTO struct {
 	Admin         *UserMinDTO     `json:"admin,omitempty"`
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
+	TransactionID string          `json:"transactionid,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
 
@@ -127,7 +128,8 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 	if invoice != nil {
 		dto.InvoiceID = invoice.ID
 		dto.SlipImageUrl = invoice.SlipImageUrl
-		
+		dto.TransactionID = invoice.TransactionID
+
 		// Derive status from the invoice status for this specific transaction mapping
 		if invoice.Status == models.InvoiceSuccess {
 			dto.Status = "paid"

@@ -12,8 +12,20 @@ type QuizQuestion struct {
 
 type QuizOption struct {
 	gorm.Model
-	QuestionID          uint    `json:"question_id"`
-	Text                string  `json:"text" valid:"required~option text is required"`
-	RecommendedCourseID *uint   `json:"recommended_course_id"`
-	RecommendedCourse   *Course `json:"recommended_course,omitempty" gorm:"foreignKey:RecommendedCourseID"`
+	QuestionID uint   `json:"question_id"`
+	Text       string `json:"text" valid:"required~option text is required"`
+
+	RecommendedCourseID *uint   `json:"recommended_course_id,omitempty"`
+	RecommendedCourse   *Course `json:"-" gorm:"foreignKey:RecommendedCourseID"`
+
+
+	RecommendedCourses []QuizOptionCourse `json:"recommended_courses" gorm:"foreignKey:OptionID;constraint:OnDelete:CASCADE;"`
+}
+
+type QuizOptionCourse struct {
+	ID       uint    `json:"id" gorm:"primarykey"`
+	OptionID uint    `json:"option_id" gorm:"index;not null"`
+	CourseID uint    `json:"course_id" gorm:"index;not null"`
+	Course   *Course `json:"course,omitempty" gorm:"foreignKey:CourseID"`
+	Weight   int     `json:"weight" gorm:"default:1"`
 }

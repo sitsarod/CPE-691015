@@ -1,4 +1,4 @@
-import { QuizQuestion, QuizOption } from '@/types/quiz';
+import { QuizQuestion, QuizOption, RecommendResponse } from '@/types/quiz';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -80,4 +80,41 @@ export const deleteOption = async (optionId: number, token: string) => {
     const res = await response.json();
     throw new Error(res.error || "Failed to delete option");
   }
+};
+
+export const addOptionCourse = async (
+  optionId: number,
+  data: { course_id: number; weight: number },
+  token: string
+) => {
+  const response = await fetch(`${BASE_URL}/admin/quiz/options/${optionId}/courses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data)
+  });
+  const res = await response.json();
+  if (!response.ok) throw new Error(res.error || "Failed to add recommended course");
+  return res.data;
+};
+
+export const deleteOptionCourse = async (id: number, token: string) => {
+  const response = await fetch(`${BASE_URL}/admin/quiz/option-courses/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const res = await response.json();
+    throw new Error(res.error || "Failed to delete recommended course");
+  }
+};
+
+export const recommendCourses = async (optionIds: number[]): Promise<RecommendResponse> => {
+  const response = await fetch(`${BASE_URL}/quiz/recommend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ option_ids: optionIds })
+  });
+  const res = await response.json();
+  if (!response.ok) throw new Error(res.error || "Failed to get recommendations");
+  return res as RecommendResponse;
 };

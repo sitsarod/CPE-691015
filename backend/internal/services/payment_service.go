@@ -2,6 +2,8 @@ package services
 
 import (
 	"errors"
+	"log"
+
 	"gorm.io/gorm"
 	"CPE-691015/internal/models"
 )
@@ -14,11 +16,12 @@ var (
 )
 
 type PaymentService struct {
-	db *gorm.DB
+	db     *gorm.DB
+	slipOk *SlipOkService
 }
 
-func NewPaymentService(db *gorm.DB) *PaymentService {
-	return &PaymentService{db: db}
+func NewPaymentService(db *gorm.DB, slipOk *SlipOkService) *PaymentService {
+	return &PaymentService{db: db, slipOk: slipOk}
 }
 
 // CreateInvoice สร้างใบแจ้งหนี้จากรายการบิลที่เลือก
@@ -141,12 +144,61 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, err
 	}
 
+	// ตรวจสลิปอัตโนมัติผ่าน SlipOK ถ้าบัญชีธนาคารหลักที่ใช้งานอยู่เปิดใช้งานฟีเจอร์นี้ไว้
+	// ตรวจผ่าน + เลขบัญชีปลายทางตรงกัน จะยืนยันการชำระเงินให้ทันที ถ้าตรวจไม่ผ่านหรือเกิดข้อผิดพลาด
+	// จะปล่อยให้สถานะยังคงเป็น waitcheck เพื่อรอแอดมินตรวจสอบด้วยตนเองต่อไป
+	if s.slipOk != nil && s.slipOk.Enabled() {
+		s.autoVerifySlip(invoiceID, slipURL)
+	}
+
 	var result models.Invoice
 	if err := s.db.Preload("PaymentItem").Preload("PaymentItem.Billing").First(&result, invoiceID).Error; err != nil {
 		return nil, err
 	}
 
 	return &result, nil
+}
+
+// autoVerifySlip เรียก SlipOK เพื่อตรวจสอบสลิปกับบัญชีธนาคารหลักที่เปิด auto_verify_enabled ไว้
+// หากตรวจผ่านและเลขบัญชีปลายทางตรงกันจะยืนยันการชำระเงินให้อัตโนมัติ ข้อผิดพลาดใด ๆ จะถูกปล่อยผ่านเงียบ ๆ
+// เพื่อให้ใบแจ้งหนี้ยังคงสถานะรอตรวจสอบไว้ให้แอดมินตรวจด้วยตนเอง
+func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
+	var activeAccount models.BankAccount
+	if err := s.db.Where("is_active = ? AND auto_verify_enabled = ?", true, true).First(&activeAccount).Error; err != nil {
+		log.Printf("[SlipOK] invoice #%d: ไม่มีบัญชีธนาคารที่ is_active และ auto_verify_enabled เปิดพร้อมกัน ข้ามการตรวจอัตโนมัติ (%v)", invoiceID, err)
+		return
+	}
+
+	var invoice models.Invoice
+	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
+		log.Printf("[SlipOK] invoice #%d: ดึงข้อมูลใบแจ้งหนี้ไม่สำเร็จ: %v", invoiceID, err)
+		return
+	}
+
+	data, err := s.slipOk.VerifySlip(slipURL, invoice.TotalAmount)
+	if err != nil {
+		log.Printf("[SlipOK] invoice #%d: เรียก SlipOK ไม่สำเร็จ/ถูกปฏิเสธ: %v", invoiceID, err)
+		return
+	}
+	if !data.Success {
+		log.Printf("[SlipOK] invoice #%d: SlipOK ตอบกลับ success=false, message=%q", invoiceID, data.Message)
+		return
+	}
+
+	if !MatchesBankAccount(data, activeAccount.AccountNo) {
+		log.Printf("[SlipOK] invoice #%d: ผู้รับปลายทางไม่ตรงกัน (account=%q, proxy=%q, บัญชีในระบบ=%q)",
+			invoiceID, data.Receiver.Account.Value, data.Receiver.Proxy.Value, activeAccount.AccountNo)
+		return
+	}
+
+	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoiceID).Update("transaction_id", data.TransRef).Error; err != nil {
+		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ: %v", invoiceID, err)
+	}
+	if _, err := s.ConfirmPayment(invoiceID); err != nil {
+		log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านแล้วแต่ ConfirmPayment ล้มเหลว: %v", invoiceID, err)
+		return
+	}
+	log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านและยืนยันการชำระเงินอัตโนมัติสำเร็จ (transRef=%s)", invoiceID, data.TransRef)
 }
 
 // ConfirmPayment ยืนยันการชำระเงินโดยผู้ดูแลระบบ (Admin)

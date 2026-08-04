@@ -101,6 +101,19 @@ export default function FinancialPortal() {
     return Array.from(byId.values());
   }, [billings]);
 
+  // Count distinct invoices awaiting review (not billing rows — one invoice can bundle
+  // several billings, and VerifySlipsTab groups by invoice_id, so the tab badge should
+  // match that grouping instead of over/under-counting individual billing rows).
+  const waitcheckInvoiceCount = useMemo(() => {
+    const keys = new Set<string>();
+    billings.forEach(b => {
+      if (b.billingstatus === 'waitcheck') {
+        keys.add(b.invoice_id ? `invoice-${b.invoice_id}` : `bill-${b.id}`);
+      }
+    });
+    return keys.size;
+  }, [billings]);
+
   // Save billing edits
   const handleSaveBillingEdit = async (
     billingId: number,
@@ -164,7 +177,7 @@ export default function FinancialPortal() {
         <div className="flex overflow-x-auto">
           {[
             { id: 'issue' as const, label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
-            { id: 'slips' as const, label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: dedupedBillings.filter(b => b.billingstatus === 'waitcheck').length },
+            { id: 'slips' as const, label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: waitcheckInvoiceCount },
             { id: 'summary' as const, label: 'สรุปรายรับและการเงิน', icon: PieChart },
             { id: 'expenses' as const, label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
             { id: 'banks' as const, label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }

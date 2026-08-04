@@ -460,6 +460,13 @@ export default function VerifySlipsTab({
                       </span>
                     </div>
                   </div>
+
+                  {reviewBilling.transactionid && (
+                    <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-150 p-3 rounded-xl flex items-center justify-between">
+                      <span className="font-bold">Transaction Reference ID:</span>
+                      <code className="font-mono text-slate-800 select-all bg-slate-100 px-1.5 py-0.5 rounded">{reviewBilling.transactionid}</code>
+                    </div>
+                  )}
                 </div>
               </div>
 

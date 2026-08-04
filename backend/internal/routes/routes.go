@@ -5,7 +5,6 @@ import (
 	"CPE-691015/internal/controllers"
 	"CPE-691015/internal/middlewares"
 	"CPE-691015/internal/services"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,7 +27,8 @@ func SetupRoutes(r *gin.Engine) {
 	enrollmentService := services.NewEnrollmentService(db)
 	enrollmentController := controllers.NewEnrollmentController(enrollmentService)
 
-	paymentService := services.NewPaymentService(db)
+	slipOkService := services.NewSlipOkService()
+	paymentService := services.NewPaymentService(db, slipOkService)
 	paymentController := controllers.NewPaymentController(paymentService)
 
 	billingService := services.NewBillingService(db)

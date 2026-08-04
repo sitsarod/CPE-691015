@@ -71,7 +71,7 @@ export async function updateUserProfileAPI(
 
 // [GET] ดึงรายชื่อนักเรียนทั้งหมด (สำหรับ Coach / Admin)
 export async function getActiveStudentsAPI(): Promise<StudentListResponseDTO[]> {
-  const res = await apiFetch<Wrapped<StudentListResponseDTO[]>>("/users/students", {
+  const res = await apiFetch<Wrapped<StudentListResponseDTO[]>>("/admin/students", {
     method: "GET",
   });
   return res.data || [];

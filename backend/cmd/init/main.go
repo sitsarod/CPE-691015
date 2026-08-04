@@ -62,6 +62,7 @@ func main() {
 		&models.AutoQA{},
 		&models.QuizQuestion{},
 		&models.QuizOption{},
+		&models.QuizOptionCourse{},
 		&models.WorkSchedule{},
 		&models.CoachAvailability{},
 	)
