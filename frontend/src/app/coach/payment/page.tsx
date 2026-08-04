@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  Gift,
 } from "lucide-react";
 
 import { fetchMyCoachProfile, fetchCoachWages, fetchCoachSchedules } from "@/services/coachAPI";
@@ -99,9 +100,19 @@ export default function CoachPaymentPage() {
     loadData(coachId || undefined);
   };
 
+  // แยกค่าจ้างจากการสอน (coach_wages) ออกจากรายได้ส่วนอื่น (coach_other) ให้เหมือนฝั่งแอดมิน
+  const wageEntries = useMemo(() => wages.filter((w) => w.expensetype !== "coach_other"), [wages]);
+  const otherEntries = useMemo(() => wages.filter((w) => w.expensetype === "coach_other"), [wages]);
+
+  const otherTotal = useMemo(() => otherEntries.reduce((s, w) => s + w.expenseamount, 0), [otherEntries]);
+  const otherSorted = useMemo(
+    () => [...otherEntries].sort((a, b) => (b.expensedate || "").localeCompare(a.expensedate || "")),
+    [otherEntries]
+  );
+
   const yearGroups: YearGroup[] = useMemo(() => {
     const map = new Map<number, YearGroup>();
-    wages.forEach((w) => {
+    wageEntries.forEach((w) => {
       if (!w.expensedate) return;
       const d = new Date(w.expensedate);
       const year = d.getFullYear();
@@ -122,7 +133,7 @@ export default function CoachPaymentPage() {
       yg.months[month].entries.push(w);
     });
     return Array.from(map.values()).sort((a, b) => b.year - a.year);
-  }, [wages]);
+  }, [wageEntries]);
 
   useEffect(() => {
     if (yearGroups.length > 0 && selectedYear === null) {
@@ -132,14 +143,14 @@ export default function CoachPaymentPage() {
     }
   }, [yearGroups, selectedYear]);
 
-  const totalWages = useMemo(() => wages.reduce((sum, w) => sum + w.expenseamount, 0), [wages]);
-  const totalCount = wages.length;
+  const totalWages = useMemo(() => wageEntries.reduce((sum, w) => sum + w.expenseamount, 0), [wageEntries]);
+  const totalCount = wageEntries.length;
   const avgPerPayment = totalCount > 0 ? totalWages / totalCount : 0;
 
   const now = new Date();
   const { currentMonthTotal, momDeltaPct } = useMemo(() => {
     const sumFor = (year: number, month: number) =>
-      wages
+      wageEntries
         .filter((w) => {
           if (!w.expensedate) return false;
           const d = new Date(w.expensedate);
@@ -153,7 +164,7 @@ export default function CoachPaymentPage() {
     const delta = prevMonth > 0 ? ((thisMonth - prevMonth) / prevMonth) * 100 : null;
     return { currentMonthTotal: thisMonth, momDeltaPct: delta };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wages]);
+  }, [wageEntries]);
 
   const currentYearGroup = yearGroups.find((y) => y.year === selectedYear) || null;
 
@@ -230,7 +241,7 @@ export default function CoachPaymentPage() {
             การเงินของฉัน
           </h1>
           <p className="text-gray-500 mt-1 text-sm">
-            ประวัติค่าจ้างที่สถาบันบันทึกจ่ายให้คุณ
+            ประวัติค่าจ้างและรายได้อื่น ๆ ที่สถาบันบันทึกจ่ายให้คุณ
           </p>
         </div>
         <button
@@ -253,13 +264,15 @@ export default function CoachPaymentPage() {
         </div>
       )}
 
-      {wages.length === 0 ? (
+      {wageEntries.length === 0 && otherEntries.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-20 text-center text-slate-400">
           <Wallet className="w-10 h-10 mx-auto mb-3 text-slate-300" />
           <p className="text-xs">ยังไม่มีประวัติค่าจ้างในขณะนี้</p>
         </div>
       ) : (
         <>
+          {wageEntries.length > 0 && (
+          <>
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
@@ -267,7 +280,7 @@ export default function CoachPaymentPage() {
                 <Wallet className="w-6 h-6" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ยอดสะสมทั้งหมด</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ค่าจ้างสะสมทั้งหมด</p>
                 <p className="text-xl font-black text-slate-800 mt-0.5">฿{totalWages.toLocaleString()}</p>
               </div>
             </div>
@@ -588,6 +601,61 @@ export default function CoachPaymentPage() {
               </div>
             </div>
           ) : null}
+          </>
+          )}
+
+          {/* รายได้อื่น ๆ (coach_other) — แยกออกจากค่าจ้างการสอน */}
+          {otherEntries.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-violet-50 text-violet-600 flex-shrink-0">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-md font-bold text-slate-800">รายได้อื่น ๆ</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    โบนัสหรือรายได้อื่นที่สถาบันจ่ายให้ นอกเหนือจากค่าจ้างการสอน · รวม {otherEntries.length} รายการ
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">รวมทั้งหมด</p>
+                  <p className="text-lg font-black text-violet-600">฿{otherTotal.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                      <th className="py-3 px-5">วันที่</th>
+                      <th className="py-3 px-5">รายละเอียด</th>
+                      <th className="py-3 px-5 text-right">จำนวนเงิน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {otherSorted.map((e) => (
+                      <tr key={e.id} className="text-xs hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3 px-5 text-slate-600 font-semibold whitespace-nowrap">{e.expensedate?.split("T")[0]}</td>
+                        <td className="py-3 px-5 text-slate-600">{e.expensedescription || "-"}</td>
+                        <td className="py-3 px-5 text-right font-bold text-slate-900 whitespace-nowrap">
+                          ฿{e.expenseamount.toLocaleString()}
+                          {e.receipturl && (
+                            <a
+                              href={e.receipturl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-2 text-[#CC0000] hover:underline font-bold"
+                            >
+                              ใบเสร็จ
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

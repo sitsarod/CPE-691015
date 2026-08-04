@@ -24,6 +24,22 @@ export async function fetchMyCoachProfile(token: string): Promise<CoachProfile> 
   return resData;
 }
 
+// ดึงข้อมูลโค้ช 1 คนตาม id (admin หรือเจ้าของ) — ใช้ดึง pay_rate_per_session มาคำนวณค่าจ้าง
+export async function fetchCoachById(coachId: number, token: string): Promise<CoachProfile> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลโค้ชได้");
+  }
+  return resData;
+}
+
 // ดึงตารางเวลาว่างของโค้ช
 export async function fetchCoachAvailability(coachId: number, token: string): Promise<AvailabilitySlot[]> {
   const response = await fetch(`${BASE_URL}/coaches/${coachId}/availability`, {
