@@ -62,7 +62,7 @@ export interface Coach {
 export interface Expense {
   id: number;
   expenseamount: number;
-  expensetype: "coach_wages" | "court_rental" | "equipment" | "advertising" | "other";
+  expensetype: "coach_wages" | "coach_other" | "court_rental" | "equipment" | "advertising" | "other";
   expensedescription: string;
   expensedate: string; // ISO string
   coach_id?: number;

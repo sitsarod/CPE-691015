@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Landmark, PlusCircle, Pencil, Trash2, X } from 'lucide-react';
+import { Landmark, Pencil, Trash2, X, Copy, Check } from 'lucide-react';
 import { BankAccount } from './types';
 import {
   toggleBankAccount,
@@ -29,6 +29,20 @@ export default function BankAccountsTab({
     auto_verify_enabled: false
   });
   const [submitting, setSubmitting] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  // คัดลอกเลขที่บัญชีไปยังคลิปบอร์ด
+  const handleCopyAccountNo = async (e: React.MouseEvent, account: BankAccount) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(account.account_no);
+      setCopiedId(account.ID);
+      onTriggerToast(`คัดลอกเลขที่บัญชี ${account.account_no} แล้ว`, 'info');
+      setTimeout(() => setCopiedId(prev => (prev === account.ID ? null : prev)), 2000);
+    } catch {
+      onTriggerToast('คัดลอกเลขที่บัญชีไม่สำเร็จ', 'error');
+    }
+  };
 
   // Toggle active status
   const handleToggleBank = async (bankId: number) => {
@@ -119,11 +133,128 @@ export default function BankAccountsTab({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-fadeIn">
-      <div className="mb-6 pb-4 border-b border-slate-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800">เปิด-ปิดบัญชีรับเงินโอน</h3>
-          <p className="text-sm text-slate-500">เลือกบัญชีธนาคารหลักที่จะให้ผู้เรียนโอนเข้า หรือเพิ่ม/แก้ไขข้อมูลบัญชีธนาคารในระบบ</p>
-        </div>
+      <div className="mb-6 pb-4 border-b border-slate-150">
+        <h3 className="text-lg font-bold text-slate-800">เปิด-ปิดบัญชีรับเงินโอน</h3>
+        <p className="text-sm text-slate-500">เลือกบัญชีธนาคารหลักที่จะให้ผู้เรียนโอนเข้า หรือเพิ่ม/แก้ไขข้อมูลบัญชีธนาคารในระบบ</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {bankAccounts.map(account => {
+          const isCopied = copiedId === account.ID;
+          return (
+            <div
+              key={account.ID}
+              className={`group relative rounded-3xl border bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col ${
+                account.is_active ? 'border-red-200 ring-1 ring-red-100' : 'border-slate-200'
+              }`}
+            >
+              {/* หัวการ์ด: ชื่อธนาคาร + ป้าย Primary */}
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="text-lg font-bold text-slate-900 truncate">{account.bank_name}</h4>
+                {account.is_active && (
+                  <span className="flex-shrink-0 text-[11px] font-bold text-[#CD0D13] bg-red-50 border border-red-100 px-2.5 py-1 rounded-full">
+                    บัญชีหลัก
+                  </span>
+                )}
+              </div>
+
+              {/* แผงข้อมูลบัญชี */}
+              <div className="mt-4 rounded-2xl bg-[#eef1f8] p-5 space-y-3.5">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#CD0D13]">ชื่อบัญชี</span>
+                  <p className="text-lg font-bold text-slate-900 mt-0.5 truncate">{account.account_name}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#CD0D13]">เลขที่บัญชี</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-lg font-bold text-slate-900 tabular-nums tracking-wider">{account.account_no}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => handleCopyAccountNo(e, account)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md text-slate-500 hover:bg-slate-200/70 hover:text-slate-700 cursor-pointer"
+                      title="คัดลอกเลขที่บัญชีแบบเต็ม"
+                    >
+                      {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* สวิตช์ควบคุม */}
+              <div className="mt-5 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800">รับเงินโอน</p>
+                    <p className={`text-xs mt-0.5 ${account.is_active ? 'text-[#CD0D13] font-semibold' : 'text-slate-400'}`}>
+                      {account.is_active ? 'บัญชีหลักรับเงินเข้าทั้งหมด' : 'กำลังปิดรับอยู่'}
+                    </p>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={account.is_active}
+                    onClick={() => handleToggleBank(account.ID)}
+                    className={`flex-shrink-0 w-11 h-6 rounded-full p-1 transition-colors duration-300 cursor-pointer ${account.is_active ? 'bg-[#CD0D13]' : 'bg-slate-200'}`}
+                    title="ตั้งบัญชีนี้เป็นบัญชีหลักสำหรับรับเงินโอน"
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${account.is_active ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800">ตรวจสลิปอัตโนมัติ</p>
+                    <p className={`text-xs mt-0.5 ${account.auto_verify_enabled ? 'text-[#CD0D13] font-semibold' : 'text-slate-400'}`}>
+                      ขับเคลื่อนโดย SlipOK
+                    </p>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={account.auto_verify_enabled}
+                    onClick={(e) => handleToggleAutoVerify(e, account)}
+                    className={`flex-shrink-0 w-11 h-6 rounded-full p-1 transition-colors duration-300 cursor-pointer ${account.auto_verify_enabled ? 'bg-[#CD0D13]' : 'bg-slate-200'}`}
+                    title="เปิด/ปิดการตรวจสลิปอัตโนมัติผ่าน SlipOK สำหรับบัญชีนี้"
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${account.auto_verify_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </div>
+                </div>
+              </div>
+
+              {/* แถวปุ่มแก้ไข/ลบ */}
+              <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingBank(account);
+                    setBankForm({
+                      bank_name: account.bank_name,
+                      account_name: account.account_name,
+                      account_no: account.account_no,
+                      is_active: account.is_active,
+                      auto_verify_enabled: account.auto_verify_enabled
+                    });
+                    setIsBankModalOpen(true);
+                  }}
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="แก้ไขข้อมูลบัญชี"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteBank(e, account.ID)}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    account.is_active ? 'text-slate-300 cursor-not-allowed' : 'text-[#CD0D13] hover:bg-red-50'
+                  }`}
+                  title={account.is_active ? "ไม่สามารถลบบัญชีธนาคารหลักได้" : "ลบบัญชีธนาคาร"}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* การ์ดเพิ่มบัญชีใหม่ */}
         <button
           type="button"
           onClick={() => {
@@ -131,115 +262,15 @@ export default function BankAccountsTab({
             setBankForm({ bank_name: '', account_name: '', account_no: '', is_active: false, auto_verify_enabled: false });
             setIsBankModalOpen(true);
           }}
-          className="bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
+          className="group rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/40 hover:border-red-200 hover:bg-red-50/30 transition-all duration-300 flex flex-col items-center justify-center text-center p-8 min-h-[260px] cursor-pointer"
         >
-          <PlusCircle className="w-4 h-4" />
-          <span>เพิ่มบัญชีธนาคาร</span>
+          <div className="p-4 rounded-2xl bg-white shadow-sm text-slate-400 group-hover:text-[#CD0D13] transition-colors mb-4">
+            <Landmark className="w-7 h-7" />
+          </div>
+          <span className="text-lg font-bold text-slate-800">เพิ่มบัญชีธนาคาร</span>
+          <span className="text-xs text-slate-500 mt-1.5 max-w-[220px]">ลงทะเบียนบัญชีใหม่เพื่อใช้รับเงินโอนในระบบ รองรับทุกธนาคารในประเทศไทย</span>
         </button>
       </div>
-
-      {bankAccounts.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <Landmark className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">ยังไม่มีบัญชีธนาคารในระบบ</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {bankAccounts.map(account => {
-            let colorClass = "bg-slate-600";
-            const nameUpper = account.bank_name.toUpperCase();
-            if (account.bank_name.includes("กสิกร") || nameUpper.includes("KBANK")) {
-              colorClass = "bg-[#00a859]";
-            } else if (account.bank_name.includes("ไทยพาณิชย์") || nameUpper.includes("SCB")) {
-              colorClass = "bg-[#4e2a84]";
-            } else if (account.bank_name.includes("กรุงเทพ") || nameUpper.includes("BBL")) {
-              colorClass = "bg-[#1e3a8a]";
-            } else if (account.bank_name.includes("กรุงไทย") || nameUpper.includes("KTB")) {
-              colorClass = "bg-[#007ad0]";
-            }
-
-            return (
-              <div
-                key={account.ID}
-                onClick={() => handleToggleBank(account.ID)}
-                className={`relative rounded-3xl p-6 text-white shadow-lg cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all select-none overflow-hidden ${colorClass} ${
-                  account.is_active ? 'ring-4 ring-offset-2 ring-red-150 scale-[1.02]' : 'opacity-85'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-xs opacity-75 font-semibold uppercase tracking-wider block">{account.bank_name}</span>
-                    <span className="text-md font-black tracking-wide mt-1 block">{account.account_name}</span>
-                  </div>
-                  <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingBank(account);
-                        setBankForm({
-                          bank_name: account.bank_name,
-                          account_name: account.account_name,
-                          account_no: account.account_no,
-                          is_active: account.is_active,
-                          auto_verify_enabled: account.auto_verify_enabled
-                        });
-                        setIsBankModalOpen(true);
-                      }}
-                      className="p-1 rounded-full bg-white/20 hover:bg-white/35 text-white transition-colors cursor-pointer"
-                      title="แก้ไขข้อมูลบัญชี"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteBank(e, account.ID)}
-                      className={`p-1 rounded-full bg-white/20 text-white transition-colors cursor-pointer ${
-                        account.is_active ? 'opacity-40 cursor-not-allowed' : 'hover:bg-red-650'
-                      }`}
-                      title={account.is_active ? "ไม่สามารถลบบัญชีธนาคารหลักได้" : "ลบบัญชีธนาคาร"}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-12">
-                  <span className="text-xs opacity-75 block uppercase font-medium">เลขที่บัญชี</span>
-                  <span className="text-xl font-bold tracking-widest mt-1 block">{account.account_no}</span>
-                </div>
-
-                <div className="mt-6 flex justify-between items-center border-t border-white/20 pt-4">
-                  <span className="text-[10px] opacity-75 font-semibold">คลิกเพื่อตั้งเป็นบัญชีหลัก</span>
-                  <div className="flex items-center">
-                    <div className={`w-9 h-5 rounded-full p-0.5 transition-all duration-300 ${account.is_active ? 'bg-white' : 'bg-white/20'}`}>
-                      <div className={`w-4 h-4 rounded-full transition-transform duration-300 ${
-                        account.is_active 
-                          ? 'translate-x-4 bg-[#CD0D13]' 
-                          : 'translate-x-0 bg-white/70'
-                      }`} />
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className="mt-3 flex justify-between items-center border-t border-white/20 pt-3 cursor-pointer"
-                  onClick={(e) => handleToggleAutoVerify(e, account)}
-                  title="เปิด/ปิดการตรวจสลิปอัตโนมัติผ่าน SlipOK สำหรับบัญชีนี้"
-                >
-                  <span className="text-[10px] opacity-75 font-semibold">ตรวจสลิปอัตโนมัติ (SlipOK)</span>
-                  <div className={`w-9 h-5 rounded-full p-0.5 transition-all duration-300 ${account.auto_verify_enabled ? 'bg-white' : 'bg-white/20'}`}>
-                    <div className={`w-4 h-4 rounded-full transition-transform duration-300 ${
-                      account.auto_verify_enabled
-                        ? 'translate-x-4 bg-[#CD0D13]'
-                        : 'translate-x-0 bg-white/70'
-                    }`} />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* Bank Account Create/Edit Modal */}
       {isBankModalOpen && (
