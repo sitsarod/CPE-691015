@@ -159,7 +159,7 @@ export default function BankAccountsTab({
               </div>
 
               {/* แผงข้อมูลบัญชี */}
-              <div className="mt-4 rounded-2xl bg-[#eef1f8] p-5 space-y-3.5">
+              <div className="mt-4 rounded-2xl bg-[#FFFFFF] p-5 space-y-3.5">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#CD0D13]">ชื่อบัญชี</span>
                   <p className="text-lg font-bold text-slate-900 mt-0.5 truncate">{account.account_name}</p>
@@ -186,7 +186,7 @@ export default function BankAccountsTab({
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-800">รับเงินโอน</p>
                     <p className={`text-xs mt-0.5 ${account.is_active ? 'text-[#CD0D13] font-semibold' : 'text-slate-400'}`}>
-                      {account.is_active ? 'บัญชีหลักรับเงินเข้าทั้งหมด' : 'กำลังปิดรับอยู่'}
+                      {account.is_active ? 'บัญชีหลักรับเงินเข้า' : 'กำลังปิดรับอยู่'}
                     </p>
                   </div>
                   <div
@@ -204,7 +204,7 @@ export default function BankAccountsTab({
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-800">ตรวจสลิปอัตโนมัติ</p>
                     <p className={`text-xs mt-0.5 ${account.auto_verify_enabled ? 'text-[#CD0D13] font-semibold' : 'text-slate-400'}`}>
-                      ขับเคลื่อนโดย SlipOK
+                      ตรวจเฉพาะบัญชีที่มีข้อมูลใน SlipOK
                     </p>
                   </div>
                   <div
@@ -268,7 +268,7 @@ export default function BankAccountsTab({
             <Landmark className="w-7 h-7" />
           </div>
           <span className="text-lg font-bold text-slate-800">เพิ่มบัญชีธนาคาร</span>
-          <span className="text-xs text-slate-500 mt-1.5 max-w-[220px]">ลงทะเบียนบัญชีใหม่เพื่อใช้รับเงินโอนในระบบ รองรับทุกธนาคารในประเทศไทย</span>
+          <span className="text-xs text-slate-500 mt-1.5 max-w-[220px]">เพิ่มบัญชีใหม่เพื่อใช้รับเงินโอนในระบบ</span>
         </button>
       </div>
 
@@ -293,7 +293,7 @@ export default function BankAccountsTab({
                 <label className="text-xs font-semibold text-slate-600 block">ชื่อธนาคาร</label>
                 <input
                   type="text"
-                  placeholder="ตัวอย่าง: ธนาคารกสิกรไทย (KBANK)"
+                  placeholder="ตัวอย่าง: ธนาคารกสิกรไทย"
                   value={bankForm.bank_name}
                   onChange={(e) => setBankForm(prev => ({ ...prev, bank_name: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
