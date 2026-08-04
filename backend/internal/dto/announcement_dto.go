@@ -6,6 +6,7 @@ type AnnouncementDTO struct {
 	ID          uint         `json:"id"`
 	Title       string       `json:"title"`
 	Content     string       `json:"content"`
+	ImageURL    string       `json:"image_url"`
 	UserID      uint         `json:"user_id"`
 	User        *UserDTO     `json:"user"`
 	CategoryID  uint         `json:"category_id"`
@@ -33,6 +34,7 @@ type CategoryDTO struct {
 type CreateAnnouncementReq struct {
 	Title      string    `json:"title" binding:"required"`
 	Content    string    `json:"content"`
+	ImageURL   string    `json:"image_url"`
 	UserID     uint      `json:"user_id" binding:"required"`
 	CategoryID uint      `json:"category_id" binding:"required"`
 	StartDate  time.Time `json:"start_date" binding:"required"`
@@ -42,6 +44,7 @@ type CreateAnnouncementReq struct {
 type UpdateAnnouncementReq struct {
 	Title      string    `json:"title"`
 	Content    string    `json:"content"`
+	ImageURL   string    `json:"image_url"`
 	UserID     uint      `json:"user_id"`
 	CategoryID uint      `json:"category_id"`
 	StartDate  time.Time `json:"start_date"`
@@ -49,5 +52,9 @@ type UpdateAnnouncementReq struct {
 }
 
 type CreateCategoryReq struct {
+	Name string `json:"name" binding:"required"`
+}
+
+type UpdateCategoryReq struct {
 	Name string `json:"name" binding:"required"`
 }

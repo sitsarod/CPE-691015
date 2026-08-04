@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, Megaphone } from "lucide-react";
 
 export default function CustomerSidebar() {
   const pathname = usePathname();

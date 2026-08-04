@@ -16,6 +16,8 @@ type AnnouncementService interface {
 	IncrementViewCount(id uint) error
 	
 	CreateCategory(req *dto.CreateCategoryReq) (*dto.CategoryDTO, error)
+	UpdateCategory(id uint, req *dto.UpdateCategoryReq) (*dto.CategoryDTO, error)
+	DeleteCategory(id uint) error
 	GetAllCategories() ([]dto.CategoryDTO, error)
 }
 
@@ -154,6 +156,39 @@ func (s *announcementService) CreateCategory(req *dto.CreateCategoryReq) (*dto.C
 	}
 	dtoRes := mapToCategoryDTO(&category)
 	return &dtoRes, nil
+}
+
+func (s *announcementService) UpdateCategory(id uint, req *dto.UpdateCategoryReq) (*dto.CategoryDTO, error) {
+	var category models.Category
+	if err := s.db.First(&category, id).Error; err != nil {
+		return nil, errors.New("category not found")
+	}
+
+	if req.Name != "" {
+		category.Name = req.Name
+	}
+
+	if err := s.db.Save(&category).Error; err != nil {
+		return nil, err
+	}
+
+	dtoRes := mapToCategoryDTO(&category)
+	return &dtoRes, nil
+}
+
+func (s *announcementService) DeleteCategory(id uint) error {
+	var category models.Category
+	if err := s.db.First(&category, id).Error; err != nil {
+		return errors.New("category not found")
+	}
+	// Check if categories are in use by announcements
+	var count int64
+	s.db.Model(&models.Announcement{}).Where("category_id = ?", id).Count(&count)
+	if count > 0 {
+		return errors.New("cannot delete category that is currently in use by announcements")
+	}
+
+	return s.db.Delete(&category).Error
 }
 
 func (s *announcementService) GetAllCategories() ([]dto.CategoryDTO, error) {
