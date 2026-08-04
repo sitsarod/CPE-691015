@@ -271,7 +271,13 @@ export default function CoachPaymentPage() {
         </div>
       ) : (
         <>
-          {wageEntries.length > 0 && (
+          {wageEntries.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-16 text-center text-slate-400">
+              <Wallet className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p className="text-sm font-semibold text-slate-500">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
+              <p className="text-xs mt-1">เมื่อสถาบันบันทึกค่าจ้างการสอนให้ ระบบจะแสดงสรุปและกราฟรายได้ที่นี่</p>
+            </div>
+          ) : (
           <>
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
