@@ -8,6 +8,9 @@ import { fetchCustomerEnrollments, fetchAvailableCourses, enrollCourse } from "@
 import { fetchActiveQuestions, recommendCourses } from "@/services/quizAPI";
 import { QuizQuestion, QuizOption } from "@/types/quiz";
 import Button from "@/components/Button";
+import FaceConsentModal from "@/components/FaceConsentModal";
+import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
+import { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
 
 export default function EnrollmentPage() {
   const router = useRouter(); 
@@ -20,6 +23,11 @@ export default function EnrollmentPage() {
   const [selectedPackage, setSelectedPackage] = useState<PackageInfo | null>(null);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // สำหรับความยินยอมเก็บข้อมูลใบหน้า (PDPA)
+  const [consent, setConsent] = useState<FaceConsentStatus | null>(null);
+  const [isConsentOpen, setIsConsentOpen] = useState(false);
+  const [isSavingConsent, setIsSavingConsent] = useState(false);
 
   // สำหรับระบบคัดกรอง (Quiz Engine)
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
@@ -49,7 +57,16 @@ export default function EnrollmentPage() {
         setEnrollments(enrollmentsData);
         setRecommendedCourses(coursesData);
         setQuizQuestions(questionsData);
-      } catch (err: unknown) { 
+
+        // ดึงสถานะความยินยอมแยกต่างหาก และกลืน error ทิ้งโดยตั้งใจ
+        // เพราะบัญชีที่ไม่มีโปรไฟล์ลูกค้า (เช่นแอดมินเปิดหน้านี้) จะได้ 404
+        // ซึ่งไม่ควรทำให้หน้าคอร์สทั้งหน้าพัง
+        try {
+          setConsent(await fetchMyFaceConsent());
+        } catch {
+          setConsent(null);
+        }
+      } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล";
         setError(errorMessage);
       } finally {
@@ -61,7 +78,20 @@ export default function EnrollmentPage() {
     loadData();
   }, [router]);
 
+  // กดยืนยันสมัคร → ถ้ายังไม่เคยตอบเรื่องความยินยอมใบหน้า ให้ถามก่อนหนึ่งครั้ง
+  // ตอบแล้วไม่ว่าจะยินยอมหรือไม่ ก็สมัครต่อได้เหมือนกัน — ความยินยอมไม่ใช่เงื่อนไขการสมัคร
   const handleEnroll = async () => {
+    if (!selectedPackage) return;
+
+    if (consent?.needs_decision) {
+      setIsConsentOpen(true);
+      return;
+    }
+
+    await doEnroll();
+  };
+
+  const doEnroll = async () => {
     if (!selectedPackage) return;
     setIsEnrolling(true);
     try {
@@ -71,7 +101,7 @@ export default function EnrollmentPage() {
         alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
         return;
       }
-      
+
       await enrollCourse({
         customer_id: parseInt(customerId),
         package_id: (selectedPackage.ID || selectedPackage.id) as number
@@ -84,6 +114,21 @@ export default function EnrollmentPage() {
       alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครเรียน");
     } finally {
       setIsEnrolling(false);
+    }
+  };
+
+  // บันทึกการตัดสินใจ แล้วสมัครต่อให้เลย ผู้ใช้จะได้ไม่ต้องกดยืนยันซ้ำสองรอบ
+  const handleConsentDecision = async (action: FaceConsentDecision) => {
+    setIsSavingConsent(true);
+    try {
+      const updated = await recordFaceConsent(action);
+      setConsent(updated);
+      setIsConsentOpen(false);
+      await doEnroll();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
+    } finally {
+      setIsSavingConsent(false);
     }
   };
 
@@ -348,6 +393,14 @@ export default function EnrollmentPage() {
           </div>
         </div>
       )}
+
+      {/* ---------------- Modal ขอความยินยอมเก็บข้อมูลใบหน้า (PDPA) ---------------- */}
+      <FaceConsentModal
+        open={isConsentOpen}
+        isSubmitting={isSavingConsent}
+        onDecision={handleConsentDecision}
+        onDismiss={() => setIsConsentOpen(false)}
+      />
 
       {/* ---------------- Modal ระบบคัดกรอง (Quiz Engine) - Premium UI ---------------- */}
       {isQuizOpen && (

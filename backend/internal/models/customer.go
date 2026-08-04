@@ -33,6 +33,15 @@ type Customer struct {
     PersonalQRCode    string          `json:"personalQR" gorm:"unique" valid:"required~Personal QR Code is required"`
     Status            CustomerStatus  `json:"status" gorm:"default:'active'" valid:"required~Status is required"`
 
+    // FaceConsentStatus คือสถานะความยินยอมให้เก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)
+    //
+    // เป็นค่าที่ denormalize มาจากแถวล่าสุดของตาราง biometric_consents โดยตั้งใจ
+    // เพราะตอนเช็คชื่อต้องอ่านค่านี้ทุกครั้ง ไม่ควรต้องไล่หาแถวล่าสุดของตาราง audit
+    //
+    // ⚠️ กติกา: การเขียน biometric_consents และการอัปเดตฟิลด์นี้ ต้องอยู่ใน
+    // transaction เดียวกันเสมอ มิฉะนั้นสองแหล่งจะไม่ตรงกัน (ดู services/consent_service.go)
+    FaceConsentStatus FaceConsentStatus `json:"face_consent_status" gorm:"type:varchar(20);default:'unknown'"`
+
 
 	Photos            	[]Photo 		`json:"photo" gorm:"foreignKey:CustomerID"`
 	Evaluations       	[]Evaluation    `json:"evaluation" gorm:"foreignKey:CustomerID"`

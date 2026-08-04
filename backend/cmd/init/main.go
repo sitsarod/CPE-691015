@@ -65,6 +65,7 @@ func main() {
 		&models.QuizOptionCourse{},
 		&models.WorkSchedule{},
 		&models.CoachAvailability{},
+		&models.BiometricConsent{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)

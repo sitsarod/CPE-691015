@@ -66,6 +66,10 @@ func SetupRoutes(r *gin.Engine) {
 	quizService := services.NewQuizService(db)
 	quizController := controllers.NewQuizController(quizService)
 
+	// ความยินยอมเก็บข้อมูลใบหน้า (PDPA)
+	consentService := services.NewConsentService(db)
+	consentController := controllers.NewConsentController(consentService)
+
 	r.Use(middlewares.CORSMiddleware())
 
 	api := r.Group("/api")
@@ -142,6 +146,22 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.GET("/students", userController.GetActiveStudentsController)
 			adminUserGroup.POST("/create", userController.CreateUserController)
 			adminUserGroup.DELETE("/:id", userController.DeleteUserController)
+		}
+
+		// --- ความยินยอมเก็บข้อมูลใบหน้า (PDPA) ---
+		// ทุกเส้นอ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param และไม่รับ customer_id จาก body
+		// จึงบันทึก/ถอนความยินยอมแทนคนอื่นไม่ได้ (ไม่ต้องใช้ CheckIDOR)
+		consentGroup := protected.Group("/consents/face")
+		{
+			consentGroup.GET("/me", consentController.GetMyConsent)
+			consentGroup.POST("", consentController.RecordConsent)
+			consentGroup.DELETE("", consentController.WithdrawConsent)
+		}
+
+		// แอดมินดูประวัติความยินยอมย้อนหลัง (ใช้พิสูจน์ความชอบด้วยกฎหมายตาม PDPA)
+		adminConsentGroup := adminOnly.Group("/admin/consents/face")
+		{
+			adminConsentGroup.GET("", consentController.GetConsentHistory)
 		}
 
 		enrollmentGroup := protected.Group("/enrollments")
@@ -239,6 +259,9 @@ func SetupRoutes(r *gin.Engine) {
 
 		// Quiz public endpoints
 		api.GET("/quiz", quizController.GetActiveQuestions)
+
+		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
+		api.GET("/consents/face/policy", consentController.GetPolicy)
 
 		protectedAnnouncementGroup := adminOnly.Group("/announcements")
 		{
