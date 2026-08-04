@@ -69,12 +69,13 @@ export default function CustomerSchedulePage() {
           }
 
           return {
-            id: enrollment.ID || enrollment.id || 0,
-            courseName: enrollment.package?.course?.course_name || enrollment.package?.course_name || "ไม่ระบุคอร์ส",
+            id: enrollment.id,
+            courseName: enrollment.package?.course?.course_name || "ไม่ระบุคอร์ส",
             sessionsCount: enrollment.package?.sessions_count || 0,
             totalSessions: enrollment.total_sessions,
             remainingSessions: enrollment.remaining_sessions,
-            attendedSessions: enrollment.total_sessions - enrollment.remaining_sessions,
+            // backend คำนวณมาให้แล้ว (กัน underflow ของ uint กรณี remaining > total)
+            attendedSessions: enrollment.attended_sessions,
             status: enrollment.status,
             schedules: schedules,
             unifiedTime

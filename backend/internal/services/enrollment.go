@@ -74,49 +74,9 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 		return nil, err
 	}
 
-	var response []dto.CourseDTO
-	for _, courseItem := range courses {
-		var packagesDTO []dto.CoursePackageDTO
-		for _, pkg := range courseItem.Packages {
-			var schedulesDTO []dto.PackageScheduleInfoDTO
-			for _, sch := range pkg.Schedules {
-				schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
-					DayOfWeek: string(sch.DayOfWeek),
-					StartTime: sch.StartTime,
-					EndTime:   sch.EndTime,
-				})
-			}
-
-			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-				ID:                 pkg.ID,
-				SessionsCount:      pkg.SessionsCount,
-				HoursCount:         pkg.HoursCount,
-				Price:              pkg.Price,
-				MaxSeats:           pkg.MaxSeats,
-				CurrentEnrollments: uint(len(pkg.Enrollments)),
-				Schedules:          schedulesDTO,
-			})
-		}
-
-		item := dto.CourseDTO{
-			ID:          courseItem.ID,
-			CourseName:  courseItem.CourseName,
-			Description: courseItem.Description,
-			Status:      string(courseItem.Status),
-			Packages:    packagesDTO,
-		}
-
-		if courseItem.User != nil {
-			item.User = &dto.CourseUserDTO{
-				FirstName: courseItem.User.FirstName,
-				LastName:  courseItem.User.LastName,
-				Email:     courseItem.User.Email,
-			}
-		}
-		response = append(response, item)
-	}
-
-	return response, nil
+	// ใช้ mapper ตัวเดียวกับ CourseService (ดู course_mapper.go)
+	// เดิมที่นี่คัดลอกตรรกะแปลง DTO มาไว้เอง ทำให้เวลาเพิ่มฟิลด์ต้องแก้หลายที่
+	return ToCourseDTOs(courses), nil
 }
 
 // [POST] ลงทะเบียนคอร์สเรียน (เปลี่ยนเป็นสถานะ Pending และยังไม่สร้างบิล)
@@ -233,7 +193,7 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 // userID ที่รับเข้ามาคือ users.id — ต้องแปลงเป็น customers.id ก่อน query
 // (ก่อนหน้านี้เอา users.id ไป query ตรง ๆ กับคอลัมน์ enrollments.customer_id
 // ทำให้ได้ข้อมูลของลูกค้าคนอื่นหรือได้ผลลัพธ์ว่างโดยไม่มี error)
-func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]models.Enrollment, error) {
+func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerEnrollmentDTO, error) {
 	customerID, err := s.toCustomerID(userID)
 	if err != nil {
 		return nil, err
@@ -244,8 +204,74 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]models.Enroll
 		Preload("Package.Course").
 		Preload("Package.Schedules").
 		Where("customer_id = ?", customerID).
+		Order("enrollment_date DESC").
 		Find(&enrollments).Error
-	return enrollments, err
+	if err != nil {
+		return nil, err
+	}
+
+	return toCustomerEnrollmentDTOs(enrollments), nil
+}
+
+// toCustomerEnrollmentDTOs แปลงเป็น DTO แทนการส่ง models.Enrollment ดิบ
+//
+// เหตุผลที่ไม่ส่ง model ดิบ: relation ที่ Preload มาจะติดไปทั้งก้อน และถ้าวันไหน
+// มีคนเพิ่ม Preload("...User") เข้ามา bcrypt hash จะรั่วทันที
+// (models.User.Password ยังใช้ tag json:"password" ไม่ใช่ json:"-")
+func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnrollmentDTO {
+	items := make([]dto.CustomerEnrollmentDTO, 0, len(enrollments))
+
+	for i := range enrollments {
+		e := &enrollments[i]
+
+		item := dto.CustomerEnrollmentDTO{
+			ID:                e.ID,
+			Status:            string(e.Status),
+			EnrollmentDate:    e.EnrollmentDate,
+			TotalSessions:     e.TotalSessions,
+			RemainingSessions: e.RemainingSessions,
+			BillingID:         e.BillingID,
+		}
+
+		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
+		if e.TotalSessions >= e.RemainingSessions {
+			item.AttendedSessions = e.TotalSessions - e.RemainingSessions
+		}
+
+		if e.Package != nil {
+			pkg := e.Package
+
+			schedules := make([]dto.PackageScheduleInfoDTO, 0, len(pkg.Schedules))
+			for _, sch := range pkg.Schedules {
+				schedules = append(schedules, dto.PackageScheduleInfoDTO{
+					DayOfWeek: string(sch.DayOfWeek),
+					StartTime: sch.StartTime,
+					EndTime:   sch.EndTime,
+				})
+			}
+
+			pkgDTO := &dto.CustomerEnrollmentPackageDTO{
+				ID:            pkg.ID,
+				SessionsCount: pkg.SessionsCount,
+				HoursCount:    pkg.HoursCount,
+				Price:         pkg.Price,
+				Schedules:     schedules,
+			}
+
+			if pkg.Course != nil {
+				pkgDTO.Course = &dto.CustomerEnrollmentCourseDTO{
+					ID:         pkg.Course.ID,
+					CourseName: pkg.Course.CourseName,
+				}
+			}
+
+			item.Package = pkgDTO
+		}
+
+		items = append(items, item)
+	}
+
+	return items
 }
 
 // [READ] ดึงข้อมูลการลงทะเบียนทั้งหมด (สำหรับแอดมิน)

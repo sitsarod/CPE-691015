@@ -3,17 +3,21 @@ import {
   ApiResponse,
   Enrollment,
   AdminEnrollment,
-  Course,
+  EnrollmentReview,
   CreateEnrollmentReq,
   CreateEnrollmentRes,
   UpdateEnrollmentReq
 } from "@/types/enrollment";
+import { CourseDTO } from "@/types/course";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน (Public)
-export async function fetchAvailableCourses(token?: string): Promise<Course[]> {
+//
+// คืน CourseDTO ตัวเดียวกับ /courses เพราะ backend ใช้ mapper ตัวเดียวกันแล้ว
+// (services/course_mapper.go) จึงรับประกันว่าโครงสร้างเหมือนกันทุกฟิลด์
+export async function fetchAvailableCourses(token?: string): Promise<CourseDTO[]> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -22,7 +26,7 @@ export async function fetchAvailableCourses(token?: string): Promise<Course[]> {
     headers,
   });
 
-  const resData: ApiResponse<Course[]> = await response.json();
+  const resData: ApiResponse<CourseDTO[]> = await response.json();
   if (!response.ok) {
     throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลคอร์สแนะนำได้");
   }
@@ -63,6 +67,27 @@ export async function fetchAllEnrollments(token: string): Promise<AdminEnrollmen
     throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลได้");
   }
   return resData.data || [];
+}
+
+// [GET] ดึงข้อมูลผู้สมัครแบบละเอียดสำหรับตรวจสอบก่อนอนุมัติ (แอดมิน)
+//
+// แยกเป็นคนละ endpoint กับรายการทั้งหมดโดยตั้งใจ — ข้อมูลชุดนี้ต้อง query เพิ่มหลายรอบ
+// จึงเรียกเฉพาะตอนแอดมินกดเปิดดูจริง ไม่ใช่โหลดมาพร้อมทั้งตาราง
+export async function fetchEnrollmentReview(id: number, token: string): Promise<EnrollmentReview> {
+  const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
+  const response = await fetch(`${BASE_URL}/admin/enrollments/${id}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cleanToken}`
+    }
+  });
+
+  const resData: ApiResponse<EnrollmentReview> = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลผู้สมัครได้");
+  }
+  return resData.data;
 }
 
 // [POST] ลูกค้ากดสมัครเรียน (Protected)

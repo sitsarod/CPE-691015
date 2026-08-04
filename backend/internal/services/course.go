@@ -59,49 +59,7 @@ func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) 
 		return nil, err
 	}
 
-	var response []dto.CourseDTO
-	for _, courseItem := range courses {
-		var packagesDTO []dto.CoursePackageDTO
-		for _, pkg := range courseItem.Packages {
-			var schedulesDTO []dto.PackageScheduleInfoDTO
-			for _, sch := range pkg.Schedules {
-				schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
-					DayOfWeek: string(sch.DayOfWeek),
-					StartTime: sch.StartTime,
-					EndTime:   sch.EndTime,
-				})
-			}
-
-			packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-				ID:                 pkg.ID,
-				SessionsCount:      pkg.SessionsCount,
-				HoursCount:         pkg.HoursCount,
-				Price:              pkg.Price,
-				MaxSeats:           pkg.MaxSeats,
-				CurrentEnrollments: uint(len(pkg.Enrollments)),
-				Schedules:          schedulesDTO,
-			})
-		}
-
-		item := dto.CourseDTO{
-			ID:          courseItem.ID,
-			CourseName:  courseItem.CourseName,
-			Description: courseItem.Description,
-			Status:      string(courseItem.Status),
-			Packages:    packagesDTO,
-		}
-
-		if courseItem.User != nil {
-			item.User = &dto.CourseUserDTO{
-				FirstName: courseItem.User.FirstName,
-				LastName:  courseItem.User.LastName,
-				Email:     courseItem.User.Email,
-			}
-		}
-		response = append(response, item)
-	}
-
-	return response, nil
+	return ToCourseDTOs(courses), nil
 }
 
 // GetCourseByID
@@ -127,44 +85,7 @@ func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO,
 		return nil, err
 	}
 
-	var packagesDTO []dto.CoursePackageDTO
-	for _, pkg := range courseItem.Packages {
-		var schedulesDTO []dto.PackageScheduleInfoDTO
-		for _, sch := range pkg.Schedules {
-			schedulesDTO = append(schedulesDTO, dto.PackageScheduleInfoDTO{
-				DayOfWeek: string(sch.DayOfWeek),
-				StartTime: sch.StartTime,
-				EndTime:   sch.EndTime,
-			})
-		}
-
-		packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
-			ID:                 pkg.ID,
-			SessionsCount:      pkg.SessionsCount,
-			HoursCount:         pkg.HoursCount,
-			Price:              pkg.Price,
-			MaxSeats:           pkg.MaxSeats,
-			CurrentEnrollments: uint(len(pkg.Enrollments)),
-			Schedules:          schedulesDTO,
-		})
-	}
-
-	response := dto.CourseDTO{
-		ID:          courseItem.ID,
-		CourseName:  courseItem.CourseName,
-		Description: courseItem.Description,
-		Status:      string(courseItem.Status),
-		Packages:    packagesDTO,
-	}
-
-	if courseItem.User != nil {
-		response.User = &dto.CourseUserDTO{
-			FirstName: courseItem.User.FirstName,
-			LastName:  courseItem.User.LastName,
-			Email:     courseItem.User.Email,
-		}
-	}
-
+	response := ToCourseDTO(&courseItem)
 	return &response, nil
 }
 
@@ -179,8 +100,14 @@ func (s *CourseService) CreateCourse(course *models.Course) error {
 	return s.db.Create(course).Error
 }
 
-// UpdateCourse 
-func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseDTO, error) {
+// UpdateCourse
+//
+// รับ DTO แทน models.Course ดิบ เพื่อให้ LearningOutcomes รับเข้ามาเป็น array ได้
+// (model เก็บเป็น text บรรทัดละข้อ จึงต้องแปลงที่ชั้นนี้) และเพื่อไม่ให้ client
+// ยัดฟิลด์อื่นของ model เช่น user_id เข้ามาแก้ได้
+//
+// ทุกฟิลด์เป็น pointer — nil = ไม่แก้ ส่งค่ามา = แก้ตามนั้น (รวมถึงแก้เป็นค่าว่าง)
+func (s *CourseService) UpdateCourse(id uint, input dto.UpdateCourseReq) (*dto.CourseDTO, error) {
 	var courseItem models.Course
 	err := s.db.First(&courseItem, id).Error
 	if err != nil {
@@ -188,17 +115,22 @@ func (s *CourseService) UpdateCourse(id uint, input models.Course) (*dto.CourseD
 	}
 
 	updateData := make(map[string]interface{})
-	if input.CourseName != "" {
-		updateData["course_name"] = input.CourseName
-    }
-	if input.Description != "" {
-		updateData["description"] = input.Description
+	if input.CourseName != nil {
+		updateData["course_name"] = *input.CourseName
 	}
-	if string(input.Status) != "" {
-		if !isValidCourseStatus(input.Status) {
+	if input.Description != nil {
+		updateData["description"] = *input.Description
+	}
+	if input.Status != nil {
+		status := models.CourseStatus(*input.Status)
+		if !isValidCourseStatus(status) {
 			return nil, ErrInvalidCourseStatus
 		}
-		updateData["status"] = input.Status
+		updateData["status"] = status
+	}
+	if input.LearningOutcomes != nil {
+		// ส่ง [] มา = ลบรายการทั้งหมด ซึ่งต่างจากไม่ส่งฟิลด์นี้มาเลย (= ไม่แตะ)
+		updateData["learning_outcomes"] = JoinLearningOutcomes(*input.LearningOutcomes)
 	}
 
 	if len(updateData) > 0 {

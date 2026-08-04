@@ -1,22 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { fetchAllCourses } from "@/services/courseAPI";
 import { CourseDTO } from "@/types/course";
-import { Loader2, BookOpen } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCourses = async () => {
       try {
-        const data = await fetchAllCourses();
-        setCourses(data);
-      } catch (err) {
-        console.error("Error loading courses:", err);
+        setCourses(await fetchAllCourses());
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลคอร์สเรียนได้"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -24,23 +26,42 @@ export default function CoursesPage() {
     loadCourses();
   }, []);
 
-  if (isLoading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-[#CC0000]" /></div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center p-20">
+        <Loader2 className="animate-spin text-[#CC0000]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-20 text-center text-red-600">{error}</div>;
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 mb-12 text-center">คอร์สเรียนแบดมินตัน</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {courses.map((course) => (
-          <Link key={course.id} href={`/courses/${course.id}`}>
-            <div className="bg-white border p-8 rounded-2xl shadow-sm hover:shadow-xl transition-all h-full flex flex-col">
-              <BookOpen className="w-8 h-8 text-[#CC0000] mb-4" />
-              <h2 className="text-xl font-bold mb-3">{course.course_name}</h2>
-              <p className="text-gray-600 text-sm flex-grow mb-6">{course.description}</p>
-              <span className="text-[#CC0000] font-bold text-sm">ดูรายละเอียดแพ็กเกจ →</span>
-            </div>
-          </Link>
-        ))}
+    <div className="mx-auto max-w-6xl px-6 py-12">
+      <div className="mb-12 text-center">
+        <h1 className="text-3xl font-bold text-gray-900">คอร์สเรียนแบดมินตัน</h1>
+        <p className="mt-3 text-gray-500">
+          เลือกคอร์สที่เหมาะกับระดับและเป้าหมายของคุณ
+        </p>
       </div>
+
+      {courses.length === 0 ? (
+        <p className="py-16 text-center text-gray-400">
+          ยังไม่มีคอร์สเปิดรับสมัครในขณะนี้
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {courses.map((course) => (
+            <CourseSummaryCard
+              key={course.id}
+              course={course}
+              href={`/courses/${course.id}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

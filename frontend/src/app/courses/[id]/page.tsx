@@ -2,24 +2,37 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { fetchAllCourses } from "@/services/courseAPI";
-import { CourseDTO } from "@/types/course";
-import { Loader2, ArrowLeft, Calendar, Clock, DollarSign } from "lucide-react";
+import { fetchCourseByID } from "@/services/courseAPI";
+import { CourseDTO, CoursePackageDTO } from "@/types/course";
+import { Loader2, ArrowLeft } from "lucide-react";
+import CourseDetail from "@/components/course/CourseDetail";
 
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [course, setCourse] = useState<CourseDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCourseDetail = async () => {
+      const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
+      const courseId = Number(rawId);
+
+      if (!rawId || Number.isNaN(courseId)) {
+        setError("รหัสคอร์สไม่ถูกต้อง");
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const data = await fetchAllCourses();
-        const found = data.find((c) => c.id.toString() === params.id);
-        setCourse(found || null);
-      } catch (err) {
-        console.error("Error:", err);
+        // เดิมหน้านี้ดึงคอร์สทั้งหมดมาแล้ว .find() เอง ซึ่งโหลดข้อมูลเกินจำเป็น
+        // และไม่ได้ 404 จริงเมื่อไม่มีคอร์สนั้น — เปลี่ยนมาใช้ endpoint ราย id ตรง ๆ
+        setCourse(await fetchCourseByID(courseId));
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error ? err.message : "ไม่พบคอร์สที่ต้องการ"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -27,50 +40,52 @@ export default function CourseDetailPage() {
     loadCourseDetail();
   }, [params.id]);
 
-  const handleEnroll = (packageId: number) => {
+  const handleEnroll = (pkg: CoursePackageDTO) => {
     const token = localStorage.getItem("token");
-    if (!token) router.push("/login");
-    else router.push(`/customer/enrollment?pkg=${packageId}`);
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    router.push(`/customer/enrollment?pkg=${pkg.id}`);
   };
 
-  if (isLoading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-[#CC0000]" /></div>;
-  if (!course) return <div className="text-center p-20">ไม่พบคอร์สที่ต้องการ</div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center p-20">
+        <Loader2 className="animate-spin text-[#CC0000]" />
+      </div>
+    );
+  }
+
+  if (error || !course) {
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-20 text-center">
+        <p className="mb-6 text-gray-600">{error ?? "ไม่พบคอร์สที่ต้องการ"}</p>
+        <button
+          onClick={() => router.push("/courses")}
+          className="rounded-lg bg-[#CC0000] px-6 py-2.5 font-bold text-white hover:bg-red-700"
+        >
+          กลับไปหน้าคอร์สทั้งหมด
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <button onClick={() => router.back()} className="flex items-center text-gray-500 mb-8 hover:text-black">
-        <ArrowLeft className="w-4 h-4 mr-2" /> ย้อนกลับ
+    <div className="mx-auto max-w-6xl px-6 py-12">
+      <button
+        onClick={() => router.back()}
+        className="mb-8 flex items-center text-gray-500 transition-colors hover:text-black"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" /> ย้อนกลับ
       </button>
 
-      <h1 className="text-4xl font-bold mb-4">{course.course_name}</h1>
-      <p className="text-gray-600 mb-10 text-lg">{course.description}</p>
-
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">แพ็กเกจทั้งหมด</h2>
-        {course.packages.map((pkg) => (
-          <div key={pkg.id} className="bg-white border p-6 rounded-xl shadow-sm flex items-center justify-between gap-6">
-            <div className="flex-1">
-              <h3 className="text-lg font-bold mb-2">แพ็กเกจ {pkg.sessions_count} ครั้ง</h3>
-              <div className="flex gap-6 text-sm text-gray-600">
-                <span className="flex items-center"><Clock className="w-4 h-4 mr-1" /> {pkg.hours_count} ชม.</span>
-                <span className="flex items-center"><Calendar className="w-4 h-4 mr-1" />
-                    {pkg.schedules.map(s => `${s.day_of_week} (${s.start_time}-${s.end_time})`).join(', ')}
-                </span>
-              </div>
-            </div>
-            
-            <div className="text-right">
-              <p className="text-xl font-black text-[#CC0000] mb-2">{pkg.price.toLocaleString()} บาท</p>
-              <button 
-                onClick={() => handleEnroll(pkg.id)}
-                className="bg-[#CC0000] text-white px-6 py-2 rounded-lg font-bold hover:bg-red-700"
-              >
-                สมัครเรียน
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <CourseDetail
+        course={course}
+        headingLevel="h1"
+        ctaLabel="สมัครเรียนแพ็กเกจนี้"
+        onSelectPackage={handleEnroll}
+      />
     </div>
   );
 }

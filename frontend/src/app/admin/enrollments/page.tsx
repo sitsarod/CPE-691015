@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Clock, AlertCircle, Search } from "lucide-react";
+import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch } from "lucide-react";
 import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
 import type { AdminEnrollment } from "@/types/enrollment";
+import EnrollmentReviewPanel from "./components/EnrollmentReviewPanel";
 
 
 export default function AdminEnrollmentsPage() {
@@ -12,6 +13,7 @@ export default function AdminEnrollmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const loadData = async () => {
     try {
@@ -31,13 +33,15 @@ export default function AdminEnrollmentsPage() {
     loadData();
   }, []);
 
+  // อนุมัติได้จากในแผงตรวจสอบเท่านั้น เพื่อบังคับให้แอดมินเห็นยอดค้างชำระ
+  // ที่นั่งคงเหลือ และคอร์สอื่นที่ผู้สมัครเรียนอยู่ ก่อนตัดสินใจ
   const handleApprove = async (id: number) => {
-    if (!confirm("ยืนยันการอนุมัติการสมัครเรียนและสร้างบิลเรียกเก็บเงิน?")) return;
     setProcessingId(id);
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
       await approveEnrollment(id, token);
+      setReviewingId(null);
       alert("อนุมัติสำเร็จ!");
       loadData();
     } catch (err: unknown) {
@@ -120,17 +124,17 @@ export default function AdminEnrollmentsPage() {
                   )}
                 </td>
                 <td className="p-4 text-center">
-                  {item.status === 'pending' ? (
-                    <button 
-                      onClick={() => handleApprove(item.id)}
-                      disabled={processingId === item.id}
-                      className="px-4 py-1.5 bg-[#CC0000] text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    >
-                      {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "อนุมัติ"}
-                    </button>
-                  ) : (
-                    <span className="text-sm text-gray-400">-</span>
-                  )}
+                  <button
+                    onClick={() => setReviewingId(item.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
+                      item.status === 'pending'
+                        ? 'bg-[#CC0000] text-white hover:bg-red-700'
+                        : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileSearch className="h-4 w-4" />
+                    {item.status === 'pending' ? 'ตรวจสอบ' : 'ดูข้อมูล'}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -145,6 +149,13 @@ export default function AdminEnrollmentsPage() {
           </tbody>
         </table>
       </div>
+
+      <EnrollmentReviewPanel
+        enrollmentId={reviewingId}
+        onClose={() => setReviewingId(null)}
+        onApprove={handleApprove}
+        isApproving={processingId != null}
+      />
     </div>
   );
 }

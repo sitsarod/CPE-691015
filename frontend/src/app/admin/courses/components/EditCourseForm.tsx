@@ -12,6 +12,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
+  const [learningOutcomes, setLearningOutcomes] = useState("");
   const [status, setStatus] = useState("active");
   const [packages, setPackages] = useState<PackageFormInput[]>([]);
   const [initialPackageIds, setInitialPackageIds] = useState<string[]>([]);
@@ -23,6 +24,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         const data = await fetchCourseByIDAdmin(courseId, token);
         setCourseName(data.course_name);
         setDescription(data.description);
+        setLearningOutcomes((data.learning_outcomes ?? []).join("\n"));
         setStatus(data.status);
         
         const loadedPackages = (data.packages || []).map((pkg: CoursePackageDTO) => ({
@@ -89,6 +91,10 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         course_name: courseName,
         description: description,
         status: status,
+        learning_outcomes: learningOutcomes
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== ""),
       }, token);
 
       // 2. Manage Packages (Delete removed, Update existing, Create new)
@@ -164,9 +170,23 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">รายละเอียด <span className="text-red-500">*</span></label>
-            <textarea 
+            <textarea
               required value={description} onChange={(e) => setDescription(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              สิ่งที่จะได้เรียนรู้
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              พิมพ์บรรทัดละ 1 ข้อ — จะแสดงเป็นรายการติ๊กถูกในหน้าคอร์สและหน้าสมัครเรียน
+            </p>
+            <textarea
+              value={learningOutcomes}
+              onChange={(e) => setLearningOutcomes(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 h-40 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none font-mono text-sm"
+              placeholder={"การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง\nฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม"}
             />
           </div>
           <div>

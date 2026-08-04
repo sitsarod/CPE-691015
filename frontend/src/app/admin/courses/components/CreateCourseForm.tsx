@@ -11,6 +11,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
+  const [learningOutcomes, setLearningOutcomes] = useState("");
   const [packages, setPackages] = useState<PackageFormInput[]>([
     { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }
   ]);
@@ -54,6 +55,10 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         course_name: courseName,
         description: description,
         status: "active",
+        learning_outcomes: learningOutcomes
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== ""),
       }, token);
 
       // Step 2: สร้างแพ็กเกจของคอร์สนี้
@@ -100,10 +105,24 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">รายละเอียด <span className="text-red-500">*</span></label>
-            <textarea 
+            <textarea
               required value={description} onChange={(e) => setDescription(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none"
-              placeholder="เช่น เรียนรวมกลุ่ม (18.00-21.00 น.) ตีเกม+ตีโต้"
+              placeholder="อธิบายภาพรวมของคอร์ส เหมาะกับใคร เน้นเรื่องอะไร"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              สิ่งที่จะได้เรียนรู้
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              พิมพ์บรรทัดละ 1 ข้อ — จะแสดงเป็นรายการติ๊กถูกในหน้าคอร์สและหน้าสมัครเรียน
+            </p>
+            <textarea
+              value={learningOutcomes}
+              onChange={(e) => setLearningOutcomes(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 h-40 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none font-mono text-sm"
+              placeholder={"การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง\nฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม\nลูกตบ (Smash) และการรับลูกตบเบื้องต้น"}
             />
           </div>
         </div>
