@@ -191,8 +191,27 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 		return
 	}
 
+	// กันสลิปซ้ำ: ถ้า transRef นี้เคยถูกใช้กับใบแจ้งหนี้อื่นไปแล้ว ห้ามยืนยันซ้ำ
+	// (ไม่ฝากไว้กับ SlipOK อย่างเดียว เผื่อกรณี log ฝั่ง SlipOK พลาดหรือถูก reset)
+	// ตัว partial unique index บน invoices.transaction_id เป็นแนวป้องกันสุดท้ายกันกรณี race
+	if data.TransRef != "" {
+		var dupCount int64
+		if err := s.db.Model(&models.Invoice{}).
+			Where("transaction_id = ? AND id <> ?", data.TransRef, invoiceID).
+			Count(&dupCount).Error; err != nil {
+			log.Printf("[SlipOK] invoice #%d: ตรวจสอบสลิปซ้ำไม่สำเร็จ: %v", invoiceID, err)
+			return
+		}
+		if dupCount > 0 {
+			log.Printf("[SlipOK] invoice #%d: สลิปนี้ (transRef=%s) ถูกใช้ยืนยันการชำระเงินกับใบแจ้งหนี้อื่นไปแล้ว ปฏิเสธการยืนยันอัตโนมัติ", invoiceID, data.TransRef)
+			return
+		}
+	}
+
+	// ถ้าบันทึก transaction_id ไม่สำเร็จ (เช่นโดน unique index จาก race กับอีก request) ต้องหยุด ไม่ยืนยันการชำระเงิน
 	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoiceID).Update("transaction_id", data.TransRef).Error; err != nil {
-		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ: %v", invoiceID, err)
+		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ (อาจเป็นสลิปซ้ำ): %v", invoiceID, err)
+		return
 	}
 	if _, err := s.ConfirmPayment(invoiceID); err != nil {
 		log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านแล้วแต่ ConfirmPayment ล้มเหลว: %v", invoiceID, err)

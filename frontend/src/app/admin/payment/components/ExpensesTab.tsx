@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Loader2, Calculator } from 'lucide-react';
+import { Trash2, Loader2, Calculator, Plus, X } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
 import { createExpense, deleteExpense } from "@/services/paymentAPI";
@@ -39,9 +39,22 @@ export default function ExpensesTab({
     receipturl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // ช่องกรอกเงินรายได้ส่วนอื่น ๆ (โบนัส/อื่น ๆ) แบบกรอกเอง เฉพาะตอนจ่ายค่าจ้างโค้ช
-  const [otherIncome, setOtherIncome] = useState('');
+  // รายการรายได้ส่วนอื่น ๆ (โบนัส/อื่น ๆ) แบบกรอกเอง เฉพาะตอนจ่ายค่าจ้างโค้ช
+  // เพิ่มได้หลายรายการ แต่ละรายการมีคำอธิบายและจำนวนเงินของตัวเอง
+  const [otherIncomes, setOtherIncomes] = useState<{ description: string; amount: string }[]>([]);
   const [wageInfo, setWageInfo] = useState<CoachWageInfo | null>(null);
+
+  const addOtherIncome = () => {
+    setOtherIncomes(prev => [...prev, { description: '', amount: '' }]);
+  };
+
+  const updateOtherIncome = (index: number, field: 'description' | 'amount', value: string) => {
+    setOtherIncomes(prev => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+  };
+
+  const removeOtherIncome = (index: number) => {
+    setOtherIncomes(prev => prev.filter((_, i) => i !== index));
+  };
 
   // คำนวณค่าจ้างค้างจ่ายของโค้ชที่เลือก แล้วเติมยอดลงช่องจำนวนเงินแบบ fix
   const loadCoachWage = async (coachIdStr: string) => {
@@ -85,14 +98,14 @@ export default function ExpensesTab({
   // เปลี่ยนประเภทรายจ่าย: เคลียร์ข้อมูลที่ผูกกับการจ่ายค่าจ้างโค้ชทุกครั้ง
   const handleTypeChange = (newType: string) => {
     setWageInfo(null);
-    setOtherIncome('');
+    setOtherIncomes([]);
     setExpenseForm(prev => ({ ...prev, expensetype: newType, coach_id: '', expenseamount: '' }));
   };
 
   const isCoachWages = expenseForm.expensetype === 'coach_wages';
-  // สำหรับค่าจ้างโค้ช: ยอดจ่ายรวม = ค่าจ้างค้างจ่าย (fix) + รายได้ส่วนอื่น (กรอกเอง)
+  // สำหรับค่าจ้างโค้ช: ยอดจ่ายรวม = ค่าจ้างค้างจ่าย (fix) + รายได้ส่วนอื่น ๆ ทุกรายการ (กรอกเอง)
   const baseWage = parseFloat(expenseForm.expenseamount) || 0;
-  const otherIncomeNum = parseFloat(otherIncome) || 0;
+  const otherIncomeNum = otherIncomes.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const totalCoachPayout = baseWage + otherIncomeNum;
 
   const handleSaveExpense = async (e: React.FormEvent) => {
@@ -128,12 +141,14 @@ export default function ExpensesTab({
         });
       }
 
-      // รายการที่ 2: รายได้ส่วนอื่น ๆ ที่กรอกเอง แยกออกเป็นอีก record
-      if (otherIncomeNum > 0) {
+      // รายการรายได้ส่วนอื่น ๆ ที่กรอกเอง แต่ละรายการแยกเป็นคนละ record พร้อมคำอธิบายของตัวเอง
+      for (const item of otherIncomes) {
+        const itemAmt = parseFloat(item.amount) || 0;
+        if (itemAmt <= 0) continue;
         reqBodies.push({
-          expenseamount: otherIncomeNum,
+          expenseamount: itemAmt,
           expensetype: 'coach_other',
-          expensedescription: typedDesc || 'รายได้ส่วนอื่น ๆ',
+          expensedescription: item.description.trim() || 'รายได้ส่วนอื่น ๆ',
           expensedate: dateISO,
           receipturl: expenseForm.receipturl,
           coach_id: coachId,
@@ -141,7 +156,7 @@ export default function ExpensesTab({
       }
 
       if (reqBodies.length === 0) {
-        onTriggerToast("กรุณากรอกจำนวนเงินค่าจ้างหรือรายได้ส่วนอื่นอย่างน้อยหนึ่งช่อง", 'error');
+        onTriggerToast("กรุณากรอกจำนวนเงินค่าจ้างหรือรายได้ส่วนอื่นอย่างน้อยหนึ่งรายการ", 'error');
         return;
       }
     } else {
@@ -167,7 +182,7 @@ export default function ExpensesTab({
       }
 
       onTriggerToast(reqBodies.length > 1 ? "บันทึกค่าจ้างและรายได้ส่วนอื่นสำเร็จเรียบร้อย" : "บันทึกค่าใช้จ่ายสำเร็จเรียบร้อย");
-      setOtherIncome('');
+      setOtherIncomes([]);
       setWageInfo(null);
       setExpenseForm({
         expenseamount: '',
@@ -269,10 +284,6 @@ export default function ExpensesTab({
                     <span>ค่าจ้างที่ควรได้ทั้งหมด</span>
                     <span className="font-semibold text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>จ่ายไปแล้ว</span>
-                    <span className="font-semibold text-slate-800">− ฿{wageInfo.alreadyPaid.toLocaleString()}</span>
-                  </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
                     <span className="font-bold text-slate-700">คงค้างจ่าย</span>
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
@@ -303,17 +314,54 @@ export default function ExpensesTab({
                 <p className="text-[10px] text-slate-400">คำนวณจากค่าจ้างที่ยังไม่ได้จ่ายโดยอัตโนมัติ</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 block">รายได้ส่วนอื่น ๆ (กรอกเอง)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={otherIncome}
-                  onChange={(e) => setOtherIncome(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
-                />
-                <p className="text-[10px] text-slate-400">เช่น โบนัส หรือรายได้อื่นที่ต้องการจ่ายเพิ่ม</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600 block">รายได้ส่วนอื่น ๆ (กรอกเอง)</label>
+                  <button
+                    type="button"
+                    onClick={addOtherIncome}
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-[#A30A0E] cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
+                  </button>
+                </div>
+
+                {otherIncomes.length === 0 ? (
+                  <p className="text-[10px] text-slate-400">เช่น โบนัส หรือรายได้อื่นที่ต้องการจ่ายเพิ่ม กด &quot;เพิ่มรายการ&quot; เพื่อระบุได้หลายรายการ</p>
+                ) : (
+                  <div className="space-y-2">
+                    {otherIncomes.map((item, index) => (
+                      <div key={`other-income-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-500">รายการที่ {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeOtherIncome(index)}
+                            className="p-1 rounded-full text-slate-400 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer"
+                            title="ลบรายการนี้"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="รายละเอียด เช่น โบนัสผลงาน, ค่าเดินทาง"
+                          value={item.description}
+                          onChange={(e) => updateOtherIncome(index, 'description', e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={item.amount}
+                          onChange={(e) => updateOtherIncome(index, 'amount', e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl bg-[#FFF0F0] border border-rose-100 px-3 py-2.5 space-y-0.5">
@@ -322,7 +370,7 @@ export default function ExpensesTab({
                   <span className="text-sm font-black text-[#CD0D13]">฿{totalCoachPayout.toLocaleString()}</span>
                 </div>
                 {baseWage > 0 && otherIncomeNum > 0 && (
-                  <p className="text-[10px] text-slate-400">จะบันทึกแยกเป็น 2 รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่น ฿{otherIncomeNum.toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-400">จะบันทึกแยกเป็น {1 + otherIncomes.filter(i => (parseFloat(i.amount) || 0) > 0).length} รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่นรวม ฿{otherIncomeNum.toLocaleString()}</p>
                 )}
               </div>
             </>

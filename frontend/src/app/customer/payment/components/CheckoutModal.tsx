@@ -48,6 +48,8 @@ export default function CheckoutModal({
   if (!isOpen) return null;
 
   const activeBankAccount = bankAccounts.find(b => b.is_active) || bankAccounts[0];
+  // ใช้เลขพร้อมเพย์ (ไม่ใช่เลขบัญชี) ในการสร้าง QR สแกนจ่าย — บัญชีที่ไม่มีเลขพร้อมเพย์จะสร้าง QR ไม่ได้
+  const promptPayID = activeBankAccount?.promptpay_id?.trim();
 
   const handleCopyText = (text: string, id: number) => {
     navigator.clipboard.writeText(text);
@@ -136,11 +138,11 @@ export default function CheckoutModal({
               <div className="flex flex-col items-center space-y-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-inner">
                 <span className="text-xs font-bold text-gray-550">สแกนจ่ายเงินสะดวกผ่านพร้อมเพย์ QR Code</span>
                 
-                {activeBankAccount ? (
+                {promptPayID ? (
                   <div className="relative p-2 bg-white rounded-xl border border-gray-150 shadow-sm flex flex-col items-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={`https://promptpay.io/${activeBankAccount.account_no}/${amount}.png`}
+                    <img
+                      src={`https://promptpay.io/${promptPayID}/${amount}.png`}
                       alt="PromptPay QR Code"
                       className="w-48 h-48 object-contain"
                     />
@@ -152,7 +154,7 @@ export default function CheckoutModal({
                 ) : (
                   <div className="text-center py-6 text-xs text-gray-550">
                     <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2 animate-bounce" />
-                    ไม่พบข้อมูลพร้อมเพย์ของสโมสร กรุณาใช้วิธีโอนเงินธนาคาร
+                    บัญชีนี้ยังไม่ได้ตั้งค่าเลขพร้อมเพย์ กรุณาใช้วิธีโอนเงินธนาคาร
                   </div>
                 )}
                 
