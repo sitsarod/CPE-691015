@@ -62,10 +62,6 @@ func SetupRoutes(r *gin.Engine) {
 	autoQAService := services.NewAutoQAService(db)
 	autoQAController := controllers.NewAutoQAController(autoQAService)
 
-	// Quiz system
-	quizService := services.NewQuizService(db)
-	quizController := controllers.NewQuizController(quizService)
-
 	// ความยินยอมเก็บข้อมูลใบหน้า (PDPA)
 	consentService := services.NewConsentService(db)
 	consentController := controllers.NewConsentController(consentService)
@@ -263,9 +259,6 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
 		api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
 
-		// Quiz public endpoints
-		api.GET("/quiz", quizController.GetActiveQuestions)
-
 		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
 		api.GET("/consents/face/policy", consentController.GetPolicy)
 
@@ -294,16 +287,6 @@ func SetupRoutes(r *gin.Engine) {
 			protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
 			protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
 			protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
-		}
-
-		protectedQuizGroup := adminOnly.Group("/admin/quiz")
-		{
-			protectedQuizGroup.GET("/", quizController.GetAllQuestions)
-			protectedQuizGroup.POST("/", quizController.CreateQuestion)
-			protectedQuizGroup.PUT("/:id", quizController.UpdateQuestion)
-			protectedQuizGroup.DELETE("/:id", quizController.DeleteQuestion)
-			protectedQuizGroup.POST("/:id/options", quizController.AddOption)
-			protectedQuizGroup.DELETE("/options/:option_id", quizController.DeleteOption)
 		}
 	}
 }
