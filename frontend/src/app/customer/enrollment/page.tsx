@@ -12,6 +12,7 @@ import {
   SearchCode,
   ArrowRight,
   ArrowLeft,
+  Wallet,
 } from "lucide-react";
 import { Enrollment } from "@/types/enrollment";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
@@ -31,7 +32,7 @@ import {
   hoursPerSession,
   formatNumber,
   dayLabel,
-  groupSchedulesByTime,
+  sortSchedulesByDay,
 } from "@/components/course/courseUtils";
 
 /** แพ็กเกจที่ผู้ใช้เลือก พร้อมชื่อคอร์สที่ผูกอยู่ (DTO ของแพ็กเกจไม่มีชื่อคอร์สในตัว) */
@@ -263,7 +264,11 @@ export default function EnrollmentPage() {
           </p>
         ) : (
           <div className="flex flex-wrap gap-10">
-            {enrollments.map((item) => (
+            {enrollments.map((item) => {
+              // คำนวณครั้งเดียว ของเดิมเรียกฟังก์ชันซ้ำสองรอบใน JSX
+              const schedules = sortSchedulesByDay(item.package?.schedules);
+
+              return (
               <div
                 key={`enroll-${item.id}`}
                 className="w-[240px] min-h-[340px] border border-gray-400 rounded-lg p-6 flex flex-col shadow-sm hover:border-[#CC0000] transition-all bg-white relative overflow-hidden"
@@ -273,8 +278,13 @@ export default function EnrollmentPage() {
                     <Clock className="w-3 h-3 mr-1" /> รอดำเนินการ 3-7 วัน
                   </div>
                 )}
+                {item.status === 'awaiting_payment' && (
+                  <div className="absolute top-0 left-0 right-0 bg-orange-100 text-orange-700 text-xs font-bold py-1.5 text-center flex justify-center items-center">
+                    <Wallet className="w-3 h-3 mr-1" /> รอชำระเงิน
+                  </div>
+                )}
 
-                <div className={`flex justify-center items-center py-4 ${item.status === 'pending' ? 'mt-4 opacity-50' : ''}`}>
+                <div className={`flex justify-center items-center py-4 ${item.status === 'pending' || item.status === 'awaiting_payment' ? 'mt-4 opacity-50' : ''}`}>
                   <FileEdit className="w-20 h-20 text-[#CC0000]" strokeWidth={1.2} />
                 </div>
 
@@ -296,22 +306,30 @@ export default function EnrollmentPage() {
                     </dd>
                   </div>
 
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-gray-500 shrink-0">วันเวลาเรียน</dt>
-                    <dd className="text-right">
-                      {groupSchedulesByTime(item.package?.schedules).length === 0 ? (
+                  {/* วันเวลาเรียน — แยกบรรทัดต่อวัน ไม่รวบวันที่เวลาตรงกัน
+                      วางหัวข้อไว้คนละบรรทัดกับค่า เพราะการ์ดกว้าง 240px
+                      ถ้าจับคู่ซ้าย-ขวาในบรรทัดเดียวจะแคบจนเวลาตกบรรทัด */}
+                  <div>
+                    <dt className="text-gray-500">วันเวลาเรียน</dt>
+                    <dd className="mt-1">
+                      {schedules.length === 0 ? (
                         <span className="text-gray-300">ยังไม่ระบุ</span>
                       ) : (
-                        groupSchedulesByTime(item.package?.schedules).map((group, idx) => (
-                          <div key={`sch-${item.id}-${idx}`} className="leading-relaxed">
-                            <span className="font-semibold text-gray-900">
-                              {group.days.map(dayLabel).join(" · ")}
-                            </span>
-                            <span className="block text-gray-500">
-                              {group.startTime}-{group.endTime}
-                            </span>
-                          </div>
-                        ))
+                        <div className="space-y-0.5">
+                          {schedules.map((sch, idx) => (
+                            <div
+                              key={`sch-${item.id}-${idx}`}
+                              className="flex justify-between gap-2"
+                            >
+                              <span className="font-semibold text-gray-900">
+                                {dayLabel(sch.day_of_week)}
+                              </span>
+                              <span className="text-gray-500">
+                                {sch.start_time}-{sch.end_time}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </dd>
                   </div>
@@ -328,13 +346,18 @@ export default function EnrollmentPage() {
 
                 <p className="mt-auto pt-3">
                   {item.status === 'pending' ? (
-                    <span className="text-sm text-yellow-600">รอแอดมินอนุมัติ</span>
+                    <span className="text-sm text-yellow-600">แอดมินกำลังตรวจสอบข้อมูล</span>
+                  ) : item.status === 'awaiting_payment' ? (
+                    <span className="text-sm text-orange-600">
+                      ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
+                    </span>
                   ) : (
                     <span className="text-sm text-gray-500">เหลือ {item.remaining_sessions} ครั้ง</span>
                   )}
                 </p>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

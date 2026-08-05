@@ -30,7 +30,9 @@ type CreateEnrollmentData struct {
 
 // UpdateEnrollmentReq รับข้อมูลตอนแอดมินต้องการแก้ไขสถานะหรือโควตา
 type UpdateEnrollmentReq struct {
-    Status             *string  `json:"status" binding:"omitempty,oneof=active completed cancelled"`
+    // awaiting_payment อยู่ในลิสต์ด้วย เพื่อให้แอดมินย้อนสถานะกลับได้
+    // (เช่น ยืนยันสลิปผิดคนแล้วต้องดึงกลับมารอชำระเงินใหม่)
+    Status             *string  `json:"status" binding:"omitempty,oneof=awaiting_payment active completed cancelled"`
     RemainingSessions  *float64 `json:"remaining_sessions" binding:"omitempty,min=0"`
 }
 

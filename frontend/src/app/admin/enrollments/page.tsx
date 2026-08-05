@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch } from "lucide-react";
+import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet } from "lucide-react";
 import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
 import type { AdminEnrollment } from "@/types/enrollment";
 import EnrollmentReviewPanel from "./components/EnrollmentReviewPanel";
@@ -112,6 +112,10 @@ export default function AdminEnrollmentsPage() {
                   {item.status === 'pending' ? (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
                       <Clock className="w-3 h-3 mr-1" /> รอดำเนินการ
+                    </span>
+                  ) : item.status === 'awaiting_payment' ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                      <Wallet className="w-3 h-3 mr-1" /> รอชำระเงิน
                     </span>
                   ) : item.status === 'active' ? (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">

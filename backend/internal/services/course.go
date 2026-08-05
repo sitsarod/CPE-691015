@@ -8,8 +8,20 @@ import (
 	"gorm.io/gorm"
 )
 
+// enrollmentSeatStatuses = สถานะที่ถือว่า "กินที่นั่ง" ของแพ็กเกจไปแล้ว
+//
+// awaiting_payment ต้องอยู่ในลิสต์นี้ด้วย เพราะที่นั่งถูกจองไว้ตั้งแต่แอดมินอนุมัติ
+// ถ้าไม่นับ ระบบจะแสดงว่ายังมีที่ว่างทั้งที่จองไปแล้ว และอนุมัติเกินโควตาได้
 var enrollmentSeatStatuses = []models.EnrollmentStatus{
 	models.EnrollmentStatusPending,
+	models.EnrollmentStatusAwaitingPayment,
+	models.EnrollmentStatusActive,
+}
+
+// enrollmentApprovedStatuses = สถานะที่ผ่านการอนุมัติแล้ว (ที่นั่งถูกยึดแน่นอน)
+// ใช้เป็นเกณฑ์ตัดสินว่าที่นั่งเต็มหรือยังตอนแอดมินกดอนุมัติ
+var enrollmentApprovedStatuses = []models.EnrollmentStatus{
+	models.EnrollmentStatusAwaitingPayment,
 	models.EnrollmentStatusActive,
 }
 
