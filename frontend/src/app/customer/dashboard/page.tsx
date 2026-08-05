@@ -2,12 +2,15 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { announcementAPI } from '@/services/announcementAPI';
+import { reviewAPI } from '@/services/reviewAPI';
 import { Announcement, Category } from '@/types/announcement';
-import { ChevronLeft, ChevronRight, Calendar, Eye, X } from 'lucide-react';
+import { Review } from '@/types/review';
+import { ChevronLeft, ChevronRight, Calendar, Eye, X, Star, Quote, BookOpen, UserRound } from 'lucide-react';
 
 export default function CustomerDashboardPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [featuredReviews, setFeaturedReviews] = useState<Review[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,14 @@ export default function CustomerDashboardPage() {
       console.error('Failed to fetch announcements:', error);
     } finally {
       setLoading(false);
+    }
+
+    // รีวิวเด่นเป็นส่วนเสริม โหลดแยกและกลืน error เพื่อไม่ให้กระทบหน้าประกาศ
+    try {
+      const reviews = await reviewAPI.getFeaturedReviews();
+      setFeaturedReviews(reviews || []);
+    } catch (error) {
+      console.error('Failed to fetch featured reviews:', error);
     }
   };
 
@@ -257,6 +268,65 @@ export default function CustomerDashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Reviews Section */}
+        {featuredReviews.length > 0 && (
+          <div className="mt-16">
+            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2 text-gray-900">
+              <span className="text-[#CC0000]">|</span> เสียงจากผู้เรียนของเรา
+            </h2>
+            <p className="text-gray-500 text-sm mb-6">รีวิวจริงจากลูกค้าที่ลงทะเบียนเรียนกับเรา</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredReviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col gap-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          size={18}
+                          className={s <= review.rating ? 'text-amber-400' : 'text-gray-200'}
+                          fill={s <= review.rating ? 'currentColor' : 'none'}
+                        />
+                      ))}
+                    </div>
+                    <Quote size={24} className="text-[#CC0000]/20" />
+                  </div>
+
+                  <p className="text-gray-700 text-sm leading-relaxed flex-grow line-clamp-5 whitespace-pre-line">
+                    {review.comment}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {review.course && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700">
+                        <BookOpen size={13} />
+                        {review.course.course_name}
+                      </span>
+                    )}
+                    {review.coach && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-50 text-purple-700">
+                        <UserRound size={13} />
+                        โค้ช {review.coach.nickname}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+                    <div className="w-10 h-10 rounded-full bg-[#FFF0F0] text-[#CC0000] flex items-center justify-center font-bold flex-shrink-0">
+                      {reviewerInitial(review)}
+                    </div>
+                    <p className="font-semibold text-gray-800 text-sm truncate">{reviewerName(review)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Detail Modal */}
@@ -315,4 +385,17 @@ export default function CustomerDashboardPage() {
       )}
     </div>
   );
+}
+
+// ---------- Review helpers ----------
+function reviewerName(r: Review): string {
+  if (!r.customer) return 'ผู้เรียน';
+  if (r.customer.nickname) return r.customer.nickname;
+  const full = [r.customer.firstName, r.customer.lastName].filter(Boolean).join(' ');
+  return full || 'ผู้เรียน';
+}
+
+function reviewerInitial(r: Review): string {
+  const name = r.customer?.nickname || r.customer?.firstName || '?';
+  return name.charAt(0).toUpperCase();
 }

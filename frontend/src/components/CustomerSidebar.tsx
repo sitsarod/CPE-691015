@@ -30,7 +30,7 @@ export default function CustomerSidebar() {
           <SidebarItem href="/customer/payment" icon={<Wallet />} label="การเงิน" active={pathname === "/customer/payment"} />
           <SidebarItem href="/customer/enrollment" icon={<ClipboardList />} label="คอร์สของฉัน" active={pathname === "/customer/enrollment"} />
           <SidebarItem href="/customer/schedule" icon={<Calendar />} label="ตารางเรียน" active={pathname === "/customer/schedule"} />
-          <SidebarItem href="/customer/feedback" icon={<StarCheck />} label="ข้อเสนอแนะ" active={pathname === "/customer/feedback"} />
+          <SidebarItem href="/customer/feedback" icon={<StarCheck />} label="รีวิวของฉัน" active={pathname === "/customer/feedback"} />
         </nav>
       </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Clock, Wallet, UserCircle, Users, ListTodo} from "lucide-react";
+import { Home, Calendar, Clock, Wallet, UserCircle, Users, ListTodo, Star} from "lucide-react";
 
 export default function CoachSidebar() {
   const pathname = usePathname();
@@ -31,6 +31,7 @@ export default function CoachSidebar() {
           <SidebarItem href="/coach/availability" icon={<Clock />} label="เวลาว่าง" active={pathname === "/coach/availability"} />
           <SidebarItem href="/coach/evalution" icon={<ListTodo />} label="ประเมินผู้เรียน" active={pathname === "/coach/evalution"} />
           <SidebarItem href="/coach/detect" icon={<Users />} label="จำแนกผู้เรียน" active={pathname === "/coach/detect"} />
+          <SidebarItem href="/coach/feedback" icon={<Star />} label="รีวิวของฉัน" active={pathname === "/coach/feedback"} />
           <SidebarItem href="/coach/payment" icon={<Wallet />} label="การเงิน" active={pathname === "/coach/payment"} />
         </nav>
       </div>

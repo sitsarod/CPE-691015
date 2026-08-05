@@ -74,6 +74,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	photoController := controllers.NewPhotoController(db)
 
+	// ระบบรีวิว/ให้คะแนนคอร์สและโค้ช
+	reviewService := services.NewReviewService(db)
+	reviewController := controllers.NewReviewController(reviewService)
+
 	r.Use(middlewares.CORSMiddleware())
 
 	api := r.Group("/api")
@@ -111,6 +115,7 @@ func SetupRoutes(r *gin.Engine) {
 		coachGroup := protected.Group("/coaches")
 		{
 			coachGroup.GET("/me", coachController.GetMyCoach)                                   // โค้ชที่ล็อกอินอยู่ resolve coach_id ของตัวเองจาก JWT
+			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                     // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
 			coachGroup.GET("/:id", coachController.GetCoachByID)                                // เจ้าของ หรือ admin
 			coachGroup.PATCH("/:id", coachController.UpdateCoach)                               // เจ้าของ หรือ admin (บาง field)
 			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
@@ -294,6 +299,28 @@ func SetupRoutes(r *gin.Engine) {
 
 		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
 		api.GET("/consents/face/policy", consentController.GetPolicy)
+
+		// --- ระบบรีวิว/ให้คะแนน ---
+		// รีวิวที่ถูกเลือกให้แสดงหน้าแรก เป็น public (ไม่ต้องล็อกอินก็เห็นได้)
+		api.GET("/reviews/featured", reviewController.GetFeaturedReviews)
+
+		// ลูกค้าส่งรีวิว/ดูรีวิวของตัวเอง (customer_id ผูกกับ JWT กันรีวิวแทนคนอื่น)
+		reviewGroup := protected.Group("/reviews")
+		{
+			reviewGroup.POST("", reviewController.CreateReview)
+			reviewGroup.GET("/me", reviewController.GetMyReviews)
+			// รายชื่อโค้ชในคอร์ส สำหรับให้ลูกค้าเลือกรีวิวโค้ช
+			reviewGroup.GET("/courses/:course_id/coaches", reviewController.GetCourseCoaches)
+		}
+
+		// แอดมิน: ดูรีวิวทั้งหมด, เลือกแสดงหน้าแรก, แก้ไข, ลบ
+		adminReviewGroup := adminOnly.Group("/admin/reviews")
+		{
+			adminReviewGroup.GET("", reviewController.GetAllReviews)
+			adminReviewGroup.PATCH("/:id", reviewController.UpdateReview)
+			adminReviewGroup.PATCH("/:id/feature", reviewController.FeatureReview)
+			adminReviewGroup.DELETE("/:id", reviewController.DeleteReview)
+		}
 
 		protectedAnnouncementGroup := adminOnly.Group("/announcements")
 		{
