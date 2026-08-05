@@ -9,8 +9,6 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  SearchCode,
-  ArrowRight,
   ArrowLeft,
   Wallet,
 } from "lucide-react";
@@ -21,8 +19,6 @@ import {
   fetchAvailableCourses,
   enrollCourse,
 } from "@/services/enrollmentAPI";
-import { fetchActiveQuestions, recommendCourses } from "@/services/quizAPI";
-import { QuizQuestion, QuizOption } from "@/types/quiz";
 import FaceConsentModal from "@/components/FaceConsentModal";
 import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
 import { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
@@ -59,14 +55,6 @@ export default function EnrollmentPage() {
   const [isConsentOpen, setIsConsentOpen] = useState(false);
   const [isSavingConsent, setIsSavingConsent] = useState(false);
 
-  // สำหรับระบบคัดกรอง (Quiz Engine)
-  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
-  const [quizAnswers, setQuizAnswers] = useState<QuizOption[]>([]);
-  const [quizResultCourseIds, setQuizResultCourseIds] = useState<number[]>([]);
-  const [isQuizFinished, setIsQuizFinished] = useState(false);
-
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -78,15 +66,13 @@ export default function EnrollmentPage() {
         return;
       }
 
-      const [enrollmentsData, coursesData, questionsData] = await Promise.all([
+      const [enrollmentsData, coursesData] = await Promise.all([
         fetchCustomerEnrollments(customerId, token),
         fetchAvailableCourses(token),
-        fetchActiveQuestions(),
       ]);
 
       setEnrollments(enrollmentsData);
       setCourses(coursesData);
-      setQuizQuestions(questionsData);
 
       // ดึงสถานะความยินยอมแยกต่างหาก และกลืน error ทิ้งโดยตั้งใจ
       // เพราะบัญชีที่ไม่มีโปรไฟล์ลูกค้า (เช่นแอดมินเปิดหน้านี้) จะได้ 404
@@ -194,49 +180,7 @@ export default function EnrollmentPage() {
     }
   };
 
-  const handleStartQuiz = () => {
-    setCurrentQuizIndex(0);
-    setQuizAnswers([]);
-    setQuizResultCourseIds([]);
-    setIsQuizFinished(false);
-    setOpenCourseId(null);
-    setIsQuizOpen(true);
-  };
-
-  const handleSelectQuizOption = async (option: QuizOption) => {
-    const newAnswers = [...quizAnswers, option];
-
-    if (currentQuizIndex < quizQuestions.length - 1) {
-      setQuizAnswers(newAnswers);
-      setCurrentQuizIndex(currentQuizIndex + 1);
-      return;
-    }
-
-    setQuizAnswers(newAnswers);
-    setIsQuizOpen(false);
-    try {
-      const optionIds = newAnswers.map((a) => a.id);
-      const res = await recommendCourses(optionIds);
-      const rankedIds = res.data.map((r) => r.course_id);
-      setQuizResultCourseIds(res.fallback ? [] : rankedIds);
-    } catch {
-      setQuizResultCourseIds([]);
-    } finally {
-      setIsQuizFinished(true);
-    }
-  };
-
-  const handleClearQuizFilter = () => {
-    setIsQuizFinished(false);
-    setQuizResultCourseIds([]);
-  };
-
-  const displayCourses =
-    isQuizFinished && quizResultCourseIds.length > 0
-      ? quizResultCourseIds
-          .map((id) => courses.find((c) => c.id === id))
-          .filter((c): c is CourseDTO => c != null)
-      : courses;
+  const displayCourses = courses;
 
   const openCourse =
     openCourseId != null
@@ -392,36 +336,12 @@ export default function EnrollmentPage() {
         <div className="mb-10 w-full">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {isQuizFinished && quizResultCourseIds.length > 0
-                  ? "คอร์สที่เหมาะกับคุณ"
-                  : "คอร์สทั้งหมด"}
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900">คอร์สทั้งหมด</h2>
               <span className="mt-1 flex items-center gap-2 text-sm text-gray-500">
                 <LayoutGrid className="h-5 w-5 text-[#CC0000]" />
-                {isQuizFinished && quizResultCourseIds.length > 0
-                  ? "ผลลัพธ์จากการประเมินแบบคัดกรองของคุณ"
-                  : "เลือกคอร์สเพื่อดูรายละเอียดและแพ็กเกจ"}
+                เลือกคอร์สเพื่อดูรายละเอียดและแพ็กเกจ
               </span>
             </div>
-
-            {isQuizFinished && quizResultCourseIds.length > 0 ? (
-              <button
-                onClick={handleClearQuizFilter}
-                className="flex items-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-6 py-3 font-bold text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
-              >
-                ✕ เลิกคัดกรอง (ดูคอร์สทั้งหมด)
-              </button>
-            ) : (
-              (quizQuestions?.length || 0) > 0 && (
-                <button
-                  onClick={handleStartQuiz}
-                  className="flex items-center gap-2 rounded-xl bg-[#CC0000] px-6 py-3 font-bold text-white shadow-lg shadow-red-200 transition-all hover:scale-105 hover:bg-red-700"
-                >
-                  <SearchCode className="h-5 w-5" /> เลือกแพ็กเกจที่เหมาะกับคุณ
-                </button>
-              )
-            )}
           </div>
 
           {displayCourses.length === 0 ? (
@@ -529,70 +449,6 @@ export default function EnrollmentPage() {
         onDecision={handleConsentDecision}
         onDismiss={() => setIsConsentOpen(false)}
       />
-
-      {/* ---------------- Modal ระบบคัดกรอง (Quiz Engine) ---------------- */}
-      {isQuizOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md transition-all duration-300">
-          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/20 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#CC0000] via-red-600 to-red-700 p-8 text-white">
-              <div className="absolute right-0 top-0 h-40 w-40 -translate-y-1/2 translate-x-1/4 rounded-full bg-white/10 blur-2xl"></div>
-              <div className="absolute bottom-0 left-0 h-32 w-32 -translate-x-1/4 translate-y-1/2 rounded-full bg-black/10 blur-xl"></div>
-
-              <div className="absolute bottom-0 left-0 h-1.5 w-full bg-black/20">
-                <div
-                  className="relative h-full bg-white transition-all duration-700 ease-out"
-                  style={{
-                    width: `${(currentQuizIndex / quizQuestions.length) * 100}%`,
-                  }}
-                >
-                  <div className="absolute right-0 top-0 h-full w-3 bg-white shadow-[0_0_10px_rgba(255,255,255,1)] blur-[2px]"></div>
-                </div>
-              </div>
-
-              <div className="relative z-10 flex items-center justify-between">
-                <h3 className="flex items-center gap-3 text-2xl font-black tracking-tight drop-shadow-md">
-                  <div className="rounded-xl border border-white/10 bg-white/20 p-2 backdrop-blur-sm">
-                    <SearchCode className="h-6 w-6 text-white" />
-                  </div>
-                  แบบประเมินคอร์สที่ใช่
-                </h3>
-              </div>
-
-              <button
-                onClick={() => setIsQuizOpen(false)}
-                className="absolute right-6 top-6 z-10 rounded-full border border-white/5 bg-black/10 p-2 text-white/70 backdrop-blur-sm transition-all duration-300 hover:rotate-90 hover:bg-black/20 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="overflow-y-auto bg-gray-50/30 p-10">
-              <div className="mx-auto max-w-xl">
-                <div className="mb-10 text-center">
-                  <span className="mb-6 inline-block rounded-full border border-red-100 bg-red-50 px-5 py-1.5 text-xs font-bold uppercase tracking-widest text-[#CC0000] shadow-sm">
-                    คำถามที่ {currentQuizIndex + 1} จาก {quizQuestions.length}
-                  </span>
-                  <h2 className="text-3xl font-black leading-snug text-gray-900">
-                    {quizQuestions[currentQuizIndex]?.text}
-                  </h2>
-                </div>
-                <div className="space-y-4">
-                  {quizQuestions[currentQuizIndex]?.options?.map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => handleSelectQuizOption(opt)}
-                      className="group flex w-full items-center justify-between rounded-2xl border-2 border-gray-100 bg-white p-6 text-left text-lg font-bold text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-                    >
-                      <span>{opt.text}</span>
-                      <ArrowRight className="h-5 w-5 text-gray-400 transition-colors group-hover:text-[#CC0000]" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ---------------- Toast แจ้งเตือนสำเร็จ ---------------- */}
       {successMessage && (
