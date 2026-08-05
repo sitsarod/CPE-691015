@@ -1,0 +1,138 @@
+package services
+
+import (
+	"CPE-691015/internal/models"
+	"errors"
+	"math/rand"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type DetectedVideoService struct {
+	db *gorm.DB
+}
+
+func NewDetectedVideoService(db *gorm.DB) *DetectedVideoService {
+	return &DetectedVideoService{db: db}
+}
+
+// CreateRawVideo บันทึกวิดีโอต้นฉบับที่อัปโหลดโดยโค้ช
+func (s *DetectedVideoService) CreateRawVideo(videoURL string) (*models.RawVideo, error) {
+	rawVideo := models.RawVideo{
+		VideoURL: videoURL,
+	}
+	if err := s.db.Create(&rawVideo).Error; err != nil {
+		return nil, errors.New("ไม่สามารถบันทึกข้อมูลวิดีโอต้นฉบับได้")
+	}
+	return &rawVideo, nil
+}
+
+// ProcessFaceDetection รันระบบจำลองการสแกนใบหน้าหาตัวตนนักเรียนในวิดีโอ (Mock Face Recognition)
+// โดยระบบจะสแกนหาเฉพาะนักเรียนที่กดยินยอมเก็บใบหน้า (PDPA: FaceConsentStatus == "granted") เท่านั้น
+func (s *DetectedVideoService) ProcessFaceDetection(rawVideoID uint, videoURL string) ([]models.DetectedVideo, error) {
+	var activeConsentCustomers []models.Customer
+	// ดึงนักเรียนทั้งหมดที่ให้ความยินยอมสแกนใบหน้า
+	err := s.db.Where("face_consent_status = ?", string(models.FaceConsentGranted)).
+		Preload("User").
+		Find(&activeConsentCustomers).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อนักเรียนที่มีประวัติการให้ความยินยอมใบหน้าได้")
+	}
+
+	var detected []models.DetectedVideo
+
+	// หากไม่มีนักเรียนที่กดยินยอมเลย จะไม่เกิดการจำลองตรวจจับ
+	if len(activeConsentCustomers) == 0 {
+		return detected, nil
+	}
+
+	// สุ่มตรวจจับพบนักเรียนประมาณ 1-2 คนจากนักเรียนที่กดยินยอม (ถ้ามี)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	countToDetect := r.Intn(2) + 1 // สุ่มพบ 1-2 คน
+	if countToDetect > len(activeConsentCustomers) {
+		countToDetect = len(activeConsentCustomers)
+	}
+
+	// สับเปลี่ยนลำดับเพื่อสุ่มเลือกนักเรียน
+	r.Shuffle(len(activeConsentCustomers), func(i, j int) {
+		activeConsentCustomers[i], activeConsentCustomers[j] = activeConsentCustomers[j], activeConsentCustomers[i]
+	})
+
+	for i := 0; i < countToDetect; i++ {
+		cust := activeConsentCustomers[i]
+
+		// สร้าง DetectedVideo ผูกนักเรียนเข้ากับวิดีโอ
+		detectedVideo := models.DetectedVideo{
+			CustomerID: cust.ID,
+			RawVideoID: rawVideoID,
+			VideoURL:   videoURL,
+		}
+
+		if err := s.db.Create(&detectedVideo).Error; err != nil {
+			return nil, errors.New("ไม่สามารถบันทึกความสัมพันธ์วิดีโอกับใบหน้านักเรียนได้")
+		}
+
+		// ดึงความสัมพันธ์มาให้ครบก่อนส่งกลับ
+		s.db.Preload("Customer").Preload("Customer.User").First(&detectedVideo, detectedVideo.ID)
+		detected = append(detected, detectedVideo)
+	}
+
+	return detected, nil
+}
+
+// ManuallyAssignStudentsToVideo โค้ชระบุรายชื่อนักเรียนในวิดีโอเอง (เพื่อแก้ไขกรณี AI ตรวจไม่พบ หรือโค้ชเลือกเอง)
+func (s *DetectedVideoService) ManuallyAssignStudentsToVideo(rawVideoID uint, videoURL string, customerIDs []uint) ([]models.DetectedVideo, error) {
+	// ลบความสัมพันธ์การตรวจจับใบหน้าเดิมของวิดีโอนี้ออกก่อน
+	err := s.db.Where("raw_video_id = ?", rawVideoID).Delete(&models.DetectedVideo{}).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลการวิเคราะห์วิดีโอเดิมได้")
+	}
+
+	var results []models.DetectedVideo
+	for _, customerID := range customerIDs {
+		// ตรวจสอบว่านักเรียนมีจริงหรือไม่
+		var cust models.Customer
+		if err := s.db.First(&cust, customerID).Error; err != nil {
+			continue // ข้ามถ้าไม่พบ
+		}
+
+		detectedVideo := models.DetectedVideo{
+			CustomerID: customerID,
+			RawVideoID: rawVideoID,
+			VideoURL:   videoURL,
+		}
+
+		if err := s.db.Create(&detectedVideo).Error; err != nil {
+			return nil, errors.New("ไม่สามารถจัดเก็บข้อมูลนักเรียนในวิดีโอได้")
+		}
+
+		s.db.Preload("Customer").Preload("Customer.User").First(&detectedVideo, detectedVideo.ID)
+		results = append(results, detectedVideo)
+	}
+
+	return results, nil
+}
+
+// GetDetectedVideosByStudentID ค้นหาวิดีโอทั้งหมดที่มีภาพนักเรียนคนนี้ปรากฏตัวอยู่
+func (s *DetectedVideoService) GetDetectedVideosByStudentID(customerID uint) ([]models.DetectedVideo, error) {
+	var videos []models.DetectedVideo
+	err := s.db.Where("customer_id = ?", customerID).
+		Preload("RawVideo").
+		Order("created_at DESC").
+		Find(&videos).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถค้นหาวิดีโอของนักเรียนคนนี้ได้")
+	}
+	return videos, nil
+}
+
+// GetDetectedVideosByRawVideoID ดึงรายชื่อนักเรียนที่ปรากฏตัวในวิดีโอนี้
+func (s *DetectedVideoService) GetDetectedVideosByRawVideoID(rawVideoID uint) ([]models.DetectedVideo, error) {
+	var list []models.DetectedVideo
+	err := s.db.Where("raw_video_id = ?", rawVideoID).
+		Preload("Customer").
+		Preload("Customer.User").
+		Find(&list).Error
+	return list, err
+}
