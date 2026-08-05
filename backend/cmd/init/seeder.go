@@ -423,12 +423,14 @@ func seedBankAccounts(db *gorm.DB) {
             BankName:    "ธนาคารกรุงไทย (KTB)",
             AccountNo:   "6629946995",
             AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
+            PromptPayID: "1309801486371", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
             IsActive:    true,
         },
         {
             BankName:    "ธนาคารกรุงไทย (KTB)",
             AccountNo:   "3350495907",
             AccountName: "นายธีรศักดิ์  กุลเกตุ",
+            PromptPayID: "0830512752", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
             IsActive:    false,
         },
     }

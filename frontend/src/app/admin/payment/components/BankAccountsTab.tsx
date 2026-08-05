@@ -25,6 +25,7 @@ export default function BankAccountsTab({
     bank_name: '',
     account_name: '',
     account_no: '',
+    promptpay_id: '',
     is_active: false,
     auto_verify_enabled: false
   });
@@ -105,6 +106,13 @@ export default function BankAccountsTab({
       return;
     }
 
+    // เลขพร้อมเพย์ไม่บังคับ แต่ถ้ากรอกต้องเป็นตัวเลข 10, 13 หรือ 15 หลัก
+    const promptPay = bankForm.promptpay_id.trim();
+    if (promptPay && !/^(\d{10}|\d{13}|\d{15})$/.test(promptPay)) {
+      onTriggerToast("เลขพร้อมเพย์ต้องเป็นตัวเลข 10 หลัก (เบอร์มือถือ), 13 หลัก (เลขบัตรประชาชน) หรือ 15 หลัก (e-Wallet)", 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
@@ -112,6 +120,7 @@ export default function BankAccountsTab({
         bank_name: bankForm.bank_name,
         account_name: bankForm.account_name,
         account_no: bankForm.account_no,
+        promptpay_id: promptPay,
         ...(editingBank ? { is_active: bankForm.is_active, auto_verify_enabled: bankForm.auto_verify_enabled } : {})
       };
 
@@ -178,6 +187,14 @@ export default function BankAccountsTab({
                     </button>
                   </div>
                 </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#CD0D13]">พร้อมเพย์ (QR)</span>
+                  {account.promptpay_id ? (
+                    <p className="text-lg font-bold text-slate-900 tabular-nums tracking-wider mt-0.5">{account.promptpay_id}</p>
+                  ) : (
+                    <p className="text-xs font-semibold text-amber-600 mt-1">ยังไม่ได้ตั้งค่า — สแกนจ่ายผ่าน QR ไม่ได้</p>
+                  )}
+                </div>
               </div>
 
               {/* สวิตช์ควบคุม */}
@@ -229,6 +246,7 @@ export default function BankAccountsTab({
                       bank_name: account.bank_name,
                       account_name: account.account_name,
                       account_no: account.account_no,
+                      promptpay_id: account.promptpay_id || '',
                       is_active: account.is_active,
                       auto_verify_enabled: account.auto_verify_enabled
                     });
@@ -259,7 +277,7 @@ export default function BankAccountsTab({
           type="button"
           onClick={() => {
             setEditingBank(null);
-            setBankForm({ bank_name: '', account_name: '', account_no: '', is_active: false, auto_verify_enabled: false });
+            setBankForm({ bank_name: '', account_name: '', account_no: '', promptpay_id: '', is_active: false, auto_verify_enabled: false });
             setIsBankModalOpen(true);
           }}
           className="group rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/40 hover:border-red-200 hover:bg-red-50/30 transition-all duration-300 flex flex-col items-center justify-center text-center p-8 min-h-[260px] cursor-pointer"
@@ -323,6 +341,24 @@ export default function BankAccountsTab({
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
                   required
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 block">
+                  เลขพร้อมเพย์ (สำหรับ QR สแกนจ่าย)
+                  <span className="font-normal text-slate-400"> — ไม่บังคับ</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="เบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก"
+                  value={bankForm.promptpay_id}
+                  onChange={(e) => setBankForm(prev => ({ ...prev, promptpay_id: e.target.value.replace(/\D/g, '') }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                />
+                <p className="text-[11px] text-slate-400 leading-snug">
+                  ใช้เบอร์มือถือ/เลขบัตรที่ผูกพร้อมเพย์กับบัญชีนี้ ไม่ใช่เลขบัญชีธนาคาร หากเว้นว่างจะสแกนจ่ายผ่าน QR ไม่ได้ (ใช้โอนเงินได้ตามปกติ)
+                </p>
               </div>
 
               {editingBank && (

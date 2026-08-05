@@ -47,6 +47,7 @@ export interface BankAccount {
   bank_name: string;
   account_no: string;
   account_name: string;
+  promptpay_id: string;
   is_active: boolean;
   auto_verify_enabled: boolean;
 }

@@ -2,10 +2,29 @@ package services
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
 )
+
+// promptPayIDPattern ยอมรับเฉพาะตัวเลขล้วนความยาว 10 (เบอร์มือถือ),
+// 13 (เลขบัตรประชาชน/ผู้เสียภาษี) หรือ 15 หลัก (เลข e-Wallet)
+var promptPayIDPattern = regexp.MustCompile(`^[0-9]{10}$|^[0-9]{13}$|^[0-9]{15}$`)
+
+// validatePromptPayID ตรวจรูปแบบเลขพร้อมเพย์ ปล่อยว่างได้ (บัญชีที่ใช้เฉพาะโอนเงิน)
+// แต่ถ้ากรอกมาต้องเป็นรูปแบบที่ promptpay.io นำไปสร้าง QR ได้จริง
+func validatePromptPayID(promptPayID string) error {
+	trimmed := strings.TrimSpace(promptPayID)
+	if trimmed == "" {
+		return nil
+	}
+	if !promptPayIDPattern.MatchString(trimmed) {
+		return errors.New("เลขพร้อมเพย์ไม่ถูกต้อง ต้องเป็นตัวเลขล้วน 10 หลัก (เบอร์มือถือ), 13 หลัก (เลขบัตรประชาชน) หรือ 15 หลัก (e-Wallet)")
+	}
+	return nil
+}
 
 type BankAccountService struct {
 	db *gorm.DB
@@ -64,6 +83,11 @@ func (s *BankAccountService) ToggleBankAccount(id uint) (*models.BankAccount, er
 
 // CreateBankAccount creates a new bank account
 func (s *BankAccountService) CreateBankAccount(req dto.CreateBankAccountRequest) (*models.BankAccount, error) {
+	// Validate PromptPay ID format (optional field)
+	if err := validatePromptPayID(req.PromptPayID); err != nil {
+		return nil, err
+	}
+
 	// Check if account number already exists
 	var count int64
 	s.db.Model(&models.BankAccount{}).Where("account_no = ?", req.AccountNo).Count(&count)
@@ -75,6 +99,7 @@ func (s *BankAccountService) CreateBankAccount(req dto.CreateBankAccountRequest)
 		BankName:    req.BankName,
 		AccountNo:   req.AccountNo,
 		AccountName: req.AccountName,
+		PromptPayID: strings.TrimSpace(req.PromptPayID),
 		IsActive:    false, // Default to inactive on creation
 	}
 
@@ -90,6 +115,13 @@ func (s *BankAccountService) UpdateBankAccount(id uint, req dto.UpdateBankAccoun
 	var account models.BankAccount
 	if err := s.db.First(&account, id).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลบัญชีธนาคาร")
+	}
+
+	// Validate PromptPay ID format if provided in this update
+	if req.PromptPayID != nil {
+		if err := validatePromptPayID(*req.PromptPayID); err != nil {
+			return nil, err
+		}
 	}
 
 	// Check if updating to an already existing account number (excluding itself)
@@ -112,6 +144,9 @@ func (s *BankAccountService) UpdateBankAccount(id uint, req dto.UpdateBankAccoun
 		}
 		if req.AccountName != nil {
 			updates["account_name"] = *req.AccountName
+		}
+		if req.PromptPayID != nil {
+			updates["prompt_pay_id"] = strings.TrimSpace(*req.PromptPayID)
 		}
 		if req.AutoVerifyEnabled != nil {
 			updates["auto_verify_enabled"] = *req.AutoVerifyEnabled
