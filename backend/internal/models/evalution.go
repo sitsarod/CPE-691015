@@ -14,6 +14,5 @@ type Evaluation struct {
 	   
 	Assessment 		string 			`json:"assessment"` 
 	Score      		int    			`json:"score"`   
-	
-	
+	VideoURL        string          `json:"video_url"`
 }
