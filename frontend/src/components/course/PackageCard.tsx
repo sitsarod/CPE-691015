@@ -4,9 +4,7 @@ import { Clock, Calendar, Users, Timer, TicketCheck } from "lucide-react";
 import { CoursePackageDTO } from "@/types/course";
 import {
   dayLabel,
-  groupSchedulesByTime,
-  pricePerSession,
-  pricePerHour,
+  sortSchedulesByDay,
   hoursPerSession,
   seatsLeft,
   seatsTotal,
@@ -28,10 +26,8 @@ export default function PackageCard({
   ctaLabel = "สมัครเรียนแพ็กเกจนี้",
   onSelect,
 }: PackageCardProps) {
-  const perSession = pricePerSession(pkg);
-  const perHour = pricePerHour(pkg);
   const perSessionHours = hoursPerSession(pkg);
-  const scheduleGroups = groupSchedulesByTime(pkg.schedules);
+  const schedules = sortSchedulesByDay(pkg.schedules);
   const full = isFull(pkg);
   const almostFull = isAlmostFull(pkg);
   const left = seatsLeft(pkg);
@@ -80,21 +76,24 @@ export default function PackageCard({
           )}
         </dl>
 
-        {/* ตารางเรียน */}
-        {scheduleGroups.length > 0 && (
+        {/* ตารางเรียน — แยกบรรทัดต่อวัน ไม่รวบวันที่เวลาตรงกัน */}
+        {schedules.length > 0 && (
           <div className="mb-5 rounded-xl border border-gray-100 bg-gray-50/70 p-3.5">
             <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-gray-700">
               <Calendar className="h-3.5 w-3.5 text-[#CC0000]" />
               รอบเวลาเรียน
             </div>
             <div className="space-y-1.5">
-              {scheduleGroups.map((group, idx) => (
-                <div key={`sch-${pkg.id}-${idx}`} className="text-xs">
+              {schedules.map((sch, idx) => (
+                <div
+                  key={`sch-${pkg.id}-${idx}`}
+                  className="flex items-center justify-between gap-2 text-xs"
+                >
                   <span className="font-semibold text-gray-700">
-                    {group.days.map(dayLabel).join(" · ")}
+                    {dayLabel(sch.day_of_week)}
                   </span>
-                  <span className="ml-2 rounded bg-white px-2 py-0.5 text-[11px] text-gray-500 ring-1 ring-gray-100">
-                    {group.startTime} - {group.endTime}
+                  <span className="rounded bg-white px-2 py-0.5 text-[11px] text-gray-500 ring-1 ring-gray-100">
+                    {sch.start_time} - {sch.end_time}
                   </span>
                 </div>
               ))}
@@ -154,28 +153,6 @@ export default function PackageCard({
             <p className="mt-1 text-sm font-semibold text-gray-500">
               {formatPrice(pkg.price)}
             </p>
-          )}
-
-          {(perSession !== null || perHour !== null) && (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-              {perSession !== null && (
-                <span>
-                  เฉลี่ย{" "}
-                  <strong className="font-bold text-gray-700">
-                    {Math.round(perSession).toLocaleString("th-TH")}
-                  </strong>{" "}
-                  บาท/ครั้ง
-                </span>
-              )}
-              {perHour !== null && (
-                <span>
-                  <strong className="font-bold text-gray-700">
-                    {Math.round(perHour).toLocaleString("th-TH")}
-                  </strong>{" "}
-                  บาท/ชั่วโมง
-                </span>
-              )}
-            </div>
           )}
         </div>
 

@@ -288,9 +288,16 @@ export default function EnrollmentReviewPanel({
         {/* ปุ่มอนุมัติ */}
         <footer className="border-t border-gray-200 bg-gray-50 px-6 py-4">
           {data && !isPending ? (
-            <p className="text-center text-sm text-gray-500">
-              คำขอนี้ดำเนินการไปแล้ว (สถานะ: {data.enrollment.status})
-            </p>
+            <div className="text-center text-sm text-gray-500">
+              คำขอนี้ดำเนินการไปแล้ว{" "}
+              <StatusPill status={data.enrollment.status} />
+              {data.enrollment.status === "awaiting_payment" && (
+                <p className="mt-2 text-xs text-orange-600">
+                  เป็นคอร์สแรกของผู้เรียน ระบบจะเปิดตารางเรียนให้อัตโนมัติ
+                  เมื่อยืนยันการชำระเงินที่หน้าตรวจสอบสลิป
+                </p>
+              )}
+            </div>
           ) : (
             <div className="flex gap-3">
               <button
@@ -460,6 +467,10 @@ function MoneyCard({
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
     pending: { label: "รออนุมัติ", className: "bg-yellow-100 text-yellow-800" },
+    awaiting_payment: {
+      label: "รอชำระเงิน",
+      className: "bg-orange-100 text-orange-800",
+    },
     active: { label: "กำลังเรียน", className: "bg-green-100 text-green-800" },
     completed: { label: "จบแล้ว", className: "bg-blue-100 text-blue-800" },
     cancelled: { label: "ยกเลิก", className: "bg-gray-100 text-gray-600" },

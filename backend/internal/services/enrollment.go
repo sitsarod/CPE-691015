@@ -94,11 +94,12 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 		return nil, err
 	}
 
+	// กันสมัครแพ็กเกจเดิมซ้ำ — ต้องรวม awaiting_payment ด้วย
+	// มิฉะนั้นคนที่อนุมัติแล้วแต่ยังไม่จ่าย จะกดสมัครแพ็กเกจเดิมซ้ำได้เรื่อย ๆ
 	var existingCount int64
 	if err := s.db.Model(&models.Enrollment{}).
 		Where("customer_id = ? AND package_id = ? AND status IN ?",
-			customerID, packageID,
-			[]models.EnrollmentStatus{models.EnrollmentStatusPending, models.EnrollmentStatusActive}).
+			customerID, packageID, enrollmentSeatStatuses).
 		Count(&existingCount).Error; err != nil {
 		return nil, errors.New("ไม่สามารถตรวจสอบการลงทะเบียนเดิมได้")
 	}
@@ -134,13 +135,14 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		return nil, ErrEnrollmentNotPending
 	}
 
-	// เช็คว่าที่นั่งเต็มหรือยัง (นับเฉพาะ Active)
-	var activeCount int64
+	// เช็คว่าที่นั่งเต็มหรือยัง — นับทั้ง active และ awaiting_payment
+	// เพราะที่นั่งถูกยึดตั้งแต่ตอนอนุมัติ ไม่ใช่ตอนจ่ายเงิน
+	var takenCount int64
 	s.db.Model(&models.Enrollment{}).
-		Where("package_id = ? AND status = ?", enrollment.PackageID, models.EnrollmentStatusActive).
-		Count(&activeCount)
+		Where("package_id = ? AND status IN ?", enrollment.PackageID, enrollmentApprovedStatuses).
+		Count(&takenCount)
 
-	if uint(activeCount) >= enrollment.Package.MaxSeats {
+	if uint(takenCount) >= enrollment.Package.MaxSeats {
 		return nil, ErrPackageSeatsFull
 	}
 
@@ -172,7 +174,31 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 			return errors.New("ไม่สามารถสร้างใบแจ้งหนี้ได้")
 		}
 
-		enrollment.Status = models.EnrollmentStatusActive
+		// ─── คอร์สแรกต้องชำระเงินก่อนจึงจะมีตารางเรียน ───
+		//
+		// "คอร์สแรก" = ยังไม่เคยมี enrollment ที่ผ่านจุดชำระเงินมาก่อน (active/completed)
+		// คนที่เคยเรียนแล้วสมัครคอร์สถัดไป จะได้ active ทันทีเหมือนเดิม ไม่ต้องรอจ่าย
+		//
+		// นับใน transaction เดียวกับการอนุมัติ เพื่อไม่ให้ผลเปลี่ยนระหว่างทาง
+		// (soft delete ถูกกรองออกโดย GORM อยู่แล้ว คำขอที่ยกเลิกไปจึงไม่ถูกนับ)
+		var priorCount int64
+		if err := tx.Model(&models.Enrollment{}).
+			Where("customer_id = ? AND id <> ? AND status IN ?",
+				enrollment.CustomerID, enrollment.ID,
+				[]models.EnrollmentStatus{
+					models.EnrollmentStatusActive,
+					models.EnrollmentStatusCompleted,
+				}).
+			Count(&priorCount).Error; err != nil {
+			return errors.New("ไม่สามารถตรวจสอบประวัติการเรียนได้")
+		}
+
+		if priorCount == 0 {
+			enrollment.Status = models.EnrollmentStatusAwaitingPayment
+		} else {
+			enrollment.Status = models.EnrollmentStatusActive
+		}
+
 		enrollment.BillingID = &newBilling.ID
 		if err := tx.Save(&enrollment).Error; err != nil {
 			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")

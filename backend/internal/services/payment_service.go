@@ -224,9 +224,26 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error)
 			return err
 		}
 
+		billingIDs := make([]uint, 0, len(items))
 		for _, item := range items {
 			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusPaid).Error; err != nil {
 				return errors.New("ไม่สามารถอัปเดตสถานะบิลเป็นชำระเงินแล้วได้")
+			}
+			billingIDs = append(billingIDs, item.BillingID)
+		}
+
+		// ปลดล็อกคอร์สแรกที่รอชำระเงินอยู่ ให้เริ่มเรียนได้
+		//
+		// นักเรียนใหม่จะถูกตั้งเป็น awaiting_payment ตอนแอดมินอนุมัติ (ดู ApproveEnrollment)
+		// และจะได้ตารางเรียนก็ต่อเมื่อบิลที่ผูกไว้ถูกยืนยันการชำระเงินแล้วเท่านั้น
+		//
+		// ทำใน transaction เดียวกับการอัปเดตบิล เพื่อไม่ให้เกิดกรณีบิลจ่ายแล้ว
+		// แต่ enrollment ยังค้างที่ awaiting_payment
+		if len(billingIDs) > 0 {
+			if err := tx.Model(&models.Enrollment{}).
+				Where("billing_id IN ? AND status = ?", billingIDs, models.EnrollmentStatusAwaitingPayment).
+				Update("status", models.EnrollmentStatusActive).Error; err != nil {
+				return errors.New("ไม่สามารถเปิดใช้งานคอร์สเรียนหลังชำระเงินได้")
 			}
 		}
 

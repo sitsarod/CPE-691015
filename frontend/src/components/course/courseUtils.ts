@@ -1,6 +1,6 @@
 // ตัวช่วยคำนวณข้อมูลที่ "อนุมานได้" จากแพ็กเกจ โดยไม่ต้องเพิ่มฟิลด์ใน DB
 //
-// ค่าพวกนี้ (ราคาต่อครั้ง/ต่อชั่วโมง, ระยะเวลาต่อครั้ง, ที่นั่งเหลือ, ช่วงราคา) คำนวณจาก
+// ค่าพวกนี้ (ระยะเวลาต่อครั้ง, ที่นั่งเหลือ, ช่วงราคา) คำนวณจาก
 // sessions_count / hours_count / price / max_seats / current_enrollments ที่มีอยู่แล้ว
 // จึงไม่ต้องเก็บซ้ำใน DB ให้เสี่ยงข้อมูลไม่ตรงกัน
 
@@ -66,16 +66,21 @@ export function groupSchedulesByTime(
   return result;
 }
 
-/** ราคาต่อครั้ง — คืน null ถ้าคำนวณไม่ได้ (ยังไม่ตั้งราคา หรือไม่ได้ระบุจำนวนครั้ง) */
-export function pricePerSession(pkg: CoursePackageDTO): number | null {
-  if (!pkg.price || !pkg.sessions_count) return null;
-  return pkg.price / pkg.sessions_count;
-}
+/**
+ * เรียงตารางเรียนตามลำดับวันในสัปดาห์ โดยไม่รวบวันที่เวลาตรงกันเข้าด้วยกัน
+ * ใช้กับที่ที่ต้องการเห็นทุกวันแยกบรรทัดพร้อมเวลาของตัวเอง
+ */
+export function sortSchedulesByDay(
+  schedules: PackageScheduleInfoDTO[] | undefined
+): PackageScheduleInfoDTO[] {
+  if (!schedules || schedules.length === 0) return [];
 
-/** ราคาต่อชั่วโมง — คืน null ถ้าคำนวณไม่ได้ */
-export function pricePerHour(pkg: CoursePackageDTO): number | null {
-  if (!pkg.price || !pkg.hours_count) return null;
-  return pkg.price / pkg.hours_count;
+  return [...schedules].sort((a, b) => {
+    const dayDiff =
+      DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week);
+    if (dayDiff !== 0) return dayDiff;
+    return a.start_time.localeCompare(b.start_time);
+  });
 }
 
 /** ระยะเวลาต่อครั้ง (ชั่วโมง) */

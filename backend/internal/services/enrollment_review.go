@@ -90,9 +90,12 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			})
 		}
 
+		// นับที่นั่งด้วยเกณฑ์เดียวกับที่ ApproveEnrollment ใช้ตัดสินว่าเต็มหรือยัง
+		// คือ active + awaiting_payment (ที่นั่งถูกยึดตั้งแต่อนุมัติ ไม่ใช่ตอนจ่ายเงิน)
+		// ถ้านับแค่ active ตัวเลขในแผงจะบอกว่ายังว่าง ทั้งที่กดอนุมัติแล้วจะเด้ง error
 		var activeCount, pendingCount int64
 		s.db.Model(&models.Enrollment{}).
-			Where("package_id = ? AND status = ?", pkg.ID, models.EnrollmentStatusActive).
+			Where("package_id = ? AND status IN ?", pkg.ID, enrollmentApprovedStatuses).
 			Count(&activeCount)
 		s.db.Model(&models.Enrollment{}).
 			Where("package_id = ? AND status = ?", pkg.ID, models.EnrollmentStatusPending).
