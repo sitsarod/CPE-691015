@@ -66,6 +66,14 @@ func SetupRoutes(r *gin.Engine) {
 	consentService := services.NewConsentService(db)
 	consentController := controllers.NewConsentController(consentService)
 
+	evaluationService := services.NewEvaluationService(db)
+	evaluationController := controllers.NewEvaluationController(evaluationService, db)
+
+	videoService := services.NewDetectedVideoService(db)
+	videoController := controllers.NewVideoController(videoService, db)
+
+	photoController := controllers.NewPhotoController(db)
+
 	r.Use(middlewares.CORSMiddleware())
 
 	api := r.Group("/api")
@@ -158,6 +166,31 @@ func SetupRoutes(r *gin.Engine) {
 		adminConsentGroup := adminOnly.Group("/admin/consents/face")
 		{
 			adminConsentGroup.GET("", consentController.GetConsentHistory)
+		}
+
+		// --- การลงทะเบียนใบหน้าตรงนักเรียน ---
+		studentFacePhotoGroup := protected.Group("/students/face-photo")
+		{
+			studentFacePhotoGroup.POST("", photoController.UploadFacePhoto)
+			studentFacePhotoGroup.GET("/me", photoController.GetMyPhotos)
+			studentFacePhotoGroup.DELETE("/:id", photoController.DeleteFacePhoto)
+		}
+
+		// --- การประเมินนักเรียนโดยโค้ช ---
+		evaluationGroup := protected.Group("/evaluations")
+		{
+			evaluationGroup.POST("", evaluationController.CreateEvaluation)
+			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
+			evaluationGroup.GET("/student/:customer_id", evaluationController.GetStudentEvaluations)
+		}
+
+		// --- วิดีโอสแกนใบหน้า ---
+		videoGroup := protected.Group("/videos")
+		{
+			videoGroup.POST("", videoController.UploadVideo)
+			videoGroup.POST("/:raw_video_id/assign", videoController.ManuallyAssignStudents)
+			videoGroup.GET("/me", videoController.GetMyDetectedVideos)
+			videoGroup.GET("/:raw_video_id/students", videoController.GetVideoDetectedStudents)
 		}
 
 		enrollmentGroup := protected.Group("/enrollments")
