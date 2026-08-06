@@ -3,14 +3,30 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"CPE-691015/internal/config"
 	"CPE-691015/internal/middlewares"
 	"CPE-691015/internal/routes"
+	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
+
+// startCustomerStatusJob รันงานปรับสถานะลูกค้า (active/inactive) แบบอัตโนมัติทุกวัน
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 24 ชั่วโมง
+func startCustomerStatusJob() {
+	userService := services.NewUserService(config.DB)
+	go func() {
+		for {
+			if err := userService.SyncCustomerStatuses(); err != nil {
+				log.Printf("ปรับสถานะลูกค้าอัตโนมัติล้มเหลว: %v", err)
+			}
+			time.Sleep(24 * time.Hour)
+		}
+	}()
+}
 
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
@@ -27,6 +43,9 @@ func main() {
 
 	// 3. ตั้งค่า Routes
 	routes.SetupRoutes(r)
+
+	// 3.1 เริ่ม background job ปรับสถานะลูกค้า active/inactive อัตโนมัติ (รายวัน)
+	startCustomerStatusJob()
 
 	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
 	port := os.Getenv("PORT")
