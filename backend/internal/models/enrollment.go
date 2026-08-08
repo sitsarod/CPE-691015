@@ -23,6 +23,7 @@ const (
 	EnrollmentStatusActive    EnrollmentStatus = "active" // เรียนได้ มีตารางเรียน
 	EnrollmentStatusCompleted EnrollmentStatus = "completed"
 	EnrollmentStatusCancelled EnrollmentStatus = "cancelled"
+	EnrollmentStatusExpired EnrollmentStatus = "expired"
 )
 
 type Enrollment struct {
@@ -32,6 +33,8 @@ type Enrollment struct {
 	TotalSessions      uint             `json:"total_sessions" valid:"required~totalSessions is required"`
 	RemainingSessions  uint             `json:"remaining_sessions" valid:"required~remainingSessions is required"`
 	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`
+	StartedAt *time.Time `json:"started_at"`
+	ExpiresAt *time.Time `json:"expires_at" gorm:"index"`
 
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`

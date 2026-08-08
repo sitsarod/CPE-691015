@@ -21,12 +21,19 @@ func ToCourseDTO(courseItem *models.Course) dto.CourseDTO {
 			})
 		}
 
+
+		durationDays := pkg.DurationDays
+		if durationDays == 0 {
+			durationDays = defaultEnrollmentDurationDays
+		}
+
 		packagesDTO = append(packagesDTO, dto.CoursePackageDTO{
 			ID:                 pkg.ID,
 			SessionsCount:      pkg.SessionsCount,
 			HoursCount:         pkg.HoursCount,
 			Price:              pkg.Price,
 			MaxSeats:           pkg.MaxSeats,
+			DurationDays:       durationDays,
 			CurrentEnrollments: uint(len(pkg.Enrollments)),
 			Schedules:          schedulesDTO,
 		})

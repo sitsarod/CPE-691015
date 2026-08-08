@@ -52,6 +52,7 @@ func TestToUserMinDTO(t *testing.T) {
 
 func TestToBillingDTO(t *testing.T) {
 	now := time.Now()
+	adminID := uint(4)
 	billing := &models.Billing{
 		Model: gorm.Model{
 			ID: 1,
@@ -77,7 +78,7 @@ func TestToBillingDTO(t *testing.T) {
 			Email:     "alice@example.com",
 			Role:      models.CustomerRole,
 		},
-		AdminID: 4,
+		AdminID: &adminID,
 		Admin: &models.User{
 			Model: gorm.Model{
 				ID: 4,

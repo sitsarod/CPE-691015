@@ -14,14 +14,18 @@ type CreatePackageReq struct {
 	HoursCount    uint                 `json:"hours_count" binding:"required"`
 	MaxSeats      uint                 `json:"max_seats" binding:"required"`
 	Price         float64              `json:"price" binding:"required"`
-	Schedules     []PackageScheduleReq `json:"schedules" binding:"required,dive"`
+	DurationDays uint `json:"duration_days" binding:"omitempty,max=366"`
+
+	Schedules []PackageScheduleReq `json:"schedules" binding:"required,dive"`
 }
 
 // UpdatePackageReq รับข้อมูลตอนแก้ไขแพ็กเกจ
 type UpdatePackageReq struct {
-	SessionsCount *uint                 `json:"sessions_count" binding:"omitempty"`
-	HoursCount    *uint                 `json:"hours_count" binding:"omitempty"`
-	MaxSeats      *uint                 `json:"max_seats" binding:"omitempty"`
-	Price         *float64              `json:"price" binding:"omitempty"`
-	Schedules     *[]PackageScheduleReq `json:"schedules" binding:"omitempty,dive"`
+	SessionsCount *uint    `json:"sessions_count" binding:"omitempty"`
+	HoursCount    *uint    `json:"hours_count" binding:"omitempty"`
+	MaxSeats      *uint    `json:"max_seats" binding:"omitempty"`
+	Price         *float64 `json:"price" binding:"omitempty"`
+	DurationDays *uint `json:"duration_days" binding:"omitempty,min=1,max=366"`
+
+	Schedules *[]PackageScheduleReq `json:"schedules" binding:"omitempty,dive"`
 }

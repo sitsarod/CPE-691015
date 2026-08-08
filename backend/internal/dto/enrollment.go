@@ -30,9 +30,7 @@ type CreateEnrollmentData struct {
 
 // UpdateEnrollmentReq รับข้อมูลตอนแอดมินต้องการแก้ไขสถานะหรือโควตา
 type UpdateEnrollmentReq struct {
-    // awaiting_payment อยู่ในลิสต์ด้วย เพื่อให้แอดมินย้อนสถานะกลับได้
-    // (เช่น ยืนยันสลิปผิดคนแล้วต้องดึงกลับมารอชำระเงินใหม่)
-    Status             *string  `json:"status" binding:"omitempty,oneof=awaiting_payment active completed cancelled"`
+    Status             *string  `json:"status" binding:"omitempty,oneof=awaiting_payment active completed cancelled expired"`
     RemainingSessions  *float64 `json:"remaining_sessions" binding:"omitempty,min=0"`
 }
 
@@ -66,6 +64,30 @@ type CustomerEnrollmentPackageDTO struct {
     Schedules     []PackageScheduleInfoDTO `json:"schedules"`
     Course        *CustomerEnrollmentCourseDTO `json:"course"`
 }
+func DaysLeft(expiresAt *time.Time) *int {
+    if expiresAt == nil {
+        return nil
+    }
+    remaining := time.Until(*expiresAt)
+    if remaining <= 0 {
+        zero := 0
+        return &zero
+    }
+    days := int(remaining.Hours() / 24)
+    if remaining.Hours() > float64(days*24) {
+        days++
+    }
+    return &days
+}
+func IsBillingOverdue(b *models.Billing) bool {
+    if b == nil {
+        return false
+    }
+    if b.Status == models.StatusPaid || b.Status == models.StatusWaitCheck {
+        return false
+    }
+    return !b.DueDate.IsZero() && b.DueDate.Before(time.Now())
+}
 
 // CustomerEnrollmentDTO หนึ่งรายการในหน้า "คอร์สของฉัน"
 type CustomerEnrollmentDTO struct {
@@ -74,6 +96,11 @@ type CustomerEnrollmentDTO struct {
     EnrollmentDate    time.Time `json:"enrollment_date"`
     TotalSessions     uint      `json:"total_sessions"`
     RemainingSessions uint      `json:"remaining_sessions"`
+
+    StartedAt *time.Time `json:"started_at"`
+    ExpiresAt *time.Time `json:"expires_at"`
+    DaysLeft  *int       `json:"days_left"`
+    IsOverdue bool `json:"is_overdue"`
 
     // AttendedSessions = TotalSessions - RemainingSessions
     //
@@ -136,11 +163,16 @@ type AdminEnrollmentDTO struct {
     RemainingSessions uint                        `json:"remaining_sessions"`
     Status            string                      `json:"status"`
     BillingID         *uint                       `json:"billing_id"`
-    Customer          *AdminEnrollmentCustomerDTO `json:"customer"`
-    Package           *AdminEnrollmentPackageDTO  `json:"package"`
+    StartedAt *time.Time `json:"started_at"`
+    ExpiresAt *time.Time `json:"expires_at"`
+    DaysLeft  *int       `json:"days_left"`
+    IsOverdue bool       `json:"is_overdue"`
+
+    Customer *AdminEnrollmentCustomerDTO `json:"customer"`
+    Package  *AdminEnrollmentPackageDTO  `json:"package"`
 }
 
-// ToAdminEnrollmentDTO แปลงหนึ่งรายการ (ต้อง Preload Customer.User และ Package.Course มาก่อน)
+
 func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
     item := AdminEnrollmentDTO{
         ID:                e.ID,
@@ -149,6 +181,10 @@ func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
         RemainingSessions: e.RemainingSessions,
         Status:            string(e.Status),
         BillingID:         e.BillingID,
+        StartedAt:         e.StartedAt,
+        ExpiresAt:         e.ExpiresAt,
+        DaysLeft:          DaysLeft(e.ExpiresAt),
+        IsOverdue:         IsBillingOverdue(e.Billing),
     }
 
     if e.Customer != nil {

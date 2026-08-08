@@ -62,7 +62,7 @@ type BillingDTO struct {
 	BillingType   *BillingTypeDTO `json:"billing_type,omitempty"`
 	CustomerID    uint            `json:"customer_id"`
 	Customer      *UserMinDTO     `json:"customer,omitempty"`
-	AdminID       uint            `json:"admin_id"`
+	AdminID       *uint           `json:"admin_id"`
 	Admin         *UserMinDTO     `json:"admin,omitempty"`
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`

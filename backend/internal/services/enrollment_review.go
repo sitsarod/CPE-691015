@@ -12,6 +12,9 @@ import (
 // แยกเป็น method ของตัวเองแทนที่จะยัดเข้า GetAllEnrollments เพราะต้อง query เพิ่มหลายรอบ
 // ถ้ารวมไว้กับรายการทั้งหมดจะกลายเป็น N+1 query ทุกครั้งที่เปิดหน้าแอดมิน
 func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.EnrollmentReviewDTO, error) {
+
+	expireStaleEnrollments(s.db)
+
 	var enrollment models.Enrollment
 	err := s.db.
 		Preload("Customer").
@@ -33,6 +36,9 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			RemainingSessions: enrollment.RemainingSessions,
 			BillingID:         enrollment.BillingID,
 			WaitingDays:       daysSince(enrollment.EnrollmentDate),
+			StartedAt:         enrollment.StartedAt,
+			ExpiresAt:         enrollment.ExpiresAt,
+			DaysLeft:          dto.DaysLeft(enrollment.ExpiresAt),
 		},
 		OtherEnrollments: []dto.ReviewOtherEnrollment{},
 	}
@@ -101,11 +107,17 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			Where("package_id = ? AND status = ?", pkg.ID, models.EnrollmentStatusPending).
 			Count(&pendingCount)
 
+		durationDays := pkg.DurationDays
+		if durationDays == 0 {
+			durationDays = defaultEnrollmentDurationDays
+		}
+
 		pkgInfo := dto.ReviewPackageInfo{
 			ID:            pkg.ID,
 			SessionsCount: pkg.SessionsCount,
 			HoursCount:    pkg.HoursCount,
 			Price:         pkg.Price,
+			DurationDays:  durationDays,
 			MaxSeats:      pkg.MaxSeats,
 			ActiveCount:   uint(activeCount),
 			PendingCount:  uint(pendingCount),

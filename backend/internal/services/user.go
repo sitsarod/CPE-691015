@@ -208,6 +208,8 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 	}
 
 
+	expireStaleEnrollments(s.db)
+
 	var count int64
 	err = s.db.Model(&models.Enrollment{}).
 		Where("customer_id = ? AND status = ? AND remaining_sessions > ?", customer.ID, models.EnrollmentStatusActive, 0).
@@ -221,6 +223,8 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 
 func (s *UserService) GetActiveStudents() ([]models.User, error) {
     var users []models.User
+
+    expireStaleEnrollments(s.db)
 
     err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
         Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
