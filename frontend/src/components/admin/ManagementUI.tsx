@@ -1,14 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, Edit, Trash2, MoreVertical, AlertCircle } from "lucide-react";
+import { Eye, Trash2, MoreVertical, AlertCircle } from "lucide-react";
 
-// สีแบรนด์ (แดง) — ใช้กับ primary action / accent ทุกหน้าจัดการ
 export const BRAND = "#E63946";
 
 export type RoleKey = "admin" | "coach" | "customer";
 
-// แปลง role string ให้เหลือ 3 ค่าหลัก
 export const normalizeRole = (role?: string): RoleKey => {
   const r = role?.toLowerCase();
   if (r === "admin") return "admin";
@@ -16,13 +14,12 @@ export const normalizeRole = (role?: string): RoleKey => {
   return "customer";
 };
 
-// ถือว่า active เว้นแต่ status จะบอกชัดว่าปิดใช้งาน
 export const isActive = (status?: string) => {
   const s = status?.toLowerCase();
   return s !== "inactive" && s !== "suspended" && s !== "rejected";
 };
 
-/* ===================== การ์ดสรุปตัวเลข ===================== */
+/* ===================== การ์ดสรุปตัวเลข (ปรับเงาให้พอดี ไม่ฟุ้งเกินไป) ===================== */
 export function SummaryCard({
   label,
   value,
@@ -35,13 +32,15 @@ export function SummaryCard({
   tint: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm transition hover:shadow-md">
-      <div className="flex items-start justify-between">
+    <div className="group rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+      <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-500">{label}</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{value}</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-gray-900">
+            {value.toLocaleString()}
+          </p>
         </div>
-        <div className={`grid h-11 w-11 place-items-center rounded-xl ${tint}`}>
+        <div className={`grid h-11 w-11 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${tint}`}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -49,37 +48,7 @@ export function SummaryCard({
   );
 }
 
-/* ===================== Avatar วงกลม (อักษรย่อ) ===================== */
-const AVATAR_STYLES: Record<RoleKey, string> = {
-  admin: "bg-violet-100 text-violet-700",
-  coach: "bg-sky-100 text-sky-700",
-  customer: "bg-rose-100 text-rose-700",
-};
-
-export function Avatar({
-  firstName,
-  lastName,
-  role = "customer",
-  size = "md",
-}: {
-  firstName?: string;
-  lastName?: string;
-  role?: RoleKey;
-  size?: "md" | "lg";
-}) {
-  const initials =
-    `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
-  const dim = size === "lg" ? "h-12 w-12 text-base" : "h-9 w-9 text-xs";
-  return (
-    <div
-      className={`grid shrink-0 place-items-center rounded-full font-bold ${dim} ${AVATAR_STYLES[role]}`}
-    >
-      {initials}
-    </div>
-  );
-}
-
-/* ===================== Badge บทบาท (pill) ===================== */
+/* ===================== Badge บทบาท ===================== */
 export function RoleBadge({ role }: { role: RoleKey }) {
   const map: Record<RoleKey, { label: string; cls: string }> = {
     admin: { label: "Admin", cls: "bg-violet-50 text-violet-700 ring-violet-600/20" },
@@ -88,26 +57,22 @@ export function RoleBadge({ role }: { role: RoleKey }) {
   };
   const { label, cls } = map[role];
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}
-    >
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>
       {label}
     </span>
   );
 }
 
-/* ===================== Badge ทั่วไป (pill สีกำหนดเอง) ===================== */
+/* ===================== Badge สีกำหนดเอง ===================== */
 export function Pill({ label, color }: { label: string; color: string }) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${color}`}
-    >
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${color}`}>
       {label}
     </span>
   );
 }
 
-/* ===================== Pill สถานะ (active / inactive) ===================== */
+/* ===================== Pill สถานะ ===================== */
 export function StatusPill({ active, status }: { active: boolean; status?: string }) {
   if (active) {
     return (
@@ -128,11 +93,9 @@ export function StatusPill({ active, status }: { active: boolean; status?: strin
 /* ===================== เมนู dropdown จัดการต่อแถว ===================== */
 export function RowActionMenu({
   onView,
-  onEdit,
   onDelete,
 }: {
   onView: () => void;
-  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -193,11 +156,9 @@ export function RowActionMenu({
         <div
           ref={menuRef}
           style={{ top: coords.top, left: coords.left, width: MENU_W }}
-          className="fixed z-50 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
+          className="fixed z-50 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-black/5"
         >
           <MenuItem icon={Eye} label="ดูรายละเอียด" onClick={() => run(onView)} />
-          <MenuItem icon={Edit} label="แก้ไข" onClick={() => run(onEdit)} />
-          <div className="my-1 h-px bg-gray-100" />
           <MenuItem icon={Trash2} label="ลบ" danger onClick={() => run(onDelete)} />
         </div>
       )}
@@ -220,9 +181,7 @@ function MenuItem({
     <button
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium transition ${
-        danger
-          ? "text-red-600 hover:bg-red-50"
-          : "text-gray-700 hover:bg-gray-50"
+        danger ? "text-red-600 hover:bg-red-50" : "text-gray-700 hover:bg-gray-50"
       }`}
     >
       <Icon className="h-4 w-4" />

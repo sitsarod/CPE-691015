@@ -6,14 +6,14 @@ import RoleGuard from "@/components/RoleGuard";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <RoleGuard allow={["admin"]}>
-      <div className="min-h-screen bg-gray-50 font-sans">
+      <div className="min-h-screen bg-white font-sans">
 
         <AdminTopBar />
         <AdminSideBar />
 
         <div className="flex flex-col min-h-screen pt-24 pl-[84px]">
 
-          <main className="flex-1 p-8 bg-gray-50">
+          <main className="flex-1 p-8 bg-white">
             {children}
           </main>
 

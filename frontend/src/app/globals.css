@@ -75,3 +75,26 @@ body {
   border: 1px solid var(--border-light);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 }
+
+/* =========================================================
+   Table Reset & Global Overrides (แก้ปัญหาเส้นขอบตารางดำ/แข็ง)
+   ========================================================= */
+table {
+  border-collapse: collapse;
+}
+
+/* บังคับให้เส้นขอบของแถวและเซลล์เป็นสีเทาอ่อนจางๆ เสมอ */
+table th, 
+table td {
+  border-color: #f3f4f6 !important; /* gray-100 */
+}
+
+/* ล้างเส้นขอบที่ไม่จำเป็นตรงหัวตาราง */
+table thead tr {
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+/* ลบขอบล่างของแถวมุมสุดท้าย */
+table tbody tr:last-child {
+  border-bottom: none !important;
+}
