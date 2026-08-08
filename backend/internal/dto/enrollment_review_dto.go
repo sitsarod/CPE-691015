@@ -22,6 +22,9 @@ type ReviewEnrollmentInfo struct {
 	BillingID         *uint     `json:"billing_id"`
 	// WaitingDays จำนวนวันที่คำขอนี้รออยู่ ใช้จัดลำดับความเร่งด่วน
 	WaitingDays int `json:"waiting_days"`
+	StartedAt *time.Time `json:"started_at"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	DaysLeft  *int       `json:"days_left"`
 }
 
 // ReviewCustomerInfo ข้อมูลส่วนตัวและการติดต่อของผู้สมัคร
@@ -57,6 +60,7 @@ type ReviewPackageInfo struct {
 	SessionsCount uint    `json:"sessions_count"`
 	HoursCount    uint    `json:"hours_count"`
 	Price         float64 `json:"price"`
+	DurationDays uint `json:"duration_days"`
 
 	MaxSeats uint `json:"max_seats"`
 	// ActiveCount = จำนวนที่อนุมัติแล้ว — เป็นตัวเลขที่ ApproveEnrollment ใช้ตัดสินว่าที่นั่งเต็มหรือยัง

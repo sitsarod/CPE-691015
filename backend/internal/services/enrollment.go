@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -25,6 +26,129 @@ var (
 	ErrEnrollmentBillingLocked = errors.New("ไม่สามารถยกเลิกได้ เนื่องจากบิลที่เกี่ยวข้องถูกชำระหรือกำลังตรวจสอบอยู่ กรุณาจัดการการชำระเงินก่อน")
 )
 
+
+const defaultEnrollmentDurationDays = 30
+
+const billingTypeCourseFee = "ค่าคอร์สเรียน"
+
+func resolveDurationDays(pkg *models.Package, enrollmentID uint) uint {
+	if pkg == nil {
+		log.Printf("[enrollment] #%d: ไม่มีข้อมูลแพ็กเกจตอนเปิดใช้งาน ใช้ค่าเริ่มต้น %d วัน",
+			enrollmentID, defaultEnrollmentDurationDays)
+		return defaultEnrollmentDurationDays
+	}
+	if pkg.DurationDays == 0 {
+		log.Printf("[enrollment] #%d: แพ็กเกจ #%d ไม่ได้ตั้ง duration_days ใช้ค่าเริ่มต้น %d วัน",
+			enrollmentID, pkg.ID, defaultEnrollmentDurationDays)
+		return defaultEnrollmentDurationDays
+	}
+	return pkg.DurationDays
+}
+func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) error {
+	now := time.Now()
+	expiresAt := now.AddDate(0, 0, int(resolveDurationDays(pkg, e.ID)))
+	if err := tx.Model(&models.Enrollment{}).
+		Where("id = ?", e.ID).
+		Updates(map[string]interface{}{
+			"status":     models.EnrollmentStatusActive,
+			"started_at": now,
+			"expires_at": expiresAt,
+		}).Error; err != nil {
+		return errors.New("ไม่สามารถเปิดใช้งานสิทธิ์เรียนได้")
+	}
+
+	e.Status = models.EnrollmentStatusActive
+	e.StartedAt = &now
+	e.ExpiresAt = &expiresAt
+	return nil
+}
+
+func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) error {
+	var billingType models.BillingType
+	if err := tx.Where("billing_type_name = ?", billingTypeCourseFee).First(&billingType).Error; err != nil {
+		return errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
+	}
+
+	billingUserID, err := ResolveUserID(tx, e.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	courseName := "คอร์สเรียน"
+	var sessions uint
+	var price float64
+	if e.Package != nil {
+		sessions = e.Package.SessionsCount
+		price = e.Package.Price
+		if e.Package.Course != nil {
+			courseName = e.Package.Course.CourseName
+		}
+	}
+
+	billing := models.Billing{
+		Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", courseName, sessions),
+		Amount:        price,
+		DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
+		Status:        models.StatusUnfunded,
+		CustomerID:    billingUserID,
+		BillingTypeID: billingType.ID,
+		AdminID:       adminID,
+	}
+
+	if err := tx.Create(&billing).Error; err != nil {
+		return errors.New("ไม่สามารถสร้างใบแจ้งหนี้ได้")
+	}
+
+	if err := tx.Model(&models.Enrollment{}).
+		Where("id = ?", e.ID).
+		Update("billing_id", billing.ID).Error; err != nil {
+		return errors.New("ไม่สามารถผูกใบแจ้งหนี้กับการลงทะเบียนได้")
+	}
+	e.BillingID = &billing.ID
+	return nil
+}
+
+func hasStudiedAnything(tx *gorm.DB, customerID uint, excludeEnrollmentID uint) (bool, error) {
+	var count int64
+	if err := tx.Model(&models.Enrollment{}).
+		Where("customer_id = ? AND id <> ? AND started_at IS NOT NULL",
+			customerID, excludeEnrollmentID).
+		Count(&count).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจสอบประวัติการเรียนได้")
+	}
+	return count > 0, nil
+}
+
+func hasStudiedCourse(tx *gorm.DB, customerID uint, courseID uint) (bool, error) {
+	var count int64
+	if err := tx.Model(&models.Enrollment{}).
+		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.started_at IS NOT NULL",
+			customerID, courseID).
+		Count(&count).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจสอบประวัติการเรียนคอร์สนี้ได้")
+	}
+	return count > 0, nil
+}
+
+func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
+	var taken int64
+	if err := tx.Model(&models.Enrollment{}).
+		Where("package_id = ? AND status IN ?", packageID, enrollmentApprovedStatuses).
+		Count(&taken).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจสอบจำนวนที่นั่งคงเหลือได้")
+	}
+	return uint(taken) >= maxSeats, nil
+}
+
+func expireStaleEnrollments(db *gorm.DB) {
+	if err := db.Model(&models.Enrollment{}).
+		Where("status = ? AND expires_at IS NOT NULL AND expires_at < ?",
+			models.EnrollmentStatusActive, time.Now()).
+		Update("status", models.EnrollmentStatusExpired).Error; err != nil {
+		log.Printf("[enrollment] อัปเดตสถานะใบที่หมดอายุไม่สำเร็จ: %v", err)
+	}
+}
 
 func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
 	if billingID == nil {
@@ -61,7 +185,8 @@ func (s *EnrollmentService) toUserID(customerID uint) (uint, error) {
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน
 func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	var courses []models.Course
-	
+	expireStaleEnrollments(s.db)
+
 	err := s.db.Preload("User").
 		Preload("Packages").
 		Preload("Packages.Schedules").
@@ -79,9 +204,7 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	return ToCourseDTOs(courses), nil
 }
 
-// [POST] ลงทะเบียนคอร์สเรียน (เปลี่ยนเป็นสถานะ Pending และยังไม่สร้างบิล)
-//
-// userID ที่รับเข้ามาคือ users.id — จะถูกแปลงเป็น customers.id ก่อนบันทึกลง enrollments
+// [POST] ลงทะเบียนคอร์สเรียน
 func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.Enrollment, error) {
 	var pkg models.Package
 
@@ -94,30 +217,65 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 		return nil, err
 	}
 
-	// กันสมัครแพ็กเกจเดิมซ้ำ — ต้องรวม awaiting_payment ด้วย
-	// มิฉะนั้นคนที่อนุมัติแล้วแต่ยังไม่จ่าย จะกดสมัครแพ็กเกจเดิมซ้ำได้เรื่อย ๆ
-	var existingCount int64
-	if err := s.db.Model(&models.Enrollment{}).
-		Where("customer_id = ? AND package_id = ? AND status IN ?",
-			customerID, packageID, enrollmentSeatStatuses).
-		Count(&existingCount).Error; err != nil {
-		return nil, errors.New("ไม่สามารถตรวจสอบการลงทะเบียนเดิมได้")
-	}
-	if existingCount > 0 {
-		return nil, errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
-	}
-
 	newEnrollment := models.Enrollment{
-		CustomerID:         customerID,
-		PackageID:          packageID,
-		EnrollmentDate:     time.Now(),
-		TotalSessions:      pkg.SessionsCount,
-		RemainingSessions:  pkg.SessionsCount,
-		Status:             models.EnrollmentStatusPending, // รอแอดมินอนุมัติ
+		CustomerID:        customerID,
+		PackageID:         packageID,
+		EnrollmentDate:    time.Now(),
+		TotalSessions:     pkg.SessionsCount,
+		RemainingSessions: pkg.SessionsCount,
 	}
 
-	if err := s.db.Create(&newEnrollment).Error; err != nil {
-		return nil, errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+
+		expireStaleEnrollments(tx)
+
+		var existingCount int64
+		if err := tx.Model(&models.Enrollment{}).
+			Where("customer_id = ? AND package_id = ? AND status IN ?",
+				customerID, packageID, enrollmentSeatStatuses).
+			Count(&existingCount).Error; err != nil {
+			return errors.New("ไม่สามารถตรวจสอบการลงทะเบียนเดิมได้")
+		}
+		if existingCount > 0 {
+			return errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
+		}
+
+		studiedCourse, err := hasStudiedCourse(tx, customerID, pkg.CourseID)
+		if err != nil {
+			return err
+		}
+
+		if !studiedCourse {
+
+			newEnrollment.Status = models.EnrollmentStatusPending
+			if err := tx.Create(&newEnrollment).Error; err != nil {
+				return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+			}
+			return nil
+		}
+
+
+		full, err := seatsFull(tx, packageID, pkg.MaxSeats)
+		if err != nil {
+			return err
+		}
+		if full {
+			return ErrPackageSeatsFull
+		}
+
+		if err := tx.Create(&newEnrollment).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
+		}
+		newEnrollment.Package = &pkg
+
+		if err := activateEnrollment(tx, &newEnrollment, &pkg); err != nil {
+			return err
+		}
+		return createEnrollmentBilling(tx, &newEnrollment, nil)
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &newEnrollment, nil
@@ -135,75 +293,41 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		return nil, ErrEnrollmentNotPending
 	}
 
-	// เช็คว่าที่นั่งเต็มหรือยัง — นับทั้ง active และ awaiting_payment
-	// เพราะที่นั่งถูกยึดตั้งแต่ตอนอนุมัติ ไม่ใช่ตอนจ่ายเงิน
-	var takenCount int64
-	s.db.Model(&models.Enrollment{}).
-		Where("package_id = ? AND status IN ?", enrollment.PackageID, enrollmentApprovedStatuses).
-		Count(&takenCount)
-
-	if uint(takenCount) >= enrollment.Package.MaxSeats {
-		return nil, ErrPackageSeatsFull
+	if enrollment.Package == nil {
+		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจของการลงทะเบียนนี้ (แพ็กเกจอาจถูกลบไปแล้ว)")
 	}
 
-	var billingType models.BillingType
-	if err := s.db.Where("billing_type_name = ?", "ค่าคอร์สเรียน").First(&billingType).Error; err != nil {
-		return nil, errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
-	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 
-	// Billing.CustomerID อ้างถึง users.id แต่ enrollment.CustomerID เป็น customers.id
-	// จึงต้องแปลงก่อน มิฉะนั้นบิลจะไปผูกกับผู้ใช้ผิดคน (คนที่ users.id บังเอิญ
-	// เท่ากับ customers.id นั้นพอดี) ซึ่งเป็นบั๊กที่มองไม่เห็นจนกว่าจะมีข้อมูลจริง
-	billingUserID, err := s.toUserID(enrollment.CustomerID)
-	if err != nil {
-		return nil, err
-	}
+		expireStaleEnrollments(tx)
 
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		newBilling := models.Billing{
-			Description:   fmt.Sprintf("ค่าลงทะเบียน: %s (เรียน %d ครั้ง)", enrollment.Package.Course.CourseName, enrollment.Package.SessionsCount),
-			Amount:        enrollment.Package.Price,
-			DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
-			Status:        models.StatusUnfunded,
-			CustomerID:    billingUserID,
-			BillingTypeID: billingType.ID,
-			AdminID:       adminID,
+		full, err := seatsFull(tx, enrollment.PackageID, enrollment.Package.MaxSeats)
+		if err != nil {
+			return err
+		}
+		if full {
+			return ErrPackageSeatsFull
 		}
 
-		if err := tx.Create(&newBilling).Error; err != nil {
-			return errors.New("ไม่สามารถสร้างใบแจ้งหนี้ได้")
+		if err := createEnrollmentBilling(tx, &enrollment, &adminID); err != nil {
+			return err
 		}
 
-		// ─── คอร์สแรกต้องชำระเงินก่อนจึงจะมีตารางเรียน ───
-		//
-		// "คอร์สแรก" = ยังไม่เคยมี enrollment ที่ผ่านจุดชำระเงินมาก่อน (active/completed)
-		// คนที่เคยเรียนแล้วสมัครคอร์สถัดไป จะได้ active ทันทีเหมือนเดิม ไม่ต้องรอจ่าย
-		//
-		// นับใน transaction เดียวกับการอนุมัติ เพื่อไม่ให้ผลเปลี่ยนระหว่างทาง
-		// (soft delete ถูกกรองออกโดย GORM อยู่แล้ว คำขอที่ยกเลิกไปจึงไม่ถูกนับ)
-		var priorCount int64
+		studiedBefore, err := hasStudiedAnything(tx, enrollment.CustomerID, enrollment.ID)
+		if err != nil {
+			return err
+		}
+
+		if studiedBefore {
+			return activateEnrollment(tx, &enrollment, enrollment.Package)
+		}
+
+		enrollment.Status = models.EnrollmentStatusAwaitingPayment
 		if err := tx.Model(&models.Enrollment{}).
-			Where("customer_id = ? AND id <> ? AND status IN ?",
-				enrollment.CustomerID, enrollment.ID,
-				[]models.EnrollmentStatus{
-					models.EnrollmentStatusActive,
-					models.EnrollmentStatusCompleted,
-				}).
-			Count(&priorCount).Error; err != nil {
-			return errors.New("ไม่สามารถตรวจสอบประวัติการเรียนได้")
-		}
-
-		if priorCount == 0 {
-			enrollment.Status = models.EnrollmentStatusAwaitingPayment
-		} else {
-			enrollment.Status = models.EnrollmentStatusActive
-		}
-
-		enrollment.BillingID = &newBilling.ID
-		if err := tx.Save(&enrollment).Error; err != nil {
+			Where("id = ?", enrollment.ID).
+			Update("status", models.EnrollmentStatusAwaitingPayment).Error; err != nil {
 			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
 		}
-
 		return nil
 	})
 
@@ -224,11 +348,13 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 	if err != nil {
 		return nil, err
 	}
+	expireStaleEnrollments(s.db)
 
 	var enrollments []models.Enrollment
 	err = s.db.Preload("Package").
 		Preload("Package.Course").
 		Preload("Package.Schedules").
+		Preload("Billing").
 		Where("customer_id = ?", customerID).
 		Order("enrollment_date DESC").
 		Find(&enrollments).Error
@@ -257,6 +383,10 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 			TotalSessions:     e.TotalSessions,
 			RemainingSessions: e.RemainingSessions,
 			BillingID:         e.BillingID,
+			StartedAt:         e.StartedAt,
+			ExpiresAt:         e.ExpiresAt,
+			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
+			IsOverdue:         dto.IsBillingOverdue(e.Billing),
 		}
 
 		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
@@ -304,11 +434,14 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 
 func (s *EnrollmentService) GetAllEnrollments() ([]models.Enrollment, error) {
 	var enrollments []models.Enrollment
+	expireStaleEnrollments(s.db)
+
 	err := s.db.Preload("Customer").
 		Preload("Customer.User").
 		Preload("Package").
 		Preload("Package.Course").
 		Preload("Package.Schedules").
+		Preload("Billing").
 		Order("created_at desc").
 		Find(&enrollments).Error
 	return enrollments, err
@@ -331,6 +464,32 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 				enrollment.RemainingSessions = uint(*req.RemainingSessions)
 			}
 			return tx.Save(&enrollment).Error
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &enrollment, nil
+	}
+
+	if req.Status != nil && models.EnrollmentStatus(*req.Status) == models.EnrollmentStatusActive && enrollment.StartedAt == nil {
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			var pkg models.Package
+			if err := tx.First(&pkg, enrollment.PackageID).Error; err != nil {
+				// ไม่ล้ม — activateEnrollment รับ nil ได้และจะ fallback เป็นระยะเวลาเริ่มต้น
+				if err := activateEnrollment(tx, &enrollment, nil); err != nil {
+					return err
+				}
+			} else if err := activateEnrollment(tx, &enrollment, &pkg); err != nil {
+				return err
+			}
+
+			if req.RemainingSessions != nil {
+				enrollment.RemainingSessions = uint(*req.RemainingSessions)
+				return tx.Model(&models.Enrollment{}).
+					Where("id = ?", enrollment.ID).
+					Update("remaining_sessions", enrollment.RemainingSessions).Error
+			}
+			return nil
 		})
 		if err != nil {
 			return nil, err

@@ -49,6 +49,7 @@ func main() {
 		&models.Package{},
 		&models.PackageSchedule{},
 		&models.Enrollment{},
+		&models.EnrollmentExtension{},
 		&models.StudentAttendance{},
 		&models.CoachAttendance{},
 		&models.Billing{},

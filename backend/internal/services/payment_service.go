@@ -251,18 +251,25 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error)
 			billingIDs = append(billingIDs, item.BillingID)
 		}
 
-		// ปลดล็อกคอร์สแรกที่รอชำระเงินอยู่ ให้เริ่มเรียนได้
+		// ปลดล็อกคอร์สของลูกค้าใหม่ที่รอชำระเงินอยู่ ให้เริ่มเรียนได้ พร้อมเริ่มเดินนาฬิกา
 		//
-		// นักเรียนใหม่จะถูกตั้งเป็น awaiting_payment ตอนแอดมินอนุมัติ (ดู ApproveEnrollment)
+		// ลูกค้าใหม่จะถูกตั้งเป็น awaiting_payment ตอนแอดมินอนุมัติ (ดู ApproveEnrollment)
 		// และจะได้ตารางเรียนก็ต่อเมื่อบิลที่ผูกไว้ถูกยืนยันการชำระเงินแล้วเท่านั้น
 		//
 		// ทำใน transaction เดียวกับการอัปเดตบิล เพื่อไม่ให้เกิดกรณีบิลจ่ายแล้ว
 		// แต่ enrollment ยังค้างที่ awaiting_payment
 		if len(billingIDs) > 0 {
-			if err := tx.Model(&models.Enrollment{}).
+			var awaiting []models.Enrollment
+			if err := tx.Preload("Package").
 				Where("billing_id IN ? AND status = ?", billingIDs, models.EnrollmentStatusAwaitingPayment).
-				Update("status", models.EnrollmentStatusActive).Error; err != nil {
-				return errors.New("ไม่สามารถเปิดใช้งานคอร์สเรียนหลังชำระเงินได้")
+				Find(&awaiting).Error; err != nil {
+				return errors.New("ไม่สามารถดึงรายการคอร์สที่รอชำระเงินได้")
+			}
+
+			for i := range awaiting {
+				if err := activateEnrollment(tx, &awaiting[i], awaiting[i].Package); err != nil {
+					return err
+				}
 			}
 		}
 

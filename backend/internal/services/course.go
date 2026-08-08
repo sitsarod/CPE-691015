@@ -54,6 +54,7 @@ func NewCourseService(db *gorm.DB) *CourseService {
 // (C1) เดิม public เห็นคอร์ส draft/inactive ด้วย จึงต้องแยกเงื่อนไขตาม caller
 func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) {
 	var courses []models.Course
+	expireStaleEnrollments(s.db)
 
 	query := s.db.Preload("User").
 		Preload("Packages").
@@ -81,6 +82,7 @@ func (s *CourseService) GetAllCourses(onlyActive bool) ([]dto.CourseDTO, error) 
 // onlyActive = false → หาได้ทุกสถานะ (แอดมิน/ใช้ภายในหลังสร้างคอร์ส)
 func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO, error) {
 	var courseItem models.Course
+	expireStaleEnrollments(s.db)
 
 	query := s.db.Preload("User").
 		Preload("Packages").

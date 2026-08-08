@@ -399,7 +399,8 @@ func seedCoursesAndPackages(db *gorm.DB) {
                 HoursCount:    p.HoursCount,
                 Price:         p.Price,
                 MaxSeats:      p.MaxSeats,
-                CourseID:      course.ID,
+                DurationDays: 30,
+                CourseID:     course.ID,
             }
             db.Create(&pkg)
 
