@@ -11,6 +11,8 @@ import {
   AlertCircle,
   ArrowLeft,
   Wallet,
+  CalendarX,
+  AlertTriangle,
 } from "lucide-react";
 import { Enrollment } from "@/types/enrollment";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
@@ -30,6 +32,11 @@ import {
   dayLabel,
   sortSchedulesByDay,
 } from "@/components/course/courseUtils";
+import {
+  describeExpiry,
+  expiryTextClass,
+  formatThaiDate,
+} from "@/components/course/expiryUtils";
 
 /** แพ็กเกจที่ผู้ใช้เลือก พร้อมชื่อคอร์สที่ผูกอยู่ (DTO ของแพ็กเกจไม่มีชื่อคอร์สในตัว) */
 interface SelectedPackage {
@@ -211,6 +218,7 @@ export default function EnrollmentPage() {
             {enrollments.map((item) => {
               // คำนวณครั้งเดียว ของเดิมเรียกฟังก์ชันซ้ำสองรอบใน JSX
               const schedules = sortSchedulesByDay(item.package?.schedules);
+              const expiry = describeExpiry(item.days_left, item.status);
 
               return (
               <div
@@ -227,8 +235,13 @@ export default function EnrollmentPage() {
                     <Wallet className="w-3 h-3 mr-1" /> รอชำระเงิน
                   </div>
                 )}
+                {item.status === 'expired' && (
+                  <div className="absolute top-0 left-0 right-0 bg-slate-200 text-slate-700 text-xs font-bold py-1.5 text-center flex justify-center items-center">
+                    <CalendarX className="w-3 h-3 mr-1" /> หมดอายุแล้ว
+                  </div>
+                )}
 
-                <div className={`flex justify-center items-center py-4 ${item.status === 'pending' || item.status === 'awaiting_payment' ? 'mt-4 opacity-50' : ''}`}>
+                <div className={`flex justify-center items-center py-4 ${item.status === 'pending' || item.status === 'awaiting_payment' || item.status === 'expired' ? 'mt-4 opacity-50' : ''}`}>
                   <FileEdit className="w-20 h-20 text-[#CC0000]" strokeWidth={1.2} />
                 </div>
 
@@ -286,19 +299,51 @@ export default function EnrollmentPage() {
                         : "สอบถามราคา"}
                     </dd>
                   </div>
+
+                  {/* แสดงวันหมดอายุเฉพาะใบที่เริ่มนับแล้ว — ใบที่รออนุมัติ/รอชำระเงิน
+                      ยังไม่มีวันหมดอายุ (expires_at เป็น null) การแสดงจะทำให้เข้าใจผิด */}
+                  {item.expires_at && (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-gray-500 shrink-0">หมดอายุ</dt>
+                      <dd className={`font-semibold text-right ${expiryTextClass(expiry.tone)}`}>
+                        {formatThaiDate(item.expires_at)}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
 
-                <p className="mt-auto pt-3">
-                  {item.status === 'pending' ? (
-                    <span className="text-sm text-yellow-600">แอดมินกำลังตรวจสอบข้อมูล</span>
-                  ) : item.status === 'awaiting_payment' ? (
-                    <span className="text-sm text-orange-600">
-                      ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-500">เหลือ {item.remaining_sessions} ครั้ง</span>
+                <div className="mt-auto space-y-1.5 pt-3">
+
+                  {item.is_overdue && (
+                    <p className="flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-[11px] font-semibold leading-relaxed text-red-700">
+                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                      มีบิลค้างชำระเกินกำหนด กรุณาติดต่อโรงเรียน
+                    </p>
                   )}
-                </p>
+
+                  <p>
+                    {item.status === 'pending' ? (
+                      <span className="text-sm text-yellow-600">แอดมินกำลังตรวจสอบข้อมูล</span>
+                    ) : item.status === 'awaiting_payment' ? (
+                      <span className="text-sm text-orange-600">
+                        ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
+                      </span>
+                    ) : item.status === 'expired' ? (
+                      <span className="text-sm text-slate-500">
+                        ครบกำหนดแล้ว สมัครแพ็กเกจใหม่เพื่อเรียนต่อได้เลย
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-500">
+                        เหลือ {item.remaining_sessions} ครั้ง
+                        {expiry.highlight && (
+                          <span className={`ml-1 font-bold ${expiryTextClass(expiry.tone)}`}>
+                            · {expiry.label}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
               );
             })}

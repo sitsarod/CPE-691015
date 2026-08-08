@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet } from "lucide-react";
+import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet, CalendarX, AlertTriangle, CalendarPlus } from "lucide-react";
 import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
 import type { AdminEnrollment } from "@/types/enrollment";
+import ExtendEnrollmentModal from "./components/ExtendEnrollmentModal";
+import {
+  describeExpiry,
+  expiryTextClass,
+  formatThaiDate,
+} from "@/components/course/expiryUtils";
 import EnrollmentReviewPanel from "./components/EnrollmentReviewPanel";
 
 
@@ -14,6 +20,8 @@ export default function AdminEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  /** ใบที่กำลังจะขยายเวลา — เก็บทั้ง object เพราะ modal ต้องใช้ชื่อและวันหมดอายุเดิม */
+  const [extendingEnrollment, setExtendingEnrollment] = useState<AdminEnrollment | null>(null);
 
   const loadData = async () => {
     try {
@@ -87,6 +95,7 @@ export default function AdminEnrollmentsPage() {
               <th className="p-4">คอร์สเรียน / แพ็กเกจ</th>
               <th className="p-4">ราคา</th>
               <th className="p-4">วันที่สมัคร</th>
+              <th className="p-4">สิทธิ์เรียน</th>
               <th className="p-4">สถานะ</th>
               <th className="p-4 text-center">จัดการ</th>
             </tr>
@@ -108,6 +117,27 @@ export default function AdminEnrollmentsPage() {
                 <td className="p-4 text-sm text-gray-600">
                   {new Date(item.enrollment_date).toLocaleDateString('th-TH')}
                 </td>
+                <td className="p-4 text-sm">
+                  {item.expires_at ? (
+                    <>
+                      <div className="text-gray-700">{formatThaiDate(item.expires_at)}</div>
+                      <div
+                        className={`text-xs font-semibold ${expiryTextClass(
+                          describeExpiry(item.days_left, item.status).tone
+                        )}`}
+                      >
+                        {describeExpiry(item.days_left, item.status).label}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400">ยังไม่เริ่มนับ</span>
+                  )}
+                  {item.is_overdue && (
+                    <div className="mt-1 inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
+                      <AlertTriangle className="h-3 w-3" /> ค้างชำระ
+                    </div>
+                  )}
+                </td>
                 <td className="p-4">
                   {item.status === 'pending' ? (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
@@ -121,6 +151,10 @@ export default function AdminEnrollmentsPage() {
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
                       <CheckCircle className="w-3 h-3 mr-1" /> อนุมัติแล้ว
                     </span>
+                  ) : item.status === 'expired' ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                      <CalendarX className="w-3 h-3 mr-1" /> หมดอายุ
+                    </span>
                   ) : (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
                       {item.status}
@@ -128,23 +162,36 @@ export default function AdminEnrollmentsPage() {
                   )}
                 </td>
                 <td className="p-4 text-center">
-                  <button
-                    onClick={() => setReviewingId(item.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
-                      item.status === 'pending'
-                        ? 'bg-[#CC0000] text-white hover:bg-red-700'
-                        : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FileSearch className="h-4 w-4" />
-                    {item.status === 'pending' ? 'ตรวจสอบ' : 'ดูข้อมูล'}
-                  </button>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setReviewingId(item.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
+                        item.status === 'pending'
+                          ? 'bg-[#CC0000] text-white hover:bg-red-700'
+                          : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <FileSearch className="h-4 w-4" />
+                      {item.status === 'pending' ? 'ตรวจสอบ' : 'ดูข้อมูล'}
+                    </button>
+
+                    {item.expires_at && item.status !== 'cancelled' && (
+                      <button
+                        onClick={() => setExtendingEnrollment(item)}
+                        title="ขยายระยะเวลาเรียน"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-600 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                        ขยายเวลา
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
             {filteredEnrollments.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500">
+                <td colSpan={7} className="p-8 text-center text-gray-500">
                   <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   ไม่พบข้อมูลคำขอสมัครเรียน
                 </td>
@@ -159,6 +206,12 @@ export default function AdminEnrollmentsPage() {
         onClose={() => setReviewingId(null)}
         onApprove={handleApprove}
         isApproving={processingId != null}
+      />
+
+      <ExtendEnrollmentModal
+        enrollment={extendingEnrollment}
+        onClose={() => setExtendingEnrollment(null)}
+        onSuccess={loadData}
       />
     </div>
   );

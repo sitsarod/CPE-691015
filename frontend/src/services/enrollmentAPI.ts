@@ -6,7 +6,10 @@ import {
   EnrollmentReview,
   CreateEnrollmentReq,
   CreateEnrollmentRes,
-  UpdateEnrollmentReq
+  UpdateEnrollmentReq,
+  ExtendEnrollmentReq,
+  ExtendEnrollmentRes,
+  EnrollmentExtension
 } from "@/types/enrollment";
 import { CourseDTO } from "@/types/course";
 
@@ -88,6 +91,50 @@ export async function fetchEnrollmentReview(id: number, token: string): Promise<
     throw new Error(resData.error || resData.message || "ไม่สามารถดึงข้อมูลผู้สมัครได้");
   }
   return resData.data;
+}
+
+// [POST] แอดมินขยายระยะเวลาเรียนให้นักเรียนรายบุคคล (adminOnly)
+export async function extendEnrollment(
+  id: number,
+  data: ExtendEnrollmentReq,
+  token: string
+): Promise<ExtendEnrollmentRes> {
+  const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
+  const response = await fetch(`${BASE_URL}/admin/enrollments/${id}/extend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cleanToken}`
+    },
+    body: JSON.stringify(data)
+  });
+
+  const resData: ApiResponse<ExtendEnrollmentRes> = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถขยายระยะเวลาได้");
+  }
+  return resData.data;
+}
+
+// [GET] ประวัติการขยายเวลาของการลงทะเบียนใบหนึ่ง (adminOnly)
+export async function fetchEnrollmentExtensions(
+  id: number,
+  token: string
+): Promise<EnrollmentExtension[]> {
+  const cleanToken = (token || "").trim().replace(/[\r\n]/g, '');
+  const response = await fetch(`${BASE_URL}/admin/enrollments/${id}/extensions`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cleanToken}`
+    }
+  });
+
+  const resData: ApiResponse<EnrollmentExtension[]> = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถดึงประวัติการขยายเวลาได้");
+  }
+  return resData.data ?? [];
 }
 
 // [POST] ลูกค้ากดสมัครเรียน (Protected)

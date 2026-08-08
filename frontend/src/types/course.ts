@@ -25,6 +25,7 @@ export interface CoursePackageDTO {
   max_seats?: number;
   current_enrollments?: number;
   price: number;
+  duration_days?: number;
   schedules: PackageScheduleInfoDTO[];
 }
 
@@ -62,6 +63,7 @@ export interface CreatePackageReq {
   hours_count: number;
   max_seats: number;
   price: number;
+  duration_days?: number;
   schedules: PackageScheduleInfoDTO[];
 }
 
@@ -70,6 +72,7 @@ export interface UpdatePackageReq {
   hours_count?: number;
   max_seats?: number;
   price?: number;
+  duration_days?: number;
   schedules?: PackageScheduleInfoDTO[];
 }
 
@@ -87,5 +90,6 @@ export interface PackageFormInput {
   hours_count: number | "";
   max_seats: number | "";
   price: number | "";
+  duration_days: number | "";
   schedules: ScheduleFormInput[];
 }

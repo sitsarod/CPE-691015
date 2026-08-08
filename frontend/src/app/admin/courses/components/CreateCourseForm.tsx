@@ -13,10 +13,10 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   const [description, setDescription] = useState("");
   const [learningOutcomes, setLearningOutcomes] = useState("");
   const [packages, setPackages] = useState<PackageFormInput[]>([
-    { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }
+    { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }
   ]);
 
-  const addPackage = () => setPackages([...packages, { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }]);
+  const addPackage = () => setPackages([...packages, { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }]);
   
   const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
   
@@ -70,6 +70,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            ...(pkg.duration_days !== "" ? { duration_days: Number(pkg.duration_days) } : {}),
             schedules: pkg.schedules.map(s => ({
               day_of_week: s.day_of_week,
               start_time: s.start_time,
@@ -154,7 +155,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1}</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
@@ -181,10 +182,21 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>
-                  <input 
+                  <input
                     type="number" required min="0" value={pkg.price} onChange={(e) => updatePackage(pkg.id, "price", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เช่น 2000"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">อายุสิทธิ์ (วัน)</label>
+                  <input
+                    type="number" min="1" max="366" value={pkg.duration_days}
+                    onChange={(e) => updatePackage(pkg.id, "duration_days", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เว้นว่าง = 30"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    นับจากวันที่เริ่มเรียน · 1 เดือน = 30
+                  </p>
                 </div>
               </div>
 
