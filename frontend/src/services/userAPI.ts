@@ -1,40 +1,9 @@
 import { apiFetch } from "@/services/apiClient";
-
-export interface UserProfileResponseDTO {
-  id: number;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  isStudent: boolean;
-
-  nickname?: string;
-  phoneNumber?: string;
-  birthDate?: string;
-  gender?: string;
-  parentEmail?: string;
-  parentPhoneNumber?: string;
-  status?: string;
-}
-
-export interface StudentListResponseDTO {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  nickname: string;
-  phoneNumber: string;
-}
-
-export interface UpdateProfileInput {
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  nickname?: string;
-  phoneNumber?: string;
-  parentEmail?: string;
-  parentPhoneNumber?: string;
-}
+import {
+  UserProfileResponseDTO,
+  UpdateProfileInput,
+  StudentListResponseDTO,
+} from "@/types/user";
 
 // ข้อมูลสำหรับให้แอดมินสร้างผู้ใช้ใหม่ (ตรงกับ models.User ฝั่ง backend)
 export interface CreateUserInput {
@@ -103,3 +72,4 @@ export async function deleteUserAPI(userId: number): Promise<void> {
     method: "DELETE",
   });
 }
+export type { StudentListResponseDTO };
