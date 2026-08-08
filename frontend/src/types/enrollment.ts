@@ -14,13 +14,6 @@ export interface ScheduleInfo {
   end_time: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// "คอร์สของฉัน" (GET /enrollments/customer/:id)
-//
-// backend คืน DTO แล้ว ไม่ใช่ models.Enrollment ดิบ จึงมี description และ
-// learning_outcomes ของคอร์สมาด้วย (ฟิลด์ learning_outcomes ตั้ง json:"-" ไว้ที่ model
-// เพราะ DB เก็บเป็น text บรรทัดละข้อ — service เป็นคนแปลงเป็น array ให้)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface EnrollmentCourseInfo {
   id: number;
@@ -41,11 +34,15 @@ export interface Enrollment {
   enrollment_date: string;
   total_sessions: number;
   remaining_sessions: number;
-  /** ⚠️ ยังเป็น 0 เสมอจนกว่าจะมีระบบเช็คชื่อที่หัก remaining_sessions (CODE_REVIEW E6) */
   attended_sessions: number;
   status: string;
   billing_id: number | null;
   package: EnrollmentPackageInfo | null;
+
+  started_at: string | null;
+  expires_at: string | null;
+  days_left: number | null;
+  is_overdue: boolean;
 }
 
 
@@ -76,6 +73,10 @@ export interface AdminEnrollment {
   remaining_sessions: number;
   status: string;
   billing_id: number | null;
+  started_at: string | null;
+  expires_at: string | null;
+  days_left: number | null;
+  is_overdue: boolean;
   customer: AdminEnrollmentCustomer | null;
   package: AdminEnrollmentPackage | null;
 }
@@ -91,6 +92,9 @@ export interface ReviewEnrollmentInfo {
   billing_id: number | null;
   /** จำนวนวันที่คำขอนี้รออยู่ */
   waiting_days: number;
+  started_at: string | null;
+  expires_at: string | null;
+  days_left: number | null;
 }
 
 export interface ReviewCustomerInfo {
@@ -121,8 +125,8 @@ export interface ReviewPackageInfo {
   sessions_count: number;
   hours_count: number;
   price: number;
+  duration_days: number;
   max_seats: number;
-  /** จำนวนที่อนุมัติแล้ว — ตัวเลขที่ backend ใช้ตัดสินว่าที่นั่งเต็มหรือยัง */
   active_count: number;
   /** คำขอที่ยังรออนุมัติ (รวมใบนี้) */
   pending_count: number;
@@ -177,6 +181,29 @@ export interface FormattedEnrollment {
 // และให้ทุกที่ใช้ CourseDTO จาก @/types/course แหล่งเดียว
 
 
+export interface ExtendEnrollmentReq {
+  extend_days: number;
+  reason: string;
+}
+
+export interface EnrollmentExtension {
+  id: number;
+  enrollment_id: number;
+  extend_days: number;
+  reason: string;
+  previous_expires_at: string | null;
+  new_expires_at: string | null;
+  extended_by_user_id: number;
+  extended_at: string;
+}
+
+export interface ExtendEnrollmentRes {
+  enrollment_id: number;
+  status: string;
+  expires_at: string | null;
+  days_left: number | null;
+  extension: EnrollmentExtension;
+}
 
 export interface CreateEnrollmentReq {
   customer_id: number;

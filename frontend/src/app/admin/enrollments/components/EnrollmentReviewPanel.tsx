@@ -17,9 +17,18 @@ import {
   CheckCircle2,
   Armchair,
 } from "lucide-react";
-import { EnrollmentReview } from "@/types/enrollment";
-import { fetchEnrollmentReview } from "@/services/enrollmentAPI";
+import { EnrollmentReview, EnrollmentExtension } from "@/types/enrollment";
+import {
+  fetchEnrollmentReview,
+  fetchEnrollmentExtensions,
+} from "@/services/enrollmentAPI";
 import { dayLabel, groupSchedulesByTime } from "@/components/course/courseUtils";
+import {
+  describeExpiry,
+  expiryBadgeClass,
+  formatThaiDate,
+  formatDuration,
+} from "@/components/course/expiryUtils";
 
 interface EnrollmentReviewPanelProps {
   enrollmentId: number | null;
@@ -41,12 +50,14 @@ export default function EnrollmentReviewPanel({
   isApproving,
 }: EnrollmentReviewPanelProps) {
   const [data, setData] = useState<EnrollmentReview | null>(null);
+  const [extensions, setExtensions] = useState<EnrollmentExtension[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (enrollmentId == null) {
       setData(null);
+      setExtensions([]);
       setError(null);
       return;
     }
@@ -59,6 +70,14 @@ export default function EnrollmentReviewPanel({
         const token = localStorage.getItem("token") || "";
         const res = await fetchEnrollmentReview(enrollmentId, token);
         if (!cancelled) setData(res);
+
+        // ประวัติการขยายเวลาเป็นข้อมูลเสริม ถ้าดึงไม่ได้ก็ไม่ควรทำให้ทั้งแผงพัง
+        try {
+          const ext = await fetchEnrollmentExtensions(enrollmentId, token);
+          if (!cancelled) setExtensions(ext);
+        } catch {
+          if (!cancelled) setExtensions([]);
+        }
       } catch (err: unknown) {
         if (!cancelled) {
           setError(
@@ -180,6 +199,63 @@ export default function EnrollmentReviewPanel({
                 </dl>
               </Section>
 
+              {data.enrollment.expires_at && (
+                <Section
+                  icon={<CalendarClock className="h-4 w-4" />}
+                  title="ช่วงเวลาที่ใช้สิทธิ์ได้"
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-gray-200 p-3">
+                      <p className="text-xs text-gray-500">เริ่มเรียน</p>
+                      <p className="mt-0.5 text-sm font-bold text-gray-900">
+                        {formatThaiDate(data.enrollment.started_at)}
+                      </p>
+                    </div>
+                    <div
+                      className={`rounded-xl border p-3 ${expiryBadgeClass(
+                        describeExpiry(data.enrollment.days_left, data.enrollment.status).tone
+                      )}`}
+                    >
+                      <p className="text-xs opacity-70">หมดอายุ</p>
+                      <p className="mt-0.5 text-sm font-bold">
+                        {formatThaiDate(data.enrollment.expires_at)}
+                      </p>
+                      <p className="text-xs font-semibold">
+                        {describeExpiry(data.enrollment.days_left, data.enrollment.status).label}
+                      </p>
+                    </div>
+                  </div>
+
+                  {extensions.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-gray-200 p-3">
+                      <p className="mb-2 text-xs font-bold text-gray-700">
+                        เคยขยายเวลามาแล้ว {extensions.length} ครั้ง
+                      </p>
+                      <ul className="space-y-2">
+                        {extensions.map((ext) => (
+                          <li
+                            key={`ext-${ext.id}`}
+                            className="border-l-2 border-gray-200 pl-2.5 text-xs"
+                          >
+                            <div className="flex justify-between gap-2">
+                              <span className="font-semibold text-gray-800">
+                                +{ext.extend_days} วัน
+                              </span>
+                              <span className="text-gray-400">
+                                {formatThaiDate(ext.extended_at)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 leading-relaxed text-gray-500">
+                              {ext.reason}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Section>
+              )}
+
               {/* แพ็กเกจที่สมัคร */}
               <Section icon={<Armchair className="h-4 w-4" />} title="แพ็กเกจที่สมัคร">
                 <div className="rounded-xl border border-gray-200 p-4">
@@ -193,6 +269,11 @@ export default function EnrollmentReviewPanel({
                       ? `${data.package.price.toLocaleString("th-TH")} บาท`
                       : "ยังไม่ได้ตั้งราคา"}
                   </p>
+                  {data.package.duration_days > 0 && (
+                    <p className="mt-0.5 text-sm text-gray-600">
+                      สิทธิ์เรียน {formatDuration(data.package.duration_days).replace("เรียนได้ ", "")} นับจากวันเริ่มเรียน
+                    </p>
+                  )}
 
                   {groupSchedulesByTime(data.package.schedules).map((g, i) => (
                     <p key={`sch-${i}`} className="mt-2 text-xs text-gray-500">

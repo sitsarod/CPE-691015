@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Calendar, Users, Timer, TicketCheck } from "lucide-react";
+import { Clock, Calendar, Users, Timer, TicketCheck, CalendarClock } from "lucide-react";
 import { CoursePackageDTO } from "@/types/course";
 import {
   dayLabel,
@@ -14,6 +14,7 @@ import {
   formatPrice,
   formatNumber,
 } from "./courseUtils";
+import { formatDuration } from "./expiryUtils";
 
 interface PackageCardProps {
   pkg: CoursePackageDTO;
@@ -33,6 +34,7 @@ export default function PackageCard({
   const left = seatsLeft(pkg);
   const total = seatsTotal(pkg);
   const fillPercent = seatsFillPercent(pkg);
+  const durationLabel = formatDuration(pkg.duration_days);
 
   return (
     <div
@@ -74,7 +76,20 @@ export default function PackageCard({
               value={total <= 2 ? `ตัวต่อตัว (${total} คน)` : `ไม่เกิน ${total} คน`}
             />
           )}
+          {durationLabel && (
+            <DetailRow
+              icon={<CalendarClock className="h-4 w-4" />}
+              label="อายุสิทธิ์"
+              value={durationLabel.replace("เรียนได้ ", "")}
+            />
+          )}
         </dl>
+
+        {durationLabel && (
+          <p className="mb-5 -mt-2 text-[11px] leading-relaxed text-gray-400">
+            นับจากวันที่เริ่มเรียน เมื่อครบกำหนดต้องสมัครใหม่
+          </p>
+        )}
 
         {/* ตารางเรียน — แยกบรรทัดต่อวัน ไม่รวบวันที่เวลาตรงกัน */}
         {schedules.length > 0 && (
