@@ -5,7 +5,7 @@ import { reviewAPI } from '@/services/reviewAPI';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
 import { Review, CourseCoach, CreateReviewReq } from '@/types/review';
 import { Enrollment } from '@/types/enrollment';
-import { Star, Send, Loader2, BookOpen, UserRound, Sparkles } from 'lucide-react';
+import { Star, Send, Loader2, BookOpen, UserRound, Sparkles, MessageSquareText } from 'lucide-react';
 
 // ตัวเลือกคอร์สที่ลูกค้าลงทะเบียนไว้ (ตัดตัวซ้ำแล้ว)
 interface CourseOption {
@@ -154,29 +154,81 @@ export default function CustomerFeedbackPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#CC0000]"></div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-[#CC0000]" />
       </div>
     );
   }
 
+  // สรุปสถิติรีวิวของฉัน
+  const reviewCount = myReviews.length;
+  const avgRating =
+    reviewCount > 0
+      ? myReviews.reduce((s, r) => s + r.rating, 0) / reviewCount
+      : 0;
+  const featuredCount = myReviews.filter((r) => r.is_featured).length;
+
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-4xl space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div>
-        <h1 className="text-[22px] font-bold text-gray-900">รีวิวของฉัน</h1>
-        <p className="text-gray-500 text-sm mt-1">
+      <div className="border-b border-gray-200 pb-6">
+        <h1 className="flex items-center gap-3 text-3xl font-black tracking-tight text-gray-900">
+          <Star className="h-8 w-8 text-[#CC0000]" fill="currentColor" />
+          รีวิวของฉัน
+        </h1>
+        <p className="mt-1 text-sm text-gray-500">
           ให้คะแนนและรีวิวคอร์สและโค้ชที่คุณลงทะเบียนเรียน — รีวิวได้ไม่จำกัดจำนวนครั้ง
         </p>
       </div>
 
+      {/* Stat summary */}
+      {reviewCount > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-500">รีวิวทั้งหมด</p>
+              <MessageSquareText className="h-4 w-4 text-[#CC0000]" />
+            </div>
+            <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
+              {reviewCount}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-500">คะแนนเฉลี่ยที่ให้</p>
+              <Star className="h-4 w-4 text-amber-400" fill="currentColor" />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <p className="text-2xl font-bold tabular-nums text-gray-900">
+                {avgRating.toFixed(1)}
+              </p>
+              <StarRating value={Math.round(avgRating)} size={14} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-500">แสดงหน้าแรก</p>
+              <Sparkles className="h-4 w-4 text-orange-500" />
+            </div>
+            <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
+              {featuredCount}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Review form */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-5">เขียนรีวิวใหม่</h2>
+        <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-gray-800">
+          <span className="text-[#CC0000]">|</span> เขียนรีวิวใหม่
+        </h2>
 
         {courses.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            คุณยังไม่มีคอร์สที่ลงทะเบียนเรียน จึงยังเขียนรีวิวไม่ได้
+          <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-400">
+            <BookOpen className="h-9 w-9 text-gray-300" />
+            <p>คุณยังไม่มีคอร์สที่ลงทะเบียนเรียน จึงยังเขียนรีวิวไม่ได้</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -301,18 +353,21 @@ export default function CustomerFeedbackPage() {
 
       {/* My reviews */}
       <div>
-        <h2 className="text-lg font-bold text-gray-800 mb-4">รีวิวที่เคยส่ง ({myReviews.length})</h2>
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-800">
+          <span className="text-[#CC0000]">|</span> รีวิวที่เคยส่ง ({myReviews.length})
+        </h2>
 
         {myReviews.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 py-12 text-center text-gray-400">
-            คุณยังไม่เคยส่งรีวิว
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-gray-200 bg-white py-12 text-center text-gray-400">
+            <MessageSquareText className="h-10 w-10 text-gray-300" />
+            <p className="text-sm">คุณยังไม่เคยส่งรีวิว — เริ่มรีวิวคอร์สแรกของคุณได้เลย</p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             {myReviews.map((review) => (
               <div
                 key={review.id}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3"
+                className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap gap-2">

@@ -134,34 +134,6 @@ export default function CustomerDashboardPage() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-gray-50 text-gray-900 font-sans selection:bg-[#CC0000] selection:text-white pb-20 rounded-2xl overflow-hidden shadow-sm">
-      {expiringSoon.length > 0 && (
-        <div className="border-b border-orange-200 bg-orange-50 px-6 py-4">
-          <div className="flex items-start gap-3">
-            <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-orange-900">
-                คอร์สของคุณใกล้ครบกำหนดแล้ว
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {expiringSoon.map((e) => (
-                  <li key={`expiring-${e.id}`} className="text-sm text-orange-800">
-                    {e.package?.course?.course_name ?? 'คอร์สเรียน'} ·{' '}
-                    <span className="font-semibold">
-                      {describeExpiry(e.days_left, e.status).label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <a
-                href="/customer/enrollment"
-                className="mt-2 inline-block text-sm font-bold text-orange-900 underline underline-offset-2 hover:text-orange-700"
-              >
-                ไปที่คอร์สของฉันเพื่อสมัครต่อ
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hero Cinematic Section (Kept Dark for Image Visibility) */}
       <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden group">
