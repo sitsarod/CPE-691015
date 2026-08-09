@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, MessageSquareText, Settings, User, LogOut } from "lucide-react";
+import { Bell, MessageSquareText, Settings, User, LogOut, LayoutDashboard } from "lucide-react";
 export default function CustomerTopbar() {
   const router = useRouter();
   
@@ -72,6 +72,15 @@ export default function CustomerTopbar() {
             <div className="absolute right-0 mt-6 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 flex flex-col z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               
               <Link
+                href="/admin/settings"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+                ตั้งค่าหน้าแรก
+              </Link>
+
+              <Link
                 href="/admin/profile"
                 onClick={() => setIsSettingsOpen(false)}
                 className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
@@ -79,7 +88,7 @@ export default function CustomerTopbar() {
                 <User className="w-5 h-5" />
                 ตั้งค่าโปรไฟล์
               </Link>
-              
+
               <hr className="my-1 border-gray-100" />
               
               <button

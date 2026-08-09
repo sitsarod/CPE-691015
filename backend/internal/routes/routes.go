@@ -42,8 +42,11 @@ func SetupRoutes(r *gin.Engine) {
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
 
+	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
+	cloudinaryService := services.NewCloudinaryService()
+
 	expenseService := services.NewExpenseService(db)
-	expenseController := controllers.NewExpenseController(expenseService)
+	expenseController := controllers.NewExpenseController(expenseService, cloudinaryService)
 
 	r.Use(middlewares.CORSMiddleware())
 	r.Static("/uploads", "./uploads")
@@ -57,6 +60,10 @@ func SetupRoutes(r *gin.Engine) {
 	// Announcement system
 	announcementService := services.NewAnnouncementService(db)
 	announcementController := controllers.NewAnnouncementController(announcementService)
+
+	// ระบบจัดการเนื้อหาหน้าแรกสาธารณะ (Landing Page CMS)
+	homeContentService := services.NewHomeContentService(db)
+	homeContentController := controllers.NewHomeContentController(homeContentService)
 
 	// Automated Q&A system
 	autoQAService := services.NewAutoQAService(db)
@@ -286,6 +293,27 @@ func SetupRoutes(r *gin.Engine) {
 			packageGroup.POST("/", packageController.CreatePackage)
 			packageGroup.PATCH("/:id", packageController.UpdatePackage)
 			packageGroup.DELETE("/:id", packageController.DeletePackage)
+		}
+
+		// --- ระบบจัดการเนื้อหาหน้าแรกสาธารณะ ---
+		// Public: หน้าแรกดึงเนื้อหาทั้งก้อน (content + active slides + featured coaches)
+		api.GET("/home-content", homeContentController.GetPublicHome)
+		api.GET("/home-content/coaches", homeContentController.GetPublicCoaches)
+
+		// Admin: จัดการเนื้อหา, รูปสไลด์, และเลือกโค้ชที่แสดงหน้าแรก
+		adminHomeGroup := adminOnly.Group("/admin/home-content")
+		{
+			adminHomeGroup.GET("", homeContentController.GetHomeContent)
+			adminHomeGroup.PATCH("", homeContentController.UpdateHomeContent)
+
+			adminHomeGroup.GET("/slides", homeContentController.GetSlides)
+			adminHomeGroup.POST("/slides", homeContentController.CreateSlide)
+			adminHomeGroup.PATCH("/reorder-slides", homeContentController.ReorderSlides)
+			adminHomeGroup.PATCH("/slides/:id", homeContentController.UpdateSlide)
+			adminHomeGroup.DELETE("/slides/:id", homeContentController.DeleteSlide)
+
+			adminHomeGroup.GET("/coaches", homeContentController.GetAllCoachesForHome)
+			adminHomeGroup.PATCH("/coaches/:id/feature", homeContentController.SetCoachFeature)
 		}
 
 		// Announcement endpoints

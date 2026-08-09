@@ -20,6 +20,9 @@ type Coach struct {
 	PaymentInfo    string `json:"payment_info" gorm:"type:varchar(255)" valid:"required~paymentInfo is required"`
 	PayRatePerSession float64 `json:"pay_rate_per_session" gorm:"type:decimal(10,2);default:0"`
 
+	// FeatureOnHome เลือกให้โค้ชคนนี้แสดงในส่วนบุคลากรของหน้าแรกสาธารณะ
+	FeatureOnHome bool `json:"feature_on_home" gorm:"default:false"`
+
 	CoachAvailability []CoachAvailability `json:"coach_availability" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	WorkSchedules     []WorkSchedule      `json:"work_schedules" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	Photos            []Photo             `json:"photo" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
