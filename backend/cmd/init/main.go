@@ -58,6 +58,8 @@ func main() {
 		&models.PaymentItem{},
 		&models.Announcement{},
 		&models.Category{},
+		&models.HomeContent{},
+		&models.HeroSlide{},
 		&models.BankAccount{},
 		&models.Expense{},
 		&models.ChatSession{},

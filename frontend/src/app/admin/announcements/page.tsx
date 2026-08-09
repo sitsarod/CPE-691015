@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { announcementAPI } from '@/services/announcementAPI';
 import { Announcement, Category } from '@/types/announcement';
+import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
 import { Plus, Edit2, Trash2, Calendar, Tag, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 export default function AdminAnnouncementsPage() {
@@ -143,6 +144,13 @@ export default function AdminAnnouncementsPage() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const sizeError = validateImageSize(file);
+    if (sizeError) {
+      alert(sizeError);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     try {
       setUploadingImage(true);
@@ -300,7 +308,9 @@ export default function AdminAnnouncementsPage() {
               
               {/* Cover Image Upload */}
               <div className="mb-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">รูปภาพหน้าปก (Cover Image)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  รูปภาพหน้าปก (Cover Image) <span className="font-normal text-gray-400">— ไม่เกิน {MAX_UPLOAD_MB} MB</span>
+                </label>
                 <div className="flex flex-col items-start gap-4">
                   {formData.image_url && (
                     <img src={formData.image_url} alt="Cover Preview" className="w-full h-48 object-cover rounded-xl border border-gray-200 shadow-sm" />

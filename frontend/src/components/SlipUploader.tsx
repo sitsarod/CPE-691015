@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Receipt } from 'lucide-react';
+import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
 
 export interface SlipUploaderProps {
   onUploadSuccess: (url: string) => void;
@@ -19,6 +20,14 @@ export default function SlipUploader({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const sizeError = validateImageSize(file);
+    if (sizeError) {
+      if (onError) onError(sizeError);
+      else alert(sizeError);
+      e.target.value = '';
+      return;
+    }
 
     setUploading(true);
     try {
@@ -69,7 +78,7 @@ export default function SlipUploader({
         >
           <Receipt className="w-6 h-6 text-slate-400 mx-auto" />
           <span className="text-xs text-[#CD0D13] font-bold block mt-1">คลิกเลือกรูปภาพสลิป</span>
-          <span className="text-[10px] text-slate-450 block">รูปถ่าย หรือ Screenshot</span>
+          <span className="text-[10px] text-slate-450 block">รูปถ่าย หรือ Screenshot (ไม่เกิน {MAX_UPLOAD_MB} MB)</span>
         </label>
 
         {uploading && (

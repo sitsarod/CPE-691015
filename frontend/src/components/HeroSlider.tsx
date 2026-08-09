@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const images = [
-  "/slide1.jpg", 
+// รูปเริ่มต้น ใช้เป็น fallback เมื่อแอดมินยังไม่ได้ตั้งค่ารูปสไลด์
+const DEFAULT_IMAGES = [
+  "/slide1.jpg",
   "/slide2.jpg",
   "/slide3.jpg",
 ];
 
-export default function HeroSlider() {
+export default function HeroSlider({ images: imagesProp }: { images?: string[] }) {
+  const images = imagesProp && imagesProp.length > 0 ? imagesProp : DEFAULT_IMAGES;
+  const isSingle = images.length <= 1; // มีรูปเดียว = ไม่ต้องเลื่อน/ไม่มีปุ่ม
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [touchStart, setTouchStart] = useState(0);
@@ -16,18 +19,24 @@ export default function HeroSlider() {
   const [isDragging, setIsDragging] = useState(false);
 
   const isWheelCooldown = useRef(false);
-  const minSwipeDistance = 50; 
+  const minSwipeDistance = 50;
 
+  // รีเซ็ต index หากจำนวนรูปเปลี่ยน (เช่น โหลดรูปจาก API มาแทน fallback) กัน index เกินขอบเขต
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [images.length]);
 
   useEffect(() => {
+    if (isSingle) return; // มีรูปเดียว ไม่ต้องตั้งเวลาเลื่อน
+
     const timer = setInterval(() => {
-      setCurrentIndex((prevIndex) => 
+      setCurrentIndex((prevIndex) =>
         prevIndex === images.length - 1 ? 0 : prevIndex + 1
       );
     }, 5000);
-    
+
     return () => clearInterval(timer);
-  }, [currentIndex]); // <--- เพิ่มตรงนี้
+  }, [currentIndex, isSingle, images.length]);
 
   const prevSlide = () => {
     setCurrentIndex((prevIndex) => 
@@ -42,6 +51,7 @@ export default function HeroSlider() {
   };
 
   const handleSwipe = () => {
+    if (isSingle) return;
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
     
@@ -53,6 +63,7 @@ export default function HeroSlider() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    if (isSingle) return;
     if (isWheelCooldown.current) return;
 
     if (Math.abs(e.deltaX) > 20) {
@@ -70,15 +81,22 @@ export default function HeroSlider() {
   };
 
   return (
-    <div 
-      className="relative w-full h-[calc(100vh-96px)] overflow-hidden group cursor-grab active:cursor-grabbing"
+    <div
+      className={`relative w-full h-[calc(100vh-96px)] overflow-hidden group ${
+        isSingle ? "" : "cursor-grab active:cursor-grabbing"
+      }`}
       onTouchStart={(e) => {
+        if (isSingle) return;
         setTouchEnd(0);
         setTouchStart(e.targetTouches[0].clientX);
       }}
-      onTouchMove={(e) => setTouchEnd(e.targetTouches[0].clientX)}
+      onTouchMove={(e) => {
+        if (isSingle) return;
+        setTouchEnd(e.targetTouches[0].clientX);
+      }}
       onTouchEnd={handleSwipe}
       onMouseDown={(e) => {
+        if (isSingle) return;
         setIsDragging(true);
         setTouchEnd(0);
         setTouchStart(e.clientX);
@@ -119,21 +137,23 @@ export default function HeroSlider() {
         ))}
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-10">
-        {images.map((_, index) => (
-          <button
-            key={index}
-            onClick={(e) => {
-              e.stopPropagation();
-              setCurrentIndex(index);
-            }}
-            className={`h-3 rounded-full transition-all duration-300 ${
-              currentIndex === index ? "bg-red-600 w-8" : "bg-white/60 hover:bg-white w-3"
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
-          ></button>
-        ))}
-      </div>
+      {!isSingle && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-10">
+          {images.map((_, index) => (
+            <button
+              key={index}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex(index);
+              }}
+              className={`h-3 rounded-full transition-all duration-300 ${
+                currentIndex === index ? "bg-red-600 w-8" : "bg-white/60 hover:bg-white w-3"
+              }`}
+              aria-label={`Go to slide ${index + 1}`}
+            ></button>
+          ))}
+        </div>
+      )}
 
     </div>
   );
