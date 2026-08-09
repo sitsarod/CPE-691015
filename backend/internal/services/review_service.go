@@ -72,6 +72,22 @@ func (s *reviewService) CreateReview(userID uint, req *dto.CreateReviewReq) (*dt
 		}
 	}
 
+	// ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้งจึงจะรีวิวได้
+	// จำนวนคาบที่เรียนไปแล้ว = total_sessions - remaining_sessions (ตรงกับ attended_sessions ฝั่ง frontend)
+	if req.CourseID != nil {
+		var attendedCount int64
+		if err := s.db.Model(&models.Enrollment{}).
+			Joins("JOIN packages ON packages.id = enrollments.package_id AND packages.deleted_at IS NULL").
+			Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.total_sessions > enrollments.remaining_sessions",
+				customerID, *req.CourseID).
+			Count(&attendedCount).Error; err != nil {
+			return nil, err
+		}
+		if attendedCount == 0 {
+			return nil, errors.New("ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้งจึงจะรีวิวได้")
+		}
+	}
+
 	review := models.Review{
 		CustomerID: customerID,
 		CourseID:   req.CourseID,

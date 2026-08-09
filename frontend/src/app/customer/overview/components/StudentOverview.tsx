@@ -242,7 +242,12 @@ export default function StudentOverview() {
   const reviewableCourses = (() => {
     const seen = new Map<number, string>();
     enrollments
-      .filter((e) => e.status === "active" || e.status === "completed")
+      // เชิญรีวิวเฉพาะคอร์สที่เข้าเรียนไปแล้วอย่างน้อย 1 ครั้ง
+      .filter(
+        (e) =>
+          (e.status === "active" || e.status === "completed") &&
+          (e.attended_sessions || 0) >= 1
+      )
       .forEach((e) => {
         const c = e.package?.course;
         if (c && !seen.has(c.id) && !reviewedCourseIds.has(c.id)) {
