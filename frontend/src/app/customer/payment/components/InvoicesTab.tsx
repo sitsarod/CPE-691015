@@ -44,7 +44,7 @@ export default function InvoicesTab({
     <div className="space-y-4">
       {invoices.length === 0 ? (
         <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-gray-100 text-gray-405 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center">
             <FileText className="w-8 h-8" />
           </div>
           <h3 className="text-lg font-bold text-gray-800">ไม่มีประวัติการชำระเงิน</h3>
@@ -86,7 +86,7 @@ export default function InvoicesTab({
               statusBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
               statusText = "ชำระเงินแล้ว (ผ่านใบแจ้งหนี้อื่น)";
             } else if (invoiceStatus === "pending") {
-              statusBg = "bg-amber-50 text-amber-700 border-amber-205";
+              statusBg = "bg-amber-50 text-amber-700 border-amber-200";
               statusText = "รอแนบสลิป";
             } else if (invoiceStatus === "waitcheck") {
               statusBg = "bg-blue-50 text-blue-700 border-blue-200";
@@ -98,28 +98,42 @@ export default function InvoicesTab({
               statusBg = "bg-rose-50 text-rose-700 border-rose-200";
               statusText = "สลิปไม่ถูกต้อง (ถูกปฏิเสธ)";
             } else if (invoiceStatus === "cancelled") {
-              statusBg = "bg-gray-100 text-gray-650 border-gray-200";
+              statusBg = "bg-gray-100 text-gray-600 border-gray-200";
               statusText = "ยกเลิกแล้ว";
             }
 
+            // แถบ accent ด้านซ้ายของการ์ด ให้โทนเดียวกับป้ายสถานะ
+            const statusBar =
+              ({
+                superseded: "bg-emerald-400",
+                success: "bg-emerald-400",
+                waitcheck: "bg-blue-400",
+                pending: "bg-amber-400",
+                rejected: "bg-rose-400",
+                cancelled: "bg-gray-300"
+              } as Record<string, string>)[invoiceStatus] ?? "bg-gray-300";
+
             return (
-              <div key={`invoice-${inv.id}`} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden transition-all">
+              <div key={`invoice-${inv.id}`} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all">
+                {/* แถบสถานะด้านซ้าย */}
+                <span className={`absolute inset-y-0 left-0 w-1 ${statusBar}`} />
                 {/* Invoice Card Header */}
-                <div 
+                <div
                   onClick={() => onToggleExpand(inv.id)}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="flex cursor-pointer flex-col justify-between gap-4 p-5 pl-6 transition-colors hover:bg-gray-50 md:flex-row md:items-center"
                 >
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-black text-gray-900 text-base">ใบแจ้งหนี้ #{inv.id}</span>
+                      <span className="text-base font-black text-gray-900">ใบแจ้งหนี้ #{inv.id}</span>
                       <span className="text-gray-300">|</span>
                       <span className="text-xs text-gray-500">{formatDate(inv.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${statusBg}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold ${statusBg}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusBar}`} />
                         {statusText}
                       </span>
-                      <span className="text-[10px] font-bold bg-gray-150 text-gray-600 px-2 py-0.5 rounded capitalize">
+                      <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
                         ช่องทาง: {inv.paymentmethod === "qr" ? "PromptPay QR" : inv.paymentmethod === "bank_transfer" ? "โอนเงินธนาคาร" : inv.paymentmethod}
                       </span>
                     </div>
@@ -127,7 +141,7 @@ export default function InvoicesTab({
 
                   <div className="flex items-center justify-between md:justify-end gap-6">
                     <div className="text-left md:text-right">
-                      <span className="text-[10px] font-bold text-gray-450 block">ยอดเงินรวม:</span>
+                      <span className="block text-[10px] font-bold text-gray-400">ยอดเงินรวม:</span>
                       <span className="text-lg font-black text-gray-900">
                         ฿{inv.invoicetotalamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </span>
@@ -143,7 +157,7 @@ export default function InvoicesTab({
                           </button>
                           <button
                             onClick={() => onCancelInvoice(inv.id)}
-                            className="px-2.5 py-1.5 border border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-555 hover:text-black text-xs font-bold rounded-lg transition-all cursor-pointer"
+                            className="px-2.5 py-1.5 border border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-500 hover:text-black text-xs font-bold rounded-lg transition-all cursor-pointer"
                           >
                             ยกเลิก
                           </button>
@@ -185,9 +199,10 @@ export default function InvoicesTab({
                       )}
                       <button
                         onClick={() => onToggleExpand(inv.id)}
-                        className="p-1 text-gray-400 hover:text-gray-655 hover:bg-gray-100 rounded-lg cursor-pointer"
+                        aria-label={isExpanded ? "ย่อรายละเอียด" : "ดูรายละเอียด"}
+                        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all hover:border-gray-300 hover:text-gray-600"
                       >
-                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
@@ -195,28 +210,28 @@ export default function InvoicesTab({
 
                 {/* Expanded Items */}
                 {isExpanded && (
-                  <div className="border-t border-gray-150 bg-gray-55/50 p-5 space-y-4">
+                  <div className="border-t border-gray-200 bg-gray-50/50 p-5 space-y-4">
                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">รายการที่รวมชำระ ({inv.paymentitems.length})</h4>
                     <div className="space-y-2">
                       {inv.paymentitems.map((item, idx) => (
-                        <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between p-3.5 bg-white border border-gray-150 rounded-xl">
+                        <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5">
                           <div>
                             <span className="text-[10px] font-bold text-gray-400">BILL-{item.billing_id}</span>
-                            <h5 className="font-bold text-gray-800 text-sm mt-0.5">{item.billing?.billingdescription || "รายการเก็บเงินย่อย"}</h5>
+                            <h5 className="mt-0.5 text-sm font-bold text-gray-800">{item.billing?.billingdescription || "รายการเก็บเงินย่อย"}</h5>
                             {item.billing?.billingdue_date && (
-                              <span className="text-[10px] text-gray-500 block mt-0.5">
+                              <span className="mt-0.5 block text-[10px] text-gray-500">
                                 ครบกำหนด: {formatDueDate(item.billing.billingdue_date)}
                               </span>
                             )}
                           </div>
-                          <span className="font-bold text-gray-900 text-sm">
+                          <span className="text-sm font-bold text-gray-900">
                             ฿{item.billing?.billingamount?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "-"}
                           </span>
                         </div>
                       ))}
                     </div>
                     {inv.transactionid && (
-                      <div className="text-[11px] text-gray-500 bg-white border border-gray-150 p-3 rounded-xl flex items-center justify-between">
+                      <div className="text-[11px] text-gray-500 bg-white border border-gray-200 p-3 rounded-xl flex items-center justify-between">
                         <span className="font-bold">Transaction Reference ID:</span>
                         <code className="font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded">{inv.transactionid}</code>
                       </div>

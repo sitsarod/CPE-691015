@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { 
-  Calendar, 
-  Clock, 
-  ExternalLink, 
-  FileText, 
-  CheckCircle2, 
-  Search, 
+  Calendar,
+  Clock,
+  ExternalLink,
+  CheckCircle2,
+  Search,
   SlidersHorizontal,
   Wallet,
   ArrowUpRight
@@ -22,6 +21,14 @@ interface BillingsTabProps {
 }
 
 type SortOption = "default" | "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "due_asc";
+
+// สถานะบิล: แถบสี + ป้าย ให้ใช้ชุดเดียวกันทั้งหน้า
+const STATUS_META: Record<string, { label: string; bar: string; chip: string; dot: string }> = {
+  overdue:   { label: "เกินกำหนดชำระ",  bar: "bg-[#CC0000]",    chip: "border-red-200 bg-red-50 text-red-700",         dot: "bg-[#CC0000]" },
+  unfunded:  { label: "ค้างชำระ",        bar: "bg-amber-400",    chip: "border-amber-200 bg-amber-50 text-amber-700",   dot: "bg-amber-400" },
+  waitcheck: { label: "รอตรวจสอบ",       bar: "bg-blue-400",     chip: "border-blue-200 bg-blue-50 text-blue-700",      dot: "bg-blue-400" },
+  paid:      { label: "ชำระเงินสำเร็จ",   bar: "bg-emerald-400",  chip: "border-emerald-200 bg-emerald-50 text-emerald-700", dot: "bg-emerald-400" }
+};
 
 export default function BillingsTab({
   billings,
@@ -103,7 +110,7 @@ export default function BillingsTab({
             placeholder="ค้นหาตามรายละเอียด หรือประเภทบิล..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-250 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#CC0000] focus:border-[#CC0000] bg-gray-50/50"
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#CC0000] focus:border-[#CC0000] bg-gray-50/50"
           />
         </div>
 
@@ -114,7 +121,7 @@ export default function BillingsTab({
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="border border-gray-250 bg-white rounded-xl text-xs py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#CC0000] text-gray-700 cursor-pointer"
+            className="border border-gray-200 bg-white rounded-xl text-xs py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#CC0000] text-gray-700 cursor-pointer"
           >
             <option value="default">สถานะ (เกินกำหนด & ค้างชำระขึ้นก่อน)</option>
             <option value="date_desc">วันที่บันทึก: ล่าสุดก่อน</option>
@@ -148,16 +155,16 @@ export default function BillingsTab({
 
       {/* Billings List */}
       {processedBillings.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <CheckCircle2 className="w-10 h-10" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 className="h-9 w-9" />
           </div>
           <h3 className="text-lg font-bold text-gray-800">
             {searchQuery ? "ไม่พบรายการบิลที่ค้นหา" : "ไม่มีบิลรอชำระเงิน"}
           </h3>
-          <p className="text-gray-500 text-sm max-w-xs">
-            {searchQuery 
-              ? "กรุณาลองเปลี่ยนคำค้นหาใหม่อีกครั้ง" 
+          <p className="max-w-xs text-sm text-gray-500">
+            {searchQuery
+              ? "กรุณาลองเปลี่ยนคำค้นหาใหม่อีกครั้ง"
               : "คุณชำระบิลเรียกเก็บเงินครบถ้วนทุกรายการแล้ว ยอดคงเหลือในบัญชีของคุณเรียบร้อยดี"}
           </p>
         </div>
@@ -167,85 +174,69 @@ export default function BillingsTab({
             const isSelected = selectedBillingIds.includes(b.id);
             const isUnpaid = b.billingstatus === "unfunded" || b.billingstatus === "overdue";
             const isOverdue = b.billingstatus === "overdue";
-            const isWaitCheck = b.billingstatus === "waitcheck";
-            
+            const meta = STATUS_META[b.billingstatus] ?? STATUS_META.unfunded;
+
             return (
-              <div 
+              <div
                 key={`billing-${b.id}`}
                 onClick={() => isUnpaid && onSelectBilling(b.id)}
-                className={`flex flex-col md:flex-row md:items-center justify-between p-5 border rounded-2xl transition-all bg-white relative ${
-                  isUnpaid ? "cursor-pointer hover:border-gray-350" : ""
+                className={`relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border bg-white p-5 pl-6 transition-all md:flex-row md:items-center ${
+                  isUnpaid ? "cursor-pointer hover:border-gray-300 hover:shadow-md" : ""
                 } ${isSelected ? "border-[#CC0000] ring-1 ring-[#CC0000]" : "border-gray-200"}`}
               >
+                {/* แถบสถานะด้านซ้าย = เส้นข้างคอร์ต */}
+                <span className={`absolute inset-y-0 left-0 w-1 ${meta.bar}`} />
+
                 <div className="flex items-start gap-4">
                   {isUnpaid ? (
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => {}} // Handled by outer div onClick
-                      className="w-4 h-4 text-[#CC0000] rounded focus:ring-[#CC0000] cursor-pointer mt-1 flex-shrink-0"
+                      className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer rounded text-[#CC0000] focus:ring-[#CC0000]"
                     />
                   ) : (
-                    <div className="w-4 h-4 mt-1 flex-shrink-0" />
+                    <div className="mt-1 h-4 w-4 flex-shrink-0" />
                   )}
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-400">BILL-{b.id}</span>
-                      <span className="text-xs text-slate-400">•</span>
-                      <span className="text-xs text-slate-500 font-semibold bg-gray-100 px-2 py-0.5 rounded">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-gray-400">BILL-{b.id}</span>
+                      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
                         {b.billing_type?.billingtypename || "อื่นๆ"}
                       </span>
-                      
-                      {/* Badges */}
-                      {isOverdue && (
-                        <span className="text-[10px] font-extrabold bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
-                          เกินกำหนดชำระ
-                        </span>
-                      )}
-                      {b.billingstatus === "unfunded" && (
-                        <span className="text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-                          ค้างชำระ
-                        </span>
-                      )}
-                      {isWaitCheck && (
-                        <span className="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
-                          รอตรวจสอบ
-                        </span>
-                      )}
-                      {b.billingstatus === "paid" && (
-                        <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
-                          ชำระเงินสำเร็จ
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-bold text-gray-900 mt-2 text-base">{b.billingdescription}</h3>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        วันที่เรียกเก็บ: {new Date(b.created_at).toLocaleDateString("th-TH")}
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${meta.chip}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                        {meta.label}
                       </span>
-                      <span className={`flex items-center gap-1 font-semibold ${isOverdue ? "text-red-600" : ""}`}>
-                        <Clock className="w-3.5 h-3.5" />
+                    </div>
+                    <h3 className="mt-2 text-base font-bold text-gray-900">{b.billingdescription}</h3>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        เรียกเก็บ: {new Date(b.created_at).toLocaleDateString("th-TH")}
+                      </span>
+                      <span className={`flex items-center gap-1 font-semibold ${isOverdue ? "text-[#CC0000]" : ""}`}>
+                        <Clock className="h-3.5 w-3.5" />
                         ครบกำหนด: {formatDueDate(b.billingdue_date)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-2 mt-4 md:mt-0 border-t md:border-t-0 border-gray-150 pt-3 md:pt-0">
-                  <span className="text-xs text-gray-450 block md:hidden">จำนวนเงิน:</span>
+                <div className="flex flex-row items-center justify-between gap-2 border-t border-gray-100 pt-3 md:flex-col md:items-end md:justify-center md:border-t-0 md:pt-0">
+                  <span className="text-xs text-gray-400 md:hidden">จำนวนเงิน</span>
                   <span className="text-xl font-black text-gray-900">
                     ฿{b.billingamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
                   {b.billingstatus === "paid" && b.slipurl && (
-                    <a 
-                      href={b.slipurl} 
-                      target="_blank" 
+                    <a
+                      href={b.slipurl}
+                      target="_blank"
                       rel="noreferrer"
-                      className="text-[10px] font-bold text-[#CC0000] hover:underline flex items-center gap-0.5"
+                      className="flex items-center gap-0.5 text-[10px] font-bold text-[#CC0000] hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      ดูสลิปโอนเงิน <ExternalLink className="w-2.5 h-2.5" />
+                      ดูสลิปโอนเงิน <ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   )}
                 </div>
@@ -257,14 +248,14 @@ export default function BillingsTab({
 
       {/* Sticky checkout bar */}
       {selectedBillingIds.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-250 py-4 px-6 md:px-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] animate-slideUp">
+        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 py-4 px-6 md:px-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] animate-slideUp">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-[#FFF0F0] rounded-xl flex items-center justify-center text-[#CC0000]">
               <Wallet className="w-5 h-5" />
             </div>
             <div>
               <span className="text-xs font-bold text-gray-500">บิลที่เลือกชำระ: {selectedBillingIds.length} รายการ</span>
-              <div className="flex items-baseline gap-1 mt-0.5">
+              <div className="mt-0.5 flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-gray-600">ยอดรวมทั้งหมด:</span>
                 <span className="text-xl font-black text-[#CC0000]">
                   ฿{selectedBillingsTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -275,7 +266,7 @@ export default function BillingsTab({
           <div className="flex gap-3">
             <button
               onClick={onClearSelection}
-              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-255 text-gray-700 hover:text-black rounded-xl text-sm font-bold transition-all border border-gray-250 cursor-pointer"
+              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-black rounded-xl text-sm font-bold transition-all border border-gray-200 cursor-pointer"
             >
               ยกเลิกการเลือก
             </button>

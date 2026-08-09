@@ -153,11 +153,7 @@ export default function CustomerFeedbackPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#CC0000]" />
-      </div>
-    );
+    return <FeedbackSkeleton />;
   }
 
   // สรุปสถิติรีวิวของฉัน
@@ -171,64 +167,87 @@ export default function CustomerFeedbackPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="border-b border-gray-200 pb-6">
-        <h1 className="flex items-center gap-3 text-3xl font-black tracking-tight text-gray-900">
-          <Star className="h-8 w-8 text-[#CC0000]" fill="currentColor" />
+      <div>
+        <div className="flex items-center gap-2 text-[#CC0000]">
+          <span className="h-px w-7 bg-[#CC0000]" />
+          <span className="text-xs font-black uppercase tracking-[0.25em]">ความคิดเห็นของฉัน</span>
+        </div>
+        <h1 className="mt-2.5 text-3xl font-black tracking-tight text-gray-900 md:text-4xl">
           รีวิวของฉัน
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          ให้คะแนนและรีวิวคอร์สและโค้ชที่คุณลงทะเบียนเรียน — รีวิวได้ไม่จำกัดจำนวนครั้ง
+        <p className="mt-2 text-sm text-gray-500">
+          ให้คะแนนและรีวิวคอร์สและโค้ชที่คุณเข้าเรียนไปแล้วอย่างน้อย 1 ครั้ง — รีวิวได้ไม่จำกัดจำนวนครั้ง
         </p>
+        <div className="mt-6 h-px bg-gray-200" />
       </div>
 
       {/* Stat summary */}
       {reviewCount > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          {/* รีวิวทั้งหมด */}
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
+            <span className="absolute inset-y-0 left-0 w-1 bg-[#CC0000]" />
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-500">รีวิวทั้งหมด</p>
-              <MessageSquareText className="h-4 w-4 text-[#CC0000]" />
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#CC0000]" />
+                <span className="text-sm font-bold text-gray-600">รีวิวทั้งหมด</span>
+              </div>
+              <MessageSquareText className="h-5 w-5 text-[#CC0000]" />
             </div>
-            <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
-              {reviewCount}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-500">คะแนนเฉลี่ยที่ให้</p>
-              <Star className="h-4 w-4 text-amber-400" fill="currentColor" />
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <p className="text-2xl font-bold tabular-nums text-gray-900">
-                {avgRating.toFixed(1)}
-              </p>
-              <StarRating value={Math.round(avgRating)} size={14} />
+            <p className="mt-5 text-3xl font-black tabular-nums text-gray-900">{reviewCount}</p>
+            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              รีวิวที่คุณส่งทั้งหมด
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          {/* คะแนนเฉลี่ยที่ให้ */}
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
+            <span className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-500">แสดงหน้าแรก</p>
-              <Sparkles className="h-4 w-4 text-orange-500" />
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <span className="text-sm font-bold text-gray-600">คะแนนเฉลี่ยที่ให้</span>
+              </div>
+              <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
             </div>
-            <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
-              {featuredCount}
-            </p>
+            <div className="mt-5 flex items-center gap-2">
+              <p className="text-3xl font-black tabular-nums text-gray-900">{avgRating.toFixed(1)}</p>
+              <StarRating value={Math.round(avgRating)} size={16} />
+            </div>
+            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              จากทั้งหมด {reviewCount} รีวิว
+            </div>
+          </div>
+
+          {/* แสดงหน้าแรก */}
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
+            <span className="absolute inset-y-0 left-0 w-1 bg-orange-400" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-orange-400" />
+                <span className="text-sm font-bold text-gray-600">แสดงหน้าแรก</span>
+              </div>
+              <Sparkles className="h-5 w-5 text-orange-500" />
+            </div>
+            <p className="mt-5 text-3xl font-black tabular-nums text-gray-900">{featuredCount}</p>
+            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              รีวิวที่ถูกเลือกโชว์หน้าแรก
+            </div>
           </div>
         </div>
       )}
 
       {/* Review form */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h2 className="mb-5 flex items-center gap-2 text-lg font-bold text-gray-800">
-          <span className="text-[#CC0000]">|</span> เขียนรีวิวใหม่
+      <div>
+        <h2 className="mb-4 flex items-center gap-2.5 text-lg font-bold text-gray-900">
+          <span className="h-5 w-1 rounded-full bg-[#CC0000]" />
+          เขียนรีวิวใหม่
         </h2>
-
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         {courses.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-gray-400">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 py-10 text-center text-sm text-gray-400">
             <BookOpen className="h-9 w-9 text-gray-300" />
-            <p>คุณยังไม่มีคอร์สที่ลงทะเบียนเรียน จึงยังเขียนรีวิวไม่ได้</p>
+            <p className="max-w-xs">ยังไม่มีคอร์สที่รีวิวได้ — เริ่มรีวิวได้เมื่อคุณเข้าเรียนไปแล้วอย่างน้อย 1 ครั้ง</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -239,7 +258,7 @@ export default function CustomerFeedbackPage() {
                 required
                 value={courseId}
                 onChange={(e) => setCourseId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
               >
                 <option value="" disabled>
                   -- เลือกคอร์ส --
@@ -260,7 +279,7 @@ export default function CustomerFeedbackPage() {
                   <button
                     type="button"
                     onClick={() => setTarget('course')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                       target === 'course'
                         ? 'bg-[#FFF0F0] border-[#CC0000] text-[#CC0000]'
                         : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -273,7 +292,7 @@ export default function CustomerFeedbackPage() {
                     type="button"
                     onClick={() => setTarget('coach')}
                     disabled={!loadingCoaches && coaches.length === 0}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                       target === 'coach'
                         ? 'bg-[#FFF0F0] border-[#CC0000] text-[#CC0000]'
                         : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -298,7 +317,7 @@ export default function CustomerFeedbackPage() {
                   value={coachId}
                   onChange={(e) => setCoachId(e.target.value === '' ? '' : Number(e.target.value))}
                   disabled={loadingCoaches}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all disabled:bg-gray-50"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all disabled:bg-gray-50"
                 >
                   <option value="" disabled>
                     {loadingCoaches ? 'กำลังโหลดรายชื่อโค้ช...' : '-- เลือกโค้ช --'}
@@ -333,7 +352,7 @@ export default function CustomerFeedbackPage() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="บอกเล่าประสบการณ์การเรียนของคุณ..."
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all resize-none"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all resize-none"
               />
             </div>
 
@@ -341,7 +360,7 @@ export default function CustomerFeedbackPage() {
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#CC0000] hover:bg-[#990000] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-colors"
+                className="flex items-center gap-2 rounded-xl bg-[#CC0000] px-6 py-2.5 font-bold text-white shadow-md shadow-[#CC0000]/20 transition-colors hover:bg-[#990000] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 ส่งรีวิว
@@ -349,12 +368,17 @@ export default function CustomerFeedbackPage() {
             </div>
           </form>
         )}
+        </div>
       </div>
 
       {/* My reviews */}
       <div>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-800">
-          <span className="text-[#CC0000]">|</span> รีวิวที่เคยส่ง ({myReviews.length})
+        <h2 className="mb-4 flex items-center gap-2.5 text-lg font-bold text-gray-900">
+          <span className="h-5 w-1 rounded-full bg-[#CC0000]" />
+          รีวิวที่เคยส่ง
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-sm font-bold tabular-nums text-gray-500">
+            {myReviews.length}
+          </span>
         </h2>
 
         {myReviews.length === 0 ? (
@@ -367,8 +391,9 @@ export default function CustomerFeedbackPage() {
             {myReviews.map((review) => (
               <div
                 key={review.id}
-                className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+                className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 pl-6 shadow-sm transition-all hover:border-gray-300 hover:shadow-md"
               >
+                <span className={`absolute inset-y-0 left-0 w-1 ${review.is_featured ? "bg-orange-400" : "bg-gray-200"}`} />
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {review.course && (
@@ -407,10 +432,68 @@ export default function CustomerFeedbackPage() {
   );
 }
 
+// โครงหน้าตอนโหลด — ล้อ layout จริง (header + การ์ดสถิติ + ฟอร์ม + รายการ)
+function FeedbackSkeleton() {
+  return (
+    <div className="mx-auto max-w-4xl animate-pulse space-y-8">
+      {/* Header */}
+      <div>
+        <div className="h-3 w-32 rounded bg-gray-200" />
+        <div className="mt-3 h-9 w-56 rounded-lg bg-gray-200" />
+        <div className="mt-3 h-3 w-80 max-w-full rounded bg-gray-100" />
+        <div className="mt-6 h-px bg-gray-200" />
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5">
+            <span className="absolute inset-y-0 left-0 w-1 bg-gray-200" />
+            <div className="flex items-center justify-between">
+              <div className="h-3.5 w-24 rounded bg-gray-200" />
+              <div className="h-5 w-5 rounded bg-gray-200" />
+            </div>
+            <div className="mt-5 h-8 w-20 rounded-lg bg-gray-200" />
+            <div className="mt-4 border-t border-gray-100 pt-3">
+              <div className="h-3 w-28 rounded bg-gray-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Form card */}
+      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="h-5 w-40 rounded bg-gray-200" />
+        <div className="h-11 w-full rounded-xl bg-gray-100" />
+        <div className="h-24 w-full rounded-xl bg-gray-100" />
+        <div className="flex justify-end">
+          <div className="h-11 w-32 rounded-xl bg-gray-200" />
+        </div>
+      </div>
+
+      {/* Reviews */}
+      <div className="space-y-4">
+        <div className="h-5 w-44 rounded bg-gray-200" />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5">
+            <span className="absolute inset-y-0 left-0 w-1 bg-gray-200" />
+            <div className="h-5 w-40 rounded-full bg-gray-100" />
+            <div className="mt-3 h-4 w-28 rounded bg-gray-200" />
+            <div className="mt-3 h-3 w-full rounded bg-gray-100" />
+            <div className="mt-2 h-3 w-2/3 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Helpers ----------
 function dedupeCourses(enrollments: Enrollment[]): CourseOption[] {
   const map = new Map<number, string>();
   for (const e of enrollments) {
+    // อนุญาตให้รีวิวได้เฉพาะคอร์สที่เข้าเรียนไปแล้วอย่างน้อย 1 ครั้ง
+    if ((e.attended_sessions || 0) < 1) continue;
     const course = e.package?.course;
     if (course && !map.has(course.id)) {
       map.set(course.id, course.course_name);

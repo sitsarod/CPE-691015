@@ -1,5 +1,5 @@
 import React from "react";
-import { Wallet, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Clock, CheckCircle2, type LucideIcon } from "lucide-react";
 
 interface PaymentStatsProps {
   totalUnpaidAmount: number;
@@ -11,6 +11,23 @@ interface PaymentStatsProps {
   paidCount: number;
 }
 
+// สกอร์บอร์ด: ยอดเงินเซ็ตด้วย mono + tabular-nums ให้อ่านเหมือนป้ายคะแนน
+const fmtAmount = (n: number) =>
+  n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+interface StatCard {
+  key: string;
+  label: string;
+  amount: number;
+  amountClass: string;
+  accentBar: string;
+  dot: string;
+  icon: LucideIcon;
+  iconClass: string;
+  note: string;
+  badge: string | null;
+}
+
 export default function PaymentStats({
   totalUnpaidAmount,
   unpaidCount,
@@ -20,76 +37,86 @@ export default function PaymentStats({
   totalPaidAmount,
   paidCount
 }: PaymentStatsProps) {
+  const cards: StatCard[] = [
+    {
+      key: "unpaid",
+      label: "ยอดค้างชำระ",
+      amount: totalUnpaidAmount,
+      amountClass: "text-[#CC0000]",
+      accentBar: "bg-[#CC0000]",
+      dot: "bg-[#CC0000]",
+      icon: AlertTriangle,
+      iconClass: `text-[#CC0000] ${hasOverdue ? "animate-bounce" : ""}`,
+      note: `${unpaidCount} รายการรอชำระ`,
+      badge: hasOverdue ? "เกินกำหนด" : null
+    },
+    {
+      key: "processing",
+      label: "รอตรวจสอบ",
+      amount: totalProcessingAmount,
+      amountClass: "text-gray-900",
+      accentBar: "bg-blue-500",
+      dot: "bg-blue-500",
+      icon: Clock,
+      iconClass: "text-blue-500",
+      note: `${processingCount} รายการกำลังตรวจสอบ`,
+      badge: null
+    },
+    {
+      key: "paid",
+      label: "ชำระเงินสำเร็จ",
+      amount: totalPaidAmount,
+      amountClass: "text-emerald-600",
+      accentBar: "bg-emerald-500",
+      dot: "bg-emerald-500",
+      icon: CheckCircle2,
+      iconClass: "text-emerald-500",
+      note: `${paidCount} รายการ`,
+      badge: null
+    }
+  ];
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Card 1: Total Unpaid (Gradient Red) */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#CD0D13] to-[#800000] text-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all group">
-        <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-15">
-          <Wallet className="w-40 h-40 group-hover:scale-110 transition-transform duration-300" />
-        </div>
-        <div className="flex justify-between items-start">
-          <span className="text-xs font-extrabold tracking-wider uppercase bg-white/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
-            ยอดค้างชำระ (Pending Payment)
-          </span>
-          <AlertTriangle className="w-5 h-5 text-red-250 animate-bounce" />
-        </div>
-        <div className="mt-6">
-          <span className="text-sm font-semibold opacity-85 block">ค่าบริการค้างชำระทั้งหมด</span>
-          <span className="text-3xl font-black tracking-tight mt-1 block">
-            ฿{totalUnpaidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-        <div className="mt-4 pt-4 border-t border-white/20 flex justify-between text-xs opacity-90">
-          <span>บิลค้างชำระ: {unpaidCount} รายการ</span>
-          {hasOverdue && (
-            <span className="text-red-200 font-bold bg-white/10 px-1.5 py-0.5 rounded">
-              มีรายการเกินกำหนดชำระ!
-            </span>
-          )}
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {cards.map((c) => {
+        const Icon = c.icon;
+        return (
+          <div
+            key={c.key}
+            className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md"
+          >
+            {/* แถบ accent สี = เส้นข้างคอร์ต */}
+            <span className={`absolute inset-y-0 left-0 w-1 ${c.accentBar}`} />
 
-      {/* Card 2: Wait Check (Soft Blue) */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
-        <div>
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-extrabold tracking-wider uppercase bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full">
-              รอตรวจสอบ (Processing)
-            </span>
-            <Clock className="w-5 h-5 text-blue-500 animate-pulse" />
-          </div>
-          <div className="mt-6">
-            <span className="text-sm font-bold text-gray-500 block">กำลังตรวจสอบโดยแอดมิน</span>
-            <span className="text-3xl font-black text-gray-900 tracking-tight mt-1 block">
-              ฿{totalProcessingAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-gray-150 text-xs text-gray-500">
-          รายการรอยืนยัน: {processingCount} รายการ
-        </div>
-      </div>
+            {/* หัวการ์ด: จุดสถานะ + ป้ายกำกับ + ไอคอน */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${c.dot}`} />
+                <span className="text-sm font-bold text-gray-600">{c.label}</span>
+              </div>
+              <Icon className={`h-5 w-5 ${c.iconClass}`} />
+            </div>
 
-      {/* Card 3: Paid (Soft Green) */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between">
-        <div>
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-extrabold tracking-wider uppercase bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full">
-              ชำระเงินสำเร็จ (Paid)
-            </span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            {/* ยอดเงิน */}
+            <div className="mt-5 flex items-baseline gap-1">
+              <span className="text-base font-bold text-gray-400">฿</span>
+              <span className={`text-[28px] font-black leading-none tracking-tight ${c.amountClass}`}>
+                {fmtAmount(c.amount)}
+              </span>
+            </div>
+
+            {/* ท้ายการ์ด: จำนวนรายการ + ป้ายเตือนเกินกำหนด */}
+            <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
+              <span className="text-xs text-gray-500">{c.note}</span>
+              {c.badge && (
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-[#CC0000]">
+                  {c.badge}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="mt-6">
-            <span className="text-sm font-bold text-gray-500 block">ยอดรวมชำระเงินสำเร็จทั้งหมด</span>
-            <span className="text-3xl font-black text-emerald-700 tracking-tight mt-1 block">
-              ฿{totalPaidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-gray-150 text-xs text-gray-500">
-          บิลชำระเงินสำเร็จ: {paidCount} รายการ
-        </div>
-      </div>
+        );
+      })}
     </div>
   );
 }

@@ -2,13 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Wallet, 
-  RefreshCw, 
-  AlertCircle, 
-  Loader2, 
-  FileText, 
-  Calendar 
+import {
+  RefreshCw,
+  AlertCircle,
+  FileText,
+  Calendar
 } from "lucide-react";
 
 import { 
@@ -24,6 +22,7 @@ import Toast from "@/components/Toast";
 // Clean separated components and types
 import { BillingDTO, InvoiceDTO, BankAccount } from "./components/types";
 import PaymentStats from "./components/PaymentStats";
+import PaymentSkeleton from "./components/PaymentSkeleton";
 import BillingsTab from "./components/BillingsTab";
 import InvoicesTab from "./components/InvoicesTab";
 import CheckoutModal from "./components/CheckoutModal";
@@ -225,12 +224,7 @@ export default function CustomerPaymentPage() {
   const totalPaidAmount = paidBillings.reduce((sum, item) => sum + item.billingamount, 0);
 
   if (isLoading) {
-    return (
-      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center text-gray-500">
-        <Loader2 className="w-12 h-12 animate-spin text-[#CC0000] mb-4" />
-        <span className="text-sm font-semibold tracking-wide animate-pulse">กำลังโหลดข้อมูลการเงิน...</span>
-      </div>
-    );
+    return <PaymentSkeleton />;
   }
 
   return (
@@ -238,24 +232,30 @@ export default function CustomerPaymentPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-150 pb-6">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            <Wallet className="w-8 h-8 text-[#CC0000]" />
-            หน้าชำระเงินและประวัติการเงิน
-          </h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            จัดการค่าใช้จ่ายและตรวจสอบประวัติการชำระเงินของคุณได้ที่นี่
-          </p>
+      <div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-[#CC0000]">
+              <span className="h-px w-7 bg-[#CC0000]" />
+              <span className="text-xs font-black uppercase tracking-[0.25em]">การเงินของฉัน</span>
+            </div>
+            <h1 className="mt-2.5 text-3xl md:text-4xl font-black tracking-tight text-gray-900">
+              ชำระเงิน <span className="font-light text-gray-300">/</span> ประวัติการเงิน
+            </h1>
+            <p className="mt-2 text-sm text-gray-500">
+              จัดการค่าใช้จ่ายและตรวจสอบสถานะการชำระเงินของคุณได้ที่นี่
+            </p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="group flex items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 transition-all hover:border-[#CC0000]/30 hover:text-[#CC0000] disabled:opacity-50 md:self-auto"
+          >
+            <RefreshCw className={`h-4 w-4 transition-colors ${isRefreshing ? "animate-spin text-[#CC0000]" : "text-gray-400 group-hover:text-[#CC0000]"}`} />
+            {isRefreshing ? "กำลังอัปเดต..." : "อัปเดตข้อมูล"}
+          </button>
         </div>
-        <button 
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-250 text-gray-700 hover:text-black py-2.5 px-4 rounded-xl text-sm font-bold transition-all border border-gray-200 cursor-pointer self-start md:self-auto disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-[#CC0000]" : ""}`} />
-          {isRefreshing ? "กำลังอัปเดต..." : "อัปเดตข้อมูล"}
-        </button>
+        <div className="mt-6 h-px bg-gray-200" />
       </div>
 
       {error && (
@@ -280,28 +280,42 @@ export default function CustomerPaymentPage() {
       />
 
       {/* Tab Selector */}
-      <div className="flex border-b border-gray-200">
+      <div className="flex gap-6 border-b border-gray-200">
         <button
           onClick={() => setActiveTab("billings")}
-          className={`py-4 px-6 font-bold text-base border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`flex cursor-pointer items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-bold transition-all ${
             activeTab === "billings"
               ? "border-[#CC0000] text-[#CC0000]"
-              : "border-transparent text-gray-550 hover:text-gray-950"
+              : "border-transparent text-gray-500 hover:text-gray-900"
           }`}
         >
-          <FileText className="w-4 h-4" />
-          รายการบิลเรียกเก็บเงิน ({billings.length})
+          <FileText className="h-4 w-4" />
+          รายการบิลเรียกเก็บเงิน
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
+              activeTab === "billings" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {billings.length}
+          </span>
         </button>
         <button
           onClick={() => setActiveTab("invoices")}
-          className={`py-4 px-6 font-bold text-base border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`flex cursor-pointer items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-bold transition-all ${
             activeTab === "invoices"
               ? "border-[#CC0000] text-[#CC0000]"
-              : "border-transparent text-gray-550 hover:text-gray-950"
+              : "border-transparent text-gray-500 hover:text-gray-900"
           }`}
         >
-          <Calendar className="w-4 h-4" />
-          ประวัติใบชำระเงิน / ใบแจ้งหนี้ ({invoices.length})
+          <Calendar className="h-4 w-4" />
+          ประวัติใบแจ้งหนี้
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
+              activeTab === "invoices" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {invoices.length}
+          </span>
         </button>
       </div>
 
