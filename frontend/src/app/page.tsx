@@ -52,6 +52,13 @@ export default function Home() {
   const slideImages = (home?.slides ?? []).map((s) => s.image_url);
   const coaches = home?.featured_coaches ?? [];
 
+  // แผนที่ที่ตั้ง: รองรับทั้งกรณีแอดมินวาง src ตรงๆ หรือวาง <iframe .../> ทั้งก้อน
+  const rawMap = content?.map_embed_url?.trim() ?? "";
+  const mapSrc = rawMap.includes("<iframe")
+    ? rawMap.match(/src="([^"]+)"/i)?.[1] ?? ""
+    : rawMap;
+  const showMap = mapSrc.startsWith("http");
+
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
 
@@ -61,7 +68,7 @@ export default function Home() {
 
       {/* 2. ส่วนบุคลากร */}
       <section id="coaches" className="w-full py-20 bg-white">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-6 md:px-12 lg:px-24">
           <h2 className="text-4xl font-bold text-gray-800 text-center">
             {content?.coaches_title || "บุคลากร"}
           </h2>
@@ -103,7 +110,7 @@ export default function Home() {
 
       {/* 3. ส่วนคอร์สเรียน */}
       <section id="courses" className="w-full py-20 bg-gray-50">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-6 md:px-12 lg:px-24">
           <h2 className="text-4xl font-bold text-gray-800 text-center mb-3">
             {content?.courses_title || "คอร์สเรียน"}
           </h2>
@@ -149,7 +156,7 @@ export default function Home() {
       {/* 4. ส่วนเสียงจากผู้เรียน (รีวิว) */}
       {content?.show_featured_reviews && reviews.length > 0 && (
         <section id="reviews" className="w-full py-20 bg-white">
-          <div className="container mx-auto px-6">
+          <div className="container mx-auto px-6 md:px-12 lg:px-24">
             <h2 className="text-4xl font-bold text-gray-800 text-center mb-3">
               {content.reviews_title || "เสียงจากผู้เรียน"}
             </h2>
@@ -188,7 +195,7 @@ export default function Home() {
 
       {/* 5. ส่วนเกี่ยวกับเรา */}
       <section id="about" className="w-full py-20 bg-gray-50">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-6 md:px-12 lg:px-24">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-4xl font-bold text-gray-800">
@@ -201,10 +208,15 @@ export default function Home() {
                 <SocialLinks content={content} variant="light" className="mt-8" />
               )}
             </div>
-            {content?.about_image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={content.about_image_url} alt={content.about_title || "about"}
-                className="w-full h-80 object-cover rounded-2xl shadow-lg" />
+            {showMap && (
+              <iframe
+                src={mapSrc}
+                title={content?.about_title || "แผนที่ที่ตั้ง"}
+                className="w-full h-96 rounded-2xl shadow-lg border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
             )}
           </div>
         </div>
@@ -212,7 +224,7 @@ export default function Home() {
 
       {/* 6. ท้ายหน้า (Footer) */}
       <footer className="w-full bg-gray-900 text-gray-400 py-12">
-        <div className="container mx-auto px-6 flex flex-col items-center gap-6 text-center">
+        <div className="container mx-auto px-6 md:px-12 lg:px-24 flex flex-col items-center gap-6 text-center">
           {content && (
             <SocialLinks content={content} variant="dark" />
           )}

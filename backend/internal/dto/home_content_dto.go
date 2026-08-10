@@ -29,6 +29,7 @@ type HomeContentDTO struct {
 	AboutTitle          string    `json:"about_title"`
 	AboutContent        string    `json:"about_content"`
 	AboutImageURL       string    `json:"about_image_url"`
+	MapEmbedURL         string    `json:"map_embed_url"`
 	CoachesTitle        string    `json:"coaches_title"`
 	CoachesSubtitle     string    `json:"coaches_subtitle"`
 	CoursesTitle        string    `json:"courses_title"`
@@ -57,6 +58,7 @@ type UpdateHomeContentReq struct {
 	AboutTitle          *string `json:"about_title"`
 	AboutContent        *string `json:"about_content"`
 	AboutImageURL       *string `json:"about_image_url"`
+	MapEmbedURL         *string `json:"map_embed_url"`
 	CoachesTitle        *string `json:"coaches_title"`
 	CoachesSubtitle     *string `json:"coaches_subtitle"`
 	CoursesTitle        *string `json:"courses_title"`

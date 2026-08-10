@@ -11,6 +11,8 @@ type HomeContent struct {
 	AboutTitle    string `json:"about_title" gorm:"type:varchar(255)"`
 	AboutContent  string `json:"about_content" gorm:"type:text"`
 	AboutImageURL string `json:"about_image_url" gorm:"type:text"`
+	// แผนที่ที่ตั้ง — เก็บ Google Maps embed URL (src ของ iframe) แสดงแทนรูปในส่วน About
+	MapEmbedURL string `json:"map_embed_url" gorm:"type:text"`
 
 	// หัวข้อ/คำโปรยของแต่ละส่วน
 	CoachesTitle    string `json:"coaches_title" gorm:"type:varchar(255)"`
