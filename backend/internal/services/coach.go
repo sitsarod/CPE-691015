@@ -36,7 +36,15 @@ var (
 	ErrCoachUserNotCoach  = errors.New("ผู้ใช้งานนี้ไม่ได้มีบทบาทเป็นโค้ช (role ต้องเป็น coach)")
 	ErrCoachDuplicateUser = errors.New("ผู้ใช้งานนี้มีข้อมูลโค้ชอยู่แล้ว")
 	ErrCoachDuplicateUID  = errors.New("uid นี้ถูกใช้งานแล้ว")
+	// ErrCoachInvalidPaymentType ใช้เมื่อ payment_type ที่ส่งมาไม่ใช่ "per_session" หรือ "monthly"
+	ErrCoachInvalidPaymentType = errors.New("payment_type ต้องเป็น per_session หรือ monthly เท่านั้น")
 )
+
+// isValidPaymentType เช็คว่าค่า payment_type ที่รับมาอยู่ในชุดที่ระบบรองรับหรือไม่
+// โค้ชแต่ละคนมีวิธีจ่ายเดียว (per_session = รายครั้ง, monthly = รายเดือน) ไม่ให้มีค่าอื่นหลุดเข้ามา
+func isValidPaymentType(v string) bool {
+	return v == "per_session" || v == "monthly"
+}
 
 // resolveCoachIDByUser ดึง coaches.id จาก users.id (JWT) — ใช้ร่วมกันในการตรวจสิทธิ์
 //
@@ -131,18 +139,25 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 		return nil, ErrCoachDuplicateUID
 	}
 
+	// 4. payment_type ต้องเป็นค่าที่ระบบรองรับเท่านั้น
+	if !isValidPaymentType(req.PaymentType) {
+		return nil, ErrCoachInvalidPaymentType
+	}
+
 	coach := models.Coach{
-		UserID:            req.UserID,
-		Phone:             req.Phone,
-		Uid:               req.Uid,
-		Address:           req.Address,
-		BirthDate:         req.BirthDate,
-		Nickname:          req.Nickname,
-		ProfilePicture:    req.ProfilePicture,
-		Specialization:    req.Specialization,
-		BankAccount:       req.BankAccount,
-		PaymentInfo:       req.PaymentInfo,
-		PayRatePerSession: req.PayRatePerSession,
+		UserID:         req.UserID,
+		Phone:          req.Phone,
+		Uid:            req.Uid,
+		Address:        req.Address,
+		BirthDate:      req.BirthDate,
+		Nickname:       req.Nickname,
+		ProfilePicture: req.ProfilePicture,
+		Specialization: req.Specialization,
+		CoachLicense:   req.CoachLicense,
+		BankAccount:    req.BankAccount,
+		PaymentInfo:    req.PaymentInfo,
+		PaymentType:    req.PaymentType,
+		PayRate:        req.PayRate,
 	}
 
 	if err := s.db.Create(&coach).Error; err != nil {
@@ -151,8 +166,8 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 	return &coach, nil
 }
 
-// Update แก้ไขข้อมูล coach บางฟิลด์ที่ coach แก้เองได้ (ไม่รวม specialization/pay_rate_per_session
-// เพราะ UpdateCoachRequest ไม่มี 2 ฟิลด์นี้แล้ว ต้องแก้ผ่าน AdminUpdate เท่านั้น)
+// Update แก้ไขข้อมูล coach บางฟิลด์ที่ coach แก้เองได้ (ไม่รวม specialization/payment_type/pay_rate
+// เพราะ UpdateCoachRequest ไม่มีฟิลด์เหล่านี้แล้ว ต้องแก้ผ่าน AdminUpdate เท่านั้น)
 func (s *CoachService) Update(id uint, userID uint, role string, req dto.UpdateCoachRequest) (*models.Coach, error) {
 	// กัน IDOR: coach แก้ได้เฉพาะ record ของตัวเอง (admin ผ่านได้ทุก record)
 	if err := VerifyCoachOwnership(s.db, id, userID, role); err != nil {
@@ -196,8 +211,8 @@ func (s *CoachService) Update(id uint, userID uint, role string, req dto.UpdateC
 	return &coach, nil
 }
 
-// AdminUpdate แก้ไข specialization (ระดับ) และ/หรือ pay_rate_per_session (ค่าจ้างต่อครั้ง)
-// เฉพาะ admin เท่านั้นที่ควรเรียกฟังก์ชันนี้ได้ (คุมสิทธิ์ที่ชั้น route ด้วย adminOnly middleware)
+// AdminUpdate แก้ไข specialization (ระดับ), coach_license, payment_type (ประเภทการจ่ายเงิน)
+// และ/หรือ pay_rate (อัตราค่าจ้าง) เฉพาะ admin เท่านั้นที่ควรเรียกฟังก์ชันนี้ได้ (คุมสิทธิ์ที่ชั้น route ด้วย adminOnly middleware)
 func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*models.Coach, error) {
 	var coach models.Coach
 	if err := s.db.First(&coach, id).Error; err != nil {
@@ -208,11 +223,20 @@ func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*m
 	if req.Specialization != nil {
 		updateData["specialization"] = *req.Specialization
 	}
-	if req.PayRatePerSession != nil {
-		if *req.PayRatePerSession < 0 {
-			return nil, errors.New("pay_rate_per_session ต้องไม่ติดลบ")
+	if req.CoachLicense != nil {
+		updateData["coach_license"] = *req.CoachLicense
+	}
+	if req.PaymentType != nil {
+		if !isValidPaymentType(*req.PaymentType) {
+			return nil, ErrCoachInvalidPaymentType
 		}
-		updateData["pay_rate_per_session"] = *req.PayRatePerSession
+		updateData["payment_type"] = *req.PaymentType
+	}
+	if req.PayRate != nil {
+		if *req.PayRate < 0 {
+			return nil, errors.New("pay_rate ต้องไม่ติดลบ")
+		}
+		updateData["pay_rate"] = *req.PayRate
 	}
 
 	if len(updateData) > 0 {

@@ -48,6 +48,7 @@ export default function CoachPaymentPage() {
 
   const [coachId, setCoachId] = useState<number | null>(null);
   const [payRate, setPayRate] = useState(0);
+  const [paymentType, setPaymentType] = useState<"per_session" | "monthly">("per_session");
   const [wages, setWages] = useState<CoachWageEntry[]>([]);
   const [schedules, setSchedules] = useState<WorkScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,7 +73,8 @@ export default function CoachPaymentPage() {
         const myProfile = await fetchMyCoachProfile(token);
         resolvedId = myProfile.id;
         setCoachId(myProfile.id);
-        setPayRate(myProfile.pay_rate_per_session);
+        setPayRate(myProfile.pay_rate);
+        setPaymentType(myProfile.payment_type);
       }
 
       const [wagesData, schedulesData] = await Promise.all([
@@ -410,7 +412,9 @@ export default function CoachPaymentPage() {
               </div>
 
               {/* Schedule vs. actual wage comparison */}
-              {scheduleComparison && (
+              {/* ตารางนี้เทียบ "คาบสอน × ค่าจ้างต่อคาบ" กับรายได้จริง — มีความหมายเฉพาะโค้ชรายครั้งเท่านั้น
+                  โค้ชรายเดือนได้รับเงินคงที่ไม่ผูกกับจำนวนคาบ จึงซ่อนตารางนี้ไป */}
+              {paymentType !== "monthly" && scheduleComparison && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="p-5 border-b border-slate-100 flex items-start gap-3">
                     <div className="p-2 rounded-lg bg-amber-50 text-amber-600 flex-shrink-0">

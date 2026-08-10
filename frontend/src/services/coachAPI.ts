@@ -1,6 +1,7 @@
 // frontend/src/services/coachAPI.ts
 import {
   CoachProfile,
+  CoachPaymentType,
   AvailabilitySlot,
   WorkScheduleItem,
   CoachWageEntry
@@ -17,8 +18,10 @@ export interface CoachListItem {
   user_id: number;
   firstName: string;
   lastName: string;
+  email: string;
   nickname: string;
   specialization: string;
+  coach_license: string;
   profile_picture: string;
   phone: string;
 }
@@ -33,9 +36,11 @@ export interface CreateCoachInput {
   nickname: string;
   profile_picture: string;
   specialization: string;
+  coach_license: string;
   bank_account: string;
   payment_info: string;
-  pay_rate_per_session: number;
+  payment_type: CoachPaymentType;
+  pay_rate: number;
 }
 
 // ข้อมูลที่แก้ไขได้ผ่าน PATCH /coaches/:id (ข้อมูลทั่วไป)
@@ -51,7 +56,9 @@ export interface UpdateCoachInput {
 // ข้อมูลที่แอดมินแก้ได้ผ่าน PATCH /coaches/:id/level (ระดับ + ค่าจ้าง)
 export interface AdminUpdateCoachInput {
   specialization?: string;
-  pay_rate_per_session?: number;
+  coach_license?: string;
+  payment_type?: CoachPaymentType;
+  pay_rate?: number;
 }
 
 interface Wrapped<T> {
@@ -126,7 +133,7 @@ export async function fetchMyCoachProfile(token: string): Promise<CoachProfile> 
   return resData;
 }
 
-// ดึงข้อมูลโค้ช 1 คนตาม id (admin หรือเจ้าของ) — ใช้ดึง pay_rate_per_session มาคำนวณค่าจ้าง
+// ดึงข้อมูลโค้ช 1 คนตาม id (admin หรือเจ้าของ) — ใช้ดึง payment_type/pay_rate มาคำนวณค่าจ้าง
 export async function fetchCoachById(coachId: number, token: string): Promise<CoachProfile> {
   const response = await fetch(`${BASE_URL}/coaches/${coachId}`, {
     method: "GET",

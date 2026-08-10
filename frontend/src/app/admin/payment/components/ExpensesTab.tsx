@@ -10,11 +10,12 @@ import { CreateExpenseReq } from "@/types/payment";
 interface CoachWageInfo {
   loading: boolean;
   error?: string;
+  paymentType: 'per_session' | 'monthly';
   payRate: number;
-  sessionsDone: number; // จำนวนคาบที่สอนไปแล้ว (วันสอนผ่านไปแล้ว)
-  expected: number;     // ค่าจ้างที่ควรได้ทั้งหมด = sessionsDone * payRate
-  alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว
-  unpaid: number;       // ค้างจ่าย = expected - alreadyPaid (ไม่ต่ำกว่า 0)
+  sessionsDone: number; // จำนวนคาบที่สอนไปแล้ว (วันสอนผ่านไปแล้ว) — ใช้เฉพาะโค้ชรายครั้ง
+  expected: number;     // ค่าจ้างที่ควรได้ทั้งหมด = sessionsDone * payRate (รายครั้ง) หรือ = payRate เต็มจำนวน (รายเดือน)
+  alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว — ใช้เฉพาะโค้ชรายครั้ง
+  unpaid: number;       // ยอดที่เติมลงช่องจำนวนเงินให้อัตโนมัติ
 }
 
 export interface ExpensesTabProps {
@@ -64,7 +65,7 @@ export default function ExpensesTab({
       return;
     }
     const coachId = parseInt(coachIdStr);
-    setWageInfo({ loading: true, payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0 });
+    setWageInfo({ loading: true, paymentType: 'per_session', payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0 });
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       const [coach, schedules] = await Promise.all([
@@ -72,7 +73,16 @@ export default function ExpensesTab({
         fetchCoachSchedules(coachId, token || ""),
       ]);
 
-      const payRate = coach.pay_rate_per_session || 0;
+      const paymentType = coach.payment_type || 'per_session';
+      const payRate = coach.pay_rate || 0;
+
+      if (paymentType === 'monthly') {
+        // โค้ชรายเดือน: ยอดค้างจ่าย = อัตราต่อเดือนเต็มจำนวนทุกครั้ง ไม่คำนวณจากจำนวนคาบสอน
+        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid: 0, unpaid: payRate });
+        setExpenseForm(prev => ({ ...prev, expenseamount: String(payRate) }));
+        return;
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
       // นับเฉพาะคาบที่วันสอนผ่านไปแล้ว (ยังไม่นับคาบที่ยังไม่ถึงวันสอน)
       const sessionsDone = schedules.filter(s => s.date && s.date.split('T')[0] < todayStr).length;
@@ -83,13 +93,13 @@ export default function ExpensesTab({
         .reduce((sum, e) => sum + e.expenseamount, 0);
       const unpaid = Math.max(expected - alreadyPaid, 0);
 
-      setWageInfo({ loading: false, payRate, sessionsDone, expected, alreadyPaid, unpaid });
+      setWageInfo({ loading: false, paymentType, payRate, sessionsDone, expected, alreadyPaid, unpaid });
       setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
     } catch (err: unknown) {
       setWageInfo({
         loading: false,
         error: err instanceof Error ? err.message : 'คำนวณค่าจ้างไม่สำเร็จ',
-        payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0,
+        paymentType: 'per_session', payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0,
       });
       setExpenseForm(prev => ({ ...prev, expenseamount: '' }));
     }
@@ -134,7 +144,9 @@ export default function ExpensesTab({
         reqBodies.push({
           expenseamount: baseWage,
           expensetype: 'coach_wages',
-          expensedescription: typedDesc || (wageInfo && !wageInfo.error ? `ค่าจ้างค้างจ่าย ${wageInfo.sessionsDone} คาบ` : 'ค่าจ้างโค้ช'),
+          expensedescription: typedDesc || (wageInfo && !wageInfo.error
+            ? (wageInfo.paymentType === 'monthly' ? 'ค่าจ้างรายเดือน' : `ค่าจ้างค้างจ่าย ${wageInfo.sessionsDone} คาบ`)
+            : 'ค่าจ้างโค้ช'),
           expensedate: dateISO,
           receipturl: expenseForm.receipturl,
           coach_id: coachId,
@@ -274,6 +286,22 @@ export default function ExpensesTab({
                 </div>
               ) : wageInfo.error ? (
                 <p className="text-[11px] text-rose-600">{wageInfo.error}</p>
+              ) : wageInfo.paymentType === 'monthly' ? (
+                <div className="text-[11px] text-slate-600 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>โค้ชรายเดือน — อัตราต่อเดือน</span>
+                    <span className="font-semibold text-slate-800">฿{wageInfo.payRate.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
+                    <span className="font-bold text-slate-700">ยอดที่จะบันทึกจ่าย (เต็มจำนวน)</span>
+                    <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
+                  </div>
+                  {wageInfo.payRate === 0 && (
+                    <p className="text-[10px] text-amber-600 pt-1">
+                      ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อเดือนของโค้ชคนนี้ ยอดจึงเป็น 0
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="text-[11px] text-slate-600 space-y-0.5">
                   <div className="flex justify-between">
