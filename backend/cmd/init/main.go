@@ -41,7 +41,6 @@ func main() {
 		&models.Customer{},
 		&models.Photo{},
 		&models.Evaluation{},
-		&models.Feedback{},
 		&models.Review{},
 		&models.DetectedVideo{},
 		&models.RawVideo{},

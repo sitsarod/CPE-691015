@@ -48,8 +48,11 @@ func (s *reviewService) preloads() *gorm.DB {
 }
 
 func (s *reviewService) CreateReview(userID uint, req *dto.CreateReviewReq) (*dto.ReviewDTO, error) {
-	if req.CourseID == nil && req.CoachID == nil {
-		return nil, errors.New("ต้องระบุคอร์สหรือโค้ชอย่างน้อยหนึ่งอย่าง")
+	category := models.ReviewCategory(req.Category)
+	switch category {
+	case models.ReviewCategoryCourse, models.ReviewCategoryCoach, models.ReviewCategoryPlace, models.ReviewCategoryService, models.ReviewCategoryOther:
+	default:
+		return nil, errors.New("หัวข้อรีวิวไม่ถูกต้อง")
 	}
 	if req.Rating < 1 || req.Rating > 5 {
 		return nil, errors.New("คะแนนต้องอยู่ระหว่าง 1 ถึง 5")
@@ -60,38 +63,50 @@ func (s *reviewService) CreateReview(userID uint, req *dto.CreateReviewReq) (*dt
 		return nil, err
 	}
 
-	// ตรวจสอบว่าคอร์ส/โค้ชที่รีวิวมีอยู่จริง
-	if req.CourseID != nil {
-		if err := s.db.First(&models.Course{}, *req.CourseID).Error; err != nil {
-			return nil, errors.New("ไม่พบคอร์สที่ต้องการรีวิว")
-		}
-	}
-	if req.CoachID != nil {
-		if err := s.db.First(&models.Coach{}, *req.CoachID).Error; err != nil {
-			return nil, errors.New("ไม่พบโค้ชที่ต้องการรีวิว")
-		}
+	// ตรวจสอบว่าคอร์สที่รีวิวมีอยู่จริง — ทุกหัวข้อต้องผูกกับคอร์สเสมอ
+	// เพราะใช้เป็นบริบทตรวจสิทธิ์ว่าเป็นนักเรียนที่กำลังเรียนคอร์สนี้อยู่จริง
+	if err := s.db.First(&models.Course{}, req.CourseID).Error; err != nil {
+		return nil, errors.New("ไม่พบคอร์สที่ต้องการรีวิว")
 	}
 
-	// ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้งจึงจะรีวิวได้
-	// จำนวนคาบที่เรียนไปแล้ว = total_sessions - remaining_sessions (ตรงกับ attended_sessions ฝั่ง frontend)
-	if req.CourseID != nil {
-		var attendedCount int64
-		if err := s.db.Model(&models.Enrollment{}).
-			Joins("JOIN packages ON packages.id = enrollments.package_id AND packages.deleted_at IS NULL").
-			Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.total_sessions > enrollments.remaining_sessions",
-				customerID, *req.CourseID).
-			Count(&attendedCount).Error; err != nil {
+	// หัวข้อ "coach" ต้องระบุโค้ช และโค้ชต้องมีตารางสอนอยู่ในคอร์สนี้จริง
+	var coachID *uint
+	if category == models.ReviewCategoryCoach {
+		if req.CoachID == nil {
+			return nil, errors.New("ต้องระบุโค้ชที่ต้องการรีวิว")
+		}
+		var coachInCourse int64
+		if err := s.db.Model(&models.Coach{}).
+			Joins("JOIN work_schedules ws ON ws.coach_id = coaches.id").
+			Where("coaches.id = ? AND ws.course_id = ? AND ws.deleted_at IS NULL", *req.CoachID, req.CourseID).
+			Count(&coachInCourse).Error; err != nil {
 			return nil, err
 		}
-		if attendedCount == 0 {
-			return nil, errors.New("ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้งจึงจะรีวิวได้")
+		if coachInCourse == 0 {
+			return nil, errors.New("ไม่พบโค้ชที่ต้องการรีวิวในคอร์สนี้")
 		}
+		coachID = req.CoachID
+	}
+
+	// สิทธิ์การรีวิว: ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้ง (total_sessions > remaining_sessions)
+	// และการลงทะเบียนต้องยัง "active" อยู่ — พอคอร์สจบ (completed/cancelled/expired) แล้วจะรีวิวเพิ่มไม่ได้
+	var eligibleCount int64
+	if err := s.db.Model(&models.Enrollment{}).
+		Joins("JOIN packages ON packages.id = enrollments.package_id AND packages.deleted_at IS NULL").
+		Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.status = ? AND enrollments.total_sessions > enrollments.remaining_sessions",
+			customerID, req.CourseID, models.EnrollmentStatusActive).
+		Count(&eligibleCount).Error; err != nil {
+		return nil, err
+	}
+	if eligibleCount == 0 {
+		return nil, errors.New("ต้องเข้าเรียนคอร์สนี้ไปแล้วอย่างน้อย 1 ครั้ง และคอร์สต้องยังไม่จบจึงจะรีวิวได้")
 	}
 
 	review := models.Review{
 		CustomerID: customerID,
-		CourseID:   req.CourseID,
-		CoachID:    req.CoachID,
+		Category:   category,
+		CourseID:   &req.CourseID,
+		CoachID:    coachID,
 		Rating:     req.Rating,
 		Comment:    req.Comment,
 	}
@@ -186,6 +201,9 @@ func (s *reviewService) UpdateReview(id uint, req *dto.UpdateReviewReq) (*dto.Re
 		return nil, errors.New("ไม่พบรีวิว")
 	}
 
+	if req.Category != "" {
+		review.Category = models.ReviewCategory(req.Category)
+	}
 	if req.Rating != 0 {
 		if req.Rating < 1 || req.Rating > 5 {
 			return nil, errors.New("คะแนนต้องอยู่ระหว่าง 1 ถึง 5")
@@ -243,6 +261,7 @@ func mapToReviewDTO(m *models.Review) dto.ReviewDTO {
 	d := dto.ReviewDTO{
 		ID:         m.ID,
 		CustomerID: m.CustomerID,
+		Category:   string(m.Category),
 		CourseID:   m.CourseID,
 		CoachID:    m.CoachID,
 		Rating:     m.Rating,
