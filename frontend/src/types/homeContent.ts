@@ -24,6 +24,7 @@ export interface HomeContent {
   about_title: string;
   about_content: string;
   about_image_url: string;
+  map_embed_url: string;
   coaches_title: string;
   coaches_subtitle: string;
   courses_title: string;
@@ -50,6 +51,7 @@ export interface UpdateHomeContentReq {
   about_title?: string;
   about_content?: string;
   about_image_url?: string;
+  map_embed_url?: string;
   coaches_title?: string;
   coaches_subtitle?: string;
   courses_title?: string;

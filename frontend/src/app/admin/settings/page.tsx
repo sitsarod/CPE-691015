@@ -15,7 +15,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  Image as ImageIcon,
+  MapPin,
   Loader2,
   Save,
   ExternalLink,
@@ -37,9 +37,6 @@ export default function AdminSettingsPage() {
   const [uploadingSlide, setUploadingSlide] = useState(false);
   const slideFileRef = useRef<HTMLInputElement>(null);
 
-  // about image upload state
-  const [uploadingAbout, setUploadingAbout] = useState(false);
-  const aboutFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadAll();
@@ -76,6 +73,7 @@ export default function AdminSettingsPage() {
         about_title: content.about_title,
         about_content: content.about_content,
         about_image_url: content.about_image_url,
+        map_embed_url: content.map_embed_url,
         coaches_title: content.coaches_title,
         coaches_subtitle: content.coaches_subtitle,
         courses_title: content.courses_title,
@@ -168,28 +166,6 @@ export default function AdminSettingsPage() {
     }
   };
 
-  // ---------- About image ----------
-  const handleAboutImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const sizeError = validateImageSize(file);
-    if (sizeError) {
-      alert(sizeError);
-      if (aboutFileRef.current) aboutFileRef.current.value = '';
-      return;
-    }
-    try {
-      setUploadingAbout(true);
-      const url = await homeContentAPI.uploadImage(file);
-      setField('about_image_url', url);
-    } catch (error: any) {
-      alert(`อัปโหลดรูปไม่สำเร็จ: ${error.message}`);
-    } finally {
-      setUploadingAbout(false);
-      if (aboutFileRef.current) aboutFileRef.current.value = '';
-    }
-  };
-
   // ---------- Coaches ----------
   const handleToggleCoach = async (coach: PublicCoach) => {
     try {
@@ -207,6 +183,13 @@ export default function AdminSettingsPage() {
       </div>
     );
   }
+
+  // แผนที่: รองรับทั้ง src ตรงๆ และการวาง <iframe .../> ทั้งก้อน แล้วดึง src มาพรีวิว
+  const rawMap = content.map_embed_url?.trim() ?? '';
+  const mapPreviewSrc = rawMap.includes('<iframe')
+    ? rawMap.match(/src="([^"]+)"/i)?.[1] ?? ''
+    : rawMap;
+  const showMapPreview = mapPreviewSrc.startsWith('http');
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -321,29 +304,27 @@ export default function AdminSettingsPage() {
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
             </Field>
           </div>
-          <Field label="รูปประกอบ">
+          <Field label="แผนที่ที่ตั้ง (Google Maps)">
             <div className="space-y-3">
-              {content.about_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={content.about_image_url} alt="about" className="w-full h-40 object-cover rounded-xl border border-gray-200" />
+              {showMapPreview ? (
+                <iframe src={mapPreviewSrc} title="แผนที่ที่ตั้ง"
+                  className="w-full h-40 rounded-xl border border-gray-200" loading="lazy" />
               ) : (
                 <div className="w-full h-40 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
-                  <ImageIcon size={28} />
+                  <MapPin size={28} />
                 </div>
               )}
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => aboutFileRef.current?.click()} disabled={uploadingAbout}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 text-sm font-medium">
-                  {uploadingAbout ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                  {content.about_image_url ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
-                </button>
-                {content.about_image_url && (
-                  <button type="button" onClick={() => setField('about_image_url', '')}
-                    className="text-sm text-red-500 hover:text-red-700">ลบรูป</button>
-                )}
-              </div>
-              <p className="text-xs text-gray-400">ขนาดไฟล์ไม่เกิน {MAX_UPLOAD_MB} MB</p>
-              <input type="file" accept="image/*" className="hidden" ref={aboutFileRef} onChange={handleAboutImage} />
+              <textarea rows={4} value={content.map_embed_url}
+                onChange={(e) => setField('map_embed_url', e.target.value)}
+                placeholder='วางลิงก์ฝังจาก Google Maps ที่นี่ (วาง src หรือทั้งก้อน <iframe ...>)'
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+              {content.map_embed_url && (
+                <button type="button" onClick={() => setField('map_embed_url', '')}
+                  className="text-sm text-red-500 hover:text-red-700">ลบแผนที่</button>
+              )}
+              <p className="text-xs text-gray-400">
+                Google Maps → ปุ่ม “แชร์” → “ฝังแผนที่” → คัดลอกโค้ด แล้วนำมาวางที่นี่
+              </p>
             </div>
           </Field>
         </div>

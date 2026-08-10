@@ -84,6 +84,9 @@ func (s *homeContentService) UpdateHomeContent(req *dto.UpdateHomeContentReq) (*
 	if req.AboutImageURL != nil {
 		content.AboutImageURL = *req.AboutImageURL
 	}
+	if req.MapEmbedURL != nil {
+		content.MapEmbedURL = *req.MapEmbedURL
+	}
 	if req.CoachesTitle != nil {
 		content.CoachesTitle = *req.CoachesTitle
 	}
@@ -265,6 +268,7 @@ func mapToHomeContentDTO(m *models.HomeContent) dto.HomeContentDTO {
 		AboutTitle:          m.AboutTitle,
 		AboutContent:        m.AboutContent,
 		AboutImageURL:       m.AboutImageURL,
+		MapEmbedURL:         m.MapEmbedURL,
 		CoachesTitle:        m.CoachesTitle,
 		CoachesSubtitle:     m.CoachesSubtitle,
 		CoursesTitle:        m.CoursesTitle,
