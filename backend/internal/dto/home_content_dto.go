@@ -36,6 +36,11 @@ type HomeContentDTO struct {
 	ShowFeaturedReviews bool      `json:"show_featured_reviews"`
 	ReviewsTitle        string    `json:"reviews_title"`
 	ReviewsSubtitle     string    `json:"reviews_subtitle"`
+	FacebookURL         string    `json:"facebook_url"`
+	InstagramURL        string    `json:"instagram_url"`
+	TiktokURL           string    `json:"tiktok_url"`
+	YoutubeURL          string    `json:"youtube_url"`
+	LineURL             string    `json:"line_url"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
@@ -59,6 +64,11 @@ type UpdateHomeContentReq struct {
 	ShowFeaturedReviews *bool   `json:"show_featured_reviews"`
 	ReviewsTitle        *string `json:"reviews_title"`
 	ReviewsSubtitle     *string `json:"reviews_subtitle"`
+	FacebookURL         *string `json:"facebook_url"`
+	InstagramURL        *string `json:"instagram_url"`
+	TiktokURL           *string `json:"tiktok_url"`
+	YoutubeURL          *string `json:"youtube_url"`
+	LineURL             *string `json:"line_url"`
 }
 
 // CreateHeroSlideReq เพิ่มรูปสไลด์ใหม่

@@ -20,6 +20,7 @@ import {
   Save,
   ExternalLink,
   Check,
+  Share2,
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -82,6 +83,11 @@ export default function AdminSettingsPage() {
         show_featured_reviews: content.show_featured_reviews,
         reviews_title: content.reviews_title,
         reviews_subtitle: content.reviews_subtitle,
+        facebook_url: content.facebook_url,
+        instagram_url: content.instagram_url,
+        tiktok_url: content.tiktok_url,
+        youtube_url: content.youtube_url,
+        line_url: content.line_url,
       });
       setContent(updated);
       setSavedFlash(true);
@@ -339,6 +345,43 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-400">ขนาดไฟล์ไม่เกิน {MAX_UPLOAD_MB} MB</p>
               <input type="file" accept="image/*" className="hidden" ref={aboutFileRef} onChange={handleAboutImage} />
             </div>
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* ===== ลิงก์โซเชียลมีเดีย ===== */}
+      <SectionCard icon={<Share2 className="h-5 w-5 text-[#CC0000]" />} title="ลิงก์โซเชียลมีเดีย"
+        desc="ใส่ลิงก์ช่องทางโซเชียลของคุณ — เว้นว่างช่องไหน ระบบจะไม่แสดงไอคอนช่องนั้นบนหน้าแรก (แสดงทั้งส่วนเกี่ยวกับเราและท้ายหน้า)">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field label="Facebook">
+            <input type="url" value={content.facebook_url}
+              onChange={(e) => setField('facebook_url', e.target.value)}
+              placeholder="https://facebook.com/yourpage"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="Instagram">
+            <input type="url" value={content.instagram_url}
+              onChange={(e) => setField('instagram_url', e.target.value)}
+              placeholder="https://instagram.com/youraccount"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="TikTok">
+            <input type="url" value={content.tiktok_url}
+              onChange={(e) => setField('tiktok_url', e.target.value)}
+              placeholder="https://tiktok.com/@youraccount"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="YouTube">
+            <input type="url" value={content.youtube_url}
+              onChange={(e) => setField('youtube_url', e.target.value)}
+              placeholder="https://youtube.com/@yourchannel"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="LINE">
+            <input type="url" value={content.line_url}
+              onChange={(e) => setField('line_url', e.target.value)}
+              placeholder="https://line.me/ti/p/~yourid หรือ URL กลุ่ม/OA"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
           </Field>
         </div>
       </SectionCard>
