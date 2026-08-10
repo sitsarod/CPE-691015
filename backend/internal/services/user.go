@@ -84,7 +84,8 @@ func (s *UserService) SyncCustomerStatuses() error {
 
 func (s *UserService) GetUserByRole(role models.UserRole) ([]models.User, error) {
 	var users []models.User
-	err := s.db.Where("role = ?", role).Find(&users).Error
+	// Preload Customer เพื่อให้มี nickname ติดมาด้วย (ใช้แสดงในหน้าออกบิล)
+	err := s.db.Preload("Customer").Where("role = ?", role).Find(&users).Error
 	return users, err
 }
 
