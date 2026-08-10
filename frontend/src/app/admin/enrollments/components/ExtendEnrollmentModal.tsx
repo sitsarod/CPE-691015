@@ -12,14 +12,12 @@ interface ExtendEnrollmentModalProps {
   onSuccess: () => void;
 }
 
-const QUICK_DAYS = [7, 14, 30];
-
 export default function ExtendEnrollmentModal({
   enrollment,
   onClose,
   onSuccess,
 }: ExtendEnrollmentModalProps) {
-  const [days, setDays] = useState<number | "">(30);
+  const [days, setDays] = useState<number | "">("");
   const [reason, setReason] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,22 +119,6 @@ export default function ExtendEnrollmentModal({
               <label className="mb-1 block text-sm font-semibold text-gray-700">
                 จำนวนวันที่ขยาย <span className="text-red-500">*</span>
               </label>
-              <div className="mb-2 flex gap-2">
-                {QUICK_DAYS.map((d) => (
-                  <button
-                    key={`quick-${d}`}
-                    type="button"
-                    onClick={() => setDays(d)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                      days === d
-                        ? "border-[#CC0000] bg-red-50 text-[#CC0000]"
-                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {d} วัน
-                  </button>
-                ))}
-              </div>
               <input
                 type="number"
                 min={1}
@@ -146,6 +128,7 @@ export default function ExtendEnrollmentModal({
                 onChange={(e) =>
                   setDays(e.target.value === "" ? "" : Number(e.target.value))
                 }
+                placeholder="ระบุจำนวนวัน"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
               />
             </div>

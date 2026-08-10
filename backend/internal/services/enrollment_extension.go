@@ -62,6 +62,9 @@ func (s *EnrollmentService) ExtendEnrollment(
 			if err := tx.First(&pkg, enrollment.PackageID).Error; err != nil {
 				return errors.New("ไม่พบข้อมูลแพ็กเกจของการลงทะเบียนนี้")
 			}
+			
+			expireStaleEnrollments(tx)
+
 			full, err := seatsFull(tx, enrollment.PackageID, pkg.MaxSeats)
 			if err != nil {
 				return err
