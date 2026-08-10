@@ -4,10 +4,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// Review คือรีวิว/คะแนนที่ลูกค้าให้กับคอร์สและ/หรือโค้ช ที่ตนได้ลงทะเบียนเรียน
+// ReviewCategory คือหัวข้อของรีวิว/ข้อเสนอแนะ
+// ลูกค้าเลือกได้ว่ากำลังรีวิว/ให้ข้อเสนอแนะเรื่องอะไร
+type ReviewCategory string
+
+const (
+	ReviewCategoryCourse  ReviewCategory = "course"  // รีวิวคอร์ส
+	ReviewCategoryCoach   ReviewCategory = "coach"   // รีวิวโค้ช
+	ReviewCategoryPlace   ReviewCategory = "place"   // ข้อเสนอแนะเกี่ยวกับสถานที่
+	ReviewCategoryService ReviewCategory = "service" // ข้อเสนอแนะเกี่ยวกับบริการ
+	ReviewCategoryOther   ReviewCategory = "other"   // อื่นๆ
+)
+
+// Review คือรีวิว/คะแนน/ข้อเสนอแนะที่ลูกค้าให้กับคอร์ส โค้ช หรือสถานฝึกสอนโดยรวม
+// ที่ตนได้ลงทะเบียนเรียน แยกหัวข้อด้วย Category
 //
-// ต่างจาก Feedback (คำร้องเรียน/ข้อเสนอแนะ) ตรงที่ Review มี "คะแนนดาว" (Rating)
-// และแอดมินสามารถเลือกยกให้บางรีวิวไปแสดงหน้าแรกของระบบได้ (IsFeatured)
+// แอดมินสามารถเลือกยกให้บางรีวิวไปแสดงหน้าแรกของระบบได้ (IsFeatured)
 //
 // ลูกค้าหนึ่งคนรีวิวได้ไม่จำกัดจำนวนครั้ง (ไม่มี unique constraint บน customer/course)
 type Review struct {
@@ -17,10 +29,14 @@ type Review struct {
 	CustomerID uint      `json:"customer_id" valid:"required~CustomerID is required"`
 	Customer   *Customer `json:"customer"`
 
-	// เป้าหมายของรีวิว: คอร์ส และ/หรือ โค้ช (อย่างน้อยต้องมีหนึ่งอย่าง — บังคับที่ service)
-	CourseID *uint   `json:"course_id"`
+	// หัวข้อของรีวิว — บังคับเลือกเสมอ
+	Category ReviewCategory `json:"category" gorm:"type:varchar(20);default:'course'" valid:"required~Category is required,in(course|coach|place|service|other)~Invalid category value"`
+
+	// คอร์สที่รีวิว/ที่เป็นบริบทของข้อเสนอแนะ — บังคับเสมอ เพราะใช้ตรวจสิทธิ์ว่าเคยเข้าเรียนคอร์สนี้จริง
+	CourseID *uint   `json:"course_id" valid:"required~CourseID is required"`
 	Course   *Course `json:"course" gorm:"foreignKey:CourseID"`
 
+	// โค้ชที่รีวิว — บังคับเฉพาะตอน Category = coach
 	CoachID *uint  `json:"coach_id"`
 	Coach   *Coach `json:"coach" gorm:"foreignKey:CoachID"`
 

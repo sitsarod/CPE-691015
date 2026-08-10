@@ -3,9 +3,18 @@
 import React, { useEffect, useState } from 'react';
 import { reviewAPI } from '@/services/reviewAPI';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
-import { Review, CourseCoach, CreateReviewReq } from '@/types/review';
+import { Review, CourseCoach, CreateReviewReq, ReviewCategory } from '@/types/review';
 import { Enrollment } from '@/types/enrollment';
-import { Star, Send, Loader2, BookOpen, UserRound, Sparkles, MessageSquareText } from 'lucide-react';
+import { Star, Send, Loader2, BookOpen, UserRound, Sparkles, MessageSquareText, MapPin, Wrench, MoreHorizontal } from 'lucide-react';
+
+// ตัวเลือกหัวข้อรีวิว/ข้อเสนอแนะที่ลูกค้าเลือกได้
+const CATEGORY_OPTIONS: { key: ReviewCategory; label: string; icon: React.ElementType }[] = [
+  { key: 'course', label: 'คอร์ส', icon: BookOpen },
+  { key: 'coach', label: 'โค้ช', icon: UserRound },
+  { key: 'place', label: 'สถานที่', icon: MapPin },
+  { key: 'service', label: 'บริการ', icon: Wrench },
+  { key: 'other', label: 'อื่นๆ', icon: MoreHorizontal },
+];
 
 // ตัวเลือกคอร์สที่ลูกค้าลงทะเบียนไว้ (ตัดตัวซ้ำแล้ว)
 interface CourseOption {
@@ -58,7 +67,7 @@ export default function CustomerFeedbackPage() {
 
   // ฟอร์ม
   const [courseId, setCourseId] = useState<number | ''>('');
-  const [target, setTarget] = useState<'course' | 'coach'>('course');
+  const [category, setCategory] = useState<ReviewCategory>('course');
   const [coachId, setCoachId] = useState<number | ''>('');
   const [coaches, setCoaches] = useState<CourseCoach[]>([]);
   const [loadingCoaches, setLoadingCoaches] = useState(false);
@@ -119,7 +128,7 @@ export default function CustomerFeedbackPage() {
     courseId !== '' &&
     rating >= 1 &&
     comment.trim().length > 0 &&
-    (target === 'course' || coachId !== '') &&
+    (category !== 'coach' || coachId !== '') &&
     !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -127,13 +136,15 @@ export default function CustomerFeedbackPage() {
     if (!canSubmit) return;
     try {
       setSubmitting(true);
-      // แนบ course_id เสมอเป็นบริบท และแนบ coach_id เมื่อเลือกรีวิวโค้ช
+      // แนบ course_id เสมอเป็นบริบท (ใช้ตรวจสิทธิ์ว่าเคยเรียนคอร์สนี้แล้ว)
+      // และแนบ coach_id เมื่อเลือกหัวข้อ "โค้ช"
       const payload: CreateReviewReq = {
+        category,
         course_id: Number(courseId),
         rating,
         comment: comment.trim(),
       };
-      if (target === 'coach' && coachId !== '') {
+      if (category === 'coach' && coachId !== '') {
         payload.coach_id = Number(coachId);
       }
 
@@ -141,7 +152,7 @@ export default function CustomerFeedbackPage() {
       // เพิ่มรีวิวใหม่ไว้บนสุด และล้างฟอร์ม
       setMyReviews((prev) => [created, ...prev]);
       setCourseId('');
-      setTarget('course');
+      setCategory('course');
       setCoachId('');
       setRating(0);
       setComment('');
@@ -271,45 +282,45 @@ export default function CustomerFeedbackPage() {
               </select>
             </div>
 
-            {/* Review target: course or coach */}
+            {/* หัวข้อรีวิว/ข้อเสนอแนะ */}
             {courseId !== '' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ต้องการรีวิวอะไร</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTarget('course')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                      target === 'course'
-                        ? 'bg-[#FFF0F0] border-[#CC0000] text-[#CC0000]'
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <BookOpen size={16} />
-                    รีวิวคอร์ส
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTarget('coach')}
-                    disabled={!loadingCoaches && coaches.length === 0}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                      target === 'coach'
-                        ? 'bg-[#FFF0F0] border-[#CC0000] text-[#CC0000]'
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <UserRound size={16} />
-                    รีวิวโค้ช
-                  </button>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ต้องการรีวิว/เสนอแนะเรื่องอะไร</label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORY_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const disabled = opt.key === 'coach' && !loadingCoaches && coaches.length === 0;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setCategory(opt.key)}
+                        disabled={disabled}
+                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          category === opt.key
+                            ? 'bg-[#FFF0F0] border-[#CC0000] text-[#CC0000]'
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon size={16} />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
-                {!loadingCoaches && coaches.length === 0 && (
-                  <p className="text-xs text-gray-400 mt-1.5">คอร์สนี้ยังไม่มีโค้ชที่มีตารางสอน จึงรีวิวได้เฉพาะคอร์ส</p>
+                {category === 'coach' && !loadingCoaches && coaches.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1.5">คอร์สนี้ยังไม่มีโค้ชที่มีตารางสอน จึงรีวิวโค้ชไม่ได้</p>
+                )}
+                {(category === 'place' || category === 'service' || category === 'other') && (
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    ข้อเสนอแนะนี้จะผูกกับคอร์ส &quot;{courses.find((c) => c.id === courseId)?.name}&quot; เป็นบริบท
+                  </p>
                 )}
               </div>
             )}
 
-            {/* Coach select (เมื่อเลือกรีวิวโค้ช) */}
-            {courseId !== '' && target === 'coach' && (
+            {/* Coach select (เมื่อเลือกหัวข้อโค้ช) */}
+            {courseId !== '' && category === 'coach' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">เลือกโค้ช</label>
                 <select
@@ -396,6 +407,11 @@ export default function CustomerFeedbackPage() {
                 <span className={`absolute inset-y-0 left-0 w-1 ${review.is_featured ? "bg-orange-400" : "bg-gray-200"}`} />
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
+                    {(review.category === 'place' || review.category === 'service' || review.category === 'other') && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700">
+                        {categoryLabel(review.category)}
+                      </span>
+                    )}
                     {review.course && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700">
                         <BookOpen size={13} />
@@ -511,5 +527,18 @@ function formatDate(iso: string): string {
     });
   } catch {
     return '';
+  }
+}
+
+function categoryLabel(category: ReviewCategory): string {
+  switch (category) {
+    case 'place':
+      return 'สถานที่';
+    case 'service':
+      return 'บริการ';
+    case 'other':
+      return 'อื่นๆ';
+    default:
+      return category;
   }
 }

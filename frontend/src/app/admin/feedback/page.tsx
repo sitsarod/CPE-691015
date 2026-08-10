@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { reviewAPI } from '@/services/reviewAPI';
-import { Review, UpdateReviewReq } from '@/types/review';
+import { Review, UpdateReviewReq, ReviewCategory } from '@/types/review';
 import Toast from '@/components/Toast';
 import {
   Star,
@@ -16,9 +16,20 @@ import {
   Sparkles,
   Loader2,
   List,
+  MapPin,
+  Wrench,
+  MoreHorizontal,
 } from 'lucide-react';
 
-type FilterTab = 'all' | 'featured' | 'course' | 'coach';
+type FilterTab = 'all' | 'featured' | ReviewCategory;
+
+const CATEGORY_META: Record<ReviewCategory, { label: string; icon: React.ElementType }> = {
+  course: { label: 'รีวิวคอร์ส', icon: BookOpen },
+  coach: { label: 'รีวิวโค้ช', icon: UserRound },
+  place: { label: 'สถานที่', icon: MapPin },
+  service: { label: 'บริการ', icon: Wrench },
+  other: { label: 'อื่นๆ', icon: MoreHorizontal },
+};
 
 // ==================== Star Rating ====================
 function StarRating({
@@ -108,8 +119,11 @@ export default function AdminFeedbackPage() {
     () => ({
       all: reviews.length,
       featured: reviews.filter((r) => r.is_featured).length,
-      course: reviews.filter((r) => r.course_id).length,
-      coach: reviews.filter((r) => r.coach_id).length,
+      course: reviews.filter((r) => r.category === 'course').length,
+      coach: reviews.filter((r) => r.category === 'coach').length,
+      place: reviews.filter((r) => r.category === 'place').length,
+      service: reviews.filter((r) => r.category === 'service').length,
+      other: reviews.filter((r) => r.category === 'other').length,
     }),
     [reviews]
   );
@@ -118,8 +132,7 @@ export default function AdminFeedbackPage() {
     const q = search.trim().toLowerCase();
     return reviews.filter((r) => {
       if (tab === 'featured' && !r.is_featured) return false;
-      if (tab === 'course' && !r.course_id) return false;
-      if (tab === 'coach' && !r.coach_id) return false;
+      if (tab !== 'all' && tab !== 'featured' && r.category !== tab) return false;
 
       if (!q) return true;
       const name = customerName(r).toLowerCase();
@@ -184,8 +197,11 @@ export default function AdminFeedbackPage() {
   const tabs: { key: FilterTab; label: string; icon: React.ElementType }[] = [
     { key: 'all', label: 'ทั้งหมด', icon: List },
     { key: 'featured', label: 'แสดงหน้าแรก', icon: Sparkles },
-    { key: 'course', label: 'รีวิวคอร์ส', icon: BookOpen },
-    { key: 'coach', label: 'รีวิวโค้ช', icon: UserRound },
+    { key: 'course', label: CATEGORY_META.course.label, icon: CATEGORY_META.course.icon },
+    { key: 'coach', label: CATEGORY_META.coach.label, icon: CATEGORY_META.coach.icon },
+    { key: 'place', label: CATEGORY_META.place.label, icon: CATEGORY_META.place.icon },
+    { key: 'service', label: CATEGORY_META.service.label, icon: CATEGORY_META.service.icon },
+    { key: 'other', label: CATEGORY_META.other.label, icon: CATEGORY_META.other.icon },
   ];
 
   return (
@@ -194,9 +210,9 @@ export default function AdminFeedbackPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">รีวิวและคะแนน (Reviews)</h1>
+        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">รีวิวและข้อเสนอแนะ (Reviews)</h1>
         <p className="text-sm text-slate-500 mt-1">
-          รีวิวคอร์สและโค้ชจากลูกค้าที่ลงทะเบียนเรียน — เลือกรีวิวเพื่อแสดงในหน้าแรกของระบบ
+          รีวิวคอร์ส โค้ช สถานที่ บริการ และข้อเสนอแนะอื่นๆ จากลูกค้าที่ลงทะเบียนเรียน — เลือกรีวิวเพื่อแสดงในหน้าแรกของระบบ
         </p>
       </div>
 
@@ -417,6 +433,15 @@ function ReviewCard({
 
       {/* Target badges */}
       <div className="flex flex-wrap gap-2">
+        {(review.category === 'place' || review.category === 'service' || review.category === 'other') && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700">
+            {(() => {
+              const Icon = CATEGORY_META[review.category].icon;
+              return <Icon size={13} />;
+            })()}
+            {CATEGORY_META[review.category].label}
+          </span>
+        )}
         {review.course && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700">
             <BookOpen size={13} />

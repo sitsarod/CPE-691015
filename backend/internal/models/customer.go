@@ -45,7 +45,7 @@ type Customer struct {
 
 	Photos            	[]Photo 		`json:"photo" gorm:"foreignKey:CustomerID"`
 	Evaluations       	[]Evaluation    `json:"evaluation" gorm:"foreignKey:CustomerID"`
-	Feedbacks         	[]Feedback      `json:"feedback" gorm:"foreignKey:CustomerID"`
+	Reviews           	[]Review        `json:"reviews" gorm:"foreignKey:CustomerID"`
 	DetectedVideos    	[]DetectedVideo `json:"detectedVideo" gorm:"foreignKey:CustomerID"`
 	Enrollments    		[]Enrollment    `json:"enrollment" gorm:"foreignKey:CustomerID"`
 
