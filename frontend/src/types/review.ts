@@ -17,10 +17,15 @@ export interface ReviewCoach {
   nickname: string;
 }
 
+// หัวข้อของรีวิว/ข้อเสนอแนะ — course/coach ผูกกับคอร์ส/โค้ชที่เลือก
+// ส่วน place/service/other เป็นข้อเสนอแนะทั่วไปเกี่ยวกับสถานฝึกสอน
+export type ReviewCategory = 'course' | 'coach' | 'place' | 'service' | 'other';
+
 export interface Review {
   id: number;
   customer_id: number;
   customer: ReviewCustomer | null;
+  category: ReviewCategory;
   course_id: number | null;
   course: ReviewCourse | null;
   coach_id: number | null;
@@ -33,12 +38,14 @@ export interface Review {
 }
 
 export interface UpdateReviewReq {
+  category?: ReviewCategory;
   rating?: number;
   comment?: string;
 }
 
 export interface CreateReviewReq {
-  course_id?: number;
+  category: ReviewCategory;
+  course_id: number;
   coach_id?: number;
   rating: number;
   comment: string;
