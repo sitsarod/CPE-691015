@@ -14,6 +14,8 @@ export default function EditForm() {
     password: "",
     confirmPassword: "",
     phoneNumber: "",
+    lineId: "",
+    facebook: "",
     parentEmail: "",
     parentPhoneNumber: ""
   });
@@ -131,6 +133,18 @@ export default function EditForm() {
         <div className="w-full flex flex-col space-y-1.5">
           <label className="text-sm font-semibold text-gray-700">หมายเลขโทรศัพท์มือถือ</label>
           <input name="phoneNumber" type="text" required value={formData.phoneNumber} onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
+        </div>
+
+        {/* Line ID */}
+        <div className="w-full sm:w-[calc(50%-0.75rem)] mr-auto flex flex-col space-y-1.5">
+          <label className="text-sm font-semibold text-gray-700">Line ID (ถ้ามี)</label>
+          <input name="lineId" type="text" value={formData.lineId} onChange={handleChange} placeholder="ระบุ Line ID" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
+        </div>
+
+        {/* Facebook */}
+        <div className="w-full sm:w-[calc(50%-0.75rem)] flex flex-col space-y-1.5">
+          <label className="text-sm font-semibold text-gray-700">Facebook (ถ้ามี)</label>
+          <input name="facebook" type="text" value={formData.facebook} onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base bg-white text-gray-900" />
         </div>
 
         {/* อีเมลผู้ปกครอง */}

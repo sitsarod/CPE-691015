@@ -11,6 +11,8 @@ import { formatDate } from "@/lib/format";
 export interface EditCoachForm {
   nickname: string;
   phone: string;
+  lineId: string;   // ไม่บังคับ
+  facebook: string; // ไม่บังคับ
   address: string;
   bank_account: string;
   payment_info: string;
@@ -74,6 +76,10 @@ export function EditCoachModal({
             value={editForm.phone}
             onChange={(e) => setEditForm({ ...editForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
           />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <InputField label="Line ID (ถ้ามี)" value={editForm.lineId} onChange={(e) => setEditForm({ ...editForm, lineId: e.target.value })} />
+          <InputField label="Facebook (ถ้ามี)" value={editForm.facebook} onChange={(e) => setEditForm({ ...editForm, facebook: e.target.value })} />
         </div>
         <InputField label="ที่อยู่" required value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

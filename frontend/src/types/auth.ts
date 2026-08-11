@@ -72,6 +72,8 @@ export interface RegisterCustomerReq {
     gender: string;
     birthDate: string | null;
     phoneNumber: string;
+    lineId?: string;
+    facebook?: string;
     parentEmail: string | null;
     parentPhoneNumber: string | null;
   };

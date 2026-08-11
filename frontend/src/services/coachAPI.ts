@@ -24,12 +24,16 @@ export interface CoachListItem {
   coach_license: string;
   profile_picture: string;
   phone: string;
+  lineId?: string;
+  facebook?: string;
 }
 
 // ข้อมูลสำหรับสร้างโค้ชใหม่ (ตรงกับ dto.CreateCoachRequest — แอดมินกรอกทั้งหมด)
 export interface CreateCoachInput {
   user_id: number;
   phone: string;
+  lineId?: string;   // ไม่บังคับ
+  facebook?: string; // ไม่บังคับ
   uid: string;
   address: string;
   birth_date: string; // YYYY-MM-DD
@@ -46,6 +50,8 @@ export interface CreateCoachInput {
 // ข้อมูลที่แก้ไขได้ผ่าน PATCH /coaches/:id (ข้อมูลทั่วไป)
 export interface UpdateCoachInput {
   phone?: string;
+  lineId?: string;
+  facebook?: string;
   address?: string;
   nickname?: string;
   profile_picture?: string;

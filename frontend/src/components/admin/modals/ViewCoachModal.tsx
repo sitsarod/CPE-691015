@@ -58,6 +58,8 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
             <DetailItem label="ชื่อเล่น" value={detail.nickname} />
             <DetailItem label="อีเมล" value={detail.email} />
             <DetailItem label="เบอร์โทรศัพท์" value={detail.phone} />
+            <DetailItem label="Line ID" value={detail.lineId || "-"} />
+            <DetailItem label="Facebook" value={detail.facebook || "-"} />
             <DetailItem label="เลขบัตรประชาชน" value={detail.uid} />
             <DetailItem label="วันเกิด" value={formatDate(detail.birth_date)} />
             <DetailItem label="ระดับฝีมือ" value={detail.specialization} />
@@ -82,6 +84,8 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
           <DetailItem label="ระดับฝีมือ" value={selected.specialization} />
           <DetailItem label="ใบรับรองผู้ฝึกสอน" value={selected.coach_license} />
           <DetailItem label="เบอร์โทรศัพท์" value={selected.phone} />
+          <DetailItem label="Line ID" value={selected.lineId || "-"} />
+          <DetailItem label="Facebook" value={selected.facebook || "-"} />
         </dl>
       ) : null}
     </Modal>

@@ -141,6 +141,8 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
 	if user.Customer != nil {
         response.Nickname = user.Customer.Nickname
         response.PhoneNumber = user.Customer.PhoneNumber
+        response.LineID = user.Customer.LineID
+        response.Facebook = user.Customer.Facebook
         response.Gender = strings.ToLower(string(user.Customer.Gender))
         
         response.ParentEmail = user.Customer.ParentEmail
@@ -178,6 +180,8 @@ func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
 		if u.Customer != nil {
 			item.Nickname = u.Customer.Nickname
 			item.PhoneNumber = u.Customer.PhoneNumber
+			item.LineID = u.Customer.LineID
+			item.Facebook = u.Customer.Facebook
 			item.Status = string(u.Customer.Status)
 		}
 		response = append(response, item)
@@ -199,20 +203,34 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 	for _, u := range studentUsers {
 		nickname := ""
 		phone := ""
+		lineID := ""
+		facebook := ""
+		birthDate := ""
+		gender := ""
 
 		if u.Customer != nil {
 			nickname = u.Customer.Nickname
 			phone = u.Customer.PhoneNumber
+			lineID = u.Customer.LineID
+			facebook = u.Customer.Facebook
+			gender = strings.ToLower(string(u.Customer.Gender))
+			if !u.Customer.BirthDate.IsZero() {
+				birthDate = u.Customer.BirthDate.Format("2006-01-02")
+			}
 		}
 
 		response = append(response, dto.StudentListResponseDTO{
-			ID:          u.ID,
-			FirstName:   u.FirstName,
-			LastName:    u.LastName,
-			Email:       u.Email,
-			Nickname:    nickname,
-			PhoneNumber: phone,
+			ID:               u.ID,
+			FirstName:        u.FirstName,
+			LastName:         u.LastName,
+			Email:            u.Email,
+			Nickname:         nickname,
+			PhoneNumber:      phone,
 			GraceEnrollments: ctrl.userService.CountGraceEnrollments(u.ID),
+			LineID:           lineID,
+			Facebook:         facebook,
+			BirthDate:        birthDate,
+			Gender:           gender,
 		})
 	}
 

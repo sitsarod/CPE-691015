@@ -131,6 +131,10 @@ export function CreateCoachModal({
           <InputField label="ที่อยู่" required value={createForm.address} onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <InputField label="Line ID (ถ้ามี)" value={createForm.lineId ?? ""} onChange={(e) => setCreateForm({ ...createForm, lineId: e.target.value })} />
+          <InputField label="Facebook (ถ้ามี)" value={createForm.facebook ?? ""} onChange={(e) => setCreateForm({ ...createForm, facebook: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <InputField label="เลขบัญชีธนาคาร" required value={createForm.bank_account} onChange={(e) => setCreateForm({ ...createForm, bank_account: e.target.value })} />
           <InputField label="ข้อมูลการจ่ายเงิน" required value={createForm.payment_info} onChange={(e) => setCreateForm({ ...createForm, payment_info: e.target.value })} />
         </div>

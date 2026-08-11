@@ -27,6 +27,9 @@ type Customer struct {
     BirthDate         time.Time       `json:"birthDate" valid:"required~Birth date is required"`
 	Gender            Gender          `json:"gender" gorm:"type:varchar(10);check:gender IN ('male', 'female')" valid:"required~Gender is required,in(male|female)~Gender must be either 'male' or 'female'"`
     PhoneNumber       string          `json:"phoneNumber" valid:"required~Phone number is required,numeric~Phone number must contain only numbers,length(10)~Invalid phone number length"`
+    // LineID / Facebook เป็นช่องทางติดต่อเสริม ไม่บังคับกรอก
+    LineID              string          `json:"lineId" gorm:"type:varchar(100)"`
+    Facebook            string          `json:"facebook" gorm:"type:varchar(255)"`
     ParentEmail       string          `json:"parentEmail" valid:"email~Invalid parent email format,optional"`
     ParentPhoneNumber string          `json:"parentPhoneNumber" valid:"numeric~Parent phone number must contain only numbers,optional"`
     ConsentedPurposes bool            `json:"consentedPurposes" gorm:"default:false" `

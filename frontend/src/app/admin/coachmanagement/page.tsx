@@ -24,13 +24,13 @@ import { DataTable, Column } from "@/components/admin/DataTable";
 type ModalMode = "view" | "create" | "edit" | null;
 
 const emptyCreateForm: CreateCoachInput = {
-  user_id: 0, phone: "", uid: "", address: "", birth_date: "", nickname: "",
+  user_id: 0, phone: "", lineId: "", facebook: "", uid: "", address: "", birth_date: "", nickname: "",
   profile_picture: "", specialization: "", coach_license: "", bank_account: "", payment_info: "",
   payment_type: "per_session", pay_rate: 0,
 };
 
 const emptyEditForm: EditCoachForm = {
-  nickname: "", phone: "", address: "", bank_account: "", payment_info: "",
+  nickname: "", phone: "", lineId: "", facebook: "", address: "", bank_account: "", payment_info: "",
   specialization: "", coach_license: "", payment_type: "per_session", pay_rate: 0,
 };
 
@@ -143,6 +143,8 @@ export default function CoachManagementPage() {
     setEditForm({
       nickname: detail.nickname ?? "",
       phone: detail.phone ?? "",
+      lineId: detail.lineId ?? "",
+      facebook: detail.facebook ?? "",
       address: detail.address ?? "",
       bank_account: detail.bank_account ?? "",
       payment_info: detail.payment_info ?? "",
@@ -186,6 +188,8 @@ export default function CoachManagementPage() {
         updateCoachAPI(editingId, {
           nickname: editForm.nickname.trim(),
           phone: editForm.phone.trim(),
+          lineId: editForm.lineId.trim(),
+          facebook: editForm.facebook.trim(),
           address: editForm.address.trim(),
           bank_account: editForm.bank_account.trim(),
           payment_info: editForm.payment_info.trim(),
