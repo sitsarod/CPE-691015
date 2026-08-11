@@ -2,20 +2,21 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, Clock, Save, Pencil, X } from "lucide-react";
+import { Loader2, AlertCircle, Save, Pencil, X } from "lucide-react";
 
 import { fetchMyCoachProfile, fetchCoachAvailability, updateCoachAvailability } from "@/services/coachAPI";
 import { AvailabilitySlot } from "@/types/coach";
 import Toast from "@/components/Toast";
 
+// เรียงวันแบบเดียวกับ UI อ้างอิง (issue-84): เริ่มวันอาทิตย์
 const DAYS: { value: string; label: string }[] = [
-  { value: "Monday", label: "จันทร์" },
-  { value: "Tuesday", label: "อังคาร" },
-  { value: "Wednesday", label: "พุธ" },
-  { value: "Thursday", label: "พฤหัสบดี" },
-  { value: "Friday", label: "ศุกร์" },
-  { value: "Saturday", label: "เสาร์" },
-  { value: "Sunday", label: "อาทิตย์" },
+  { value: "Sunday", label: "SUN" },
+  { value: "Monday", label: "MON" },
+  { value: "Tuesday", label: "TUE" },
+  { value: "Wednesday", label: "WED" },
+  { value: "Thursday", label: "THU" },
+  { value: "Friday", label: "FRI" },
+  { value: "Saturday", label: "SAT" },
 ];
 
 // สเกลกริด: ทุก ๆ 1 ชั่วโมง ตั้งแต่ 08:00 ถึง 24:00 (16 คอลัมน์)
@@ -83,7 +84,7 @@ const selectedToSlots = (set: Set<string>): AvailabilitySlot[] => {
   return result;
 };
 
-const GRID_TEMPLATE_COLUMNS = `112px repeat(${HOURS.length}, minmax(56px, 1fr))`;
+const GRID_TEMPLATE_COLUMNS = `92px repeat(${HOURS.length}, minmax(54px, 1fr))`;
 
 export default function CoachAvailabilityPage() {
   const router = useRouter();
@@ -214,20 +215,13 @@ export default function CoachAvailabilityPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn">
+    <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-150 pb-6">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            <Clock className="w-8 h-8 text-[#CC0000]" />
-            ตารางเวลาว่าง
-          </h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            {isEditing
-              ? "คลิก หรือคลิกค้างแล้วลาก เพื่อเลือกช่วงเวลาที่คุณสะดวกสอน (ทีละ 1 ชั่วโมง)"
-              : "กดปุ่ม \"แก้ไขเวลาว่าง\" เพื่อเริ่มปรับตาราง แอดมินจะมอบหมายคาบสอนภายในช่วงเวลานี้เท่านั้น"}
-          </p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">ตารางเวลาว่าง</h1>
+          <p className="text-gray-500 mt-1 text-sm">เลือกช่วงเวลาที่สอนได้ เพื่อให้แอดมินมอบหมายงานได้ตรงเวลา</p>
         </div>
 
         {isEditing ? (
@@ -235,7 +229,7 @@ export default function CoachAvailabilityPage() {
             <button
               onClick={handleCancelEdit}
               disabled={isSaving}
-              className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 py-2.5 px-5 rounded-xl text-sm font-bold transition-all cursor-pointer disabled:opacity-60"
+              className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 py-2.5 px-6 rounded-xl text-sm font-bold transition-all cursor-pointer disabled:opacity-60"
             >
               <X className="w-4 h-4" />
               ยกเลิก
@@ -243,16 +237,16 @@ export default function CoachAvailabilityPage() {
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center justify-center gap-2 bg-[#CD0D13] hover:bg-[#A30A0E] text-white py-2.5 px-5 rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg cursor-pointer disabled:opacity-60"
+              className="flex items-center justify-center gap-2 bg-[#CD0D13] hover:bg-[#A30A0E] text-white py-2.5 px-8 rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg cursor-pointer disabled:opacity-60"
             >
               <Save className="w-4 h-4" />
-              {isSaving ? "กำลังบันทึก..." : "บันทึกตารางเวลาว่าง"}
+              {isSaving ? "กำลังบันทึก..." : "บันทึก"}
             </button>
           </div>
         ) : (
           <button
             onClick={handleStartEdit}
-            className="flex items-center justify-center gap-2 bg-[#CD0D13] hover:bg-[#A30A0E] text-white py-2.5 px-5 rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg cursor-pointer self-start md:self-auto"
+            className="flex items-center justify-center gap-2 bg-[#CD0D13] hover:bg-[#A30A0E] text-white py-2.5 px-6 rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-lg cursor-pointer self-start md:self-auto"
           >
             <Pencil className="w-4 h-4" />
             แก้ไขเวลาว่าง
@@ -270,62 +264,98 @@ export default function CoachAvailabilityPage() {
         </div>
       )}
 
+      {isEditing && (
+        <p className="text-xs font-bold text-[#CD0D13]">
+          โหมดแก้ไข: คลิกช่องเพื่อเลือก/ยกเลิกเวลาว่าง (คลิกค้างแล้วลากเพื่อเลือกหลายช่อง)
+        </p>
+      )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className={`min-w-[1000px] ${isEditing ? "select-none" : ""}`}>
+            {/* หัวตาราง */}
+            <div
+              className="grid bg-slate-50 border-b border-slate-200"
+              style={{ gridTemplateColumns: GRID_TEMPLATE_COLUMNS }}
+            >
+              <div className="py-3.5 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">DAY</div>
+              {HOURS.map((h) => (
+                <div key={h} className="py-3.5 text-center text-[10px] font-bold text-slate-500">
+                  {pad2(h)}-{pad2(h + 1)}
+                </div>
+              ))}
+            </div>
+
+            {/* แถวแต่ละวัน */}
+            {DAYS.map((day, dayIdx) => (
+              <div
+                key={day.value}
+                className={`grid items-center ${dayIdx !== DAYS.length - 1 ? "border-b border-slate-100" : ""}`}
+                style={{ gridTemplateColumns: GRID_TEMPLATE_COLUMNS }}
+              >
+                <div className="py-1 px-4 text-xs font-extrabold text-slate-700">{day.label}</div>
+
+                {HOURS.map((h) => {
+                  const isSel = displayed.has(cellKey(day.value, h));
+                  const prevSel = h > START_HOUR && displayed.has(cellKey(day.value, h - 1));
+                  const nextSel = h < END_HOUR - 1 && displayed.has(cellKey(day.value, h + 1));
+                  const roundLeft = isSel && !prevSel;
+                  const roundRight = isSel && !nextSel;
+
+                  if (isEditing) {
+                    // โหมดแก้ไข: แต่ละช่องเป็น pill แยกกัน มีระยะห่างระหว่างช่อง
+                    return (
+                      <div key={h} className="px-0.5 py-1.5">
+                        <div
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleCellMouseDown(day.value, h);
+                          }}
+                          onMouseEnter={() => handleCellMouseEnter(day.value, h)}
+                          title={`${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00`}
+                          className={`h-8 rounded-full cursor-pointer transition-all ${
+                            isSel
+                              ? "bg-gradient-to-r from-[#E63946] to-[#CD0D13] shadow-sm"
+                              : "bg-slate-50 border border-dashed border-slate-300 hover:border-[#E63946]/50 hover:bg-rose-50/40"
+                          }`}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // โหมดดูอย่างเดียว: แท่งต่อเนื่อง (ช่องที่เลือกติดกันจะเชื่อมเป็นแท่งเดียว)
+                  return (
+                    <div
+                      key={h}
+                      title={isSel ? `${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00` : undefined}
+                      className={`h-10 flex items-center ${roundLeft ? "pl-1.5" : ""} ${roundRight ? "pr-1.5" : ""}`}
+                    >
+                      {isSel && (
+                        <div
+                          className={`h-8 w-full bg-gradient-to-r from-[#E63946] to-[#CD0D13] shadow-sm ${
+                            roundLeft ? "rounded-l-full" : ""
+                          } ${roundRight ? "rounded-r-full" : ""}`}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center gap-5 text-xs text-slate-500">
         <span className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded-md bg-gradient-to-br from-[#4E92FF] to-[#2563EB] shadow-sm" /> ว่าง (เลือกแล้ว)
+          <span className="w-6 h-3.5 rounded-full bg-gradient-to-r from-[#E63946] to-[#CD0D13]" /> ว่าง
         </span>
         <span className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded-md bg-slate-100 ring-1 ring-slate-200" /> ไม่ว่าง
+          <span className="w-6 h-3.5 rounded-full bg-slate-100 ring-1 ring-slate-200" /> ไม่ว่าง
         </span>
         {!isEditing && (
           <span className="ml-auto text-slate-400 italic">โหมดดูอย่างเดียว — กด &quot;แก้ไขเวลาว่าง&quot; เพื่อแก้ไข</span>
         )}
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-        <div className="overflow-x-auto pb-1">
-          <div
-            className={`grid gap-1.5 min-w-[1050px] ${isEditing ? "select-none" : ""}`}
-            style={{ gridTemplateColumns: GRID_TEMPLATE_COLUMNS }}
-          >
-            {/* หัวตาราง */}
-            <div className="sticky left-0 z-10 bg-white" />
-            {HOURS.map((h) => (
-              <div key={h} className="text-center text-[11px] font-bold text-slate-500 pb-2">
-                {pad2(h)}-{pad2(h + 1)}
-              </div>
-            ))}
-
-            {/* แถวแต่ละวัน */}
-            {DAYS.map((day) => (
-              <React.Fragment key={day.value}>
-                <div className="sticky left-0 z-10 bg-white flex items-center pr-3">
-                  <span className="text-sm font-extrabold text-slate-700">{day.label}</span>
-                </div>
-                {HOURS.map((h) => {
-                  const isSelected = displayed.has(cellKey(day.value, h));
-                  return (
-                    <div
-                      key={h}
-                      onMouseDown={(e) => {
-                        if (!isEditing) return;
-                        e.preventDefault();
-                        handleCellMouseDown(day.value, h);
-                      }}
-                      onMouseEnter={() => handleCellMouseEnter(day.value, h)}
-                      title={`${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00`}
-                      className={`h-12 rounded-lg transition-all ${isEditing ? "cursor-pointer" : "cursor-default"} ${
-                        isSelected
-                          ? "bg-gradient-to-br from-[#4E92FF] to-[#2563EB] shadow-sm"
-                          : `bg-slate-100 ring-1 ring-slate-200/70 ${isEditing ? "hover:bg-slate-200" : ""}`
-                      }`}
-                    />
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
