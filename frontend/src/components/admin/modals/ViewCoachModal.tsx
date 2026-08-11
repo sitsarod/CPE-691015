@@ -4,7 +4,13 @@ import Modal from "@/components/Modal";
 import Button from "@/components/Button";
 import { CoachListItem } from "@/services/coachAPI";
 import { CoachProfile } from "@/types/coach";
+
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  per_session: "รายครั้ง",
+  monthly: "รายเดือน",
+};
 import {  Pill, DetailItem, BRAND } from "@/components/admin/ManagementUI";
+import { formatDate } from "@/lib/format";
 
 interface Props {
   isOpen: boolean;
@@ -12,15 +18,25 @@ interface Props {
   selected: CoachListItem | null;
   detail: CoachProfile | null;
   isLoadingDetail: boolean;
+  onEdit?: () => void;
 }
 
-export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDetail }: Props) {
+export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDetail, onEdit }: Props) {
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title="รายละเอียดโค้ช"
-      footer={<Button variant="primary" onClick={onClose}>ปิด</Button>}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>ปิด</Button>
+          {onEdit && detail && (
+            <Button variant="primary" onClick={onEdit} className="bg-[#E63946] hover:bg-[#d62839]">
+              แก้ไขข้อมูล
+            </Button>
+          )}
+        </>
+      }
     >
       {isLoadingDetail ? (
         <div className="flex justify-center py-10">
@@ -42,11 +58,20 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
             <DetailItem label="ชื่อเล่น" value={detail.nickname} />
             <DetailItem label="อีเมล" value={detail.email} />
             <DetailItem label="เบอร์โทรศัพท์" value={detail.phone} />
-            <DetailItem label="วันเกิด" value={detail.birth_date} />
+            <DetailItem label="เลขบัตรประชาชน" value={detail.uid} />
+            <DetailItem label="วันเกิด" value={formatDate(detail.birth_date)} />
+            <DetailItem label="ระดับฝีมือ" value={detail.specialization} />
+            <DetailItem label="ใบรับรองผู้ฝึกสอน" value={detail.coach_license} />
             <DetailItem label="ที่อยู่" value={detail.address} />
+            <DetailItem label="เลขบัญชีธนาคาร" value={detail.bank_account} />
+            <DetailItem label="ข้อมูลการจ่ายเงิน" value={detail.payment_info} />
             <DetailItem
-              label="ค่าจ้างต่อครั้ง"
-              value={detail.pay_rate_per_session != null ? `${detail.pay_rate_per_session.toLocaleString()} บาท` : "-"}
+              label="ประเภทการจ่ายเงิน"
+              value={PAYMENT_TYPE_LABEL[detail.payment_type] ?? "-"}
+            />
+            <DetailItem
+              label={detail.payment_type === "monthly" ? "ค่าจ้างต่อเดือน" : "ค่าจ้างต่อครั้ง"}
+              value={detail.pay_rate != null ? `${detail.pay_rate.toLocaleString()} บาท` : "-"}
             />
           </dl>
         </div>
@@ -54,7 +79,8 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
         <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <DetailItem label="ชื่อ - นามสกุล" value={`${selected.firstName} ${selected.lastName}`} />
           <DetailItem label="ชื่อเล่น" value={selected.nickname} />
-          <DetailItem label="ระดับ" value={selected.specialization} />
+          <DetailItem label="ระดับฝีมือ" value={selected.specialization} />
+          <DetailItem label="ใบรับรองผู้ฝึกสอน" value={selected.coach_license} />
           <DetailItem label="เบอร์โทรศัพท์" value={selected.phone} />
         </dl>
       ) : null}

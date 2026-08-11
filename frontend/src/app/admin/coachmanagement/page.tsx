@@ -6,6 +6,8 @@ import {
   getAllCoachesAPI,
   getCoachDetailAPI,
   createCoachAPI,
+  updateCoachAPI,
+  adminUpdateCoachLevelAPI,
   deleteCoachAPI,
   CoachListItem,
   CreateCoachInput,
@@ -16,13 +18,20 @@ import { MemberFilterToolbar } from "@/components/admin/MemberFilterToolbar";
 import { Pill, SummaryCard, RowActionMenu } from "@/components/admin/ManagementUI";
 import { ViewCoachModal } from "@/components/admin/modals/ViewCoachModal";
 import { CreateCoachModal } from "@/components/admin/modals/CreateCoachModal";
+import { EditCoachModal, EditCoachForm } from "@/components/admin/modals/EditCoachModal";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
-type ModalMode = "view" | "create" | null;
+type ModalMode = "view" | "create" | "edit" | null;
 
 const emptyCreateForm: CreateCoachInput = {
   user_id: 0, phone: "", uid: "", address: "", birth_date: "", nickname: "",
-  profile_picture: "", specialization: "", bank_account: "", payment_info: "", pay_rate_per_session: 0,
+  profile_picture: "", specialization: "", coach_license: "", bank_account: "", payment_info: "",
+  payment_type: "per_session", pay_rate: 0,
+};
+
+const emptyEditForm: EditCoachForm = {
+  nickname: "", phone: "", address: "", bank_account: "", payment_info: "",
+  specialization: "", coach_license: "", payment_type: "per_session", pay_rate: 0,
 };
 
 export default function CoachManagementPage() {
@@ -38,6 +47,8 @@ export default function CoachManagementPage() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<CreateCoachInput>(emptyCreateForm);
+  const [editForm, setEditForm] = useState<EditCoachForm>(emptyEditForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const loadCoaches = async () => {
     try {
@@ -59,6 +70,7 @@ export default function CoachManagementPage() {
     setSelected(null);
     setDetail(null);
     setFormError(null);
+    setEditingId(null);
   };
 
   const openView = async (item: CoachListItem) => {
@@ -89,8 +101,9 @@ export default function CoachManagementPage() {
     }
     const required: [keyof CreateCoachInput, string][] = [
       ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["uid", "เลขบัตรประชาชน (UID)"],
-      ["address", "ที่อยู่"], ["birth_date", "วันเกิด"], ["specialization", "ระดับ/ความเชี่ยวชาญ"],
-      ["profile_picture", "รูปโปรไฟล์ (URL)"], ["bank_account", "เลขบัญชีธนาคาร"], ["payment_info", "ข้อมูลการจ่ายเงิน"],
+      ["address", "ที่อยู่"], ["birth_date", "วันเกิด"], ["specialization", "ระดับฝีมือ"],
+      ["coach_license", "ใบรับรองผู้ฝึกสอน"],
+      ["bank_account", "เลขบัญชีธนาคาร"], ["payment_info", "ข้อมูลการจ่ายเงิน"],
     ];
     for (const [key, label] of required) {
       if (!String(createForm[key]).trim()) {
@@ -98,8 +111,16 @@ export default function CoachManagementPage() {
         return;
       }
     }
-    if (!createForm.pay_rate_per_session || createForm.pay_rate_per_session <= 0) {
-      setFormError("กรุณากรอกค่าจ้างต่อครั้งให้ถูกต้อง");
+    if (!/^\d{10}$/.test(createForm.phone)) {
+      setFormError("เบอร์โทรต้องเป็นตัวเลข 10 หลัก");
+      return;
+    }
+    if (!/^\d{13}$/.test(createForm.uid)) {
+      setFormError("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
+      return;
+    }
+    if (!createForm.pay_rate || createForm.pay_rate <= 0) {
+      setFormError(createForm.payment_type === "monthly" ? "กรุณากรอกค่าจ้างต่อเดือนให้ถูกต้อง" : "กรุณากรอกค่าจ้างต่อครั้งให้ถูกต้อง");
       return;
     }
 
@@ -110,6 +131,76 @@ export default function CoachManagementPage() {
       await loadCoaches();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "ไม่สามารถสร้างโปรไฟล์โค้ชได้");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // เปิดฟอร์มแก้ไข โดยโหลดข้อมูลจาก detail (ที่หน้า View โหลดไว้แล้ว) มา prefill
+  const openEdit = () => {
+    if (!detail) return;
+    setEditingId(detail.id);
+    setEditForm({
+      nickname: detail.nickname ?? "",
+      phone: detail.phone ?? "",
+      address: detail.address ?? "",
+      bank_account: detail.bank_account ?? "",
+      payment_info: detail.payment_info ?? "",
+      specialization: detail.specialization ?? "",
+      coach_license: detail.coach_license ?? "",
+      payment_type: detail.payment_type ?? "per_session",
+      pay_rate: detail.pay_rate ?? 0,
+    });
+    setFormError(null);
+    setModalMode("edit");
+  };
+
+  const handleUpdate = async () => {
+    if (editingId == null) return;
+    setFormError(null);
+
+    const required: [keyof EditCoachForm, string][] = [
+      ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["address", "ที่อยู่"],
+      ["bank_account", "เลขบัญชีธนาคาร"], ["payment_info", "ข้อมูลการจ่ายเงิน"],
+      ["specialization", "ระดับฝีมือ"], ["coach_license", "ใบรับรองผู้ฝึกสอน"],
+    ];
+    for (const [key, label] of required) {
+      if (!String(editForm[key]).trim()) {
+        setFormError(`กรุณากรอก: ${label}`);
+        return;
+      }
+    }
+    if (!/^\d{10}$/.test(editForm.phone)) {
+      setFormError("เบอร์โทรต้องเป็นตัวเลข 10 หลัก");
+      return;
+    }
+    if (!editForm.pay_rate || editForm.pay_rate <= 0) {
+      setFormError(editForm.payment_type === "monthly" ? "กรุณากรอกค่าจ้างต่อเดือนให้ถูกต้อง" : "กรุณากรอกค่าจ้างต่อครั้งให้ถูกต้อง");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      // ข้อมูลโปรไฟล์ทั่วไป + ระดับ/ค่าจ้าง (admin) — ยิงพร้อมกัน
+      await Promise.all([
+        updateCoachAPI(editingId, {
+          nickname: editForm.nickname.trim(),
+          phone: editForm.phone.trim(),
+          address: editForm.address.trim(),
+          bank_account: editForm.bank_account.trim(),
+          payment_info: editForm.payment_info.trim(),
+        }),
+        adminUpdateCoachLevelAPI(editingId, {
+          specialization: editForm.specialization.trim(),
+          coach_license: editForm.coach_license.trim(),
+          payment_type: editForm.payment_type,
+          pay_rate: editForm.pay_rate,
+        }),
+      ]);
+      closeModal();
+      await loadCoaches();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกการแก้ไขได้");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,8 +222,10 @@ export default function CoachManagementPage() {
       c.id?.toString().includes(term) ||
       c.firstName?.toLowerCase().includes(term) ||
       c.lastName?.toLowerCase().includes(term) ||
+      c.email?.toLowerCase().includes(term) ||
       c.nickname?.toLowerCase().includes(term) ||
       c.specialization?.toLowerCase().includes(term) ||
+      c.coach_license?.toLowerCase().includes(term) ||
       c.phone?.toLowerCase().includes(term)
     );
   });
@@ -157,14 +250,26 @@ export default function CoachManagementPage() {
               <span className="text-xs text-gray-400">({item.nickname})</span>
             )}
           </div>
+          {item.email && (
+            <span className="text-xs text-gray-500 mt-0.5 truncate">{item.email}</span>
+          )}
         </div>
       ),
     },
     {
-      header: "ระดับ / ความเชี่ยวชาญ",
+      header: "ระดับฝีมือ",
       render: (item) =>
         item.specialization ? (
           <Pill label={item.specialization} color="bg-sky-50 text-sky-700 ring-sky-600/20" />
+        ) : (
+          <span className="text-gray-400">-</span>
+        ),
+    },
+    {
+      header: "ใบรับรองผู้ฝึกสอน",
+      render: (item) =>
+        item.coach_license ? (
+          <Pill label={item.coach_license} color="bg-violet-50 text-violet-700 ring-violet-600/20" />
         ) : (
           <span className="text-gray-400">-</span>
         ),
@@ -236,8 +341,9 @@ export default function CoachManagementPage() {
         emptyMessage="ไม่พบข้อมูลโค้ชในระบบ"
       />
 
-      <ViewCoachModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} detail={detail} isLoadingDetail={isLoadingDetail} />
+      <ViewCoachModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} detail={detail} isLoadingDetail={isLoadingDetail} onEdit={openEdit} />
       <CreateCoachModal isOpen={modalMode === "create"} onClose={closeModal} createForm={createForm} setCreateForm={setCreateForm} formError={formError} isSubmitting={isSubmitting} onCreate={handleCreate} />
+      <EditCoachModal isOpen={modalMode === "edit"} onClose={closeModal} editForm={editForm} setEditForm={setEditForm} detail={detail} formError={formError} isSubmitting={isSubmitting} onSave={handleUpdate} />
     </div>
   );
 }

@@ -89,6 +89,7 @@ func seedCoaches(db *gorm.DB) {
 		BirthDate      string
 		ProfilePicture string
 		Specialization string
+		CoachLicense   string
 		BankAccount    string
 		PaymentInfo    string
 	}{
@@ -102,7 +103,8 @@ func seedCoaches(db *gorm.DB) {
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
 			ProfilePicture: "https://example.com/profiles/coach1.png",
-			Specialization: "เทคนิคการเตะและการเลี้ยงบอล",
+			Specialization: "S+",
+			CoachLicense:   "License A",
 			BankAccount:    "ธ.กสิกรไทย 123-4-56789-0",
 			PaymentInfo:    "PromptPay: 0812345678",
 		},
@@ -116,7 +118,8 @@ func seedCoaches(db *gorm.DB) {
 			Address:        "456/78 ถ.เพชรบุรี กรุงเทพฯ",
 			BirthDate:      "1993-10-05",
 			ProfilePicture: "https://example.com/profiles/coach2.png",
-			Specialization: "ความคล่องตัวและการจ่ายบอล",
+			Specialization: "S",
+			CoachLicense:   "License B",
 			BankAccount:    "ธ.ไทยพาณิชย์ 987-6-54321-0",
 			PaymentInfo:    "PromptPay: 0823456789",
 		},
@@ -130,7 +133,8 @@ func seedCoaches(db *gorm.DB) {
 			Address:        "789/12 ถ.พหลโยธิน กรุงเทพฯ",
 			BirthDate:      "1992-05-30",
 			ProfilePicture: "https://example.com/profiles/coach3.png",
-			Specialization: "การจัดตำแหน่งและการตั้งรับ",
+			Specialization: "P",
+			CoachLicense:   "License C",
 			BankAccount:    "ธ.กรุงเทพ 111-2-22222-3",
 			PaymentInfo:    "PromptPay: 0834567890",
 		},
@@ -161,6 +165,7 @@ func seedCoaches(db *gorm.DB) {
 						BirthDate:      data.BirthDate,
 						ProfilePicture: data.ProfilePicture,
 						Specialization: data.Specialization,
+						CoachLicense:   data.CoachLicense,
 						BankAccount:    data.BankAccount,
 						PaymentInfo:    data.PaymentInfo,
 					}
