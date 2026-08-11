@@ -10,6 +10,9 @@ type Coach struct {
     User              *User           `json:"user" ` 
 	
 	Phone          string `json:"phone" gorm:"type:varchar(20)" valid:"required~phone is required"`
+	// LineID / Facebook เป็นช่องทางติดต่อเสริม ไม่บังคับกรอก
+	LineID         string `json:"lineId" gorm:"type:varchar(100)"`
+	Facebook       string `json:"facebook" gorm:"type:varchar(255)"`
 	Uid            string `json:"uid" gorm:"type:varchar(255);unique" valid:"required~uid is required"`
 	Address        string `json:"address" gorm:"type:varchar(255)" valid:"required~address is required"`
 	BirthDate      string `json:"birth_date" gorm:"type:date" valid:"required~birthDate is required"` // ปรับเป็น type:date เพื่อมาตรฐานข้อมูล

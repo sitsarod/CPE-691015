@@ -8,6 +8,8 @@ export interface UserProfileResponseDTO {
 
   nickname?: string;
   phoneNumber?: string;
+  lineId?: string;
+  facebook?: string;
   birthDate?: string;
   gender?: string;
   parentEmail?: string;
@@ -23,6 +25,10 @@ export interface StudentListResponseDTO {
   nickname: string;
   phoneNumber: string;
   graceEnrollments?: number;
+  lineId?: string;
+  facebook?: string;
+  birthDate?: string;
+  gender?: string;
 }
 
 export interface UpdateProfileInput {
@@ -33,4 +39,6 @@ export interface UpdateProfileInput {
   phoneNumber?: string;
   parentEmail?: string;
   parentPhoneNumber?: string;
+  lineId?: string;
+  facebook?: string;
 }

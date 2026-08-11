@@ -62,6 +62,8 @@ export function ViewMemberModal({
             <DetailItem label="ชื่อเล่น" value={selected.nickname} />
             <DetailItem label="อีเมล" value={selected.email} />
             <DetailItem label="เบอร์โทรศัพท์" value={selected.phoneNumber} />
+            <DetailItem label="Line ID" value={selected.lineId || "-"} />
+            <DetailItem label="Facebook" value={selected.facebook || "-"} />
             <DetailItem label="บทบาท" value={selected.role} />
             <DetailItem label="อีเมลผู้ปกครอง" value={selected.parentEmail} />
             <DetailItem label="เบอร์ผู้ปกครอง" value={selected.parentPhoneNumber} />

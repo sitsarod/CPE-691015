@@ -176,6 +176,13 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
         if input.ParentPhoneNumber != "" {
             customerUpdate["parent_phone_number"] = input.ParentPhoneNumber
         }
+        // LineID / Facebook ไม่บังคับ จึงยอมให้ส่งค่าว่างมาเพื่อลบข้อมูลเดิมได้
+        if input.LineID != nil {
+            customerUpdate["line_id"] = *input.LineID
+        }
+        if input.Facebook != nil {
+            customerUpdate["facebook"] = *input.Facebook
+        }
 
         if len(customerUpdate) > 0 {
             if err := s.db.Model(user.Customer).Updates(customerUpdate).Error; err != nil {

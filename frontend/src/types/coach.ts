@@ -32,6 +32,8 @@ export interface CoachProfile {
   email: string;
   nickname: string;
   phone: string;
+  lineId?: string;
+  facebook?: string;
   uid: string;
   address: string;
   birth_date: string;

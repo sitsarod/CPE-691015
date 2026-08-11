@@ -147,6 +147,8 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 	coach := models.Coach{
 		UserID:         req.UserID,
 		Phone:          req.Phone,
+		LineID:         req.LineID,
+		Facebook:       req.Facebook,
 		Uid:            req.Uid,
 		Address:        req.Address,
 		BirthDate:      req.BirthDate,
@@ -182,6 +184,13 @@ func (s *CoachService) Update(id uint, userID uint, role string, req dto.UpdateC
 	updateData := make(map[string]interface{})
 	if req.Phone != nil {
 		updateData["phone"] = *req.Phone
+	}
+	// LineID / Facebook ไม่บังคับ จึงยอมให้ส่งค่าว่างมาเพื่อลบข้อมูลเดิมได้
+	if req.LineID != nil {
+		updateData["line_id"] = *req.LineID
+	}
+	if req.Facebook != nil {
+		updateData["facebook"] = *req.Facebook
 	}
 	if req.Address != nil {
 		updateData["address"] = *req.Address

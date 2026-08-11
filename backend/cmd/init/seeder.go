@@ -84,6 +84,8 @@ func seedCoaches(db *gorm.DB) {
 		Email          string
 		Nickname       string
 		Phone          string
+		LineID         string
+		Facebook       string
 		Uid            string
 		Address        string
 		BirthDate      string
@@ -99,6 +101,8 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach1@gmail.com",
 			Nickname:       "โค้ชบอล",
 			Phone:          "0812345678",
+			LineID:         "coachball_th",
+			Facebook:       "https://facebook.com/coachball.th",
 			Uid:            "C001",
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
@@ -114,6 +118,8 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach2@gmail.com",
 			Nickname:       "โค้ชเจ",
 			Phone:          "0823456789",
+			LineID:         "coach_jay",
+			Facebook:       "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
 			Uid:            "C002",
 			Address:        "456/78 ถ.เพชรบุรี กรุงเทพฯ",
 			BirthDate:      "1993-10-05",
@@ -129,6 +135,8 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach3@gmail.com",
 			Nickname:       "โค้ชตัง",
 			Phone:          "0834567890",
+			LineID:         "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
+			Facebook:       "https://facebook.com/coachtang",
 			Uid:            "C003",
 			Address:        "789/12 ถ.พหลโยธิน กรุงเทพฯ",
 			BirthDate:      "1992-05-30",
@@ -160,6 +168,8 @@ func seedCoaches(db *gorm.DB) {
 						UserID:         user.ID,
 						Nickname:       data.Nickname,
 						Phone:          data.Phone,
+						LineID:         data.LineID,
+						Facebook:       data.Facebook,
 						Uid:            data.Uid,
 						Address:        data.Address,
 						BirthDate:      data.BirthDate,
@@ -197,6 +207,8 @@ func seedCustomers(db *gorm.DB) {
 		Nickname          string
 		Gender            string
 		PhoneNumber       string
+		LineID            string
+		Facebook          string
 		BirthDate         time.Time
 		ParentEmail       string
 		ParentPhoneNumber string
@@ -211,6 +223,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "ศักดิ์",
 			Gender:            "male",
 			PhoneNumber:       "0845678901",
+			LineID:            "somsak_r",
+			Facebook:          "https://facebook.com/somsak.rakrian",
 			BirthDate:         time.Date(2010, 1, 15, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent1@gmail.com",
 			ParentPhoneNumber: "0898765432",
@@ -225,6 +239,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "ดา",
 			Gender:            "female",
 			PhoneNumber:       "0856789012",
+			LineID:            "suda_j",
+			Facebook:          "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
 			BirthDate:         time.Date(2012, 5, 20, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent2@gmail.com",
 			ParentPhoneNumber: "0897654321",
@@ -239,6 +255,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "นะ",
 			Gender:            "male",
 			PhoneNumber:       "0867890123",
+			LineID:            "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
+			Facebook:          "", // เว้นว่างไว้ทดสอบเคสไม่กรอกทั้งคู่
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@gmail.com",
 			ParentPhoneNumber: "0896543210",
@@ -269,6 +287,8 @@ func seedCustomers(db *gorm.DB) {
 						Gender:            models.Gender(data.Gender),
 						BirthDate:         data.BirthDate,
 						PhoneNumber:       data.PhoneNumber,
+						LineID:            data.LineID,
+						Facebook:          data.Facebook,
 						ParentEmail:       data.ParentEmail,
 						ParentPhoneNumber: data.ParentPhoneNumber,
 						ConsentedPurposes: data.ConsentedPurposes,

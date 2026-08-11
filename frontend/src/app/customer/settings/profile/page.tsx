@@ -24,6 +24,8 @@ export default function EditForm() {
     birthDate: "",
     email: "",
     phoneNumber: "",
+    lineId: "",
+    facebook: "",
     parentEmail: "",
     parentPhoneNumber: ""
   });
@@ -52,6 +54,8 @@ export default function EditForm() {
           birthDate: profile.birthDate ? profile.birthDate.split("T")[0] : "",
           email: profile.email || "",
           phoneNumber: profile.phoneNumber || "",
+          lineId: profile.lineId || "",
+          facebook: profile.facebook || "",
           parentEmail: profile.parentEmail || "",
           parentPhoneNumber: profile.parentPhoneNumber || ""
         });
@@ -81,6 +85,8 @@ export default function EditForm() {
       await updateUserProfileAPI(userId, {
         email: formData.email,
         phoneNumber: formData.phoneNumber,
+        lineId: formData.lineId,
+        facebook: formData.facebook,
         parentEmail: formData.parentEmail,
         parentPhoneNumber: formData.parentPhoneNumber,
       });
@@ -160,8 +166,16 @@ export default function EditForm() {
           label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" type="text" value={formData.phoneNumber} required 
           onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ" 
         />
-        <InputField 
-          label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" value={formData.parentEmail} 
+        <InputField
+          label="Line ID (ถ้ามี)" name="lineId" type="text" value={formData.lineId}
+          onChange={handleChange} placeholder="ระบุ Line ID"
+        />
+        <InputField
+          label="Facebook (ถ้ามี)" name="facebook" type="text" value={formData.facebook}
+          onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
+        />
+        <InputField
+          label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" value={formData.parentEmail}
           onChange={handleChange} placeholder="ระบุอีเมลผู้ปกครอง" 
         />
         <InputField 
