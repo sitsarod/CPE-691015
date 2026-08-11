@@ -1,6 +1,8 @@
 export const EXPIRY_WARNING_DAYS = 7;
 
-export type ExpiryTone = "none" | "normal" | "warning" | "expired";
+export const GRACE_PERIOD_DAYS = 7;
+
+export type ExpiryTone = "none" | "normal" | "warning" | "expired" | "grace";
 
 export interface ExpiryDisplay {
   label: string;
@@ -9,8 +11,18 @@ export interface ExpiryDisplay {
 }
 export function describeExpiry(
   daysLeft: number | null,
-  status?: string
+  status?: string,
+  graceDaysLeft?: number | null
 ): ExpiryDisplay {
+ 
+  if (graceDaysLeft !== null && graceDaysLeft !== undefined && graceDaysLeft > 0) {
+    return {
+      label: `หมดอายุแล้ว · ติดต่อแอดมินได้อีก ${graceDaysLeft} วัน`,
+      tone: "grace",
+      highlight: true,
+    };
+  }
+
   if (status === "expired") {
     return { label: "หมดอายุแล้ว", tone: "expired", highlight: true };
   }
@@ -38,6 +50,8 @@ export function expiryTextClass(tone: ExpiryTone): string {
   switch (tone) {
     case "expired":
       return "text-slate-500";
+    case "grace":
+      return "text-red-600";
     case "warning":
       return "text-orange-600";
     case "normal":
@@ -51,6 +65,8 @@ export function expiryBadgeClass(tone: ExpiryTone): string {
   switch (tone) {
     case "expired":
       return "bg-slate-100 text-slate-700 border-slate-200";
+    case "grace":
+      return "bg-red-50 text-red-700 border-red-200";
     case "warning":
       return "bg-orange-50 text-orange-700 border-orange-200";
     case "normal":

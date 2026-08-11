@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet, CalendarX, AlertTriangle, CalendarPlus } from "lucide-react";
+import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet, CalendarX, AlertTriangle } from "lucide-react";
 import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
 import type { AdminEnrollment } from "@/types/enrollment";
-import ExtendEnrollmentModal from "./components/ExtendEnrollmentModal";
 import {
   describeExpiry,
   expiryTextClass,
@@ -20,8 +19,6 @@ export default function AdminEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
-  /** ใบที่กำลังจะขยายเวลา — เก็บทั้ง object เพราะ modal ต้องใช้ชื่อและวันหมดอายุเดิม */
-  const [extendingEnrollment, setExtendingEnrollment] = useState<AdminEnrollment | null>(null);
 
   const loadData = async () => {
     try {
@@ -59,11 +56,11 @@ export default function AdminEnrollmentsPage() {
     }
   };
 
-  const filteredEnrollments = enrollments.filter(e => 
-    e.customer?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    e.customer?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.package?.course?.course_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEnrollments = enrollments.filter(e =>
+      e.customer?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.customer?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.package?.course?.course_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   if (isLoading) return <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#CC0000]" /></div>;
   if (error) return <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">{error}</div>;
@@ -86,6 +83,7 @@ export default function AdminEnrollmentsPage() {
           />
         </div>
       </div>
+
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="w-full text-left border-collapse">
@@ -123,11 +121,16 @@ export default function AdminEnrollmentsPage() {
                       <div className="text-gray-700">{formatThaiDate(item.expires_at)}</div>
                       <div
                         className={`text-xs font-semibold ${expiryTextClass(
-                          describeExpiry(item.days_left, item.status).tone
+                          describeExpiry(item.days_left, item.status, item.grace_days_left).tone
                         )}`}
                       >
-                        {describeExpiry(item.days_left, item.status).label}
+                        {describeExpiry(item.days_left, item.status, item.grace_days_left).label}
                       </div>
+                      {item.grace_days_left !== null && item.grace_days_left > 0 && (
+                        <div className="text-xs font-bold text-red-600">
+                          ยังเหลือ {item.remaining_sessions} ครั้ง
+                        </div>
+                      )}
                     </>
                   ) : (
                     <span className="text-xs text-gray-400">ยังไม่เริ่มนับ</span>
@@ -161,31 +164,19 @@ export default function AdminEnrollmentsPage() {
                     </span>
                   )}
                 </td>
-                <td className="p-4 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setReviewingId(item.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
-                        item.status === 'pending'
-                          ? 'bg-[#CC0000] text-white hover:bg-red-700'
-                          : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <FileSearch className="h-4 w-4" />
-                      {item.status === 'pending' ? 'ตรวจสอบ' : 'ดูข้อมูล'}
-                    </button>
 
-                    {item.expires_at && item.status !== 'cancelled' && (
-                      <button
-                        onClick={() => setExtendingEnrollment(item)}
-                        title="ขยายระยะเวลาเรียน"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-600 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-                      >
-                        <CalendarPlus className="h-4 w-4" />
-                        ขยายเวลา
-                      </button>
-                    )}
-                  </div>
+                <td className="p-4 text-center">
+                  <button
+                    onClick={() => setReviewingId(item.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
+                      item.status === 'pending'
+                        ? 'bg-[#CC0000] text-white hover:bg-red-700'
+                        : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileSearch className="h-4 w-4" />
+                    {item.status === 'pending' ? 'ตรวจสอบ' : 'ดูข้อมูล'}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -208,11 +199,6 @@ export default function AdminEnrollmentsPage() {
         isApproving={processingId != null}
       />
 
-      <ExtendEnrollmentModal
-        enrollment={extendingEnrollment}
-        onClose={() => setExtendingEnrollment(null)}
-        onSuccess={loadData}
-      />
     </div>
   );
 }

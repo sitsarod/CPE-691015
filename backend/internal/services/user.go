@@ -227,14 +227,37 @@ func (s *UserService) GetActiveStudents() ([]models.User, error) {
 
     expireStaleEnrollments(s.db)
 
+    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
+
     err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
         Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
-        Where("enrollments.status = ? AND enrollments.remaining_sessions > ?", models.EnrollmentStatusActive, 0).
+        Where("enrollments.deleted_at IS NULL AND enrollments.remaining_sessions > 0").
+        Where(
+            s.db.Where("enrollments.status = ?", models.EnrollmentStatusActive).
+                Or("enrollments.status = ? AND enrollments.expires_at > ?",
+                    models.EnrollmentStatusExpired, graceCutoff),
+        ).
         Group("users.id").
         Preload("Customer").
         Find(&users).Error
 
     return users, err
+}
+
+func (s *UserService) CountGraceEnrollments(userID uint) int64 {
+    customerID, err := ResolveCustomerID(s.db, userID)
+    if err != nil {
+        return 0
+    }
+
+    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
+
+    var count int64
+    s.db.Model(&models.Enrollment{}).
+        Where("customer_id = ? AND status = ? AND remaining_sessions > 0 AND expires_at > ?",
+            customerID, models.EnrollmentStatusExpired, graceCutoff).
+        Count(&count)
+    return count
 }
 
 // FindAccountByIdentifier ค้นหาบัญชีผู้ใช้จาก Email หรือ PhoneNumber

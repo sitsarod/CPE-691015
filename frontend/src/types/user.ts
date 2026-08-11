@@ -22,6 +22,7 @@ export interface StudentListResponseDTO {
   email: string;
   nickname: string;
   phoneNumber: string;
+  graceEnrollments?: number;
 }
 
 export interface UpdateProfileInput {

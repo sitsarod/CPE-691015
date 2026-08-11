@@ -43,6 +43,7 @@ export interface Enrollment {
   expires_at: string | null;
   days_left: number | null;
   is_overdue: boolean;
+  grace_days_left: number | null;
 }
 
 
@@ -77,6 +78,7 @@ export interface AdminEnrollment {
   expires_at: string | null;
   days_left: number | null;
   is_overdue: boolean;
+  grace_days_left: number | null;
   customer: AdminEnrollmentCustomer | null;
   package: AdminEnrollmentPackage | null;
 }
@@ -95,6 +97,7 @@ export interface ReviewEnrollmentInfo {
   started_at: string | null;
   expires_at: string | null;
   days_left: number | null;
+  grace_days_left: number | null;
 }
 
 export interface ReviewCustomerInfo {
@@ -183,6 +186,7 @@ export interface FormattedEnrollment {
 
 export interface ExtendEnrollmentReq {
   extend_days: number;
+  extend_sessions: number;
   reason: string;
 }
 
@@ -190,9 +194,12 @@ export interface EnrollmentExtension {
   id: number;
   enrollment_id: number;
   extend_days: number;
+  extend_sessions: number;
   reason: string;
   previous_expires_at: string | null;
   new_expires_at: string | null;
+  previous_total_sessions: number;
+  new_total_sessions: number;
   extended_by_user_id: number;
   extended_at: string;
 }
@@ -202,6 +209,8 @@ export interface ExtendEnrollmentRes {
   status: string;
   expires_at: string | null;
   days_left: number | null;
+  total_sessions: number;
+  remaining_sessions: number;
   extension: EnrollmentExtension;
 }
 

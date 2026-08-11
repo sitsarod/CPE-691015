@@ -218,7 +218,13 @@ export default function EnrollmentPage() {
             {enrollments.map((item) => {
               // คำนวณครั้งเดียว ของเดิมเรียกฟังก์ชันซ้ำสองรอบใน JSX
               const schedules = sortSchedulesByDay(item.package?.schedules);
-              const expiry = describeExpiry(item.days_left, item.status);
+              const expiry = describeExpiry(
+                item.days_left,
+                item.status,
+                item.grace_days_left
+              );
+              const inGrace =
+                item.grace_days_left !== null && item.grace_days_left > 0;
 
               return (
               <div
@@ -236,8 +242,17 @@ export default function EnrollmentPage() {
                   </div>
                 )}
                 {item.status === 'expired' && (
-                  <div className="absolute top-0 left-0 right-0 bg-slate-200 text-slate-700 text-xs font-bold py-1.5 text-center flex justify-center items-center">
-                    <CalendarX className="w-3 h-3 mr-1" /> หมดอายุแล้ว
+                  <div
+                    className={`absolute top-0 left-0 right-0 text-xs font-bold py-1.5 text-center flex justify-center items-center ${
+                      inGrace
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <CalendarX className="w-3 h-3 mr-1" />
+                    {inGrace
+                      ? `หมดอายุ · ขอขยายได้อีก ${item.grace_days_left} วัน`
+                      : 'หมดอายุแล้ว'}
                   </div>
                 )}
 
@@ -327,6 +342,11 @@ export default function EnrollmentPage() {
                     ) : item.status === 'awaiting_payment' ? (
                       <span className="text-sm text-orange-600">
                         ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
+                      </span>
+                    ) : inGrace ? (
+                      <span className="text-sm font-semibold text-red-600">
+                        เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
+                        ติดต่อแอดมินภายใน {item.grace_days_left} วันเพื่อขอขยายสิทธิ์
                       </span>
                     ) : item.status === 'expired' ? (
                       <span className="text-sm text-slate-500">

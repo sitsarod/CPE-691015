@@ -387,6 +387,7 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 			ExpiresAt:         e.ExpiresAt,
 			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
 			IsOverdue:         dto.IsBillingOverdue(e.Billing),
+			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions),
 		}
 
 		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
