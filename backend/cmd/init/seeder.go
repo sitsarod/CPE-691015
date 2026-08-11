@@ -213,7 +213,7 @@ func seedCustomers(db *gorm.DB) {
 		ParentEmail       string
 		ParentPhoneNumber string
 		ConsentedPurposes bool
-		PersonalQRCode    string
+		PersonalQRCode string
 	}{
 		{
 			FirstName:         "สมศักดิ์",
