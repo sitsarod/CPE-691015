@@ -35,8 +35,12 @@ type StudentAttendance struct {
 	ConfidenceScore float64 `json:"confidence_score"`
 
 	// Foreign Keys
-	EnrollmentID uint  `json:"enrollment_id" valid:"required~enrollmentId is required"`
-	UserID       *uint `json:"user_id"` 
+	EnrollmentID uint  `json:"enrollment_id" gorm:"uniqueIndex:idx_attendance_enrollment_session,where:attendance_session_id IS NOT NULL" valid:"required~enrollmentId is required"`
+	UserID       *uint `json:"user_id"`
+
+	AttendanceSessionID *uint              `json:"attendance_session_id" gorm:"index;uniqueIndex:idx_attendance_enrollment_session"`
+	AttendanceSession   *AttendanceSession `json:"attendance_session,omitempty" gorm:"foreignKey:AttendanceSessionID"`
+	RecordedByUserID *uint `json:"recorded_by_user_id"`
 
 	// Relationships
 	Enrollment *Enrollment `json:"enrollment" gorm:"foreignKey:EnrollmentID"`

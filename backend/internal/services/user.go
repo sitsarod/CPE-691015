@@ -118,7 +118,6 @@ func (s *UserService) CreateUser(user *models.User) error {
 
 	if user.Role == models.CustomerRole && user.Customer != nil {
 		user.Customer.Status = models.CustomerStatusActive
-
 		if user.Customer.PersonalQRCode == "" {
 			user.Customer.PersonalQRCode = "QR_" + user.Email
 		}
