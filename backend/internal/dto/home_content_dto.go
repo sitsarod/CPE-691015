@@ -42,6 +42,13 @@ type HomeContentDTO struct {
 	TiktokURL           string    `json:"tiktok_url"`
 	YoutubeURL          string    `json:"youtube_url"`
 	LineURL             string    `json:"line_url"`
+	SchoolName          string    `json:"school_name"`
+	ContactAddress      string    `json:"contact_address"`
+	ContactPhone        string    `json:"contact_phone"`
+	ContactEmail        string    `json:"contact_email"`
+	OpeningHours        string    `json:"opening_hours"`
+	PrivacyPolicy       string    `json:"privacy_policy"`
+	TermsOfService      string    `json:"terms_of_service"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
@@ -71,6 +78,13 @@ type UpdateHomeContentReq struct {
 	TiktokURL           *string `json:"tiktok_url"`
 	YoutubeURL          *string `json:"youtube_url"`
 	LineURL             *string `json:"line_url"`
+	SchoolName          *string `json:"school_name"`
+	ContactAddress      *string `json:"contact_address"`
+	ContactPhone        *string `json:"contact_phone"`
+	ContactEmail        *string `json:"contact_email"`
+	OpeningHours        *string `json:"opening_hours"`
+	PrivacyPolicy       *string `json:"privacy_policy"`
+	TermsOfService      *string `json:"terms_of_service"`
 }
 
 // CreateHeroSlideReq เพิ่มรูปสไลด์ใหม่

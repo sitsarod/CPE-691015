@@ -1,6 +1,6 @@
 // frontend/src/services/authAPI.ts
 import { apiFetch } from "@/services/apiClient";
-import { AuthResponseDTO, LoginReq, RegisterCustomerReq, UserResponseDTO, VerifyOTPReq, VerifyOTPResponseDTO } from "@/types/auth";
+import { AuthResponseDTO, LoginReq, RefreshResponseDTO, RegisterCustomerReq, UserResponseDTO, VerifyOTPReq, VerifyOTPResponseDTO } from "@/types/auth";
 
 
 // [POST] เข้าสู่ระบบ
@@ -8,6 +8,14 @@ export async function loginAPI(data: LoginReq): Promise<AuthResponseDTO> {
   return await apiFetch<AuthResponseDTO>("/auth/login", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+}
+
+// [POST] ขอ access token ใหม่ด้วย refresh token
+export async function refreshTokenAPI(refreshToken: string): Promise<RefreshResponseDTO> {
+  return await apiFetch<RefreshResponseDTO>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
   });
 }
 

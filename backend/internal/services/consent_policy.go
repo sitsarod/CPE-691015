@@ -30,7 +30,12 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 // FaceConsentPolicy คืนเนื้อหาประกาศฉบับปัจจุบัน
-func FaceConsentPolicy() dto.FaceConsentPolicyRes {
+//
+// controller = ข้อมูลผู้ควบคุมข้อมูลส่วนบุคคล (ม.23(5)) ส่งเข้ามาจากภายนอก
+// เพื่อดึงข้อมูลติดต่อจริงจาก CMS (หน้า /admin/settings) แทนการฮาร์ดโค้ด
+// หมายเหตุ: ข้อมูลติดต่อไม่ใช่สาระของความยินยอม การแก้เบอร์/อีเมล/ที่อยู่จึง
+// ไม่ต้องขยับ FaceConsentPolicyVersion (ต่างจากการแก้ "ข้อความประกาศ" ในไฟล์นี้)
+func FaceConsentPolicy(controller dto.DataControllerContact) dto.FaceConsentPolicyRes {
 	return dto.FaceConsentPolicyRes{
 		Version: models.FaceConsentPolicyVersion,
 		Title:   "การเก็บและใช้ข้อมูลภาพใบหน้า",
@@ -89,15 +94,8 @@ func FaceConsentPolicy() dto.FaceConsentPolicyRes {
 			"การถอนความยินยอมไม่กระทบสถานะการเป็นนักเรียน สิทธิในคอร์สที่สมัครไว้ หรือประวัติการเช็คชื่อที่บันทึกไว้ก่อนหน้า",
 
 		// มาตรา 23(5) — ต้องแจ้งข้อมูลติดต่อของผู้ควบคุมข้อมูลส่วนบุคคล
-		//
-		// ⚠️ TODO ก่อนใช้งานจริง: แก้เป็นข้อมูลติดต่อจริงของโรงเรียน
-		// ค่าด้านล่างเป็นตัวอย่างเท่านั้น ถ้าปล่อยไว้จะถือว่าแจ้งข้อมูลตามมาตรา 23(5) ไม่ครบ
-		Controller: dto.DataControllerContact{
-			Name:    "Koyama Badminton School",
-			Address: "[ที่อยู่โรงเรียน — กรุณากรอกข้อมูลจริงก่อนเปิดใช้งาน]",
-			Email:   "[อีเมลติดต่อเรื่องข้อมูลส่วนบุคคล — กรุณากรอกข้อมูลจริง]",
-			Phone:   "[เบอร์ติดต่อ — กรุณากรอกข้อมูลจริง]",
-		},
+		// ดึงจาก CMS (ข้อมูลติดต่อในหน้า /admin/settings) — ดู ConsentService.GetPolicy
+		Controller: controller,
 
 		LegalReferences: []dto.LegalReference{
 			{

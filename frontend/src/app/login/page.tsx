@@ -50,6 +50,7 @@ try {
       const data = await loginAPI({ email, password });
 
       localStorage.setItem("token", data.token);
+      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("lastName", data.user.lastName ?? "");

@@ -82,7 +82,7 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
 
   return (
     <div
-      className={`relative w-full h-[calc(100vh-96px)] overflow-hidden group ${
+      className={`relative w-full aspect-[16/9] overflow-hidden group ${
         isSingle ? "" : "cursor-grab active:cursor-grabbing"
       }`}
       onTouchStart={(e) => {
@@ -129,7 +129,7 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
             <img 
               src={src} 
               alt={`Slide ${index + 1}`} 
-              className="w-full h-full object-cover select-none pointer-events-none" 
+              className="w-full h-full object-cover select-none pointer-events-none"
               draggable={false}
             />
             <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>

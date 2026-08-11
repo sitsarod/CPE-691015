@@ -31,4 +31,15 @@ type HomeContent struct {
 	TiktokURL    string `json:"tiktok_url" gorm:"type:varchar(255)"`
 	YoutubeURL   string `json:"youtube_url" gorm:"type:varchar(255)"`
 	LineURL      string `json:"line_url" gorm:"type:varchar(255)"`
+
+	// ข้อมูลติดต่อ (แสดงท้ายหน้า/footer) — เว้นว่างช่องไหน จะไม่แสดงบรรทัดนั้น
+	SchoolName     string `json:"school_name" gorm:"type:varchar(255)"`     // ชื่อโรงเรียน/ธุรกิจ ใช้เป็นชื่อแบรนด์ + บรรทัดลิขสิทธิ์
+	ContactAddress string `json:"contact_address" gorm:"type:text"`         // ที่อยู่
+	ContactPhone   string `json:"contact_phone" gorm:"type:varchar(255)"`   // เบอร์โทร
+	ContactEmail   string `json:"contact_email" gorm:"type:varchar(255)"`   // อีเมล
+	OpeningHours   string `json:"opening_hours" gorm:"type:text"`           // เวลาทำการ (รองรับหลายบรรทัด)
+
+	// เอกสารทางกฎหมาย (แสดงเป็นหน้าแยก /privacy, /terms และลิงก์ท้ายหน้า)
+	PrivacyPolicy  string `json:"privacy_policy" gorm:"type:text"`  // นโยบายความเป็นส่วนตัว (PDPA)
+	TermsOfService string `json:"terms_of_service" gorm:"type:text"` // ข้อกำหนดการใช้งาน
 }

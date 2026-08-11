@@ -10,7 +10,7 @@ import { reviewAPI } from "@/services/reviewAPI";
 import { CourseDTO } from "@/types/course";
 import { PublicHome } from "@/types/homeContent";
 import { Review } from "@/types/review";
-import { BookOpen, Loader2, Star, UserRound } from "lucide-react";
+import { BookOpen, Loader2, Star, UserRound, MapPin, Phone, Mail, Clock } from "lucide-react";
 
 export default function Home() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
@@ -51,6 +51,8 @@ export default function Home() {
   const content = home?.content;
   const slideImages = (home?.slides ?? []).map((s) => s.image_url);
   const coaches = home?.featured_coaches ?? [];
+  // ชื่อแบรนด์สำหรับ footer/ลิขสิทธิ์ — ใช้ค่าจาก CMS ถ้ามี ไม่งั้น fallback ชื่อโรงเรียน
+  const schoolName = content?.school_name?.trim() || "Koyama Badminton School";
 
   // แผนที่ที่ตั้ง: รองรับทั้งกรณีแอดมินวาง src ตรงๆ หรือวาง <iframe .../> ทั้งก้อน
   const rawMap = content?.map_embed_url?.trim() ?? "";
@@ -223,18 +225,111 @@ export default function Home() {
       </section>
 
       {/* 6. ท้ายหน้า (Footer) */}
-      <footer className="w-full bg-gray-900 text-gray-400 py-12">
-        <div className="container mx-auto px-6 md:px-12 lg:px-24 flex flex-col items-center gap-6 text-center">
-          {content && (
-            <SocialLinks content={content} variant="dark" />
-          )}
-          <p className="text-sm">
-            © {new Date().getFullYear()}{" "}
-            <span className="font-semibold text-white">
-              {content?.about_title || "เกี่ยวกับเรา"}
-            </span>
-            . สงวนลิขสิทธิ์.
-          </p>
+      <footer className="w-full bg-gray-900 text-gray-400">
+        <div className="container mx-auto px-6 md:px-12 lg:px-24 py-14">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+
+            {/* คอลัมน์ 1: แบรนด์ + โซเชียล */}
+            <div>
+              <h3 className="text-xl font-bold text-white">{schoolName}</h3>
+              {content?.about_content && (
+                <p className="mt-3 text-sm leading-relaxed line-clamp-4">
+                  {content.about_content}
+                </p>
+              )}
+              {content && (
+                <SocialLinks content={content} variant="dark" className="mt-5" />
+              )}
+            </div>
+
+            {/* คอลัมน์ 2: ลิงก์ลัด */}
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-wider text-white">เมนูลัด</h4>
+              <ul className="mt-4 space-y-3 text-sm">
+                <li><Link href="/#coaches" className="hover:text-white transition-colors">บุคลากร</Link></li>
+                <li><Link href="/#courses" className="hover:text-white transition-colors">คอร์สเรียน</Link></li>
+                <li><Link href="/#about" className="hover:text-white transition-colors">เกี่ยวกับเรา</Link></li>
+              </ul>
+            </div>
+
+            {/* คอลัมน์ 3: ข้อมูลติดต่อ (แสดงเฉพาะช่องที่กรอกไว้) */}
+            {(content?.contact_address || content?.contact_phone || content?.contact_email || content?.opening_hours) && (
+              <div>
+                <h4 className="text-sm font-bold uppercase tracking-wider text-white">ติดต่อเรา</h4>
+                <ul className="mt-4 space-y-3 text-sm">
+                  {content?.contact_address && (
+                    <li className="flex gap-3">
+                      <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5 text-[#CC0000]" />
+                      <span className="whitespace-pre-line">{content.contact_address}</span>
+                    </li>
+                  )}
+                  {content?.contact_phone && (
+                    <li className="flex gap-3 items-center">
+                      <Phone className="w-5 h-5 flex-shrink-0 text-[#CC0000]" />
+                      <a href={`tel:${content.contact_phone.replace(/[^\d+]/g, "")}`} className="hover:text-white transition-colors">
+                        {content.contact_phone}
+                      </a>
+                    </li>
+                  )}
+                  {content?.contact_email && (
+                    <li className="flex gap-3 items-center">
+                      <Mail className="w-5 h-5 flex-shrink-0 text-[#CC0000]" />
+                      <a href={`mailto:${content.contact_email}`} className="hover:text-white transition-colors break-all">
+                        {content.contact_email}
+                      </a>
+                    </li>
+                  )}
+                  {content?.opening_hours && (
+                    <li className="flex gap-3">
+                      <Clock className="w-5 h-5 flex-shrink-0 mt-0.5 text-[#CC0000]" />
+                      <span className="whitespace-pre-line">{content.opening_hours}</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ปุ่ม CTA: สมัคร/เข้าสู่ระบบ */}
+        <div className="border-t border-gray-800">
+          <div className="container mx-auto px-6 md:px-12 lg:px-24 py-10 flex flex-col items-center gap-4 text-center">
+            <p className="text-white text-lg font-semibold">พร้อมเริ่มเรียนกับเราแล้วหรือยัง?</p>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center rounded-lg bg-[#CC0000] px-16 py-4 min-w-[18rem] text-lg font-bold text-white shadow-lg shadow-[#CC0000]/25 hover:bg-[#990000] transition-colors"
+            >
+              สมัคร / เข้าสู่ระบบ
+            </Link>
+          </div>
+        </div>
+
+        {/* แถบลิขสิทธิ์ + ลิงก์เอกสารทางกฎหมาย */}
+        <div className="border-t border-gray-800">
+          <div className="container mx-auto px-6 md:px-12 lg:px-24 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-center">
+            <p>
+              © {new Date().getFullYear()}{" "}
+              <span className="font-semibold text-white">{schoolName}</span>
+              . สงวนลิขสิทธิ์.
+            </p>
+            {(content?.privacy_policy || content?.terms_of_service) && (
+              <div className="flex items-center gap-4">
+                {content?.privacy_policy && (
+                  <Link href="/privacy" className="hover:text-white transition-colors">
+                    นโยบายความเป็นส่วนตัว
+                  </Link>
+                )}
+                {content?.privacy_policy && content?.terms_of_service && (
+                  <span className="text-gray-700">|</span>
+                )}
+                {content?.terms_of_service && (
+                  <Link href="/terms" className="hover:text-white transition-colors">
+                    ข้อกำหนดการใช้งาน
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </footer>
 

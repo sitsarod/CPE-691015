@@ -48,6 +48,7 @@ func (s *homeContentService) getOrCreateContent() (*models.HomeContent, error) {
 			CoursesTitle:    "คอร์สเรียน",
 			ReviewsTitle:    "เสียงจากผู้เรียน",
 			CoursesSubtitle: "",
+			SchoolName:      "Koyama Badminton School",
 		}
 		if err := s.db.Create(&content).Error; err != nil {
 			return nil, err
@@ -122,6 +123,27 @@ func (s *homeContentService) UpdateHomeContent(req *dto.UpdateHomeContentReq) (*
 	}
 	if req.LineURL != nil {
 		content.LineURL = *req.LineURL
+	}
+	if req.SchoolName != nil {
+		content.SchoolName = *req.SchoolName
+	}
+	if req.ContactAddress != nil {
+		content.ContactAddress = *req.ContactAddress
+	}
+	if req.ContactPhone != nil {
+		content.ContactPhone = *req.ContactPhone
+	}
+	if req.ContactEmail != nil {
+		content.ContactEmail = *req.ContactEmail
+	}
+	if req.OpeningHours != nil {
+		content.OpeningHours = *req.OpeningHours
+	}
+	if req.PrivacyPolicy != nil {
+		content.PrivacyPolicy = *req.PrivacyPolicy
+	}
+	if req.TermsOfService != nil {
+		content.TermsOfService = *req.TermsOfService
 	}
 
 	if err := s.db.Save(content).Error; err != nil {
@@ -281,6 +303,13 @@ func mapToHomeContentDTO(m *models.HomeContent) dto.HomeContentDTO {
 		TiktokURL:           m.TiktokURL,
 		YoutubeURL:          m.YoutubeURL,
 		LineURL:             m.LineURL,
+		SchoolName:          m.SchoolName,
+		ContactAddress:      m.ContactAddress,
+		ContactPhone:        m.ContactPhone,
+		ContactEmail:        m.ContactEmail,
+		OpeningHours:        m.OpeningHours,
+		PrivacyPolicy:       m.PrivacyPolicy,
+		TermsOfService:      m.TermsOfService,
 		UpdatedAt:           m.UpdatedAt,
 	}
 }

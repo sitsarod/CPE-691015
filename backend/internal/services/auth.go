@@ -3,19 +3,20 @@ package services
 import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/token"
 	"errors"
 
 	"math/rand"
-	"os"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 type AuthService interface {
-	Login(input dto.LoginInput) (string, *models.User, error)
+	// Login คืนค่า access token, refresh token และข้อมูลผู้ใช้
+	Login(input dto.LoginInput) (accessToken string, refreshToken string, user *models.User, err error)
+	// Refresh ใช้ refresh token ขอ access token ใหม่ (พร้อมหมุน refresh token ใหม่ด้วย)
+	Refresh(refreshToken string) (newAccessToken string, newRefreshToken string, err error)
 	SendOTP(input dto.SendOTPInput) error
 	VerifyOTP(input dto.VerifyOTPInput) (string, error) // คืนค่า Reset Token ถ้า OTP ถูกต้อง
 }
@@ -28,41 +29,70 @@ func NewAuthService(db *gorm.DB) AuthService {
 	return &authService{db: db}
 }
 
-func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		return []byte("my_super_secret_key_1234")
-	}
-	return []byte(secret)
-}
-
-func (s *authService) Login(input dto.LoginInput) (string, *models.User, error) {
+func (s *authService) Login(input dto.LoginInput) (string, string, *models.User, error) {
 	var user models.User
 	err := s.db.Preload("Customer").Where("email = ?", input.Email).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
+			return "", "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 		}
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
 	if err != nil {
-		return "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
+		return "", "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 	}
 
-	claims := jwt.MapClaims{
-		"user_id": user.ID,
-		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 1).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(getJWTSecret())
+	accessToken, refreshToken, err := issueTokens(&user)
 	if err != nil {
-		return "", nil, errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
+		return "", "", nil, err
 	}
 
-	return tokenString, &user, nil
+	return accessToken, refreshToken, &user, nil
+}
+
+// Refresh ตรวจสอบ refresh token แล้วออก token ชุดใหม่ให้
+// จะดึง role ล่าสุดจาก DB เสมอ เผื่อสิทธิ์ผู้ใช้ถูกเปลี่ยนหลังจากออก token เดิม
+func (s *authService) Refresh(refreshToken string) (string, string, error) {
+	claims, err := token.Parse(refreshToken)
+	if err != nil {
+		return "", "", errors.New("refresh token ไม่ถูกต้องหรือหมดอายุ")
+	}
+
+	// ต้องเป็น refresh token เท่านั้น กัน access token ถูกนำมาใช้ขอต่ออายุ
+	if t, _ := claims["type"].(string); t != token.TypeRefresh {
+		return "", "", errors.New("token ไม่ใช่ refresh token")
+	}
+
+	userID, err := token.UserID(claims)
+	if err != nil {
+		return "", "", errors.New("refresh token ไม่ถูกต้อง")
+	}
+
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return "", "", errors.New("ไม่พบบัญชีผู้ใช้")
+	}
+
+	accessToken, newRefreshToken, err := issueTokens(&user)
+	if err != nil {
+		return "", "", err
+	}
+	return accessToken, newRefreshToken, nil
+}
+
+// issueTokens ออก access + refresh token ให้ผู้ใช้ที่ระบุ
+func issueTokens(user *models.User) (string, string, error) {
+	accessToken, err := token.GenerateAccessToken(user.ID, string(user.Role))
+	if err != nil {
+		return "", "", errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
+	}
+	refreshToken, err := token.GenerateRefreshToken(user.ID)
+	if err != nil {
+		return "", "", errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
+	}
+	return accessToken, refreshToken, nil
 }
 
 // 🌟 สั่งสร้างและส่ง OTP (ตอนนี้ทำ Mock ส่งเลข 123456 ล็อคไว้เทสหน้าบ้านได้เลย)
@@ -87,13 +117,7 @@ func (s *authService) VerifyOTP(input dto.VerifyOTPInput) (string, error) {
 	}
 
 	// สร้าง Reset Token ชั่วคราว (อายุ 15 นาที) เพื่อเอาไปใช้ตอน Reset Password
-	claims := jwt.MapClaims{
-		"email":  input.Email,
-		"action": "reset_password",
-		"exp":    time.Now().Add(time.Minute * 15).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	resetToken, err := token.SignedString(getJWTSecret())
+	resetToken, err := token.GenerateResetToken(input.Email)
 	if err != nil {
 		return "", errors.New("ไม่สามารถสร้าง Reset Token ได้")
 	}

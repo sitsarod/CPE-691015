@@ -1,13 +1,12 @@
 package middlewares
 
 import (
-    "fmt"
     "net/http"
-    "os"
     "strings"
 
+    "CPE-691015/internal/token"
+
     "github.com/gin-gonic/gin"
-    "github.com/golang-jwt/jwt/v5"
 )
 
 // CORSMiddleware handles Cross-Origin Resource Sharing (CORS) configurations.
@@ -33,20 +32,12 @@ func CORSMiddleware() gin.HandlerFunc {
     }
 }
 
-func getJWTSecret() []byte {
-    secret := os.Getenv("JWT_SECRET")
-    if secret == "" {
-        panic("JWT_SECRET is not set in .env file. Please check your environment variables.")
-    }
-    return []byte(secret)
-}
-
 func AuthMiddleware() gin.HandlerFunc {
     return func(c *gin.Context) {
         authHeader := c.GetHeader("Authorization")
         if authHeader == "" {
             c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบก่อนใช้งาน (Missing Token)"})
-            c.Abort() 
+            c.Abort()
             return
         }
 
@@ -57,31 +48,24 @@ func AuthMiddleware() gin.HandlerFunc {
             return
         }
 
-        tokenString := parts[1]
-
-        token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-            if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-                return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-            }
-            return getJWTSecret(), nil
-        })
-
-        if err != nil || !token.Valid {
+        claims, err := token.Parse(parts[1])
+        if err != nil {
             c.JSON(http.StatusUnauthorized, gin.H{"error": "ตั๋วหมดอายุหรือไม่มีสิทธิ์ใช้งาน (Invalid or Expired Token)"})
             c.Abort()
             return
         }
 
-        claims, ok := token.Claims.(jwt.MapClaims)
-        if ok && token.Valid {
-            userID := claims["user_id"]
-            role := claims["role"]
-
-            c.Set("userID", userID)
-            c.Set("role", role)
+        // ต้องเป็น access token เท่านั้น กันไม่ให้ refresh token ถูกนำมาเข้าถึง API โดยตรง
+        if t, _ := claims["type"].(string); t != token.TypeAccess {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "ต้องใช้ access token เท่านั้น (Invalid Token Type)"})
+            c.Abort()
+            return
         }
 
-        c.Next() 
+        c.Set("userID", claims["user_id"])
+        c.Set("role", claims["role"])
+
+        c.Next()
     }
 }
 

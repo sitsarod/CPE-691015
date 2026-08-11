@@ -27,7 +27,7 @@ func NewConsentController(service *services.ConsentService) *ConsentController {
 //
 // [GET] /api/consents/face/policy
 func (ctrl *ConsentController) GetPolicy(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"data": services.FaceConsentPolicy()})
+	c.JSON(http.StatusOK, gin.H{"data": ctrl.service.GetPolicy()})
 }
 
 // GetMyConsent ดูสถานะความยินยอมของตัวเอง
