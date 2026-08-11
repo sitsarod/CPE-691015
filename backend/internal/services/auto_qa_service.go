@@ -26,6 +26,7 @@ type AutoQAService interface {
 
 	// Q&A logic
 	AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*dto.AskQuestionResponse, error)
+	AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto.AutoQADTO, error)
 }
 
 type autoQAService struct {
@@ -256,6 +257,33 @@ func (s *autoQAService) AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*d
 	}, nil
 }
 
+func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto.AutoQADTO, error) {
+	// Verify session exists and is active
+	var session models.ChatSession
+	if err := s.db.First(&session, sessionID).Error; err != nil {
+		return nil, errors.New("chat session not found")
+	}
+
+	if session.Status == models.ChatSessionStatusClosed {
+		return nil, errors.New("cannot send messages to a closed session")
+	}
+
+	// Create and persist the interaction log as an admin reply
+	interactionLog := models.AutoQA{
+		Mode:      "admin_reply",
+		Question:  "", // Admin replies don't have a user question part
+		Answer:    req.Answer,
+		SessionID: &sessionID,
+	}
+
+	if err := s.db.Create(&interactionLog).Error; err != nil {
+		return nil, err
+	}
+
+	dtoRes := mapToAutoQADTO(&interactionLog)
+	return &dtoRes, nil
+}
+
 // === Helper Functions ===
 
 func calculateMatchScore(query string, question string, similarQuestion string) int {
@@ -273,9 +301,15 @@ func calculateMatchScore(query string, question string, similarQuestion string) 
 		return 500
 	}
 
-	// 3. Similar question substring match
-	if len(similarQuestion) > 0 && (strings.Contains(query, similarQuestion) || strings.Contains(similarQuestion, query)) {
-		return 400
+	// 3. Similar question keyword match (fuzzy logic)
+	if len(similarQuestion) > 0 {
+		keywords := strings.Split(similarQuestion, "|")
+		for _, kw := range keywords {
+			kw = strings.TrimSpace(kw)
+			if len(kw) > 0 && strings.Contains(query, kw) {
+				return 400
+			}
+		}
 	}
 
 	// 4. Token overlap match

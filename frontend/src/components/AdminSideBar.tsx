@@ -37,6 +37,8 @@ export default function CustomerSidebar() {
           <SidebarItem href="/admin/usermanagement" icon={<BookUser />} label="จัดการข้อมูลผู้ใช้งาน" active={pathname === "/admin/usermanagement"} />
           <SidebarItem href="/admin/enrollments" icon={<Book />} label="การลงทะเบียนเรียน" active={pathname === "/admin/enrollments"} />
           <SidebarItem href="/admin/quiz-manager" icon={<ListChecks />} label="ระบบคัดกรองคอร์ส" active={pathname === "/admin/quiz-manager"} />
+          <SidebarItem href="/admin/chat-sessions" icon={<MessageSquareMore />} label="จัดการแชท (Chat Sessions)" active={pathname === "/admin/chat-sessions"} />
+          <SidebarItem href="/admin/auto-qa" icon={<ListChecks />} label="จัดการ Q&A (Knowledge Base)" active={pathname === "/admin/auto-qa"} />
 
         </nav>
       </div>

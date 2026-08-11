@@ -49,6 +49,7 @@ func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq)
 	announcement := models.Announcement{
 		Title:      req.Title,
 		Content:    req.Content,
+		ImageURL:   req.ImageURL,
 		UserID:     req.UserID,
 		CategoryID: req.CategoryID,
 		StartDate:  req.StartDate,
@@ -98,6 +99,9 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 	}
 	if req.Content != "" {
 		announcement.Content = req.Content
+	}
+	if req.ImageURL != "" {
+		announcement.ImageURL = req.ImageURL
 	}
 	if req.UserID != 0 {
 		var user models.User
@@ -210,6 +214,7 @@ func mapToAnnouncementDTO(m *models.Announcement) dto.AnnouncementDTO {
 		ID:          m.ID,
 		Title:       m.Title,
 		Content:     m.Content,
+		ImageURL:    m.ImageURL,
 		UserID:      m.UserID,
 		CategoryID:  m.CategoryID,
 		StartDate:   m.StartDate,
