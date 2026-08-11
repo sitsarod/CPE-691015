@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -21,6 +22,36 @@ type ConsentService struct {
 
 func NewConsentService(db *gorm.DB) *ConsentService {
 	return &ConsentService{db: db}
+}
+
+// GetPolicy คืนเนื้อหาประกาศการเก็บข้อมูลใบหน้า พร้อมเติมข้อมูลผู้ควบคุมข้อมูล (ม.23(5))
+// จากข้อมูลติดต่อที่แอดมินตั้งไว้ใน CMS — ช่องไหนยังไม่กรอกจะคง placeholder เตือนว่ายังไม่ได้ตั้งค่า
+func (s *ConsentService) GetPolicy() dto.FaceConsentPolicyRes {
+	// ค่าเริ่มต้น (placeholder) — ใช้เมื่อยังไม่ได้ตั้งค่าใน CMS
+	contact := dto.DataControllerContact{
+		Name:    "Koyama Badminton School",
+		Address: "[ที่อยู่โรงเรียน — กรุณากรอกข้อมูลจริงก่อนเปิดใช้งาน]",
+		Email:   "[อีเมลติดต่อเรื่องข้อมูลส่วนบุคคล — กรุณากรอกข้อมูลจริง]",
+		Phone:   "[เบอร์ติดต่อ — กรุณากรอกข้อมูลจริง]",
+	}
+
+	var hc models.HomeContent
+	if err := s.db.Order("id ASC").First(&hc).Error; err == nil {
+		if v := strings.TrimSpace(hc.SchoolName); v != "" {
+			contact.Name = v
+		}
+		if v := strings.TrimSpace(hc.ContactAddress); v != "" {
+			contact.Address = v
+		}
+		if v := strings.TrimSpace(hc.ContactEmail); v != "" {
+			contact.Email = v
+		}
+		if v := strings.TrimSpace(hc.ContactPhone); v != "" {
+			contact.Phone = v
+		}
+	}
+
+	return FaceConsentPolicy(contact)
 }
 
 // ConsentMeta คือข้อมูลประกอบที่เก็บไว้เป็นหลักฐาน audit (ไม่ได้มาจาก body ที่ผู้ใช้ควบคุมได้)

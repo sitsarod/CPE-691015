@@ -21,6 +21,8 @@ import {
   ExternalLink,
   Check,
   Share2,
+  Phone,
+  FileText,
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -86,6 +88,13 @@ export default function AdminSettingsPage() {
         tiktok_url: content.tiktok_url,
         youtube_url: content.youtube_url,
         line_url: content.line_url,
+        school_name: content.school_name,
+        contact_address: content.contact_address,
+        contact_phone: content.contact_phone,
+        contact_email: content.contact_email,
+        opening_hours: content.opening_hours,
+        privacy_policy: content.privacy_policy,
+        terms_of_service: content.terms_of_service,
       });
       setContent(updated);
       setSavedFlash(true);
@@ -217,7 +226,7 @@ export default function AdminSettingsPage() {
 
       {/* ===== รูปสไลด์ ===== */}
       <SectionCard icon={<Images className="h-5 w-5 text-[#CC0000]" />} title="รูปสไลด์ (Hero Slider)"
-        desc={`รูปภาพขนาดใหญ่ที่เลื่อนสลับด้านบนสุดของหน้าแรก แนะนำสัดส่วนแนวนอน (เช่น 1920×1080) — ขนาดไฟล์ไม่เกิน ${MAX_UPLOAD_MB} MB ต่อรูป`}>
+        desc={`รูปภาพขนาดใหญ่ที่เลื่อนสลับด้านบนสุดของหน้าแรก — แสดงเป็นแบนเนอร์สัดส่วน 16:9 ควรอัปแนวนอน 1920×1080 พิกเซล (16:9) เพื่อให้พอดีแบนเนอร์และเห็นรูปเต็มทั้งภาพทุกขนาดจอ ขนาดไฟล์ไม่เกิน ${MAX_UPLOAD_MB} MB ต่อรูป`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {slides.map((slide, index) => (
             <div key={slide.id} className="rounded-xl border border-gray-200 overflow-hidden bg-white">
@@ -364,6 +373,68 @@ export default function AdminSettingsPage() {
               placeholder="https://line.me/ti/p/~yourid หรือ URL กลุ่ม/OA"
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
           </Field>
+        </div>
+      </SectionCard>
+
+      {/* ===== ข้อมูลติดต่อ (footer) ===== */}
+      <SectionCard icon={<Phone className="h-5 w-5 text-[#CC0000]" />} title="ข้อมูลติดต่อ (ท้ายหน้า)"
+        desc="ข้อมูลที่แสดงในส่วนท้ายหน้า (footer) ของหน้าแรก — เว้นว่างช่องไหน จะไม่แสดงบรรทัดนั้น">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field label="ชื่อโรงเรียน / ธุรกิจ">
+            <input type="text" value={content.school_name}
+              onChange={(e) => setField('school_name', e.target.value)}
+              placeholder="เช่น Koyama Badminton School"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="เบอร์โทร">
+            <input type="tel" value={content.contact_phone}
+              onChange={(e) => setField('contact_phone', e.target.value)}
+              placeholder="เช่น 02-123-4567"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="อีเมล">
+            <input type="email" value={content.contact_email}
+              onChange={(e) => setField('contact_email', e.target.value)}
+              placeholder="เช่น info@example.com"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="เวลาทำการ">
+            <textarea rows={3} value={content.opening_hours}
+              onChange={(e) => setField('opening_hours', e.target.value)}
+              placeholder="เช่น จันทร์–ศุกร์ 10:00–20:00&#10;เสาร์–อาทิตย์ 09:00–18:00"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="ที่อยู่">
+              <textarea rows={3} value={content.contact_address}
+                onChange={(e) => setField('contact_address', e.target.value)}
+                placeholder="เลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+            </Field>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* ===== เอกสารทางกฎหมาย ===== */}
+      <SectionCard icon={<FileText className="h-5 w-5 text-[#CC0000]" />} title="เอกสารทางกฎหมาย"
+        desc="เนื้อหานโยบายความเป็นส่วนตัวและข้อกำหนดการใช้งาน — แสดงเป็นหน้าแยก (/privacy, /terms) และมีลิงก์ท้ายหน้า เว้นว่างไว้ = ไม่แสดงลิงก์นั้น">
+        <div className="space-y-6">
+          <Field label="นโยบายความเป็นส่วนตัว (PDPA)">
+            <textarea rows={8} value={content.privacy_policy}
+              onChange={(e) => setField('privacy_policy', e.target.value)}
+              placeholder="อธิบายว่าเก็บข้อมูลอะไร ใช้ทำอะไร เก็บนานแค่ไหน สิทธิของเจ้าของข้อมูล และช่องทางติดต่อ..."
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-y" />
+          </Field>
+          <Field label="ข้อกำหนดการใช้งาน (Terms of Service)">
+            <textarea rows={8} value={content.terms_of_service}
+              onChange={(e) => setField('terms_of_service', e.target.value)}
+              placeholder="เงื่อนไขการใช้บริการ สิทธิและหน้าที่ของผู้ใช้ การชำระเงิน การยกเลิก ฯลฯ..."
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-y" />
+          </Field>
+          <p className="text-xs text-gray-400">
+            หมายเหตุ: นโยบายการเก็บ “ข้อมูลใบหน้า” (PDPA) มีระบบแยกเฉพาะตอนลงทะเบียนใบหน้าอยู่แล้ว
+            ส่วนช่องนี้เป็นนโยบายความเป็นส่วนตัวภาพรวมของเว็บไซต์
+          </p>
         </div>
       </SectionCard>
 

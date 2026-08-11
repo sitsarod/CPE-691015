@@ -37,6 +37,13 @@ export interface HomeContent {
   tiktok_url: string;
   youtube_url: string;
   line_url: string;
+  school_name: string;
+  contact_address: string;
+  contact_phone: string;
+  contact_email: string;
+  opening_hours: string;
+  privacy_policy: string;
+  terms_of_service: string;
   updated_at: string;
 }
 
@@ -64,6 +71,13 @@ export interface UpdateHomeContentReq {
   tiktok_url?: string;
   youtube_url?: string;
   line_url?: string;
+  school_name?: string;
+  contact_address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  opening_hours?: string;
+  privacy_policy?: string;
+  terms_of_service?: string;
 }
 
 export interface CreateHeroSlideReq {
