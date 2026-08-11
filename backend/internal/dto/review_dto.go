@@ -34,6 +34,7 @@ type ReviewDTO struct {
 	ID         uint               `json:"id"`
 	CustomerID uint               `json:"customer_id"`
 	Customer   *ReviewCustomerDTO `json:"customer"`
+	Category   string             `json:"category"`
 	CourseID   *uint              `json:"course_id"`
 	Course     *ReviewCourseDTO   `json:"course"`
 	CoachID    *uint              `json:"coach_id"`
@@ -46,17 +47,24 @@ type ReviewDTO struct {
 }
 
 // CreateReviewReq ใช้ตอนลูกค้าส่งรีวิว (customer_id มาจาก JWT ไม่ใช่ body)
+//
+// CourseID บังคับเสมอ — ใช้ตรวจสิทธิ์ว่าเคยเข้าเรียนคอร์สนี้แล้ว แม้หัวข้อรีวิว
+// จะเป็น place/service/other ก็ยังต้องผูกกับคอร์สที่กำลังเรียนอยู่
+//
+// CoachID บังคับเฉพาะตอน Category = "coach" (ตรวจที่ service)
 type CreateReviewReq struct {
-	CourseID *uint  `json:"course_id"`
+	Category string `json:"category" binding:"required,oneof=course coach place service other"`
+	CourseID uint   `json:"course_id" binding:"required"`
 	CoachID  *uint  `json:"coach_id"`
 	Rating   int    `json:"rating" binding:"required,min=1,max=5"`
 	Comment  string `json:"comment" binding:"required"`
 }
 
-// UpdateReviewReq ใช้ตอนแอดมินแก้ไขรีวิว (เช่น ปรับคะแนน/ข้อความ)
+// UpdateReviewReq ใช้ตอนแอดมินแก้ไขรีวิว (เช่น ปรับคะแนน/ข้อความ/หัวข้อ)
 type UpdateReviewReq struct {
-	Rating  int    `json:"rating" binding:"omitempty,min=1,max=5"`
-	Comment string `json:"comment"`
+	Category string `json:"category" binding:"omitempty,oneof=course coach place service other"`
+	Rating   int    `json:"rating" binding:"omitempty,min=1,max=5"`
+	Comment  string `json:"comment"`
 }
 
 // FeatureReviewReq ใช้ตอนแอดมินเลือก/ยกเลิกการแสดงรีวิวในหน้าแรก

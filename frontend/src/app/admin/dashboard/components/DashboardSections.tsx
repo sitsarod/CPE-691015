@@ -202,6 +202,7 @@ export function RecentActivity({ activities }: { activities: ActivityRow[] }) {
 
 const alertToneMap = {
   danger: { wrap: "border-red-200 bg-red-50/70", bar: "bg-red-500", icon: "text-red-500", title: "text-red-800", action: "text-red-600 hover:text-red-700" },
+  warning: { wrap: "border-amber-200 bg-amber-50/70", bar: "bg-amber-500", icon: "text-amber-500", title: "text-amber-800", action: "text-amber-600 hover:text-amber-700" },
   info: { wrap: "border-blue-200 bg-blue-50/70", bar: "bg-blue-500", icon: "text-blue-500", title: "text-blue-800", action: "text-blue-600 hover:text-blue-700" },
   success: { wrap: "border-emerald-200 bg-emerald-50/70", bar: "bg-emerald-500", icon: "text-emerald-600", title: "text-emerald-800", action: "text-emerald-600 hover:text-emerald-700" },
 } as const;

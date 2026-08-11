@@ -1,5 +1,5 @@
 // frontend/src/types/identify.ts
-import { UserResponseDTO } from "@/services/authAPI";
+import { UserResponseDTO } from "@/types/auth";
 
 export interface IdentifyUserData extends Partial<UserResponseDTO> {
   resetToken?: string;

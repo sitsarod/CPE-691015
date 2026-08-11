@@ -39,6 +39,8 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			StartedAt:         enrollment.StartedAt,
 			ExpiresAt:         enrollment.ExpiresAt,
 			DaysLeft:          dto.DaysLeft(enrollment.ExpiresAt),
+			GraceDaysLeft: dto.GraceDaysLeft(
+				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions),
 		},
 		OtherEnrollments: []dto.ReviewOtherEnrollment{},
 	}

@@ -240,7 +240,19 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
     }));
 
   // ---- การแจ้งเตือน ----
-  const overdue = billings.filter((b) => b.billingstatus === "overdue");
+  // "ค้างชำระ" = บิลที่ยังไม่ชำระ = ไม่ใช่ paid และไม่ใช่ waitcheck (คือ unfunded + overdue)
+  // เกินกำหนดจริงดูจาก due_date ไม่ใช่คอลัมน์ status เพราะระบบไม่มี job เลื่อน
+  // unfunded → overdue เมื่อเลยกำหนด (อ้างอิง backend enrollment_review.go)
+  const unpaidBillings = billings.filter(
+    (b) => b.billingstatus !== "paid" && b.billingstatus !== "waitcheck"
+  );
+  const isOverdue = (b: BillingDTO) => {
+    const due = new Date(b.billingdue_date);
+    return !Number.isNaN(due.getTime()) && due.getTime() < now.getTime();
+  };
+  const overdue = unpaidBillings.filter(isOverdue);
+  const pending = unpaidBillings.filter((b) => !isOverdue(b));
+  const sumAmt = (arr: BillingDTO[]) => arr.reduce((s, b) => s + (b.billingamount || 0), 0);
   const waitcheck = billings.filter((b) => b.billingstatus === "waitcheck");
 
   // คลาสที่นั่งใกล้เต็ม — แพ็กเกจที่ลงทะเบียนไปแล้ว >= 90% ของ max_seats
@@ -259,9 +271,17 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       tone: "danger",
       icon: AlertTriangle,
       title: "การชำระเงินเกินกำหนด",
-      body: `มีบิลค้างชำระเกินกำหนด ${overdue.length} รายการ รวม ${fmtBaht(
-        overdue.reduce((s, b) => s + (b.billingamount || 0), 0)
-      )}`,
+      body: `มีบิลค้างชำระเกินกำหนด ${overdue.length} รายการ รวม ${fmtBaht(sumAmt(overdue))}`,
+      action: "จัดการการชำระเงิน",
+      href: "/admin/payment",
+    });
+  }
+  if (pending.length > 0) {
+    alerts.push({
+      tone: "warning",
+      icon: CreditCard,
+      title: "บิลค้างชำระ (รอชำระเงิน)",
+      body: `มีบิลค้างชำระจากการสมัครคอร์ส ${pending.length} รายการ รวม ${fmtBaht(sumAmt(pending))}`,
       action: "จัดการการชำระเงิน",
       href: "/admin/payment",
     });
@@ -300,12 +320,20 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   // ---- ข้อมูลเชิงลึก ----
   const curKey = `${now.getFullYear()}-${now.getMonth()}`;
   const prevKey = `${now.getFullYear()}-${now.getMonth() - 1}`;
-  const newThisMonth = enrollments.filter(
-    (e) => monthKey(e.enrollment_date) === curKey
-  ).length;
-  const newLastMonth = enrollments.filter(
-    (e) => monthKey(e.enrollment_date) === prevKey
-  ).length;
+  // "นักเรียนใหม่" = ลูกค้าที่ชำระเงินค่าคอร์สแล้วเท่านั้น (ต้องจ่ายก่อนถึงเป็นนักเรียน)
+  // นับไม่ซ้ำต่อคนต่อเดือน — ใช้ email เป็นคีย์แบบเดียวกับ courseAgg ด้านบน
+  const paidBillingIds = new Set(paidBillings.map((b) => b.id));
+  const countNewStudents = (key: string) => {
+    const set = new Set<string>();
+    enrollments.forEach((e) => {
+      if (monthKey(e.enrollment_date) !== key) return;
+      if (e.billing_id == null || !paidBillingIds.has(e.billing_id)) return; // ยังไม่ชำระ → ไม่นับ
+      set.add(e.customer?.email?.trim() || `enrollment:${e.id}`);
+    });
+    return set.size;
+  };
+  const newThisMonth = countNewStudents(curKey);
+  const newLastMonth = countNewStudents(prevKey);
   const totalSessions = enrollments.reduce((s, e) => s + (e.total_sessions || 0), 0);
   const remainingSessions = enrollments.reduce(
     (s, e) => s + (e.remaining_sessions || 0),

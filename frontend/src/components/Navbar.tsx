@@ -3,17 +3,49 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+// section ที่มีเมนูใน Top bar (ต้องตรงกับ id ใน frontend/src/app/page.tsx)
+const SECTIONS = ["coaches", "courses", "about"];
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [active, setActive] = useState<string>("");
+
+  // scroll-spy: ไฮไลท์เมนูของส่วนที่กำลังเลื่อนดูอยู่ (เฉพาะหน้าแรก)
+  useEffect(() => {
+    if (pathname !== "/") {
+      setActive("");
+      return;
+    }
+    const els = SECTIONS.map((id) => document.getElementById(id)).filter(
+      (el): el is HTMLElement => el !== null
+    );
+    if (els.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) setActive(visible[0].target.id);
+      },
+      { rootMargin: "-45% 0px -50% 0px", threshold: 0 }
+    );
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [pathname]);
 
   if (
-    pathname?.startsWith("/customer") || 
-    pathname?.startsWith("/admin") || 
+    pathname?.startsWith("/customer") ||
+    pathname?.startsWith("/admin") ||
     pathname?.startsWith("/coach")
   ) {
-    return null; 
+    return null;
   }
+
+  const linkClass = (id: string) =>
+    `transition-colors ${
+      active === id ? "text-red-600 font-bold" : "text-black hover:text-red-600"
+    }`;
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-white h-24 flex items-center px-4 md:px-12 border-b border-gray-100">
@@ -32,13 +64,13 @@ export default function Navbar() {
 
         {/* เมนูฝั่งขวา */}
         <div className="hidden md:flex items-center gap-8 text-black text-lg font-medium">
-          <Link href="/#coaches" className="text-black hover:text-red-600 transition-colors">
+          <Link href="/#coaches" className={linkClass("coaches")}>
             บุคลากร
           </Link>
-          <Link href="/#courses" className="text-black hover:text-red-600 transition-colors">
+          <Link href="/#courses" className={linkClass("courses")}>
             คอร์สเรียน
           </Link>
-          <Link href="/#about" className="text-black hover:text-red-600 transition-colors">
+          <Link href="/#about" className={linkClass("about")}>
             เกี่ยวกับฉัน
           </Link>
 

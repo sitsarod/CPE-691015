@@ -29,6 +29,7 @@ type HomeContentDTO struct {
 	AboutTitle          string    `json:"about_title"`
 	AboutContent        string    `json:"about_content"`
 	AboutImageURL       string    `json:"about_image_url"`
+	MapEmbedURL         string    `json:"map_embed_url"`
 	CoachesTitle        string    `json:"coaches_title"`
 	CoachesSubtitle     string    `json:"coaches_subtitle"`
 	CoursesTitle        string    `json:"courses_title"`
@@ -36,6 +37,11 @@ type HomeContentDTO struct {
 	ShowFeaturedReviews bool      `json:"show_featured_reviews"`
 	ReviewsTitle        string    `json:"reviews_title"`
 	ReviewsSubtitle     string    `json:"reviews_subtitle"`
+	FacebookURL         string    `json:"facebook_url"`
+	InstagramURL        string    `json:"instagram_url"`
+	TiktokURL           string    `json:"tiktok_url"`
+	YoutubeURL          string    `json:"youtube_url"`
+	LineURL             string    `json:"line_url"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
@@ -52,6 +58,7 @@ type UpdateHomeContentReq struct {
 	AboutTitle          *string `json:"about_title"`
 	AboutContent        *string `json:"about_content"`
 	AboutImageURL       *string `json:"about_image_url"`
+	MapEmbedURL         *string `json:"map_embed_url"`
 	CoachesTitle        *string `json:"coaches_title"`
 	CoachesSubtitle     *string `json:"coaches_subtitle"`
 	CoursesTitle        *string `json:"courses_title"`
@@ -59,6 +66,11 @@ type UpdateHomeContentReq struct {
 	ShowFeaturedReviews *bool   `json:"show_featured_reviews"`
 	ReviewsTitle        *string `json:"reviews_title"`
 	ReviewsSubtitle     *string `json:"reviews_subtitle"`
+	FacebookURL         *string `json:"facebook_url"`
+	InstagramURL        *string `json:"instagram_url"`
+	TiktokURL           *string `json:"tiktok_url"`
+	YoutubeURL          *string `json:"youtube_url"`
+	LineURL             *string `json:"line_url"`
 }
 
 // CreateHeroSlideReq เพิ่มรูปสไลด์ใหม่

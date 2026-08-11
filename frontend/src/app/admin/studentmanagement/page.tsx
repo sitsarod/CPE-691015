@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, RefreshCw, GraduationCap, Mail, Phone, UserRound, AlertCircle, Search } from "lucide-react";
+import { RefreshCw, GraduationCap, Phone, UserRound, AlertCircle, Search, BookOpen, CalendarClock } from "lucide-react";
 import {
   getActiveStudentsAPI,
   getUserProfileAPI,
@@ -11,6 +11,7 @@ import {
 import Button from "@/components/Button";
 import { SummaryCard, RowActionMenu } from "@/components/admin/ManagementUI";
 import { ViewMemberModal } from "@/components/admin/modals/ViewMemberModal";
+import StudentEnrollmentsModal from "@/components/admin/modals/StudentEnrollmentsModal";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
 const getId = (item: any): number => item?.id ?? item?.ID ?? 0;
@@ -25,6 +26,9 @@ export default function StudentManagementPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<any>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+  const [enrollmentsOf, setEnrollmentsOf] = useState<StudentListResponseDTO | null>(null);
+  const [showGraceOnly, setShowGraceOnly] = useState(false);
 
   const loadStudents = async () => {
     try {
@@ -70,20 +74,25 @@ export default function StudentManagementPage() {
     }
   };
 
-  const filteredStudents = students.filter((s) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      getId(s)?.toString().includes(term) ||
-      s.firstName?.toLowerCase().includes(term) ||
-      s.lastName?.toLowerCase().includes(term) ||
-      s.nickname?.toLowerCase().includes(term) ||
-      s.email?.toLowerCase().includes(term)
-    );
-  });
+
+  const graceStudents = students.filter((s) => (s.graceEnrollments ?? 0) > 0);
+
+  const filteredStudents = students
+    .filter((s) => (showGraceOnly ? (s.graceEnrollments ?? 0) > 0 : true))
+    .filter((s) => {
+      const term = searchTerm.toLowerCase();
+      return (
+        getId(s)?.toString().includes(term) ||
+        s.firstName?.toLowerCase().includes(term) ||
+        s.lastName?.toLowerCase().includes(term) ||
+        s.nickname?.toLowerCase().includes(term) ||
+        s.email?.toLowerCase().includes(term)
+      );
+    });
 
   const stats = {
     total: students.length,
-    withEmail: students.filter((s) => !!s.email).length,
+    grace: graceStudents.length,
     withPhone: students.filter((s) => !!s.phoneNumber).length,
     withNickname: students.filter((s) => !!s.nickname).length,
   };
@@ -113,10 +122,35 @@ export default function StudentManagementPage() {
       render: (item) => <span className="text-gray-600">{item.phoneNumber || "-"}</span>,
     },
     {
+      header: "สิทธิ์เรียน",
+      render: (item) =>
+        (item.graceEnrollments ?? 0) > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
+            <CalendarClock className="h-3 w-3" />
+            รอขยายสิทธิ์ {item.graceEnrollments} คอร์ส
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">ปกติ</span>
+        ),
+    },
+    {
       header: "การจัดการ",
-      className: "text-right w-20",
+      className: "text-right w-44",
       render: (item) => (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setEnrollmentsOf(item)}
+            title="ดูคอร์สและขยายสิทธิ์"
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
+              (item.graceEnrollments ?? 0) > 0
+                ? "border-[#CC0000] bg-red-50 text-[#CC0000] hover:bg-red-100"
+                : "border-gray-300 bg-white text-gray-600 hover:border-[#CC0000] hover:text-[#CC0000]"
+            }`}
+          >
+            <BookOpen className="h-4 w-4" />
+            คอร์สเรียน
+          </button>
           <RowActionMenu onView={() => openView(item)} onDelete={() => handleDelete(item)} />
         </div>
       ),
@@ -142,7 +176,7 @@ export default function StudentManagementPage() {
       {/* ===== Summary Cards ===== */}
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="นักเรียนทั้งหมด" value={stats.total} icon={GraduationCap} tint="bg-rose-100 text-rose-700" />
-        <SummaryCard label="ระบุอีเมล" value={stats.withEmail} icon={Mail} tint="bg-sky-100 text-sky-700" />
+        <SummaryCard label="รอขยายสิทธิ์" value={stats.grace} icon={CalendarClock} tint="bg-red-100 text-red-700" />
         <SummaryCard label="ระบุเบอร์โทร" value={stats.withPhone} icon={Phone} tint="bg-emerald-100 text-emerald-700" />
         <SummaryCard label="ระบุชื่อเล่น" value={stats.withNickname} icon={UserRound} tint="bg-violet-100 text-violet-700" />
       </div>
@@ -152,6 +186,31 @@ export default function StudentManagementPage() {
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>
+      )}
+
+      {graceStudents.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowGraceOnly((v) => !v)}
+          className={`mt-6 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+            showGraceOnly
+              ? "border-red-300 bg-red-100"
+              : "border-red-200 bg-red-50 hover:bg-red-100"
+          }`}
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-red-900">
+              มี {graceStudents.length} คนที่คอร์สหมดอายุแล้วแต่ยังเรียนไม่ครบ
+            </p>
+            <p className="mt-0.5 text-sm text-red-700">
+              ติดต่อกลับเพื่อขยายเวลาหรือเพิ่มจำนวนครั้งให้ก่อนพ้นช่วงผ่อนผัน ·{" "}
+              <span className="font-semibold underline">
+                {showGraceOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}
+              </span>
+            </p>
+          </div>
+        </button>
       )}
 
       {/* ===== Search Toolbar (สไตล์สอดคล้องกับการ์ด) ===== */}
@@ -179,12 +238,24 @@ export default function StudentManagementPage() {
       />
 
       {/* ===== View Modal ===== */}
-      <ViewMemberModal 
-        isOpen={modalMode === "view"} 
-        onClose={closeModal} 
-        selected={selected} 
-        isLoadingDetail={isLoadingDetail} 
-        getId={getId} 
+      <ViewMemberModal
+        isOpen={modalMode === "view"}
+        onClose={closeModal}
+        selected={selected}
+        isLoadingDetail={isLoadingDetail}
+        getId={getId}
+      />
+
+      <StudentEnrollmentsModal
+        userId={enrollmentsOf ? getId(enrollmentsOf) : null}
+        studentName={
+          enrollmentsOf
+            ? `${enrollmentsOf.firstName} ${enrollmentsOf.lastName}`
+            : ""
+        }
+        onClose={() => setEnrollmentsOf(null)}
+        // โหลดรายชื่อใหม่เพราะธง "รอขยายสิทธิ์" อาจหายไปหลังขยายให้แล้ว
+        onChanged={loadStudents}
       />
     </div>
   );

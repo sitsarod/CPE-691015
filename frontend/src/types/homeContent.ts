@@ -24,6 +24,7 @@ export interface HomeContent {
   about_title: string;
   about_content: string;
   about_image_url: string;
+  map_embed_url: string;
   coaches_title: string;
   coaches_subtitle: string;
   courses_title: string;
@@ -31,6 +32,11 @@ export interface HomeContent {
   show_featured_reviews: boolean;
   reviews_title: string;
   reviews_subtitle: string;
+  facebook_url: string;
+  instagram_url: string;
+  tiktok_url: string;
+  youtube_url: string;
+  line_url: string;
   updated_at: string;
 }
 
@@ -45,6 +51,7 @@ export interface UpdateHomeContentReq {
   about_title?: string;
   about_content?: string;
   about_image_url?: string;
+  map_embed_url?: string;
   coaches_title?: string;
   coaches_subtitle?: string;
   courses_title?: string;
@@ -52,6 +59,11 @@ export interface UpdateHomeContentReq {
   show_featured_reviews?: boolean;
   reviews_title?: string;
   reviews_subtitle?: string;
+  facebook_url?: string;
+  instagram_url?: string;
+  tiktok_url?: string;
+  youtube_url?: string;
+  line_url?: string;
 }
 
 export interface CreateHeroSlideReq {

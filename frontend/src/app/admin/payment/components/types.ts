@@ -4,6 +4,7 @@ export interface BackendUser {
   lastName: string;
   email: string;
   role: string;
+  customer?: { nickname?: string } | null;
 }
 
 export interface BillingTypeDTO {

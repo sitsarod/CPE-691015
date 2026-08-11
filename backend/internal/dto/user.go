@@ -35,8 +35,10 @@ type StudentListResponseDTO struct {
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
 	Email       string `json:"email"`
-	Nickname    string `json:"nickname"`    
-	PhoneNumber string `json:"phoneNumber"` 
+	Nickname    string `json:"nickname"`
+	PhoneNumber string `json:"phoneNumber"`
+
+	GraceEnrollments int64 `json:"graceEnrollments"`
 }
 
 type UpdateProfileInput struct {

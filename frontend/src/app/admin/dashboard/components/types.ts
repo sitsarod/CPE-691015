@@ -30,7 +30,7 @@ export interface ActivityRow {
 }
 
 export interface AlertRow {
-  tone: "danger" | "info" | "success";
+  tone: "danger" | "warning" | "info" | "success";
   icon: LucideIcon;
   title: string;
   body: string;

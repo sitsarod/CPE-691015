@@ -84,6 +84,9 @@ func (s *homeContentService) UpdateHomeContent(req *dto.UpdateHomeContentReq) (*
 	if req.AboutImageURL != nil {
 		content.AboutImageURL = *req.AboutImageURL
 	}
+	if req.MapEmbedURL != nil {
+		content.MapEmbedURL = *req.MapEmbedURL
+	}
 	if req.CoachesTitle != nil {
 		content.CoachesTitle = *req.CoachesTitle
 	}
@@ -104,6 +107,21 @@ func (s *homeContentService) UpdateHomeContent(req *dto.UpdateHomeContentReq) (*
 	}
 	if req.ReviewsSubtitle != nil {
 		content.ReviewsSubtitle = *req.ReviewsSubtitle
+	}
+	if req.FacebookURL != nil {
+		content.FacebookURL = *req.FacebookURL
+	}
+	if req.InstagramURL != nil {
+		content.InstagramURL = *req.InstagramURL
+	}
+	if req.TiktokURL != nil {
+		content.TiktokURL = *req.TiktokURL
+	}
+	if req.YoutubeURL != nil {
+		content.YoutubeURL = *req.YoutubeURL
+	}
+	if req.LineURL != nil {
+		content.LineURL = *req.LineURL
 	}
 
 	if err := s.db.Save(content).Error; err != nil {
@@ -250,6 +268,7 @@ func mapToHomeContentDTO(m *models.HomeContent) dto.HomeContentDTO {
 		AboutTitle:          m.AboutTitle,
 		AboutContent:        m.AboutContent,
 		AboutImageURL:       m.AboutImageURL,
+		MapEmbedURL:         m.MapEmbedURL,
 		CoachesTitle:        m.CoachesTitle,
 		CoachesSubtitle:     m.CoachesSubtitle,
 		CoursesTitle:        m.CoursesTitle,
@@ -257,6 +276,11 @@ func mapToHomeContentDTO(m *models.HomeContent) dto.HomeContentDTO {
 		ShowFeaturedReviews: m.ShowFeaturedReviews,
 		ReviewsTitle:        m.ReviewsTitle,
 		ReviewsSubtitle:     m.ReviewsSubtitle,
+		FacebookURL:         m.FacebookURL,
+		InstagramURL:        m.InstagramURL,
+		TiktokURL:           m.TiktokURL,
+		YoutubeURL:          m.YoutubeURL,
+		LineURL:             m.LineURL,
 		UpdatedAt:           m.UpdatedAt,
 	}
 }

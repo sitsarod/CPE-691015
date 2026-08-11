@@ -72,4 +72,4 @@ export async function deleteUserAPI(userId: number): Promise<void> {
     method: "DELETE",
   });
 }
-export type { StudentListResponseDTO };
+export type { StudentListResponseDTO, UserProfileResponseDTO };

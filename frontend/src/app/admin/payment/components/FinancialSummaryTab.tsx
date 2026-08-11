@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Calendar, CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3 } from 'lucide-react';
 import { BillingDTO, Expense } from './types';
 import StatsCard from '@/components/StatsCard';
@@ -26,75 +26,72 @@ export default function FinancialSummaryTab({
   const [summaryFilterStatus, setSummaryFilterStatus] = useState<'all' | 'pending' | 'paid' | 'unpaid'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Helper to check if date is in selected timeframe
-  const isDateInTimeframe = useCallback((dateStr: string) => {
-    if (!dateStr) return false;
-    const targetDate = new Date(dateStr);
-    const targetTime = targetDate.getTime();
+  // คำนวณขอบเขตช่วงเวลา [start, end] ครั้งเดียวต่อการเปลี่ยนตัวกรอง
+  // (เดิมคำนวณใหม่ต่อบิลทุกใบ) แล้วให้การเช็คเหลือแค่เทียบตัวเลข
+  const timeframeWindow = useMemo(() => {
     const now = new Date();
-
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
 
     if (summaryTimeframe === 'today') {
-      return targetTime >= startOfToday && targetTime <= endOfToday;
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      return { start: startOfToday, end: endOfToday };
     }
-
     if (summaryTimeframe === 'week') {
       const tempNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const day = tempNow.getDay();
       const diff = tempNow.getDate() - day + (day === 0 ? -6 : 1);
       const startOfWeek = new Date(tempNow.setDate(diff));
       startOfWeek.setHours(0, 0, 0, 0);
-      return targetTime >= startOfWeek.getTime() && targetTime <= endOfToday;
+      return { start: startOfWeek.getTime(), end: endOfToday };
     }
-
     if (summaryTimeframe === 'month') {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       startOfMonth.setHours(0, 0, 0, 0);
-      return targetTime >= startOfMonth.getTime() && targetTime <= endOfToday;
+      return { start: startOfMonth.getTime(), end: endOfToday };
     }
-
     if (summaryTimeframe === 'year') {
       const startOfYear = new Date(now.getFullYear(), 0, 1);
       startOfYear.setHours(0, 0, 0, 0);
-      return targetTime >= startOfYear.getTime() && targetTime <= endOfToday;
+      return { start: startOfYear.getTime(), end: endOfToday };
     }
-
     if (summaryTimeframe === 'custom') {
       const start = summaryStartDate ? new Date(summaryStartDate) : null;
       if (start) start.setHours(0, 0, 0, 0);
       const end = summaryEndDate ? new Date(summaryEndDate) : null;
       if (end) end.setHours(23, 59, 59, 999);
-
-      const startTime = start ? start.getTime() : 0;
-      const endTime = end ? end.getTime() : Infinity;
-
-      return targetTime >= startTime && targetTime <= endTime;
+      return { start: start ? start.getTime() : 0, end: end ? end.getTime() : Infinity };
     }
-
-    return true;
+    return { start: -Infinity, end: Infinity };
   }, [summaryTimeframe, summaryStartDate, summaryEndDate]);
 
-  // Financial Stats
+  // Helper to check if date is in selected timeframe
+  const isDateInTimeframe = useCallback((dateStr: string) => {
+    if (!dateStr) return false;
+    const t = new Date(dateStr).getTime();
+    return t >= timeframeWindow.start && t <= timeframeWindow.end;
+  }, [timeframeWindow]);
+
+  // Financial Stats — วนข้อมูลรอบเดียวสะสมทุกยอดพร้อมกัน (single pass)
   const summaryStats = useMemo(() => {
-    const tfBillings = billings.filter(b => isDateInTimeframe(b.created_at || b.billingdue_date));
-    const tfExpenses = expenses.filter(e => isDateInTimeframe(e.expensedate));
-
-    const totalPaid = tfBillings.filter(b => b.billingstatus === 'paid').reduce((sum, b) => sum + b.billingamount, 0);
-    const totalPending = tfBillings.filter(b => b.billingstatus === 'waitcheck').reduce((sum, b) => sum + b.billingamount, 0);
-    const totalInvoiced = tfBillings.reduce((sum, b) => sum + b.billingamount, 0);
-    const totalUnpaid = tfBillings.filter(b => b.billingstatus === 'unfunded' || b.billingstatus === 'overdue').reduce((sum, b) => sum + b.billingamount, 0);
-
-    const totalExpenses = tfExpenses.reduce((sum, e) => sum + e.expenseamount, 0);
-    const netRevenue = totalPaid - totalExpenses;
-
+    let totalPaid = 0;
+    let totalPending = 0;
+    let totalInvoiced = 0;
+    let totalUnpaid = 0;
     const coursesBreakdown: { [key: string]: number } = {};
-    tfBillings.forEach(b => {
-      const typeName = b.billing_type?.billingtypename || "อื่นๆ";
-      coursesBreakdown[typeName] = (coursesBreakdown[typeName] || 0) + b.billingamount;
-    });
 
+    for (const b of billings) {
+      if (!isDateInTimeframe(b.created_at || b.billingdue_date)) continue;
+      const amt = b.billingamount;
+      totalInvoiced += amt;
+      if (b.billingstatus === 'paid') totalPaid += amt;
+      else if (b.billingstatus === 'waitcheck') totalPending += amt;
+      else if (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') totalUnpaid += amt;
+
+      const typeName = b.billing_type?.billingtypename || "อื่นๆ";
+      coursesBreakdown[typeName] = (coursesBreakdown[typeName] || 0) + amt;
+    }
+
+    let totalExpenses = 0;
     const expensesBreakdown: { [key: string]: number } = {
       coach_wages: 0,
       court_rental: 0,
@@ -102,9 +99,13 @@ export default function FinancialSummaryTab({
       advertising: 0,
       other: 0
     };
-    tfExpenses.forEach(e => {
+    for (const e of expenses) {
+      if (!isDateInTimeframe(e.expensedate)) continue;
+      totalExpenses += e.expenseamount;
       expensesBreakdown[e.expensetype] = (expensesBreakdown[e.expensetype] || 0) + e.expenseamount;
-    });
+    }
+
+    const netRevenue = totalPaid - totalExpenses;
 
     return {
       totalPaid,
@@ -174,6 +175,20 @@ export default function FinancialSummaryTab({
         return matchesSearch && matchesStatus;
       });
   }, [billings, searchTerm, summaryFilterStatus, isDateInTimeframe]);
+
+  // แบ่งหน้าตารางรายการบิล 10 รายการ/หน้า (ลดภาระการเรนเดอร์เมื่อบิลเยอะ)
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+  // รีเซ็ตกลับหน้าแรกเมื่อฟิลเตอร์/ช่วงเวลา/คำค้นเปลี่ยน
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, summaryFilterStatus, summaryTimeframe, summaryStartDate, summaryEndDate]);
+  const totalPages = Math.max(1, Math.ceil(filteredSummaryLogs.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedLogs = useMemo(
+    () => filteredSummaryLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredSummaryLogs, safePage]
+  );
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -371,7 +386,7 @@ export default function FinancialSummaryTab({
                   placeholder="ค้นหา..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs outline-none focus:bg-white focus:border-[#CD0D13] text-slate-800"
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white focus:border-[#CD0D13] text-slate-800"
                 />
                 <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
               </div>
@@ -379,7 +394,7 @@ export default function FinancialSummaryTab({
               <select
                 value={summaryFilterStatus}
                 onChange={(e) => setSummaryFilterStatus(e.target.value as 'all' | 'pending' | 'paid' | 'unpaid')}
-                className="w-full sm:w-auto px-3 py-1.5 bg-slate-50 border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-700"
+                className="w-full sm:w-auto px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white text-slate-700"
               >
                 <option value="all">สถานะ: ทั้งหมด</option>
                 <option value="paid">ชำระแล้ว</option>
@@ -390,19 +405,19 @@ export default function FinancialSummaryTab({
           </div>
 
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
-                  <th className="py-3 px-5">รหัสบิล</th>
-                  <th className="py-3 px-5">ชื่อผู้เรียน</th>
-                  <th className="py-3 px-5">ประเภทค่าใช้จ่าย</th>
-                  <th className="py-3 px-5">รายละเอียด</th>
-                  <th className="py-3 px-5 text-right">ยอดรวม</th>
-                  <th className="py-3 px-5">วันที่ครบกำหนด</th>
-                  <th className="py-3 px-5">สถานะ</th>
+            <table className="w-full min-w-[720px] text-left border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                  <th className="py-3 px-4 whitespace-nowrap">รหัสบิล</th>
+                  <th className="py-3 px-4 whitespace-nowrap">ชื่อผู้เรียน</th>
+                  <th className="py-3 px-4 whitespace-nowrap">ประเภทค่าใช้จ่าย</th>
+                  <th className="py-3 px-4 whitespace-nowrap">รายละเอียด</th>
+                  <th className="py-3 px-4 text-right whitespace-nowrap">ยอดรวม</th>
+                  <th className="py-3 px-4 whitespace-nowrap">วันที่ครบกำหนด</th>
+                  <th className="py-3 px-4 whitespace-nowrap">สถานะ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-100">
                 {filteredSummaryLogs.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
@@ -410,22 +425,22 @@ export default function FinancialSummaryTab({
                     </td>
                   </tr>
                 ) : (
-                  filteredSummaryLogs.map(b => (
-                    <tr key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="hover:bg-slate-50/50 text-xs transition-colors">
-                      <td className="py-3.5 px-5 font-semibold text-slate-550">BILL-{b.id}</td>
-                      <td className="py-3.5 px-5 font-bold text-slate-800">
+                  pagedLogs.map(b => (
+                    <tr key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/60 text-xs transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-slate-500 whitespace-nowrap tabular-nums">BILL-{b.id}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">
                         {b.customer ? `${b.customer.firstName} ${b.customer.lastName}` : "ผู้เรียน"}
                       </td>
-                      <td className="py-3.5 px-5 text-slate-600">{b.billing_type?.billingtypename || "ทั่วไป"}</td>
-                      <td className="py-3.5 px-5 text-slate-505 text-slate-500 max-w-xs truncate" title={b.billingdescription}>
+                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{b.billing_type?.billingtypename || "ทั่วไป"}</td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate" title={b.billingdescription}>
                         {b.billingdescription}
                       </td>
-                      <td className="py-3.5 px-5 text-right font-bold text-slate-805 text-slate-800">
+                      <td className="py-3.5 px-4 text-right font-bold text-slate-800 whitespace-nowrap tabular-nums">
                         ฿{b.billingamount.toLocaleString()}
                       </td>
-                      <td className="py-3.5 px-5 text-slate-505 text-slate-500">{b.billingdue_date?.split('T')[0]}</td>
-                      <td className="py-3.5 px-5">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{b.billingdue_date?.split('T')[0]}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-block whitespace-nowrap text-[9px] font-bold px-2.5 py-1 rounded-full ${
                           b.billingstatus === 'paid'
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                             : b.billingstatus === 'waitcheck'
@@ -441,6 +456,34 @@ export default function FinancialSummaryTab({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination controls */}
+          {filteredSummaryLogs.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 text-xs">
+              <span className="text-slate-500">
+                แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredSummaryLogs.length)} จาก {filteredSummaryLogs.length} รายการ
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ก่อนหน้า
+                </button>
+                <span className="text-slate-600 font-semibold whitespace-nowrap">หน้า {safePage}/{totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ถัดไป
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Course Income Breakdown */}

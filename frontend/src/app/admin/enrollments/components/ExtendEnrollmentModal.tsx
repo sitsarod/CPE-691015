@@ -3,23 +3,32 @@
 import { useState } from "react";
 import { X, CalendarPlus, Loader2, AlertTriangle } from "lucide-react";
 import { extendEnrollment } from "@/services/enrollmentAPI";
-import type { AdminEnrollment } from "@/types/enrollment";
 import { formatThaiDate } from "@/components/course/expiryUtils";
 
+export interface ExtendTarget {
+  id: number;
+  status: string;
+  expires_at: string | null;
+  total_sessions: number;
+  remaining_sessions: number;
+  /** ใช้แสดงหัวโมดัลให้แอดมินรู้ว่ากำลังขยายให้ใคร คอร์สอะไร */
+  studentName?: string;
+  courseName?: string;
+}
+
 interface ExtendEnrollmentModalProps {
-  enrollment: AdminEnrollment | null;
+  enrollment: ExtendTarget | null;
   onClose: () => void;
   onSuccess: () => void;
 }
-
-const QUICK_DAYS = [7, 14, 30];
 
 export default function ExtendEnrollmentModal({
   enrollment,
   onClose,
   onSuccess,
 }: ExtendEnrollmentModalProps) {
-  const [days, setDays] = useState<number | "">(30);
+  const [days, setDays] = useState<number | "">("");
+  const [sessions, setSessions] = useState<number | "">("");
   const [reason, setReason] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +53,11 @@ export default function ExtendEnrollmentModal({
       setIsSaving(true);
       await extendEnrollment(
         enrollment.id,
-        { extend_days: Number(days), reason: reason.trim() },
+        {
+          extend_days: days === "" ? 0 : Number(days),
+          extend_sessions: sessions === "" ? 0 : Number(sessions),
+          reason: reason.trim(),
+        },
         token
       );
       onSuccess();
@@ -56,8 +69,14 @@ export default function ExtendEnrollmentModal({
     }
   };
 
+  const daysValue = days === "" ? 0 : Number(days);
+  const sessionsValue = sessions === "" ? 0 : Number(sessions);
+
   const isValid =
-    days !== "" && Number(days) >= 1 && Number(days) <= 366 && reason.trim().length >= 3;
+    (daysValue > 0 || sessionsValue > 0) &&
+    daysValue <= 366 &&
+    sessionsValue <= 100 &&
+    reason.trim().length >= 3;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -69,8 +88,9 @@ export default function ExtendEnrollmentModal({
               ขยายระยะเวลาเรียน
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              {enrollment.customer?.first_name} {enrollment.customer?.last_name} ·{" "}
-              {enrollment.package?.course?.course_name}
+              {[enrollment.studentName, enrollment.courseName]
+                .filter(Boolean)
+                .join(" · ") || `การลงทะเบียน #${enrollment.id}`}
             </p>
           </div>
           <button
@@ -109,46 +129,59 @@ export default function ExtendEnrollmentModal({
                   {formatThaiDate(enrollment.expires_at)}
                 </span>
               </div>
+              <div className="mt-1 flex justify-between">
+                <span className="text-gray-500">จำนวนครั้งคงเหลือ</span>
+                <span className="font-bold text-gray-900">
+                  {enrollment.remaining_sessions} จาก {enrollment.total_sessions} ครั้ง
+                </span>
+              </div>
               {/* บอกกติกาการนับให้ชัด เพราะสองกรณีให้ผลต่างกันและแอดมินคาดเดาเองไม่ได้ */}
               <p className="mt-1.5 text-xs leading-relaxed text-gray-400">
                 {enrollment.status === "expired"
-                  ? "ใบนี้หมดอายุแล้ว ระบบจะนับวันใหม่จากวันนี้และเปิดสิทธิ์เรียนกลับมาให้"
-                  : "ระบบจะนับต่อจากวันหมดอายุเดิม วันที่เหลืออยู่จะไม่หายไป"}
+                  ? "ใบนี้หมดอายุแล้ว ถ้าขยายเวลา ระบบจะนับวันใหม่จากวันนี้และเปิดสิทธิ์เรียนกลับมาให้"
+                  : "ถ้าขยายเวลา ระบบจะนับต่อจากวันหมดอายุเดิม วันที่เหลืออยู่จะไม่หายไป"}
               </p>
             </div>
 
-            <div className="mb-4">
-              <label className="mb-1 block text-sm font-semibold text-gray-700">
-                จำนวนวันที่ขยาย <span className="text-red-500">*</span>
-              </label>
-              <div className="mb-2 flex gap-2">
-                {QUICK_DAYS.map((d) => (
-                  <button
-                    key={`quick-${d}`}
-                    type="button"
-                    onClick={() => setDays(d)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                      days === d
-                        ? "border-[#CC0000] bg-red-50 text-[#CC0000]"
-                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {d} วัน
-                  </button>
-                ))}
+
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  ขยายเวลา (วัน)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={366}
+                  value={days}
+                  onChange={(e) =>
+                    setDays(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  placeholder="เว้นว่าง = ไม่ขยาย"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
+                />
               </div>
-              <input
-                type="number"
-                min={1}
-                max={366}
-                required
-                value={days}
-                onChange={(e) =>
-                  setDays(e.target.value === "" ? "" : Number(e.target.value))
-                }
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
-              />
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                  เพิ่มจำนวนครั้ง
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={sessions}
+                  onChange={(e) =>
+                    setSessions(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  placeholder="เว้นว่าง = ไม่เพิ่ม"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
+                />
+              </div>
             </div>
+
+            <p className="mb-4 -mt-2 text-xs text-gray-400">
+              กรอกอย่างน้อยหนึ่งช่อง · การเพิ่มจำนวนครั้งจะเพิ่มทั้งโควตารวมและครั้งที่เหลือ
+            </p>
 
             <div className="mb-5">
               <label className="mb-1 block text-sm font-semibold text-gray-700">
