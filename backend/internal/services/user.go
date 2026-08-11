@@ -1,11 +1,12 @@
 package services
 
 import (
-	
+
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
 	"errors"
 	"strings"
+	"time"
 	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -21,14 +22,70 @@ func NewUserService(db *gorm.DB) *UserService {
 
 // GetAllUsers retrieves all users from the database
 func (s *UserService) GetAllUsers() ([]models.User, error) {
+	// อัปเดตสถานะ active/inactive ให้เป็นปัจจุบันก่อนดึงรายชื่อ (best-effort ไม่ให้ล้มทั้ง request)
+	_ = s.SyncCustomerStatuses()
+
 	var users []models.User
-	err := s.db.Find(&users).Error
+	// Preload("Customer") เพื่อให้ได้ status/nickname/phone ของลูกค้ามาแสดงในหน้า admin ด้วย
+	err := s.db.Preload("Customer").Find(&users).Error
 	return users, err
+}
+
+// SyncCustomerStatuses ปรับสถานะลูกค้าอัตโนมัติตามการมี enrollment ที่ยัง active อยู่
+//
+//   - ตั้งเป็น "inactive": ลูกค้าที่ตอนนี้ไม่มี enrollment ที่ active (remaining_sessions > 0) เหลือ
+//     และไม่มีความเคลื่อนไหวของ enrollment เกิน 3 เดือน (ถ้าไม่เคยลงเรียนเลย ยึดวันที่สมัครเป็นเกณฑ์)
+//   - ตั้งกลับเป็น "active": ลูกค้าที่เคย inactive แต่กลับมามี enrollment active อีกครั้ง
+//
+// เกณฑ์เวลาใช้ enrollments.updated_at เป็นตัวแทน "เวลาที่ enrollment เปลี่ยนสถานะครั้งล่าสุด"
+// (เช่น ตอน remaining_sessions หมด หรือถูกปิดเป็น completed/cancelled) ซึ่งเป็น field เวลาที่มีอยู่จริง
+//
+// คำนวณ cutoff ใน Go แล้วส่งเป็น parameter เพื่อไม่ผูกกับ syntax INTERVAL ของ DB เจ้าใดเจ้าหนึ่ง
+func (s *UserService) SyncCustomerStatuses() error {
+	now := time.Now()
+	cutoff := now.AddDate(0, -3, 0) // ย้อนหลัง 3 เดือน
+
+	// 1) ปิดใช้งานลูกค้าที่ไม่มี enrollment active มานานเกิน 3 เดือน
+	//    ค่า 'active'/'inactive' ตรงกับ models.CustomerStatusActive/Inactive และ models.EnrollmentStatusActive
+	const deactivate = `
+		UPDATE customers
+		SET status = 'inactive', updated_at = ?
+		WHERE deleted_at IS NULL
+		  AND status = 'active'
+		  AND id NOT IN (
+			SELECT customer_id FROM enrollments
+			WHERE deleted_at IS NULL AND status = 'active' AND remaining_sessions > 0
+		  )
+		  AND COALESCE(
+			(SELECT MAX(e.updated_at) FROM enrollments e
+			  WHERE e.customer_id = customers.id AND e.deleted_at IS NULL),
+			customers.created_at
+		  ) < ?`
+	if err := s.db.Exec(deactivate, now, cutoff).Error; err != nil {
+		return err
+	}
+
+	// 2) เปิดใช้งานคืนให้ลูกค้าที่กลับมามี enrollment active อีกครั้ง
+	const reactivate = `
+		UPDATE customers
+		SET status = 'active', updated_at = ?
+		WHERE deleted_at IS NULL
+		  AND status = 'inactive'
+		  AND id IN (
+			SELECT customer_id FROM enrollments
+			WHERE deleted_at IS NULL AND status = 'active' AND remaining_sessions > 0
+		  )`
+	if err := s.db.Exec(reactivate, now).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *UserService) GetUserByRole(role models.UserRole) ([]models.User, error) {
 	var users []models.User
-	err := s.db.Where("role = ?", role).Find(&users).Error
+	// Preload Customer เพื่อให้มี nickname ติดมาด้วย (ใช้แสดงในหน้าออกบิล)
+	err := s.db.Preload("Customer").Where("role = ?", role).Find(&users).Error
 	return users, err
 }
 
@@ -113,12 +170,27 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
         if input.PhoneNumber != "" {
             customerUpdate["phone_number"] = input.PhoneNumber
         }
-        
+        if input.ParentEmail != "" {
+            customerUpdate["parent_email"] = input.ParentEmail
+        }
+        if input.ParentPhoneNumber != "" {
+            customerUpdate["parent_phone_number"] = input.ParentPhoneNumber
+        }
+        // LineID / Facebook ไม่บังคับ จึงยอมให้ส่งค่าว่างมาเพื่อลบข้อมูลเดิมได้
+        if input.LineID != nil {
+            customerUpdate["line_id"] = *input.LineID
+        }
+        if input.Facebook != nil {
+            customerUpdate["facebook"] = *input.Facebook
+        }
+
         if len(customerUpdate) > 0 {
-            s.db.Model(user.Customer).Updates(customerUpdate)
+            if err := s.db.Model(user.Customer).Updates(customerUpdate).Error; err != nil {
+                return nil, err
+            }
         }
     } else if user.Role == "coach" {
-        
+
     }
 
    
@@ -144,6 +216,8 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 	}
 
 
+	expireStaleEnrollments(s.db)
+
 	var count int64
 	err = s.db.Model(&models.Enrollment{}).
 		Where("customer_id = ? AND status = ? AND remaining_sessions > ?", customer.ID, models.EnrollmentStatusActive, 0).
@@ -158,14 +232,39 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 func (s *UserService) GetActiveStudents() ([]models.User, error) {
     var users []models.User
 
+    expireStaleEnrollments(s.db)
+
+    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
+
     err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
         Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
-        Where("enrollments.status = ? AND enrollments.remaining_sessions > ?", models.EnrollmentStatusActive, 0).
+        Where("enrollments.deleted_at IS NULL AND enrollments.remaining_sessions > 0").
+        Where(
+            s.db.Where("enrollments.status = ?", models.EnrollmentStatusActive).
+                Or("enrollments.status = ? AND enrollments.expires_at > ?",
+                    models.EnrollmentStatusExpired, graceCutoff),
+        ).
         Group("users.id").
         Preload("Customer").
         Find(&users).Error
 
     return users, err
+}
+
+func (s *UserService) CountGraceEnrollments(userID uint) int64 {
+    customerID, err := ResolveCustomerID(s.db, userID)
+    if err != nil {
+        return 0
+    }
+
+    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
+
+    var count int64
+    s.db.Model(&models.Enrollment{}).
+        Where("customer_id = ? AND status = ? AND remaining_sessions > 0 AND expires_at > ?",
+            customerID, models.EnrollmentStatusExpired, graceCutoff).
+        Count(&count)
+    return count
 }
 
 // FindAccountByIdentifier ค้นหาบัญชีผู้ใช้จาก Email หรือ PhoneNumber

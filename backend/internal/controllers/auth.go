@@ -14,6 +14,7 @@ import (
 type AuthController interface {
 	Login(c *gin.Context)
 	Register(c *gin.Context)
+	Refresh(c *gin.Context)    // ขอ access token ใหม่ด้วย refresh token
 	SendOTP(c *gin.Context)    // 👈 เพิ่มใหม่
 	VerifyOTP(c *gin.Context)  // 👈 เพิ่มใหม่
 }
@@ -35,7 +36,7 @@ func (ctrl *authController) Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := ctrl.authService.Login(input)
+	token, refreshToken, user, err := ctrl.authService.Login(input)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -52,8 +53,9 @@ func (ctrl *authController) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "เข้าสู่ระบบสำเร็จคัป",
-		"token":   token,
+		"message":      "เข้าสู่ระบบสำเร็จคัป",
+		"token":        token,
+		"refreshToken": refreshToken,
 		"user": gin.H{
 			"id":        user.ID,
 			"firstName": user.FirstName,
@@ -99,15 +101,16 @@ func (ctrl *authController) Register(c *gin.Context) {
 		Password: rawPassword,
 	}
 
-	token, user, err := ctrl.authService.Login(loginInput)
+	token, refreshToken, user, err := ctrl.authService.Login(loginInput)
 	if err != nil {
 		c.JSON(http.StatusCreated, gin.H{"message": "สมัครสมาชิกสำเร็จแล้วคัป กรุณาไปหน้าเข้าสู่ระบบ"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "สมัครสมาชิกสำเร็จคัป",
-		"token":   token,
+		"message":      "สมัครสมาชิกสำเร็จคัป",
+		"token":        token,
+		"refreshToken": refreshToken,
 		"user": gin.H{
 			"id":        user.ID,
 			"firstName": user.FirstName,
@@ -119,6 +122,29 @@ func (ctrl *authController) Register(c *gin.Context) {
 				"qrImage":  qrBase64,
 			},
 		},
+	})
+}
+
+// Refresh รับ refresh token แล้วออก access token (+ refresh token) ชุดใหม่
+func (ctrl *authController) Refresh(c *gin.Context) {
+	var input struct {
+		RefreshToken string `json:"refreshToken" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ refresh token"})
+		return
+	}
+
+	token, refreshToken, err := ctrl.authService.Refresh(input.RefreshToken)
+	if err != nil {
+		// 401 เพื่อให้ฝั่ง client รู้ว่าต้องกลับไป login ใหม่
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":        token,
+		"refreshToken": refreshToken,
 	})
 }
 

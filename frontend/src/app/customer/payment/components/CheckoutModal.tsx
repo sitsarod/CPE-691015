@@ -48,6 +48,8 @@ export default function CheckoutModal({
   if (!isOpen) return null;
 
   const activeBankAccount = bankAccounts.find(b => b.is_active) || bankAccounts[0];
+  // ใช้เลขพร้อมเพย์ (ไม่ใช่เลขบัญชี) ในการสร้าง QR สแกนจ่าย — บัญชีที่ไม่มีเลขพร้อมเพย์จะสร้าง QR ไม่ได้
+  const promptPayID = activeBankAccount?.promptpay_id?.trim();
 
   const handleCopyText = (text: string, id: number) => {
     navigator.clipboard.writeText(text);
@@ -70,7 +72,7 @@ export default function CheckoutModal({
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="p-6 border-b border-gray-150 flex items-center justify-between bg-gray-50">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div>
             <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-[#CC0000]" />
@@ -92,9 +94,9 @@ export default function CheckoutModal({
         {/* Modal Scrollable Content */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {/* Total Amount Panel */}
-          <div className="bg-[#FFF0F0] border border-[#FFE0E0] rounded-2xl p-5 text-center">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">ยอดเงินที่ต้องชำระ</span>
-            <span className="text-3xl font-black text-[#CC0000] mt-1 block">
+          <div className="rounded-2xl border border-[#FFE0E0] bg-[#FFF0F0] p-5 text-center">
+            <span className="block text-xs font-bold uppercase tracking-wider text-gray-500">ยอดเงินที่ต้องชำระ</span>
+            <span className="mt-1 block text-3xl font-black text-[#CC0000]">
               ฿{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -108,7 +110,7 @@ export default function CheckoutModal({
                 className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   activePaymentMethod === "qr"
                     ? "bg-white text-[#CC0000] shadow-sm"
-                    : "text-gray-655 hover:text-black"
+                    : "text-gray-600 hover:text-black"
                 }`}
               >
                 <QrCode className="w-4 h-4" />
@@ -120,7 +122,7 @@ export default function CheckoutModal({
                 className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   activePaymentMethod === "bank_transfer"
                     ? "bg-white text-[#CC0000] shadow-sm"
-                    : "text-gray-655 hover:text-black"
+                    : "text-gray-600 hover:text-black"
                 }`}
               >
                 <Building2 className="w-4 h-4" />
@@ -134,25 +136,25 @@ export default function CheckoutModal({
             {activePaymentMethod === "qr" ? (
               // PromptPay Mode
               <div className="flex flex-col items-center space-y-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-inner">
-                <span className="text-xs font-bold text-gray-550">สแกนจ่ายเงินสะดวกผ่านพร้อมเพย์ QR Code</span>
+                <span className="text-xs font-bold text-gray-500">สแกนจ่ายเงินสะดวกผ่านพร้อมเพย์ QR Code</span>
                 
-                {activeBankAccount ? (
-                  <div className="relative p-2 bg-white rounded-xl border border-gray-150 shadow-sm flex flex-col items-center">
+                {promptPayID ? (
+                  <div className="relative p-2 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={`https://promptpay.io/${activeBankAccount.account_no}/${amount}.png`}
+                    <img
+                      src={`https://promptpay.io/${promptPayID}/${amount}.png`}
                       alt="PromptPay QR Code"
                       className="w-48 h-48 object-contain"
                     />
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-550 font-bold bg-gray-55 px-2 py-0.5 rounded">
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                       ระบุยอดเงิน ฿{amount.toLocaleString("th-TH")}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-xs text-gray-550">
+                  <div className="text-center py-6 text-xs text-gray-500">
                     <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2 animate-bounce" />
-                    ไม่พบข้อมูลพร้อมเพย์ของสโมสร กรุณาใช้วิธีโอนเงินธนาคาร
+                    บัญชีนี้ยังไม่ได้ตั้งค่าเลขพร้อมเพย์ กรุณาใช้วิธีโอนเงินธนาคาร
                   </div>
                 )}
                 
@@ -166,7 +168,7 @@ export default function CheckoutModal({
             ) : (
               // Bank Transfer Mode
               <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-650 block">บัญชีสำหรับโอนเงินธนาคาร:</span>
+                <span className="text-xs font-bold text-gray-600 block">บัญชีสำหรับโอนเงินธนาคาร:</span>
                 {bankAccounts.filter(b => b.is_active).length === 0 ? (
                   <div className="text-center py-6 text-xs text-gray-500 border border-gray-200 rounded-2xl">
                     ไม่พบบัญชีธนาคารสโมสร กรุณาติดต่อผู้ดูแลระบบ
@@ -186,7 +188,7 @@ export default function CheckoutModal({
                             <button
                               type="button"
                               onClick={() => handleCopyText(acc.account_no, acc.ID)}
-                              className="p-1 text-gray-400 hover:text-black hover:bg-gray-150 rounded cursor-pointer"
+                              className="p-1 text-gray-400 hover:text-black hover:bg-gray-200 rounded cursor-pointer"
                               title="คัดลอกเลขบัญชี"
                             >
                               {copySuccess[acc.ID] ? (
@@ -206,8 +208,8 @@ export default function CheckoutModal({
           </div>
 
           {/* Slip Uploader Section */}
-          <div className="border-t border-gray-150 pt-6 space-y-3">
-            <span className="text-xs font-bold text-gray-650 block">แนบหลักฐานการโอนเงิน (สลิป):</span>
+          <div className="border-t border-gray-200 pt-6 space-y-3">
+            <span className="text-xs font-bold text-gray-600 block">แนบหลักฐานการโอนเงิน (สลิป):</span>
             <SlipUploader
               currentUrl={uploadedSlipUrl}
               onUploadSuccess={onUploadSuccess}
@@ -218,7 +220,7 @@ export default function CheckoutModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-6 border-t border-gray-150 flex items-center justify-end gap-3 bg-gray-50">
+        <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3 bg-gray-50">
           <button
             type="button"
             onClick={onClose}

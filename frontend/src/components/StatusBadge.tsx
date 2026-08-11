@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Wallet, CalendarX } from 'lucide-react';
 
 interface StatusBadgeProps {
   status: string;
@@ -19,6 +19,18 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       return (
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
           <CheckCircle className="w-3 h-3 mr-1" /> active
+        </span>
+      );
+    case 'awaiting_payment':
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+          <Wallet className="w-3 h-3 mr-1" /> รอชำระเงิน
+        </span>
+      );
+    case 'expired':
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+          <CalendarX className="w-3 h-3 mr-1" /> หมดอายุ
         </span>
       );
     case 'rejected':

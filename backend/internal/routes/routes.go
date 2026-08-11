@@ -42,8 +42,11 @@ func SetupRoutes(r *gin.Engine) {
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
 
+	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
+	cloudinaryService := services.NewCloudinaryService()
+
 	expenseService := services.NewExpenseService(db)
-	expenseController := controllers.NewExpenseController(expenseService)
+	expenseController := controllers.NewExpenseController(expenseService, cloudinaryService)
 
 	r.Use(middlewares.CORSMiddleware())
 	r.Static("/uploads", "./uploads")
@@ -58,13 +61,29 @@ func SetupRoutes(r *gin.Engine) {
 	announcementService := services.NewAnnouncementService(db)
 	announcementController := controllers.NewAnnouncementController(announcementService)
 
+	// ระบบจัดการเนื้อหาหน้าแรกสาธารณะ (Landing Page CMS)
+	homeContentService := services.NewHomeContentService(db)
+	homeContentController := controllers.NewHomeContentController(homeContentService)
+
 	// Automated Q&A system
 	autoQAService := services.NewAutoQAService(db)
 	autoQAController := controllers.NewAutoQAController(autoQAService)
 
-	// Quiz system
-	quizService := services.NewQuizService(db)
-	quizController := controllers.NewQuizController(quizService)
+	// ความยินยอมเก็บข้อมูลใบหน้า (PDPA)
+	consentService := services.NewConsentService(db)
+	consentController := controllers.NewConsentController(consentService)
+
+	evaluationService := services.NewEvaluationService(db)
+	evaluationController := controllers.NewEvaluationController(evaluationService, db)
+
+	videoService := services.NewDetectedVideoService(db)
+	videoController := controllers.NewVideoController(videoService, db)
+
+	photoController := controllers.NewPhotoController(db)
+
+	// ระบบรีวิว/ให้คะแนนคอร์สและโค้ช
+	reviewService := services.NewReviewService(db)
+	reviewController := controllers.NewReviewController(reviewService)
 
 	r.Use(middlewares.CORSMiddleware())
 	r.OPTIONS("/*path", func(c *gin.Context) {
@@ -78,6 +97,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			authGroup.POST("/login", authController.Login)
 			authGroup.POST("/register", authController.Register)
+			authGroup.POST("/refresh", authController.Refresh)
 			authGroup.POST("/send-otp", authController.SendOTP)
 			authGroup.POST("/verify-otp", authController.VerifyOTP)
 		}
@@ -106,6 +126,7 @@ func SetupRoutes(r *gin.Engine) {
 		coachGroup := protected.Group("/coaches")
 		{
 			coachGroup.GET("/me", coachController.GetMyCoach)                                   // โค้ชที่ล็อกอินอยู่ resolve coach_id ของตัวเองจาก JWT
+			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                     // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
 			coachGroup.GET("/:id", coachController.GetCoachByID)                                // เจ้าของ หรือ admin
 			coachGroup.PATCH("/:id", coachController.UpdateCoach)                               // เจ้าของ หรือ admin (บาง field)
 			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
@@ -147,11 +168,60 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.DELETE("/:id", userController.DeleteUserController)
 		}
 
+		// --- ความยินยอมเก็บข้อมูลใบหน้า (PDPA) ---
+		// ทุกเส้นอ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param และไม่รับ customer_id จาก body
+		// จึงบันทึก/ถอนความยินยอมแทนคนอื่นไม่ได้ (ไม่ต้องใช้ CheckIDOR)
+		consentGroup := protected.Group("/consents/face")
+		{
+			consentGroup.GET("/me", consentController.GetMyConsent)
+			consentGroup.POST("", consentController.RecordConsent)
+			consentGroup.DELETE("", consentController.WithdrawConsent)
+		}
+
+		// แอดมินดูประวัติความยินยอมย้อนหลัง (ใช้พิสูจน์ความชอบด้วยกฎหมายตาม PDPA)
+		adminConsentGroup := adminOnly.Group("/admin/consents/face")
+		{
+			adminConsentGroup.GET("", consentController.GetConsentHistory)
+		}
+
+		// --- การลงทะเบียนใบหน้าตรงนักเรียน ---
+		studentFacePhotoGroup := protected.Group("/students/face-photo")
+		{
+			studentFacePhotoGroup.POST("", photoController.UploadFacePhoto)
+			studentFacePhotoGroup.GET("/me", photoController.GetMyPhotos)
+			studentFacePhotoGroup.DELETE("/:id", photoController.DeleteFacePhoto)
+		}
+
+		// --- การประเมินนักเรียนโดยโค้ช ---
+		evaluationGroup := protected.Group("/evaluations")
+		{
+			evaluationGroup.POST("", evaluationController.CreateEvaluation)
+			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
+			evaluationGroup.GET("/student/:customer_id", evaluationController.GetStudentEvaluations)
+		}
+
+		// --- วิดีโอสแกนใบหน้า ---
+		videoGroup := protected.Group("/videos")
+		{
+			videoGroup.POST("", videoController.UploadVideo)
+			videoGroup.POST("/:raw_video_id/assign", videoController.ManuallyAssignStudents)
+			videoGroup.GET("/me", videoController.GetMyDetectedVideos)
+			videoGroup.GET("/:raw_video_id/students", videoController.GetVideoDetectedStudents)
+		}
+
 		enrollmentGroup := protected.Group("/enrollments")
 		{
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
 		}
+
+		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
+		{
+			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
+			adminEnrollmentReviewGroup.POST("/:id/extend", enrollmentController.ExtendEnrollment)
+			adminEnrollmentReviewGroup.GET("/:id/extensions", enrollmentController.GetEnrollmentExtensions)
+		}
+
 		adminEnrollmentGroup := adminOnly.Group("/enrollments")
 		{
 			adminEnrollmentGroup.GET("/", enrollmentController.GetAllEnrollments)
@@ -229,6 +299,27 @@ func SetupRoutes(r *gin.Engine) {
 			packageGroup.DELETE("/:id", packageController.DeletePackage)
 		}
 
+		// --- ระบบจัดการเนื้อหาหน้าแรกสาธารณะ ---
+		// Public: หน้าแรกดึงเนื้อหาทั้งก้อน (content + active slides + featured coaches)
+		api.GET("/home-content", homeContentController.GetPublicHome)
+		api.GET("/home-content/coaches", homeContentController.GetPublicCoaches)
+
+		// Admin: จัดการเนื้อหา, รูปสไลด์, และเลือกโค้ชที่แสดงหน้าแรก
+		adminHomeGroup := adminOnly.Group("/admin/home-content")
+		{
+			adminHomeGroup.GET("", homeContentController.GetHomeContent)
+			adminHomeGroup.PATCH("", homeContentController.UpdateHomeContent)
+
+			adminHomeGroup.GET("/slides", homeContentController.GetSlides)
+			adminHomeGroup.POST("/slides", homeContentController.CreateSlide)
+			adminHomeGroup.PATCH("/reorder-slides", homeContentController.ReorderSlides)
+			adminHomeGroup.PATCH("/slides/:id", homeContentController.UpdateSlide)
+			adminHomeGroup.DELETE("/slides/:id", homeContentController.DeleteSlide)
+
+			adminHomeGroup.GET("/coaches", homeContentController.GetAllCoachesForHome)
+			adminHomeGroup.PATCH("/coaches/:id/feature", homeContentController.SetCoachFeature)
+		}
+
 		// Announcement endpoints
 		api.GET("/announcements", announcementController.GetAllAnnouncements)
 		api.GET("/announcements/:id", announcementController.GetAnnouncementByID)
@@ -241,8 +332,30 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
 		api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
 
-		// Quiz public endpoints
-		api.GET("/quiz", quizController.GetActiveQuestions)
+		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
+		api.GET("/consents/face/policy", consentController.GetPolicy)
+
+		// --- ระบบรีวิว/ให้คะแนน ---
+		// รีวิวที่ถูกเลือกให้แสดงหน้าแรก เป็น public (ไม่ต้องล็อกอินก็เห็นได้)
+		api.GET("/reviews/featured", reviewController.GetFeaturedReviews)
+
+		// ลูกค้าส่งรีวิว/ดูรีวิวของตัวเอง (customer_id ผูกกับ JWT กันรีวิวแทนคนอื่น)
+		reviewGroup := protected.Group("/reviews")
+		{
+			reviewGroup.POST("", reviewController.CreateReview)
+			reviewGroup.GET("/me", reviewController.GetMyReviews)
+			// รายชื่อโค้ชในคอร์ส สำหรับให้ลูกค้าเลือกรีวิวโค้ช
+			reviewGroup.GET("/courses/:course_id/coaches", reviewController.GetCourseCoaches)
+		}
+
+		// แอดมิน: ดูรีวิวทั้งหมด, เลือกแสดงหน้าแรก, แก้ไข, ลบ
+		adminReviewGroup := adminOnly.Group("/admin/reviews")
+		{
+			adminReviewGroup.GET("", reviewController.GetAllReviews)
+			adminReviewGroup.PATCH("/:id", reviewController.UpdateReview)
+			adminReviewGroup.PATCH("/:id/feature", reviewController.FeatureReview)
+			adminReviewGroup.DELETE("/:id", reviewController.DeleteReview)
+		}
 
 		protectedAnnouncementGroup := adminOnly.Group("/announcements")
 		{
@@ -260,6 +373,7 @@ func SetupRoutes(r *gin.Engine) {
 		adminOnly.DELETE("/admin/chat-sessions/:id", autoQAController.DeleteChatSession)
 		adminOnly.POST("/admin/chat-sessions/:id/reply", autoQAController.AdminReply)
 
+<<<<<<< HEAD
 		adminOnly.GET("/admin/auto-qas", autoQAController.GetAllAutoQAs)
 		adminOnly.GET("/admin/auto-qas/:id", autoQAController.GetAutoQAByID)
 		adminOnly.POST("/admin/auto-qas", autoQAController.CreateAutoQA)
@@ -274,6 +388,15 @@ func SetupRoutes(r *gin.Engine) {
 			protectedQuizGroup.DELETE("/:id", quizController.DeleteQuestion)
 			protectedQuizGroup.POST("/:id/options", quizController.AddOption)
 			protectedQuizGroup.DELETE("/options/:option_id", quizController.DeleteOption)
+=======
+		protectedAutoQAGroup := adminOnly.Group("/auto-qas")
+		{
+			protectedAutoQAGroup.GET("/", autoQAController.GetAllAutoQAs)
+			protectedAutoQAGroup.GET("/:id", autoQAController.GetAutoQAByID)
+			protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
+			protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
+			protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
+>>>>>>> ce0e3c4142bc366203f55bcad4cd24b4b10bba36
 		}
 	}
 }

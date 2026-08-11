@@ -84,11 +84,14 @@ func seedCoaches(db *gorm.DB) {
 		Email          string
 		Nickname       string
 		Phone          string
+		LineID         string
+		Facebook       string
 		Uid            string
 		Address        string
 		BirthDate      string
 		ProfilePicture string
 		Specialization string
+		CoachLicense   string
 		BankAccount    string
 		PaymentInfo    string
 	}{
@@ -98,11 +101,14 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach1@gmail.com",
 			Nickname:       "โค้ชบอล",
 			Phone:          "0812345678",
+			LineID:         "coachball_th",
+			Facebook:       "https://facebook.com/coachball.th",
 			Uid:            "C001",
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
 			ProfilePicture: "https://example.com/profiles/coach1.png",
-			Specialization: "เทคนิคการเตะและการเลี้ยงบอล",
+			Specialization: "S+",
+			CoachLicense:   "License A",
 			BankAccount:    "ธ.กสิกรไทย 123-4-56789-0",
 			PaymentInfo:    "PromptPay: 0812345678",
 		},
@@ -112,11 +118,14 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach2@gmail.com",
 			Nickname:       "โค้ชเจ",
 			Phone:          "0823456789",
+			LineID:         "coach_jay",
+			Facebook:       "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
 			Uid:            "C002",
 			Address:        "456/78 ถ.เพชรบุรี กรุงเทพฯ",
 			BirthDate:      "1993-10-05",
 			ProfilePicture: "https://example.com/profiles/coach2.png",
-			Specialization: "ความคล่องตัวและการจ่ายบอล",
+			Specialization: "S",
+			CoachLicense:   "License B",
 			BankAccount:    "ธ.ไทยพาณิชย์ 987-6-54321-0",
 			PaymentInfo:    "PromptPay: 0823456789",
 		},
@@ -126,11 +135,14 @@ func seedCoaches(db *gorm.DB) {
 			Email:          "coach3@gmail.com",
 			Nickname:       "โค้ชตัง",
 			Phone:          "0834567890",
+			LineID:         "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
+			Facebook:       "https://facebook.com/coachtang",
 			Uid:            "C003",
 			Address:        "789/12 ถ.พหลโยธิน กรุงเทพฯ",
 			BirthDate:      "1992-05-30",
 			ProfilePicture: "https://example.com/profiles/coach3.png",
-			Specialization: "การจัดตำแหน่งและการตั้งรับ",
+			Specialization: "P",
+			CoachLicense:   "License C",
 			BankAccount:    "ธ.กรุงเทพ 111-2-22222-3",
 			PaymentInfo:    "PromptPay: 0834567890",
 		},
@@ -156,11 +168,14 @@ func seedCoaches(db *gorm.DB) {
 						UserID:         user.ID,
 						Nickname:       data.Nickname,
 						Phone:          data.Phone,
+						LineID:         data.LineID,
+						Facebook:       data.Facebook,
 						Uid:            data.Uid,
 						Address:        data.Address,
 						BirthDate:      data.BirthDate,
 						ProfilePicture: data.ProfilePicture,
 						Specialization: data.Specialization,
+						CoachLicense:   data.CoachLicense,
 						BankAccount:    data.BankAccount,
 						PaymentInfo:    data.PaymentInfo,
 					}
@@ -192,6 +207,8 @@ func seedCustomers(db *gorm.DB) {
 		Nickname          string
 		Gender            string
 		PhoneNumber       string
+		LineID            string
+		Facebook          string
 		BirthDate         time.Time
 		ParentEmail       string
 		ParentPhoneNumber string
@@ -206,6 +223,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "ศักดิ์",
 			Gender:            "male",
 			PhoneNumber:       "0845678901",
+			LineID:            "somsak_r",
+			Facebook:          "https://facebook.com/somsak.rakrian",
 			BirthDate:         time.Date(2010, 1, 15, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent1@gmail.com",
 			ParentPhoneNumber: "0898765432",
@@ -220,6 +239,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "ดา",
 			Gender:            "female",
 			PhoneNumber:       "0856789012",
+			LineID:            "suda_j",
+			Facebook:          "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
 			BirthDate:         time.Date(2012, 5, 20, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent2@gmail.com",
 			ParentPhoneNumber: "0897654321",
@@ -234,6 +255,8 @@ func seedCustomers(db *gorm.DB) {
 			Nickname:          "นะ",
 			Gender:            "male",
 			PhoneNumber:       "0867890123",
+			LineID:            "", // เว้นว่างไว้ทดสอบเคสไม่กรอก (ฟิลด์นี้ไม่บังคับ)
+			Facebook:          "", // เว้นว่างไว้ทดสอบเคสไม่กรอกทั้งคู่
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@gmail.com",
 			ParentPhoneNumber: "0896543210",
@@ -264,6 +287,8 @@ func seedCustomers(db *gorm.DB) {
 						Gender:            models.Gender(data.Gender),
 						BirthDate:         data.BirthDate,
 						PhoneNumber:       data.PhoneNumber,
+						LineID:            data.LineID,
+						Facebook:          data.Facebook,
 						ParentEmail:       data.ParentEmail,
 						ParentPhoneNumber: data.ParentPhoneNumber,
 						ConsentedPurposes: data.ConsentedPurposes,
@@ -295,10 +320,12 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }
 
     // สร้างข้อมูลตามโปสเตอร์ Koyama Badminton School
+    // LearningOutcomes เก็บเป็นข้อความหลายบรรทัด บรรทัดละ 1 ข้อ (ดู models.Course.LearningOutcomes)
     courseSeeds := []struct {
-        CourseName  string
-        Description string
-        Packages    []struct {
+        CourseName       string
+        Description      string
+        LearningOutcomes string
+        Packages         []struct {
             SessionsCount uint
             HoursCount    uint
             Price         float64
@@ -309,7 +336,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }{
         {
             CourseName:  "คอร์สปกติ",
-            Description: "เรียนรวมกลุ่ม (18.00-20.00 น.)",
+            Description: "คอร์สเรียนรวมกลุ่มสำหรับผู้เริ่มต้นถึงระดับกลาง เน้นปูพื้นฐานให้แน่นตั้งแต่การจับไม้ การยืน ไปจนถึงลูกตีพื้นฐานครบทุกแบบ เรียนกับโค้ชผู้มีประสบการณ์ในบรรยากาศเป็นกันเอง",
+            LearningOutcomes: `การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง
+ฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม
+ลูกโยนหลัง (Clear) และลูกหยอดหน้าเน็ต (Net Drop)
+ลูกตบ (Smash) และการรับลูกตบเบื้องต้น
+การเสิร์ฟสั้นและเสิร์ฟยาวให้แม่นยำ
+กติกาการแข่งขันและการนับคะแนน`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 1800, 10, "18:00", "20:00"},
                 {12, 24, 2200, 10, "18:00", "20:00"},
@@ -319,7 +352,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส VIP นักกีฬา",
-            Description: "เรียนรวมกลุ่ม (18.00-21.00 น.) ตีเกม+ตีโต้",
+            Description: "คอร์สเข้มข้นสำหรับผู้ที่มีพื้นฐานแล้วและต้องการลงแข่งขันจริงจัง เพิ่มเวลาเป็น 3 ชั่วโมงต่อครั้ง เน้นตีโต้และตีเกมจริงเพื่อสร้างความอึดและไหวพริบในสนาม",
+            LearningOutcomes: `เทคนิคการตีขั้นสูง ลูกดาด (Drive) ลูกตัดหยอด (Drop Shot) และลูกหลอก
+ฟุตเวิร์กความเร็วสูงและการทรงตัวขณะตีลูกยาก
+การวางแผนเกมและอ่านทางคู่ต่อสู้
+การเล่นคู่ ตำแหน่งยืนและการสลับหน้า-หลังกับคู่ขา
+โปรแกรมเสริมสร้างความแข็งแรงและความอึดเฉพาะนักแบดมินตัน
+การเตรียมตัวและการวางแผนก่อนลงแข่งขันรายการจริง`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 2000, 10, "18:00", "21:00"},
                 {12, 24, 2400, 10, "18:00", "21:00"},
@@ -329,7 +368,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (2 ชม.)",
-            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Description: "เรียนตัวต่อตัวกับโค้ชแบบเต็ม 2 ชั่วโมงต่อครั้ง โค้ชออกแบบเนื้อหาให้ตรงกับจุดอ่อนของผู้เรียนแต่ละคนโดยเฉพาะ เหมาะกับผู้ที่ต้องการพัฒนาเร็วหรือมีเวลาจำกัด",
+            LearningOutcomes: `แผนการฝึกที่ออกแบบเฉพาะบุคคลจากการประเมินฝีมือจริง
+แก้ไขท่าทางที่ผิดแบบตัวต่อตัว ได้รับคำแนะนำทันทีทุกลูก
+ฝึกซ้ำเฉพาะจุดที่เป็นจุดอ่อนจนกว่าจะแก้ได้
+ตีโต้กับโค้ชเพื่อสร้างความสม่ำเสมอของลูก
+ตีเกมจริงกับโค้ชพร้อมวิเคราะห์หลังจบเกม
+ติดตามพัฒนาการรายครั้งตลอดคอร์ส`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 16, 0, 2, "10:00", "12:00"},
                 {12, 24, 0, 2, "14:00", "16:00"},
@@ -339,7 +384,13 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (1 ชม.)",
-            Description: "เรียนตัวต่อตัว ตีเกม+ตีโต้",
+            Description: "เรียนตัวต่อตัวแบบกระชับ 1 ชั่วโมงต่อครั้ง เหมาะกับผู้ที่มีเวลาน้อยแต่อยากได้คำแนะนำแบบใกล้ชิด เน้นแก้จุดอ่อนทีละเรื่องให้เห็นผลชัดในแต่ละครั้ง",
+            LearningOutcomes: `เลือกโฟกัสได้ครั้งละ 1 ทักษะ ทำให้เห็นพัฒนาการชัดเจน
+แก้ไขท่าทางเฉพาะจุดโดยโค้ชดูแลใกล้ชิด
+ฝึกความแม่นยำของลูกเสิร์ฟและลูกหยอด
+เพิ่มความเร็วของฟุตเวิร์กด้วยแบบฝึกเฉพาะทาง
+ได้รับการบ้านไปฝึกต่อเองระหว่างรอคาบถัดไป
+ยืดหยุ่นเรื่องเวลา เลือกช่วงที่สะดวกได้`,
             Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
                 {8, 8, 0, 2, "10:00", "11:00"},
                 {12, 12, 0, 2, "13:00", "14:00"},
@@ -354,10 +405,11 @@ func seedCoursesAndPackages(db *gorm.DB) {
         err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
         if err == gorm.ErrRecordNotFound {
             course = models.Course{
-                CourseName:  seed.CourseName,
-                Description: seed.Description,
-                Status:      models.CourseStatusActive,
-                UserID:      admin.ID,
+                CourseName:       seed.CourseName,
+                Description:      seed.Description,
+                LearningOutcomes: seed.LearningOutcomes,
+                Status:           models.CourseStatusActive,
+                UserID:           admin.ID,
             }
             if err := db.Create(&course).Error; err != nil {
                 log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)
@@ -372,7 +424,8 @@ func seedCoursesAndPackages(db *gorm.DB) {
                 HoursCount:    p.HoursCount,
                 Price:         p.Price,
                 MaxSeats:      p.MaxSeats,
-                CourseID:      course.ID,
+                DurationDays: 30,
+                CourseID:     course.ID,
             }
             db.Create(&pkg)
 
@@ -396,12 +449,14 @@ func seedBankAccounts(db *gorm.DB) {
             BankName:    "ธนาคารกรุงไทย (KTB)",
             AccountNo:   "6629946995",
             AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
+            PromptPayID: "1309801486371", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
             IsActive:    true,
         },
         {
             BankName:    "ธนาคารกรุงไทย (KTB)",
             AccountNo:   "3350495907",
             AccountName: "นายธีรศักดิ์  กุลเกตุ",
+            PromptPayID: "0830512752", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
             IsActive:    false,
         },
     }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, Megaphone } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard } from "lucide-react";
 
 export default function CustomerSidebar() {
   const pathname = usePathname();
@@ -22,20 +22,21 @@ export default function CustomerSidebar() {
   }, []);
 
   return (
-    <aside className="fixed top-24 left-0 h-[calc(100vh-96px)] bg-white flex flex-col border-r border-gray-200 z-40 transition-all duration-300 ease-in-out w-[84px] hover:w-[260px] group overflow-hidden">
+    <aside className="fixed top-24 left-0 h-[calc(100vh-96px)] bg-white flex flex-col z-40 transition-all duration-300 ease-in-out w-[84px] hover:w-[260px] group overflow-hidden">
       
-      <div className="flex-1 flex flex-col justify-center min-w-[260px] overflow-x-hidden">
-        <nav className="flex flex-col gap-3 w-full">
+      <div className="flex-1 flex flex-col min-w-[260px] overflow-y-auto overflow-x-hidden py-4">
+        <nav className="flex flex-col gap-3 w-full my-auto">
           <SidebarItem href="/customer/dashboard" icon={<Home />} label="หน้าแรก" active={pathname === "/customer/dashboard"} />
+          <SidebarItem href="/customer/overview" icon={<LayoutDashboard />} label="แดชบอร์ด" active={pathname === "/customer/overview"} />
           <SidebarItem href="/customer/payment" icon={<Wallet />} label="การเงิน" active={pathname === "/customer/payment"} />
           <SidebarItem href="/customer/enrollment" icon={<ClipboardList />} label="คอร์สของฉัน" active={pathname === "/customer/enrollment"} />
           <SidebarItem href="/customer/schedule" icon={<Calendar />} label="ตารางเรียน" active={pathname === "/customer/schedule"} />
-          <SidebarItem href="/customer/feedback" icon={<StarCheck />} label="ข้อเสนอแนะ" active={pathname === "/customer/feedback"} />
+          <SidebarItem href="/customer/feedback" icon={<StarCheck />} label="รีวิวของฉัน" active={pathname === "/customer/feedback"} />
         </nav>
       </div>
 
       <Link href="/customer/profile">
-        <div className="border-t border-gray-200 flex items-center gap-4 flex-shrink-0 min-w-[260px] cursor-pointer hover:bg-gray-50 px-[22px] py-6 transition-colors">
+        <div className="flex items-center gap-4 flex-shrink-0 min-w-[260px] cursor-pointer hover:bg-gray-50 px-[22px] py-6 transition-colors">
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
             <UserCircle className="w-8 h-8" />
           </div>

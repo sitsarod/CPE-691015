@@ -124,6 +124,99 @@ func (ctrl *EnrollmentController) GetCustomerEnrollments(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"data": enrollments})
 }
 
+// GetEnrollmentReview ดึงข้อมูลตรวจสอบผู้สมัครแบบละเอียดก่อนอนุมัติ (adminOnly)
+//
+// [GET] /api/admin/enrollments/:id
+func (ctrl *EnrollmentController) GetEnrollmentReview(c *gin.Context) {
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        return
+    }
+
+    review, err := ctrl.service.GetEnrollmentReview(uint(id))
+    if err != nil {
+        if errors.Is(err, services.ErrEnrollmentNotFound) {
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้สมัครได้"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"data": review})
+}
+
+// ExtendEnrollment ขยายระยะเวลาเรียนให้นักเรียนรายบุคคล (adminOnly)
+//
+// [POST] /api/admin/enrollments/:id/extend
+//
+// ตัวตนของแอดมินดึงจาก JWT ไม่ใช่จาก body — ถ้ารับจาก body จะปลอมได้ว่าใครเป็นคนอนุมัติ
+func (ctrl *EnrollmentController) ExtendEnrollment(c *gin.Context) {
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        return
+    }
+
+    adminID, _, ok := GetAuthContext(c)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
+        return
+    }
+
+    var req dto.ExtendEnrollmentReq
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "error": "ข้อมูลไม่ถูกต้อง — จำนวนวันไม่เกิน 366 จำนวนครั้งไม่เกิน 100 และต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร",
+        })
+        return
+    }
+
+    res, err := ctrl.service.ExtendEnrollment(uint(id), adminID, req)
+    if err != nil {
+        switch {
+        case errors.Is(err, services.ErrEnrollmentNotFound):
+            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+        case errors.Is(err, services.ErrExtensionInvalid),
+            errors.Is(err, services.ErrExtensionEmpty),
+            errors.Is(err, services.ErrExtensionReasonReq):
+            c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        case errors.Is(err, services.ErrExtensionNotStarted),
+            errors.Is(err, services.ErrExtensionCancelled),
+            errors.Is(err, services.ErrPackageSeatsFull):
+            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+        default:
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        }
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "message": "ขยายสิทธิ์เรียนเรียบร้อยแล้ว",
+        "data":    res,
+    })
+}
+
+// GetEnrollmentExtensions ดึงประวัติการขยายเวลาของการลงทะเบียนใบหนึ่ง (adminOnly)
+//
+// [GET] /api/admin/enrollments/:id/extensions
+func (ctrl *EnrollmentController) GetEnrollmentExtensions(c *gin.Context) {
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        return
+    }
+
+    items, err := ctrl.service.GetEnrollmentExtensions(uint(id))
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
 // GetAllEnrollments
 func (ctrl *EnrollmentController) GetAllEnrollments(c *gin.Context) {
     enrollments, err := ctrl.service.GetAllEnrollments()

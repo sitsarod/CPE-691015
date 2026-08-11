@@ -29,33 +29,43 @@ func toCoachResponse(coach *models.Coach) dto.CoachResponse {
 		UserID:         coach.UserID,
 		Nickname:       coach.Nickname,
 		Specialization: coach.Specialization,
+		CoachLicense:   coach.CoachLicense,
 		ProfilePicture: coach.ProfilePicture,
 		Phone:          coach.Phone,
+		LineID:         coach.LineID,
+		Facebook:       coach.Facebook,
 	}
 
 	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service เช็ค nil ก่อนเสมอกันกรณี preload ไม่เจอ user จริง
 	if coach.User != nil {
 		resp.FirstName = coach.User.FirstName
 		resp.LastName = coach.User.LastName
+		resp.Email = coach.User.Email
 	}
 
 	return resp
 }
 
 // toCoachDetailResponse แปลง models.Coach (พร้อม User ที่ preload มาแล้ว) เป็น dto.CoachDetailResponse
-// ใช้กับหน้า detail/edit ที่ต้องการฟิลด์ครบกว่า list รวมถึง pay_rate_per_session ที่โชว์ได้ (read-only)
+// ใช้กับหน้า detail/edit ที่ต้องการฟิลด์ครบกว่า list รวมถึง payment_type/pay_rate ที่โชว์ได้ (read-only)
 func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
 	resp := dto.CoachDetailResponse{
 		ID:                coach.ID,
 		UserID:            coach.UserID,
 		Nickname:          coach.Nickname,
 		Phone:             coach.Phone,
+		LineID:            coach.LineID,
+		Facebook:          coach.Facebook,
 		Uid:               coach.Uid,
 		Address:           coach.Address,
 		BirthDate:         coach.BirthDate,
 		Specialization:    coach.Specialization,
+		CoachLicense:      coach.CoachLicense,
 		ProfilePicture:    coach.ProfilePicture,
-		PayRatePerSession: coach.PayRatePerSession,
+		BankAccount:       coach.BankAccount,
+		PaymentInfo:       coach.PaymentInfo,
+		PaymentType:       coach.PaymentType,
+		PayRate:           coach.PayRate,
 	}
 
 	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service
@@ -147,7 +157,7 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 	coach, err := ctrl.service.Create(req)
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrCoachUserNotFound), errors.Is(err, services.ErrCoachUserNotCoach):
+		case errors.Is(err, services.ErrCoachUserNotFound), errors.Is(err, services.ErrCoachUserNotCoach), errors.Is(err, services.ErrCoachInvalidPaymentType):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrCoachDuplicateUser), errors.Is(err, services.ErrCoachDuplicateUID):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -161,7 +171,7 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 }
 
 // UpdateCoach handles PATCH /api/coaches/:id
-// coach แก้ข้อมูลตัวเอง (ไม่รวม specialization/pay_rate_per_session ตาม UpdateCoachRequest ที่ตัดออกแล้ว)
+// coach แก้ข้อมูลตัวเอง (ไม่รวม specialization/payment_type/pay_rate ตาม UpdateCoachRequest ที่ตัดออกแล้ว)
 func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -196,7 +206,7 @@ func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 }
 
 // AdminUpdateCoach handles PATCH /api/coaches/:id/level
-// เฉพาะ admin เท่านั้นที่แก้ specialization (ระดับ) และ pay_rate_per_session (ค่าจ้างต่อครั้ง) ได้
+// เฉพาะ admin เท่านั้นที่แก้ specialization (ระดับ), payment_type และ pay_rate (ค่าจ้าง) ได้
 // route ต้องผูกกับ adminOnly middleware (RequireRole("admin")) เท่านั้น
 func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

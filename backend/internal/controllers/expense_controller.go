@@ -15,11 +15,12 @@ import (
 )
 
 type ExpenseController struct {
-	service *services.ExpenseService
+	service    *services.ExpenseService
+	cloudinary *services.CloudinaryService // nil = ไม่ได้ตั้งค่า จะ fallback เก็บไฟล์ในเครื่อง
 }
 
-func NewExpenseController(service *services.ExpenseService) *ExpenseController {
-	return &ExpenseController{service: service}
+func NewExpenseController(service *services.ExpenseService, cloudinary *services.CloudinaryService) *ExpenseController {
+	return &ExpenseController{service: service, cloudinary: cloudinary}
 }
 
 func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
@@ -99,11 +100,31 @@ func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {
 	})
 }
 
-// UploadFileHandler handles multipart/form-data file uploads and saves to ./uploads directory
+// UploadFileHandler handles multipart/form-data file uploads.
+// ถ้าตั้งค่า Cloudinary ไว้จะอัปโหลดขึ้นคลาวด์ ไม่งั้น fallback เก็บไฟล์ในโฟลเดอร์ ./uploads
 func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการอัปโหลด"})
+		return
+	}
+
+	// เก็บบน Cloudinary เมื่อถูกตั้งค่า
+	if ctrl.cloudinary != nil {
+		src, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
+			return
+		}
+		defer src.Close()
+
+		url, err := ctrl.cloudinary.UploadFile(c.Request.Context(), src)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ขึ้น Cloudinary ไม่สำเร็จ: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"url": url})
 		return
 	}
 

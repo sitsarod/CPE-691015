@@ -23,7 +23,9 @@ type Package struct {
     HoursCount    uint      `json:"hours_count" valid:"required~hoursCount is required"`
     Price         float64   `json:"price" gorm:"type:decimal(10,2)" valid:"required~price is required"`
     MaxSeats      uint      `json:"max_seats" gorm:"default:10"`
-    
+
+    // DurationDays = จำนวนวันที่เรียนได้ นับจากวันที่เริ่มมีสิทธิ์เรียน (Enrollment.StartedAt)
+    DurationDays uint `json:"duration_days" gorm:"default:30"`
     // Foreign Key
     CourseID uint    `json:"course_id" valid:"required~courseId is required"`
     Course   *Course `json:"course,omitempty" gorm:"foreignKey:CourseID"`

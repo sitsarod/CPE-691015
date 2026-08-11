@@ -22,6 +22,8 @@ type UserProfileResponseDTO struct {
 
 	Nickname          string     `json:"nickname,omitempty"`
 	PhoneNumber       string     `json:"phoneNumber,omitempty"`
+	LineID            string     `json:"lineId,omitempty"`
+	Facebook          string     `json:"facebook,omitempty"`
 	BirthDate         *string `json:"birthDate,omitempty"`
 	Gender            string     `json:"gender,omitempty"`
 	ParentEmail       string     `json:"parentEmail,omitempty"`
@@ -35,8 +37,14 @@ type StudentListResponseDTO struct {
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
 	Email       string `json:"email"`
-	Nickname    string `json:"nickname"`    
-	PhoneNumber string `json:"phoneNumber"` 
+	Nickname    string `json:"nickname"`
+	PhoneNumber string `json:"phoneNumber"`
+
+	GraceEnrollments int64 `json:"graceEnrollments"`
+	LineID      string `json:"lineId"`
+	Facebook    string `json:"facebook"`
+	BirthDate   string `json:"birthDate"`
+	Gender      string `json:"gender"`
 }
 
 type UpdateProfileInput struct {
@@ -46,8 +54,12 @@ type UpdateProfileInput struct {
 
 	Nickname          string `json:"nickname"`
 	PhoneNumber       string `json:"phoneNumber" binding:"omitempty,numeric,len=10"`
-	ParentEmail       string `json:"parentEmail" binding:"omitempty,email,endswith=@gmail.com"` 
+	ParentEmail       string `json:"parentEmail" binding:"omitempty,email,endswith=@gmail.com"`
 	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10"`
+
+	// LineID / Facebook ไม่บังคับ ใช้ pointer เพื่อแยก "ไม่ได้ส่งมา" ออกจาก "ส่งค่าว่างมาเพื่อลบ"
+	LineID   *string `json:"lineId"`
+	Facebook *string `json:"facebook"`
 }
 
 

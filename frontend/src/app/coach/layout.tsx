@@ -1,21 +1,24 @@
 // app/coach/layout.tsx
 import CoachSidebar from "@/components/CoachSidebar";
 import CoachTopbar from "@/components/CoachTopbar";
+import RoleGuard from "@/components/RoleGuard";
 
 export default function CoachLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <RoleGuard allow={["coach"]}>
+      <div className="min-h-screen bg-white font-sans">
 
-      <CoachTopbar />
-      <CoachSidebar />
+        <CoachTopbar />
+        <CoachSidebar />
 
-      <div className="flex flex-col min-h-screen pt-24 pl-[84px]">
+        <div className="flex flex-col min-h-screen pt-24 pl-[84px]">
 
-        <main className="flex-1 p-8 bg-white">
-          {children}
-        </main>
+          <main className="flex-1 p-8 bg-white">
+            {children}
+          </main>
 
+        </div>
       </div>
-    </div>
+    </RoleGuard>
   );
 }

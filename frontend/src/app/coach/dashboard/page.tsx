@@ -92,8 +92,8 @@ export default function CoachDashboardPage() {
         />
         <StatCard
           icon={<Wallet className="w-6 h-6" />}
-          label="ค่าจ้างต่อคาบ"
-          value={`฿${profile.pay_rate_per_session.toLocaleString()}`}
+          label={profile.payment_type === "monthly" ? "ค่าจ้างต่อเดือน" : "ค่าจ้างต่อคาบ"}
+          value={`฿${profile.pay_rate.toLocaleString()}`}
         />
         <StatCard
           icon={<Clock className="w-6 h-6" />}

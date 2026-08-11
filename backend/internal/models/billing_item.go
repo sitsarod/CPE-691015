@@ -29,8 +29,7 @@ type Billing struct {
 
 	CustomerID uint  `json:"customer_id"`
 	Customer   *User `json:"customer" gorm:"foreignKey:CustomerID"`
-
-	AdminID uint  `json:"admin_id"`
+	AdminID *uint `json:"admin_id"`
 	Admin   *User `json:"admin" gorm:"foreignKey:AdminID"`
 
 	PaymentItem []PaymentItem `json:"paymentitem" gorm:"foreignKey:BillingID"`

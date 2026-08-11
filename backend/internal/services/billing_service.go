@@ -37,7 +37,7 @@ func (s *BillingService) CreateSingleBilling(customerID uint, adminID uint, bill
 		Status:        models.StatusUnfunded,
 		BillingTypeID: billingTypeID,
 		CustomerID:    customerID,
-		AdminID:       adminID,
+		AdminID:       &adminID,
 	}
 
 	if err := s.db.Create(&billing).Error; err != nil {
@@ -74,7 +74,7 @@ func (s *BillingService) CreateBulkBillings(customerIDs []uint, adminID uint, bi
 				Status:        models.StatusUnfunded,
 				BillingTypeID: billingTypeID,
 				CustomerID:    customerID,
-				AdminID:       adminID,
+				AdminID:       &adminID,
 			}
 
 			if err := tx.Create(&billing).Error; err != nil {
@@ -147,7 +147,7 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 				Status:        models.StatusUnfunded,
 				BillingTypeID: billingTypeID,
 				CustomerID:    customerID,
-				AdminID:       adminID,
+				AdminID:       &adminID,
 			}
 
 			if err := tx.Create(&billing).Error; err != nil {

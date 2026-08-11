@@ -16,6 +16,20 @@ func NewPackageService(db *gorm.DB) *PackageService {
 	return &PackageService{db: db}
 }
 
+var ErrInvalidDuration = errors.New("ระยะเวลาของแพ็กเกจต้องอยู่ระหว่าง 1 ถึง 366 วัน")
+
+const maxPackageDurationDays = 366
+
+func resolvePackageDuration(days uint) (uint, error) {
+	if days == 0 {
+		return defaultEnrollmentDurationDays, nil
+	}
+	if days > maxPackageDurationDays {
+		return 0, ErrInvalidDuration
+	}
+	return days, nil
+}
+
 // [CREATE] สร้างแพ็กเกจใหม่ พร้อมตารางเรียนหลายวัน
 func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Package, error) {
 	var schedules []models.PackageSchedule
@@ -27,12 +41,18 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 		})
 	}
 
+	durationDays, err := resolvePackageDuration(req.DurationDays)
+	if err != nil {
+		return nil, err
+	}
+
 	newPkg := models.Package{
 		CourseID:      req.CourseID,
 		SessionsCount: req.SessionsCount,
 		HoursCount:    req.HoursCount,
 		Price:         req.Price,
 		MaxSeats:      req.MaxSeats,
+		DurationDays:  durationDays,
 		Schedules:     schedules,
 	}
 
@@ -62,6 +82,12 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 		}
 		if req.Price != nil {
 			pkg.Price = *req.Price
+		}
+		if req.DurationDays != nil {
+			if *req.DurationDays == 0 || *req.DurationDays > maxPackageDurationDays {
+				return ErrInvalidDuration
+			}
+			pkg.DurationDays = *req.DurationDays
 		}
 
 		if err := tx.Save(&pkg).Error; err != nil {

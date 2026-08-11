@@ -1,77 +1,6 @@
 // frontend/src/services/authAPI.ts
 import { apiFetch } from "@/services/apiClient";
-
-export interface LoginReq {
-  email: string;     
-  password: string;  
-}
-
-export interface FindAccountReq {
-  identifier: string; 
-}
-
-export interface SendOTPReq {
-  email: string;  
-}
-
-export interface VerifyOTPReq {
-  email: string;      
-  otp: string;       
-}
-
-// User Profile DTO ที่ส่งกลับจาก FindAccount / Auth
-export interface UserResponseDTO {
-  id: number;
-  firstName: string;
-  lastName: string;
-  nickname?: string;
-  email: string;
-  role: string;
-  avatarUrl?: string;
-}
-
-// User Info สำหรับ Login / Register Response
-export interface UserInfoDTO {
-  id: number;
-  role: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-export interface CustomerInfoDTO {
-  nickname: string;
-  qrImage: string;
-}
-
-// DTO สำหรับ Response ของ Login และ Register
-export interface AuthResponseDTO {
-  message?: string;
-  token: string;
-  user: UserInfoDTO;
-  customer?: CustomerInfoDTO;
-}
-
-export interface VerifyOTPResponseDTO {
-  message: string;
-  resetToken: string;
-}
-
-export interface RegisterCustomerReq {
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: string;
-  role: string;
-  customer: {
-    nickname: string;
-    gender: string;
-    birthDate: string | null;
-    phoneNumber: string;
-    parentEmail: string | null;
-    parentPhoneNumber: string | null;
-  };
-}
+import { AuthResponseDTO, LoginReq, RefreshResponseDTO, RegisterCustomerReq, UserResponseDTO, VerifyOTPReq, VerifyOTPResponseDTO } from "@/types/auth";
 
 
 // [POST] เข้าสู่ระบบ
@@ -79,6 +8,14 @@ export async function loginAPI(data: LoginReq): Promise<AuthResponseDTO> {
   return await apiFetch<AuthResponseDTO>("/auth/login", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+}
+
+// [POST] ขอ access token ใหม่ด้วย refresh token
+export async function refreshTokenAPI(refreshToken: string): Promise<RefreshResponseDTO> {
+  return await apiFetch<RefreshResponseDTO>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
   });
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Calendar, BookOpen, AlertCircle, Clock } from "lucide-react";
+import { Loader2, Calendar, BookOpen, AlertCircle, Clock, CalendarX } from "lucide-react";
 import { fetchCustomerEnrollments } from "@/services/enrollmentAPI";
 import type { ScheduleInfo, FormattedEnrollment } from "@/types/enrollment";
 
@@ -38,6 +38,8 @@ const formatTimeLabel = (hour: number) => {
 
 export default function CustomerSchedulePage() {
   const [enrollments, setEnrollments] = useState<FormattedEnrollment[]>([]);
+  /** จำนวนคอร์สที่ครบกำหนดแล้ว — ใช้อธิบายว่าทำไมคอร์สหายจากตาราง */
+  const [expiredCount, setExpiredCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,8 +57,8 @@ export default function CustomerSchedulePage() {
         }
 
         const data = await fetchCustomerEnrollments(customerId, token);
-        
         const displayEnrollments = data.filter(e => e.status === "active");
+        setExpiredCount(data.filter(e => e.status === "expired").length);
 
         const formatted: FormattedEnrollment[] = displayEnrollments.map((enrollment) => {
           const schedules = enrollment.package?.schedules || [];
@@ -69,12 +71,13 @@ export default function CustomerSchedulePage() {
           }
 
           return {
-            id: enrollment.ID || enrollment.id || 0,
-            courseName: enrollment.package?.course?.course_name || enrollment.package?.course_name || "ไม่ระบุคอร์ส",
+            id: enrollment.id,
+            courseName: enrollment.package?.course?.course_name || "ไม่ระบุคอร์ส",
             sessionsCount: enrollment.package?.sessions_count || 0,
             totalSessions: enrollment.total_sessions,
             remainingSessions: enrollment.remaining_sessions,
-            attendedSessions: enrollment.total_sessions - enrollment.remaining_sessions,
+            // backend คำนวณมาให้แล้ว (กัน underflow ของ uint กรณี remaining > total)
+            attendedSessions: enrollment.attended_sessions,
             status: enrollment.status,
             schedules: schedules,
             unifiedTime
@@ -134,6 +137,21 @@ export default function CustomerSchedulePage() {
 
   return (
     <div className="w-full pb-24 space-y-8">
+      {expiredCount > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <CalendarX className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+          <div className="text-sm leading-relaxed text-slate-700">
+            <span className="font-bold">
+              มีคอร์สที่ครบกำหนดระยะเวลาแล้ว {expiredCount} คอร์ส
+            </span>
+            <span className="text-slate-500">
+              {" "}
+              จึงไม่แสดงในตารางเรียนนี้ — สมัครแพ็กเกจใหม่ได้ที่หน้าคอร์สของฉัน
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 1. Summary Table Section (Top) */}
       <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden">
         <div className="bg-[#CC0000] p-5 flex items-center justify-between">

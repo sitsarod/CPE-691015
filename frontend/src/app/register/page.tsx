@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", nickname: "", gender: "", birthDate: "",
     email: "", password: "", confirmPassword: "", phoneNumber: "",
+    lineId: "", facebook: "",
     parentEmail: "", parentPhoneNumber: "",
   });
 
@@ -66,12 +67,15 @@ export default function RegisterPage() {
           gender: formData.gender,
           birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : null,
           phoneNumber: formData.phoneNumber,
+          lineId: formData.lineId || "",
+          facebook: formData.facebook || "",
           parentEmail: formData.parentEmail || null,
           parentPhoneNumber: formData.parentPhoneNumber || null,
         }
       });
 
       localStorage.setItem("token", data.token);
+      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("email", data.user.email);
@@ -148,9 +152,19 @@ export default function RegisterPage() {
             error={errors.phoneNumber} 
           />
 
-          <InputField 
-            label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" placeholder="ระบุอีเมลผู้ปกครอง" onChange={handleChange} 
-            error={errors.parentEmail} 
+          <InputField
+            label="Line ID (ถ้ามี)" name="lineId" placeholder="ระบุ Line ID" onChange={handleChange}
+            error={errors.lineId} containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
+          />
+
+          <InputField
+            label="Facebook (ถ้ามี)" name="facebook" placeholder="ระบุชื่อ/ลิงก์ Facebook" onChange={handleChange}
+            error={errors.facebook} containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
+          />
+
+          <InputField
+            label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" placeholder="ระบุอีเมลผู้ปกครอง" onChange={handleChange}
+            error={errors.parentEmail}
           />
 
           <InputField 

@@ -191,8 +191,27 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 		return
 	}
 
+	// กันสลิปซ้ำ: ถ้า transRef นี้เคยถูกใช้กับใบแจ้งหนี้อื่นไปแล้ว ห้ามยืนยันซ้ำ
+	// (ไม่ฝากไว้กับ SlipOK อย่างเดียว เผื่อกรณี log ฝั่ง SlipOK พลาดหรือถูก reset)
+	// ตัว partial unique index บน invoices.transaction_id เป็นแนวป้องกันสุดท้ายกันกรณี race
+	if data.TransRef != "" {
+		var dupCount int64
+		if err := s.db.Model(&models.Invoice{}).
+			Where("transaction_id = ? AND id <> ?", data.TransRef, invoiceID).
+			Count(&dupCount).Error; err != nil {
+			log.Printf("[SlipOK] invoice #%d: ตรวจสอบสลิปซ้ำไม่สำเร็จ: %v", invoiceID, err)
+			return
+		}
+		if dupCount > 0 {
+			log.Printf("[SlipOK] invoice #%d: สลิปนี้ (transRef=%s) ถูกใช้ยืนยันการชำระเงินกับใบแจ้งหนี้อื่นไปแล้ว ปฏิเสธการยืนยันอัตโนมัติ", invoiceID, data.TransRef)
+			return
+		}
+	}
+
+	// ถ้าบันทึก transaction_id ไม่สำเร็จ (เช่นโดน unique index จาก race กับอีก request) ต้องหยุด ไม่ยืนยันการชำระเงิน
 	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoiceID).Update("transaction_id", data.TransRef).Error; err != nil {
-		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ: %v", invoiceID, err)
+		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ (อาจเป็นสลิปซ้ำ): %v", invoiceID, err)
+		return
 	}
 	if _, err := s.ConfirmPayment(invoiceID); err != nil {
 		log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านแล้วแต่ ConfirmPayment ล้มเหลว: %v", invoiceID, err)
@@ -224,9 +243,33 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error)
 			return err
 		}
 
+		billingIDs := make([]uint, 0, len(items))
 		for _, item := range items {
 			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusPaid).Error; err != nil {
 				return errors.New("ไม่สามารถอัปเดตสถานะบิลเป็นชำระเงินแล้วได้")
+			}
+			billingIDs = append(billingIDs, item.BillingID)
+		}
+
+		// ปลดล็อกคอร์สของลูกค้าใหม่ที่รอชำระเงินอยู่ ให้เริ่มเรียนได้ พร้อมเริ่มเดินนาฬิกา
+		//
+		// ลูกค้าใหม่จะถูกตั้งเป็น awaiting_payment ตอนแอดมินอนุมัติ (ดู ApproveEnrollment)
+		// และจะได้ตารางเรียนก็ต่อเมื่อบิลที่ผูกไว้ถูกยืนยันการชำระเงินแล้วเท่านั้น
+		//
+		// ทำใน transaction เดียวกับการอัปเดตบิล เพื่อไม่ให้เกิดกรณีบิลจ่ายแล้ว
+		// แต่ enrollment ยังค้างที่ awaiting_payment
+		if len(billingIDs) > 0 {
+			var awaiting []models.Enrollment
+			if err := tx.Preload("Package").
+				Where("billing_id IN ? AND status = ?", billingIDs, models.EnrollmentStatusAwaitingPayment).
+				Find(&awaiting).Error; err != nil {
+				return errors.New("ไม่สามารถดึงรายการคอร์สที่รอชำระเงินได้")
+			}
+
+			for i := range awaiting {
+				if err := activateEnrollment(tx, &awaiting[i], awaiting[i].Package); err != nil {
+					return err
+				}
 			}
 		}
 

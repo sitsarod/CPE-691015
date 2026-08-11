@@ -12,6 +12,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
+  const [learningOutcomes, setLearningOutcomes] = useState("");
   const [status, setStatus] = useState("active");
   const [packages, setPackages] = useState<PackageFormInput[]>([]);
   const [initialPackageIds, setInitialPackageIds] = useState<string[]>([]);
@@ -23,6 +24,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         const data = await fetchCourseByIDAdmin(courseId, token);
         setCourseName(data.course_name);
         setDescription(data.description);
+        setLearningOutcomes((data.learning_outcomes ?? []).join("\n"));
         setStatus(data.status);
         
         const loadedPackages = (data.packages || []).map((pkg: CoursePackageDTO) => ({
@@ -32,6 +34,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           hours_count: pkg.hours_count,
           max_seats: pkg.max_seats ?? ("" as const),
           price: pkg.price,
+          duration_days: pkg.duration_days ?? ("" as const),
           schedules: (pkg.schedules || []).map((sch: PackageScheduleInfoDTO, i: number) => ({
             id: `sch-${i}-${Date.now()}`,
             day_of_week: sch.day_of_week,
@@ -51,7 +54,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
     loadCourse();
   }, [courseId]);
 
-  const addPackage = () => setPackages([...packages, { id: `temp-${Date.now()}`, isNew: true, sessions_count: "", hours_count: "", max_seats: "", price: "", schedules: [] }]);
+  const addPackage = () => setPackages([...packages, { id: `temp-${Date.now()}`, isNew: true, sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }]);
   
   const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
   
@@ -89,6 +92,10 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         course_name: courseName,
         description: description,
         status: status,
+        learning_outcomes: learningOutcomes
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== ""),
       }, token);
 
       // 2. Manage Packages (Delete removed, Update existing, Create new)
@@ -108,6 +115,9 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           end_time: s.end_time
         }));
 
+        const durationField =
+          pkg.duration_days !== "" ? { duration_days: Number(pkg.duration_days) } : {};
+
         if (pkg.isNew) {
           await createPackage({
             course_id: courseId,
@@ -115,6 +125,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            ...durationField,
             schedules: schedulesDto
           }, token);
         } else {
@@ -123,6 +134,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            ...durationField,
             schedules: schedulesDto
           }, token);
         }
@@ -164,9 +176,23 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">รายละเอียด <span className="text-red-500">*</span></label>
-            <textarea 
+            <textarea
               required value={description} onChange={(e) => setDescription(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              สิ่งที่จะได้เรียนรู้
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              พิมพ์บรรทัดละ 1 ข้อ — จะแสดงเป็นรายการติ๊กถูกในหน้าคอร์สและหน้าสมัครเรียน
+            </p>
+            <textarea
+              value={learningOutcomes}
+              onChange={(e) => setLearningOutcomes(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 h-40 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none font-mono text-sm"
+              placeholder={"การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง\nฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม"}
             />
           </div>
           <div>
@@ -206,7 +232,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1} {pkg.isNew && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded ml-2">ใหม่</span>}</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
@@ -233,10 +259,22 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>
-                  <input 
+                  <input
                     type="number" required min="0" value={pkg.price} onChange={(e) => updatePackageField(pkg.id, "price", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">อายุสิทธิ์ (วัน)</label>
+                  <input
+                    type="number" min="1" max="366" value={pkg.duration_days}
+                    onChange={(e) => updatePackageField(pkg.id, "duration_days", e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เว้นว่าง = คงเดิม"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    มีผลกับผู้สมัครใหม่เท่านั้น
+                  </p>
                 </div>
               </div>
 

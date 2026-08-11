@@ -4,6 +4,7 @@ export interface BackendUser {
   lastName: string;
   email: string;
   role: string;
+  customer?: { nickname?: string } | null;
 }
 
 export interface BillingTypeDTO {
@@ -47,6 +48,7 @@ export interface BankAccount {
   bank_name: string;
   account_no: string;
   account_name: string;
+  promptpay_id: string;
   is_active: boolean;
   auto_verify_enabled: boolean;
 }
@@ -62,7 +64,7 @@ export interface Coach {
 export interface Expense {
   id: number;
   expenseamount: number;
-  expensetype: "coach_wages" | "court_rental" | "equipment" | "advertising" | "other";
+  expensetype: "coach_wages" | "coach_other" | "court_rental" | "equipment" | "advertising" | "other";
   expensedescription: string;
   expensedate: string; // ISO string
   coach_id?: number;

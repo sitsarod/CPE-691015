@@ -42,13 +42,20 @@ export default function BillingIssueForm({
   const [billingDescription, setBillingDescription] = useState('');
   const [dueDate, setDueDate] = useState(getNextWeekDate());
 
+  // ยอดหารเฉลี่ยแบบกลุ่ม — ถ้ามีเศษให้ปัดขึ้นเป็นจำนวนเต็มบาท
+  const groupTotal = (parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0);
+  const perPersonRaw =
+    selectedStudentIds.length > 0 ? groupTotal / selectedStudentIds.length : 0;
+  const perPersonRounded = Math.ceil(perPersonRaw);
+  const hasRounding = perPersonRounded !== perPersonRaw;
+
   // Filter students based on search query in the form checklist
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const fullName = `${s.firstName || ''} ${s.lastName || ''}`.toLowerCase();
-      const email = (s.email || '').toLowerCase();
+      const nickname = (s.customer?.nickname || '').toLowerCase();
       const query = studentSearchQuery.toLowerCase();
-      return fullName.includes(query) || email.includes(query);
+      return fullName.includes(query) || nickname.includes(query);
     });
   }, [students, studentSearchQuery]);
 
@@ -107,8 +114,8 @@ export default function BillingIssueForm({
       if (billingMode === 'individual') {
         calculatedAmount = parseFloat(price);
       } else {
-        const total = (parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0);
-        calculatedAmount = total / selectedStudentIds.length;
+        // ปัดขึ้นเป็นจำนวนเต็มบาทให้ตรงกับที่แสดงในฟอร์ม
+        calculatedAmount = perPersonRounded;
       }
 
       const payload = {
@@ -233,8 +240,10 @@ export default function BillingIssueForm({
                         className="w-4 h-4 text-[#CD0D13] rounded border-slate-300 focus:ring-[#CD0D13] accent-red-650 mr-3"
                       />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm block truncate">{s.firstName} {s.lastName}</span>
-                        <span className="text-xxs text-slate-400 block truncate">{s.email}</span>
+                        <span className="text-sm block truncate">
+                          {s.firstName} {s.lastName}
+                          {s.customer?.nickname && ` (${s.customer.nickname})`}
+                        </span>
                       </div>
                     </label>
                   );
@@ -294,7 +303,7 @@ export default function BillingIssueForm({
               /* Group Pricing (Cost-Split Inputs) */
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">จำนวนชั่วโมง <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">จำนวน <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     value={hours}
@@ -307,7 +316,7 @@ export default function BillingIssueForm({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">อัตรา (บาท/ชั่วโมง) <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">อัตรา (บาท/จำนวน) <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <input
                       type="number"
@@ -335,7 +344,7 @@ export default function BillingIssueForm({
                 </span>
               </div>
               <div>
-                <span className="text-xxs text-slate-400 block font-semibold uppercase tracking-wider">จำนวนผู้รับภาระ</span>
+                <span className="text-xxs text-slate-400 block font-semibold uppercase tracking-wider">จำนวนผู้รับ</span>
                 <span className="text-sm font-bold text-slate-850 mt-1 block">
                   {selectedStudentIds.length} คน
                 </span>
@@ -343,11 +352,13 @@ export default function BillingIssueForm({
               <div>
                 <span className="text-xxs text-[#CD0D13] block font-bold uppercase tracking-wider">หารเฉลี่ยตกคนละ</span>
                 <span className="text-lg font-black text-[#CD0D13] mt-0.5 block">
-                  ฿{(selectedStudentIds.length > 0 
-                    ? (((parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0)) / selectedStudentIds.length) 
-                    : 0
-                  ).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  ฿{perPersonRounded.toLocaleString('th-TH')}
                 </span>
+                {hasRounding && (
+                  <span className="text-[10px] font-medium text-amber-600 block mt-0.5">
+                    ปัดขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -359,7 +370,7 @@ export default function BillingIssueForm({
               rows={2}
               value={billingDescription}
               onChange={(e) => setBillingDescription(e.target.value)}
-              placeholder="เช่น ค่าสอนแบดมินตันเดือนมิถุนายน หรือ ค่าเช่าสนามคอร์สผู้รักษาประตูหารเฉลี่ย"
+              placeholder="เช่น ค่าลูกแบต หรือ ค่าเช่าสนาม"
               className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
               required
             />
@@ -387,13 +398,15 @@ export default function BillingIssueForm({
                 {billingMode === 'individual' ? 'ราคาเรียกเก็บต่อคน' : 'ราคาเฉลี่ยต่อคนหลังจากหาร'}
               </span>
               <h4 className="text-3xl font-extrabold text-slate-900 mt-1">
-                {(billingMode === 'individual'
-                  ? (parseFloat(price) || 0)
-                  : (selectedStudentIds.length > 0
-                      ? (((parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0)) / selectedStudentIds.length)
-                      : 0)
-                ).toLocaleString('th-TH', { minimumFractionDigits: 2 })} <span className="text-sm font-semibold text-slate-500 font-normal">บาท</span>
+                {billingMode === 'individual'
+                  ? (parseFloat(price) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })
+                  : perPersonRounded.toLocaleString('th-TH')} <span className="text-sm font-semibold text-slate-500 font-normal">บาท</span>
               </h4>
+              {billingMode === 'group' && hasRounding && (
+                <span className="text-xs font-medium text-amber-600 mt-1 block">
+                  * ปัดเศษขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ต่อคน
+                </span>
+              )}
             </div>
             <button
               type="submit"

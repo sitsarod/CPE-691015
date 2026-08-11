@@ -1,12 +1,127 @@
 // frontend/src/services/coachAPI.ts
 import {
   CoachProfile,
+  CoachPaymentType,
   AvailabilitySlot,
   WorkScheduleItem,
   CoachWageEntry
 } from "@/types/coach";
+import { apiFetch } from "@/services/apiClient";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// ===== ส่วนของแอดมิน: จัดการข้อมูลโค้ช (list / create / update / delete) =====
+
+// ข้อมูลโค้ชแบบย่อ ใช้ในหน้าตารางรายชื่อ (ตรงกับ dto.CoachResponse)
+export interface CoachListItem {
+  id: number;
+  user_id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  nickname: string;
+  specialization: string;
+  coach_license: string;
+  profile_picture: string;
+  phone: string;
+  lineId?: string;
+  facebook?: string;
+}
+
+// ข้อมูลสำหรับสร้างโค้ชใหม่ (ตรงกับ dto.CreateCoachRequest — แอดมินกรอกทั้งหมด)
+export interface CreateCoachInput {
+  user_id: number;
+  phone: string;
+  lineId?: string;   // ไม่บังคับ
+  facebook?: string; // ไม่บังคับ
+  uid: string;
+  address: string;
+  birth_date: string; // YYYY-MM-DD
+  nickname: string;
+  profile_picture: string;
+  specialization: string;
+  coach_license: string;
+  bank_account: string;
+  payment_info: string;
+  payment_type: CoachPaymentType;
+  pay_rate: number;
+}
+
+// ข้อมูลที่แก้ไขได้ผ่าน PATCH /coaches/:id (ข้อมูลทั่วไป)
+export interface UpdateCoachInput {
+  phone?: string;
+  lineId?: string;
+  facebook?: string;
+  address?: string;
+  nickname?: string;
+  profile_picture?: string;
+  bank_account?: string;
+  payment_info?: string;
+}
+
+// ข้อมูลที่แอดมินแก้ได้ผ่าน PATCH /coaches/:id/level (ระดับ + ค่าจ้าง)
+export interface AdminUpdateCoachInput {
+  specialization?: string;
+  coach_license?: string;
+  payment_type?: CoachPaymentType;
+  pay_rate?: number;
+}
+
+interface Wrapped<T> {
+  data: T;
+}
+
+// [GET] แอดมินดึงรายชื่อโค้ชทั้งหมด
+export async function getAllCoachesAPI(): Promise<CoachListItem[]> {
+  const res = await apiFetch<Wrapped<CoachListItem[]>>("/coaches", {
+    method: "GET",
+  });
+  return res.data || [];
+}
+
+// [GET] ดึงข้อมูลโค้ช 1 คนแบบละเอียด (ใช้กับหน้ารายละเอียด/แก้ไข)
+export async function getCoachDetailAPI(coachId: number): Promise<CoachProfile> {
+  return await apiFetch<CoachProfile>(`/coaches/${coachId}`, { method: "GET" });
+}
+
+// [POST] แอดมินสร้างโปรไฟล์โค้ชใหม่ (ต้องมี user_id ของผู้ใช้ที่มี role = coach อยู่แล้ว)
+export async function createCoachAPI(
+  data: CreateCoachInput
+): Promise<CoachListItem> {
+  return await apiFetch<CoachListItem>("/coaches", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// [PATCH] แก้ไขข้อมูลทั่วไปของโค้ช
+export async function updateCoachAPI(
+  coachId: number,
+  data: UpdateCoachInput
+): Promise<CoachListItem> {
+  return await apiFetch<CoachListItem>(`/coaches/${coachId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+// [PATCH] แอดมินแก้ระดับ (specialization) และค่าจ้างต่อครั้งของโค้ช
+export async function adminUpdateCoachLevelAPI(
+  coachId: number,
+  data: AdminUpdateCoachInput
+): Promise<CoachListItem> {
+  return await apiFetch<CoachListItem>(`/coaches/${coachId}/level`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+// [DELETE] แอดมินลบโปรไฟล์โค้ช
+export async function deleteCoachAPI(coachId: number): Promise<void> {
+  await apiFetch<{ message: string }>(`/coaches/${coachId}`, {
+    method: "DELETE",
+  });
+}
 
 // ดึงข้อมูลโปรไฟล์ของโค้ชที่ล็อกอินอยู่ (resolve coach_id จาก JWT ที่ backend เอง)
 export async function fetchMyCoachProfile(token: string): Promise<CoachProfile> {
@@ -20,6 +135,22 @@ export async function fetchMyCoachProfile(token: string): Promise<CoachProfile> 
   const resData = await response.json();
   if (!response.ok) {
     throw new Error(resData.error || "ไม่สามารถดึงข้อมูลโปรไฟล์โค้ชได้");
+  }
+  return resData;
+}
+
+// ดึงข้อมูลโค้ช 1 คนตาม id (admin หรือเจ้าของ) — ใช้ดึง payment_type/pay_rate มาคำนวณค่าจ้าง
+export async function fetchCoachById(coachId: number, token: string): Promise<CoachProfile> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลโค้ชได้");
   }
   return resData;
 }

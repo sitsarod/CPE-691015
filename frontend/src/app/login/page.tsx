@@ -1,7 +1,7 @@
 // frontend/src/app/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation"; 
 import Button from "@/components/Button";
@@ -28,8 +28,17 @@ export default function LoginPage() {
  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState(""); 
+  const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // แจ้งเตือนเมื่อถูกเด้งมาหน้านี้เพราะเซสชันหมดอายุ (SessionGuard แนบ ?expired=1 มา)
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("expired") === "1") {
+      setSessionExpired(true);
+    }
+  }, []);
 
  
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,6 +50,7 @@ try {
       const data = await loginAPI({ email, password });
 
       localStorage.setItem("token", data.token);
+      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("firstName", data.user.firstName);
       localStorage.setItem("lastName", data.user.lastName ?? "");
@@ -77,6 +87,12 @@ try {
           <h2 className="text-3xl font-bold text-gray-900 mb-2">เข้าสู่ระบบ</h2>
           <p className="text-gray-500">Koyama Badminton School</p>
         </div>
+
+        {sessionExpired && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm text-center">
+            เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง
+          </div>
+        )}
 
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">

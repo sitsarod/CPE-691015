@@ -9,10 +9,21 @@ import (
 type EnrollmentStatus string
 
 const (
-	EnrollmentStatusPending   EnrollmentStatus = "pending"
-	EnrollmentStatusActive    EnrollmentStatus = "active"
+	EnrollmentStatusPending EnrollmentStatus = "pending" // รอแอดมินอนุมัติ
+
+	// EnrollmentStatusAwaitingPayment = อนุมัติแล้ว แต่ยังเรียนไม่ได้จนกว่าจะชำระเงิน
+	//
+	// ใช้เฉพาะ "คอร์สแรก" ของนักเรียนแต่ละคน (ดู EnrollmentService.ApproveEnrollment)
+	// นักเรียนเก่าที่เคยเรียนแล้วจะข้ามสถานะนี้ไปเป็น active ทันทีที่อนุมัติ
+	//
+	// สถานะนี้ "จองที่นั่งไว้แล้ว" จึงต้องถูกนับรวมทุกที่ที่นับที่นั่ง
+	// มิฉะนั้นจะขายที่นั่งเกิน (ดู enrollmentSeatStatuses ใน services/course.go)
+	EnrollmentStatusAwaitingPayment EnrollmentStatus = "awaiting_payment"
+
+	EnrollmentStatusActive    EnrollmentStatus = "active" // เรียนได้ มีตารางเรียน
 	EnrollmentStatusCompleted EnrollmentStatus = "completed"
 	EnrollmentStatusCancelled EnrollmentStatus = "cancelled"
+	EnrollmentStatusExpired EnrollmentStatus = "expired"
 )
 
 type Enrollment struct {
@@ -22,6 +33,8 @@ type Enrollment struct {
 	TotalSessions      uint             `json:"total_sessions" valid:"required~totalSessions is required"`
 	RemainingSessions  uint             `json:"remaining_sessions" valid:"required~remainingSessions is required"`
 	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`
+	StartedAt *time.Time `json:"started_at"`
+	ExpiresAt *time.Time `json:"expires_at" gorm:"index"`
 
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`

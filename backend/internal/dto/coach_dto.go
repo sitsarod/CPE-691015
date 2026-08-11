@@ -2,24 +2,30 @@ package dto
 
 // Request สำหรับลงทะเบียนหรือสร้าง Coach (admin เป็นคนกรอกทั้งหมด รวมถึงระดับและค่าจ้างเริ่มต้น)
 type CreateCoachRequest struct {
-	UserID            uint    `json:"user_id" valid:"required~UserID is required"`
-	Phone             string  `json:"phone" valid:"required~phone is required"`
-	Uid               string  `json:"uid" valid:"required~uid is required"`
-	Address           string  `json:"address" valid:"required~address is required"`
-	BirthDate         string  `json:"birth_date" valid:"required~birthDate is required"` // รูปแบบ YYYY-MM-DD
-	Nickname          string  `json:"nickname" valid:"required~nickname is required"`
-	ProfilePicture    string  `json:"profile_picture" valid:"required~profilePicture is required"`
-	Specialization    string  `json:"specialization" valid:"required~specialization is required"`
-	BankAccount       string  `json:"bank_account" valid:"required~bankAccount is required"`
-	PaymentInfo       string  `json:"payment_info" valid:"required~paymentInfo is required"`
-	PayRatePerSession float64 `json:"pay_rate_per_session" valid:"required~payRatePerSession is required"` // บาทต่อ 1 ครั้งที่สอน
+	UserID         uint    `json:"user_id" valid:"required~UserID is required"`
+	Phone          string  `json:"phone" valid:"required~phone is required,numeric~เบอร์โทรต้องเป็นตัวเลข,stringlength(10|10)~เบอร์โทรต้องมี 10 หลัก"`
+	LineID         string  `json:"lineId"`   // ไม่บังคับ
+	Facebook       string  `json:"facebook"` // ไม่บังคับ
+	Uid            string  `json:"uid" valid:"required~uid is required,numeric~เลขบัตรประชาชนต้องเป็นตัวเลข,stringlength(13|13)~เลขบัตรประชาชนต้องมี 13 หลัก"`
+	Address        string  `json:"address" valid:"required~address is required"`
+	BirthDate      string  `json:"birth_date" valid:"required~birthDate is required"` // รูปแบบ YYYY-MM-DD
+	Nickname       string  `json:"nickname" valid:"required~nickname is required"`
+	ProfilePicture string  `json:"profile_picture"` // optional — ค่อยให้โค้ชอัปโหลดเองในหน้าโปรไฟล์ทีหลัง
+	Specialization string  `json:"specialization" valid:"required~specialization is required"`
+	CoachLicense   string  `json:"coach_license" valid:"required~coachLicense is required"`
+	BankAccount    string  `json:"bank_account" valid:"required~bankAccount is required"`
+	PaymentInfo    string  `json:"payment_info" valid:"required~paymentInfo is required"`
+	PaymentType    string  `json:"payment_type" valid:"required~paymentType is required"` // "per_session" หรือ "monthly"
+	PayRate        float64 `json:"pay_rate" valid:"required~payRate is required"`         // บาทต่อครั้ง (per_session) หรือ บาทต่อเดือน (monthly)
 }
 
 // Request สำหรับ coach แก้ไขข้อมูลตัวเอง
-// ตั้งใจไม่ใส่ Specialization และ PayRatePerSession ไว้ที่นี่ เพราะ coach ไม่ควรแก้ระดับ/ค่าจ้างตัวเองได้
-// ฟิลด์ 2 ตัวนี้แก้ผ่าน AdminUpdateCoachRequest โดย admin เท่านั้น
+// ตั้งใจไม่ใส่ Specialization และ PayRate/PaymentType ไว้ที่นี่ เพราะ coach ไม่ควรแก้ระดับ/ค่าจ้างตัวเองได้
+// ฟิลด์เหล่านี้แก้ผ่าน AdminUpdateCoachRequest โดย admin เท่านั้น
 type UpdateCoachRequest struct {
     Phone          *string `json:"phone"`
+	LineID         *string `json:"lineId"`
+	Facebook       *string `json:"facebook"`
     Address        *string `json:"address"`
     Nickname       *string `json:"nickname"`
     ProfilePicture *string `json:"profile_picture"`
@@ -27,11 +33,14 @@ type UpdateCoachRequest struct {
     PaymentInfo    *string `json:"payment_info"`
 }
 
-// Request สำหรับ admin แก้ไขระดับ (specialization) และค่าจ้างต่อครั้งของ coach
+// Request สำหรับ admin แก้ไขระดับ (specialization), ใบรับรองผู้ฝึกสอน (coach_license),
+// ประเภทการจ่ายเงิน (payment_type) และอัตราค่าจ้าง (pay_rate) ของ coach
 // แยกออกจาก UpdateCoachRequest โดยตั้งใจ เพื่อไม่ให้ coach เรียก endpoint เดียวกันแล้วแก้ค่าพวกนี้ได้เอง
 type AdminUpdateCoachRequest struct {
-	Specialization    *string  `json:"specialization"`
-	PayRatePerSession *float64 `json:"pay_rate_per_session"`
+	Specialization *string  `json:"specialization"`
+	CoachLicense   *string  `json:"coach_license"`
+	PaymentType    *string  `json:"payment_type"`
+	PayRate        *float64 `json:"pay_rate"`
 }
 
 // Response สำหรับส่งข้อมูลโค้ชกลับไปแสดงหน้าบ้าน (ใช้กับหน้า list, ซ่อนฟิลด์อ่อนไหวออก)
@@ -40,26 +49,36 @@ type CoachResponse struct {
 	UserID         uint   `json:"user_id"`
 	FirstName      string `json:"firstName"`
 	LastName       string `json:"lastName"`
+	Email          string `json:"email"`
 	Nickname       string `json:"nickname"`
 	Specialization string `json:"specialization"`
+	CoachLicense   string `json:"coach_license"`
 	ProfilePicture string `json:"profile_picture"`
 	Phone          string `json:"phone"`
+	LineID         string `json:"lineId"`
+	Facebook       string `json:"facebook"`
 }
 
 type CoachDetailResponse struct {
-	ID                uint    `json:"id"`
-	UserID            uint    `json:"user_id"`
-	FirstName         string  `json:"first_name"`
-	LastName          string  `json:"last_name"`
-	Email             string  `json:"email"`
-	Nickname          string  `json:"nickname"`
-	Phone             string  `json:"phone"`
-	Uid               string  `json:"uid"`
-	Address           string  `json:"address"`
-	BirthDate         string  `json:"birth_date"`
-	Specialization    string  `json:"specialization"`
-	ProfilePicture    string  `json:"profile_picture"`
-	PayRatePerSession float64 `json:"pay_rate_per_session"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
+	ID             uint    `json:"id"`
+	UserID         uint    `json:"user_id"`
+	FirstName      string  `json:"first_name"`
+	LastName       string  `json:"last_name"`
+	Email          string  `json:"email"`
+	Nickname       string  `json:"nickname"`
+	Phone          string  `json:"phone"`
+	LineID         string  `json:"lineId"`
+	Facebook       string  `json:"facebook"`
+	Uid            string  `json:"uid"`
+	Address        string  `json:"address"`
+	BirthDate      string  `json:"birth_date"`
+	Specialization string  `json:"specialization"`
+	CoachLicense   string  `json:"coach_license"`
+	ProfilePicture string  `json:"profile_picture"`
+	BankAccount    string  `json:"bank_account"`
+	PaymentInfo    string  `json:"payment_info"`
+	PaymentType    string  `json:"payment_type"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
+	PayRate        float64 `json:"pay_rate"`     // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 }
 
 // โครงสร้างย่อยของวันและเวลาว่างแต่ละช่วง

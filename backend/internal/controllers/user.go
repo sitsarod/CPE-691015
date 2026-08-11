@@ -141,6 +141,8 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
 	if user.Customer != nil {
         response.Nickname = user.Customer.Nickname
         response.PhoneNumber = user.Customer.PhoneNumber
+        response.LineID = user.Customer.LineID
+        response.Facebook = user.Customer.Facebook
         response.Gender = strings.ToLower(string(user.Customer.Gender))
         
         response.ParentEmail = user.Customer.ParentEmail
@@ -162,7 +164,30 @@ func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": users})
+
+	// map เป็น DTO เพื่อส่ง status/nickname/phone (จากตาราง customers) ไปให้หน้า admin
+	// admin/coach ไม่มี Customer จึงไม่มี status (หน้าบ้านจะถือว่า active ตามค่าเริ่มต้น)
+	response := make([]dto.UserProfileResponseDTO, 0, len(users))
+	for i := range users {
+		u := users[i]
+		item := dto.UserProfileResponseDTO{
+			ID:        u.ID,
+			Email:     u.Email,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+			Role:      string(u.Role),
+		}
+		if u.Customer != nil {
+			item.Nickname = u.Customer.Nickname
+			item.PhoneNumber = u.Customer.PhoneNumber
+			item.LineID = u.Customer.LineID
+			item.Facebook = u.Customer.Facebook
+			item.Status = string(u.Customer.Status)
+		}
+		response = append(response, item)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
 // GetActiveStudentsController ดึงรายชื่อผู้ใช้งานที่เป็นนักเรียนทั้งหมดส่งให้หน้าบ้าน
@@ -178,19 +203,34 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 	for _, u := range studentUsers {
 		nickname := ""
 		phone := ""
+		lineID := ""
+		facebook := ""
+		birthDate := ""
+		gender := ""
 
 		if u.Customer != nil {
 			nickname = u.Customer.Nickname
 			phone = u.Customer.PhoneNumber
+			lineID = u.Customer.LineID
+			facebook = u.Customer.Facebook
+			gender = strings.ToLower(string(u.Customer.Gender))
+			if !u.Customer.BirthDate.IsZero() {
+				birthDate = u.Customer.BirthDate.Format("2006-01-02")
+			}
 		}
 
 		response = append(response, dto.StudentListResponseDTO{
-			ID:          u.ID,
-			FirstName:   u.FirstName,
-			LastName:    u.LastName,
-			Email:       u.Email,
-			Nickname:    nickname,
-			PhoneNumber: phone,
+			ID:               u.ID,
+			FirstName:        u.FirstName,
+			LastName:         u.LastName,
+			Email:            u.Email,
+			Nickname:         nickname,
+			PhoneNumber:      phone,
+			GraceEnrollments: ctrl.userService.CountGraceEnrollments(u.ID),
+			LineID:           lineID,
+			Facebook:         facebook,
+			BirthDate:        birthDate,
+			Gender:           gender,
 		})
 	}
 
