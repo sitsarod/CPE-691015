@@ -213,7 +213,11 @@ export default function EnrollmentReviewPanel({
                     </div>
                     <div
                       className={`rounded-xl border p-3 ${expiryBadgeClass(
-                        describeExpiry(data.enrollment.days_left, data.enrollment.status).tone
+                        describeExpiry(
+                          data.enrollment.days_left,
+                          data.enrollment.status,
+                          data.enrollment.grace_days_left
+                        ).tone
                       )}`}
                     >
                       <p className="text-xs opacity-70">หมดอายุ</p>
@@ -221,7 +225,13 @@ export default function EnrollmentReviewPanel({
                         {formatThaiDate(data.enrollment.expires_at)}
                       </p>
                       <p className="text-xs font-semibold">
-                        {describeExpiry(data.enrollment.days_left, data.enrollment.status).label}
+                        {
+                          describeExpiry(
+                            data.enrollment.days_left,
+                            data.enrollment.status,
+                            data.enrollment.grace_days_left
+                          ).label
+                        }
                       </p>
                     </div>
                   </div>

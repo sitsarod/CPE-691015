@@ -212,6 +212,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 			Email:       u.Email,
 			Nickname:    nickname,
 			PhoneNumber: phone,
+			GraceEnrollments: ctrl.userService.CountGraceEnrollments(u.ID),
 		})
 	}
 

@@ -25,6 +25,8 @@ type ReviewEnrollmentInfo struct {
 	StartedAt *time.Time `json:"started_at"`
 	ExpiresAt *time.Time `json:"expires_at"`
 	DaysLeft  *int       `json:"days_left"`
+
+	GraceDaysLeft *int `json:"grace_days_left"`
 }
 
 // ReviewCustomerInfo ข้อมูลส่วนตัวและการติดต่อของผู้สมัคร

@@ -168,7 +168,7 @@ func (ctrl *EnrollmentController) ExtendEnrollment(c *gin.Context) {
     var req dto.ExtendEnrollmentReq
     if err := c.ShouldBindJSON(&req); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{
-            "error": "ข้อมูลไม่ถูกต้อง — จำนวนวันต้องอยู่ระหว่าง 1 ถึง 366 และต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร",
+            "error": "ข้อมูลไม่ถูกต้อง — จำนวนวันไม่เกิน 366 จำนวนครั้งไม่เกิน 100 และต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร",
         })
         return
     }
@@ -178,7 +178,9 @@ func (ctrl *EnrollmentController) ExtendEnrollment(c *gin.Context) {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
             c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-        case errors.Is(err, services.ErrExtensionInvalid), errors.Is(err, services.ErrExtensionReasonReq):
+        case errors.Is(err, services.ErrExtensionInvalid),
+            errors.Is(err, services.ErrExtensionEmpty),
+            errors.Is(err, services.ErrExtensionReasonReq):
             c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         case errors.Is(err, services.ErrExtensionNotStarted),
             errors.Is(err, services.ErrExtensionCancelled),
@@ -191,7 +193,7 @@ func (ctrl *EnrollmentController) ExtendEnrollment(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, gin.H{
-        "message": "ขยายระยะเวลาเรียนเรียบร้อยแล้ว",
+        "message": "ขยายสิทธิ์เรียนเรียบร้อยแล้ว",
         "data":    res,
     })
 }

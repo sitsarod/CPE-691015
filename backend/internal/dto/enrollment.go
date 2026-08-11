@@ -79,6 +79,27 @@ func DaysLeft(expiresAt *time.Time) *int {
     }
     return &days
 }
+const GracePeriodDays = 7
+
+func GraceDaysLeft(status string, expiresAt *time.Time, remainingSessions uint) *int {
+	if status != string(models.EnrollmentStatusExpired) || expiresAt == nil || remainingSessions == 0 {
+		return nil
+	}
+
+	graceEnd := expiresAt.AddDate(0, 0, GracePeriodDays)
+	remaining := time.Until(graceEnd)
+	if remaining <= 0 {
+		return nil // พ้นช่วงผ่อนผันไปแล้ว
+	}
+
+	// ปัดขึ้นเหมือน DaysLeft — เหลืออีก 3 ชั่วโมงยังถือว่ามีเวลาอีก 1 วัน
+	days := int(remaining.Hours() / 24)
+	if remaining.Hours() > float64(days*24) {
+		days++
+	}
+	return &days
+}
+
 func IsBillingOverdue(b *models.Billing) bool {
     if b == nil {
         return false
@@ -101,6 +122,8 @@ type CustomerEnrollmentDTO struct {
     ExpiresAt *time.Time `json:"expires_at"`
     DaysLeft  *int       `json:"days_left"`
     IsOverdue bool `json:"is_overdue"`
+
+    GraceDaysLeft *int `json:"grace_days_left"`
 
     // AttendedSessions = TotalSessions - RemainingSessions
     //
@@ -168,6 +191,8 @@ type AdminEnrollmentDTO struct {
     DaysLeft  *int       `json:"days_left"`
     IsOverdue bool       `json:"is_overdue"`
 
+    GraceDaysLeft *int `json:"grace_days_left"`
+
     Customer *AdminEnrollmentCustomerDTO `json:"customer"`
     Package  *AdminEnrollmentPackageDTO  `json:"package"`
 }
@@ -185,6 +210,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
         ExpiresAt:         e.ExpiresAt,
         DaysLeft:          DaysLeft(e.ExpiresAt),
         IsOverdue:         IsBillingOverdue(e.Billing),
+        GraceDaysLeft:     GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions),
     }
 
     if e.Customer != nil {
