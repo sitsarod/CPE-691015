@@ -211,3 +211,26 @@ func (ctrl *AutoQAController) AskQuestion(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
+
+func (ctrl *AutoQAController) AdminReply(c *gin.Context) {
+	idParam := c.Param("id")
+	sessionID, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+
+	var req dto.AdminReplyReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := ctrl.service.AdminReply(uint(sessionID), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}

@@ -59,3 +59,8 @@ type AskQuestionResponse struct {
 	Answer string     `json:"answer"`
 	Match  *AutoQADTO `json:"match,omitempty"`
 }
+
+type AdminReplyReq struct {
+	Answer string `json:"answer" binding:"required"`
+}
+

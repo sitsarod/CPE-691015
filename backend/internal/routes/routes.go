@@ -86,6 +86,9 @@ func SetupRoutes(r *gin.Engine) {
 	reviewController := controllers.NewReviewController(reviewService)
 
 	r.Use(middlewares.CORSMiddleware())
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.AbortWithStatus(204)
+	})
 
 	api := r.Group("/api")
 	{
@@ -324,6 +327,7 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/announcements/categories", announcementController.GetAllCategories)
 
 		// Automated Q&A Chat Session public endpoints
+		api.GET("/auto-qas/public", autoQAController.GetAllAutoQAs)
 		api.POST("/chat-sessions", autoQAController.CreateChatSession)
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
 		api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
@@ -364,13 +368,27 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		// Automated Q&A Chat Session and Knowledge Base protected endpoints
-		protectedChatSessionGroup := adminOnly.Group("/chat-sessions")
-		{
-			protectedChatSessionGroup.GET("/", autoQAController.GetAllChatSessions)
-			protectedChatSessionGroup.PATCH("/:id", autoQAController.UpdateChatSession)
-			protectedChatSessionGroup.DELETE("/:id", autoQAController.DeleteChatSession)
-		}
+		adminOnly.GET("/admin/chat-sessions", autoQAController.GetAllChatSessions)
+		adminOnly.PATCH("/admin/chat-sessions/:id", autoQAController.UpdateChatSession)
+		adminOnly.DELETE("/admin/chat-sessions/:id", autoQAController.DeleteChatSession)
+		adminOnly.POST("/admin/chat-sessions/:id/reply", autoQAController.AdminReply)
 
+<<<<<<< HEAD
+		adminOnly.GET("/admin/auto-qas", autoQAController.GetAllAutoQAs)
+		adminOnly.GET("/admin/auto-qas/:id", autoQAController.GetAutoQAByID)
+		adminOnly.POST("/admin/auto-qas", autoQAController.CreateAutoQA)
+		adminOnly.PATCH("/admin/auto-qas/:id", autoQAController.UpdateAutoQA)
+		adminOnly.DELETE("/admin/auto-qas/:id", autoQAController.DeleteAutoQA)
+
+		protectedQuizGroup := adminOnly.Group("/admin/quiz")
+		{
+			protectedQuizGroup.GET("/", quizController.GetAllQuestions)
+			protectedQuizGroup.POST("/", quizController.CreateQuestion)
+			protectedQuizGroup.PUT("/:id", quizController.UpdateQuestion)
+			protectedQuizGroup.DELETE("/:id", quizController.DeleteQuestion)
+			protectedQuizGroup.POST("/:id/options", quizController.AddOption)
+			protectedQuizGroup.DELETE("/options/:option_id", quizController.DeleteOption)
+=======
 		protectedAutoQAGroup := adminOnly.Group("/auto-qas")
 		{
 			protectedAutoQAGroup.GET("/", autoQAController.GetAllAutoQAs)
@@ -378,6 +396,7 @@ func SetupRoutes(r *gin.Engine) {
 			protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
 			protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
 			protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
+>>>>>>> ce0e3c4142bc366203f55bcad4cd24b4b10bba36
 		}
 	}
 }
