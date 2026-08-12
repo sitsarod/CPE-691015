@@ -77,14 +77,38 @@ export default function PaymentStats({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      {cards.map((c) => {
-        const Icon = c.icon;
-        return (
-          <div
-            key={c.key}
-            className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md"
-          >
+    <>
+      {/* จอเล็ก: ยุบเหลือการ์ดเดียว แบ่ง 3 ช่องแนวนอน ประหยัดพื้นที่ */}
+      <div className="grid grid-cols-3 divide-x divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:hidden">
+        {cards.map((c) => (
+          <div key={c.key} className="flex flex-col items-center gap-1.5 px-1.5 py-4 text-center">
+            <span className="text-[13px] font-bold leading-tight text-gray-600">{c.label}</span>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-xs font-bold text-gray-400">฿</span>
+              <span className={`text-lg font-black leading-none tabular-nums ${c.amountClass}`}>
+                {fmtAmount(c.amount)}
+              </span>
+            </div>
+            {c.badge ? (
+              <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-[#CC0000]">
+                {c.badge}
+              </span>
+            ) : (
+              <span className="text-[10px] leading-tight text-gray-400">{c.note}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* จอ tablet ขึ้นไป: การ์ดแบบเต็มรายละเอียด */}
+      <div className="hidden gap-4 sm:grid sm:grid-cols-3">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div
+              key={c.key}
+              className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 hover:shadow-md sm:p-5"
+            >
             {/* แถบ accent สี = เส้นข้างคอร์ต */}
             <span className={`absolute inset-y-0 left-0 w-1 ${c.accentBar}`} />
 
@@ -100,7 +124,7 @@ export default function PaymentStats({
             {/* ยอดเงิน */}
             <div className="mt-5 flex items-baseline gap-1">
               <span className="text-base font-bold text-gray-400">฿</span>
-              <span className={`text-[28px] font-black leading-none tracking-tight ${c.amountClass}`}>
+              <span className={`text-2xl font-black leading-none tracking-tight sm:text-[28px] ${c.amountClass}`}>
                 {fmtAmount(c.amount)}
               </span>
             </div>
@@ -114,9 +138,10 @@ export default function PaymentStats({
                 </span>
               )}
             </div>
-          </div>
-        );
-      })}
-    </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

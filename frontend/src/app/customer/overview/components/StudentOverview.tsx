@@ -105,15 +105,15 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-2xl border border-gray-200/80 border-l-4 bg-white p-5 shadow-sm transition hover:shadow-md"
+      className="rounded-2xl border border-gray-200/80 border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
       style={{ borderLeftColor: accent }}
     >
-      <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-gray-500">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-gray-500 sm:text-sm">{label}</p>
         <Icon className="h-4 w-4 shrink-0" style={{ color: accent }} />
       </div>
-      <p className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{value}</p>
-      <p className="mt-2 text-xs text-gray-400">{note}</p>
+      <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{value}</p>
+      <p className="mt-2 text-[11px] leading-snug text-gray-400 sm:text-xs">{note}</p>
     </div>
   );
 }
@@ -132,6 +132,72 @@ function OverviewSkeleton() {
         <div className="h-64 rounded-2xl bg-gray-100 lg:col-span-2" />
         <div className="h-64 rounded-2xl bg-gray-100" />
       </div>
+    </div>
+  );
+}
+
+/* --------------------------------- alerts ------------------------------- */
+
+type AlertItem = {
+  tone: "danger" | "info" | "success";
+  icon: LucideIcon;
+  title: string;
+  body: string;
+  action: string;
+  href: string;
+};
+
+// รายการการ์ดแจ้งเตือน — ใช้ซ้ำได้ทั้งตำแหน่งบนสุด (จอเล็ก) และในคอลัมน์ขวา (จอใหญ่)
+function AlertList({ alerts }: { alerts: AlertItem[] }) {
+  return (
+    <div className="space-y-3">
+      {alerts.map((al, i) => {
+        const tone =
+          al.tone === "danger"
+            ? {
+                wrap: "border-red-200 bg-red-50/70",
+                bar: "bg-red-500",
+                icon: "text-red-500",
+                title: "text-red-800",
+                action: "text-red-600 hover:text-red-700",
+              }
+            : al.tone === "success"
+            ? {
+                wrap: "border-emerald-200 bg-emerald-50/70",
+                bar: "bg-emerald-500",
+                icon: "text-emerald-600",
+                title: "text-emerald-800",
+                action: "text-emerald-600 hover:text-emerald-700",
+              }
+            : {
+                wrap: "border-blue-200 bg-blue-50/70",
+                bar: "bg-blue-500",
+                icon: "text-blue-500",
+                title: "text-blue-800",
+                action: "text-blue-600 hover:text-blue-700",
+              };
+        return (
+          <div
+            key={i}
+            className={`relative overflow-hidden rounded-xl border p-4 pl-5 ${tone.wrap}`}
+          >
+            <span className={`absolute inset-y-0 left-0 w-1 ${tone.bar}`} />
+            <div className="flex items-start gap-2.5">
+              <al.icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone.icon}`} />
+              <div className="min-w-0">
+                <p className={`text-sm font-bold ${tone.title}`}>{al.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-gray-600">{al.body}</p>
+                <Link
+                  href={al.href}
+                  className={`mt-2 inline-block text-xs font-semibold ${tone.action}`}
+                >
+                  {al.action}
+                </Link>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -202,7 +268,18 @@ export default function StudentOverview() {
 
   /* ----------------------------- คำนวณตัวเลข ----------------------------- */
   const activeEnrollments = enrollments.filter((e) => e.status === "active");
-  const remainingSessions = activeEnrollments.reduce(
+
+  // นับ/แสดงเฉพาะคอร์สที่ยืนยันการชำระเงินแล้วจริง ๆ
+  // = active + บิลที่ผูกอยู่ต้อง "paid" (ไม่ค้างชำระ/ไม่รอตรวจสอบ)
+  const billingById = new Map(billings.map((b) => [b.id, b]));
+  const confirmedEnrollments = activeEnrollments.filter((e) => {
+    if (e.billing_id == null) return true; // ไม่มีบิลผูก = ไม่มีค้างชำระ
+    const bill = billingById.get(e.billing_id);
+    if (!bill) return true; // หาบิลไม่เจอในรายการของลูกค้า จึงไม่บล็อก
+    return bill.billingstatus === "paid";
+  });
+
+  const remainingSessions = confirmedEnrollments.reduce(
     (s, e) => s + (e.remaining_sessions || 0),
     0
   );
@@ -235,6 +312,20 @@ export default function StudentOverview() {
   const awaitingPayment = enrollments.filter((e) => e.status === "awaiting_payment");
   const pendingEnrollments = enrollments.filter((e) => e.status === "pending");
 
+  // ข้อความ empty-state ของการ์ดความคืบหน้า/ตารางเรียน (เมื่อยังไม่มีคอร์สที่ยืนยันแล้ว)
+  const hasAwaitingConfirm = activeEnrollments.length > 0; // active แต่บิลยังไม่ paid = รอแอดมินยืนยัน
+  const hasUnpaidCourse = awaitingPayment.length > 0 || pendingEnrollments.length > 0; // ลงทะเบียนแล้วแต่ยังไม่จ่าย
+  const emptyLearningMsg = hasAwaitingConfirm
+    ? "คอร์สของคุณกำลังรอยืนยันการชำระเงิน"
+    : hasUnpaidCourse
+    ? "มีคอร์สที่รอชำระเงิน ชำระเงินเพื่อเริ่มเรียน"
+    : "ยังไม่มีคอร์สที่กำลังเรียน";
+  const emptyScheduleMsg = hasAwaitingConfirm
+    ? "รอยืนยันการชำระเงินก่อนจึงจะมีตารางเรียน"
+    : hasUnpaidCourse
+    ? "ชำระเงินเพื่อดูตารางเรียน"
+    : "ยังไม่มีตารางเรียน";
+
   // ----- คอร์สที่เรียนอยู่/เรียนจบแล้ว แต่ยังไม่ได้รีวิว -----
   const reviewedCourseIds = new Set(
     myReviews.map((r) => r.course_id).filter((id): id is number => id != null)
@@ -266,7 +357,7 @@ export default function StudentOverview() {
     dayLabel: string;
   };
   const upcoming: Upcoming[] = [];
-  activeEnrollments.forEach((e) => {
+  confirmedEnrollments.forEach((e) => {
     const courseName = e.package?.course?.course_name || "คอร์สเรียน";
     (e.package?.schedules || []).forEach((sch: ScheduleInfo) => {
       const when = nextOccurrence(sch.day_of_week, sch.start_time);
@@ -287,15 +378,7 @@ export default function StudentOverview() {
   ).length;
 
   // ----- การแจ้งเตือน -----
-  type Alert = {
-    tone: "danger" | "info" | "success";
-    icon: LucideIcon;
-    title: string;
-    body: string;
-    action: string;
-    href: string;
-  };
-  const alerts: Alert[] = [];
+  const alerts: AlertItem[] = [];
   if (overdueBillings.length > 0) {
     alerts.push({
       tone: "danger",
@@ -352,21 +435,21 @@ export default function StudentOverview() {
   const needsConsent = consent?.needs_decision;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* ---------- ทักทาย + ปุ่มลัด ---------- */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-gradient-to-br from-white to-gray-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4">
         <div>
-          <p className="text-sm text-gray-500">ยินดีต้อนรับกลับ</p>
-          <h3 className="mt-0.5 text-xl font-bold text-gray-900">
+          <p className="text-base text-gray-500">ยินดีต้อนรับกลับ</p>
+          <h3 className="mt-1 text-2xl font-bold text-gray-900 sm:text-3xl">
             สวัสดี{firstName ? `, ${firstName}` : ""} 👋
           </h3>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {QUICK_ACTIONS.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#CC0000]/40 hover:text-[#CC0000]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#CC0000]/40 hover:text-[#CC0000] sm:justify-start sm:px-4"
             >
               <Icon className="h-4 w-4 text-[#CC0000]" />
               {label}
@@ -400,11 +483,19 @@ export default function StudentOverview() {
         </div>
       )}
 
+      {/* ---------- การแจ้งเตือน (จอเล็ก: ไว้บนสุด) ---------- */}
+      {alerts.length > 0 && (
+        <div className="lg:hidden">
+          <h3 className="mb-3 text-lg font-bold text-gray-900">การแจ้งเตือน</h3>
+          <AlertList alerts={alerts} />
+        </div>
+      )}
+
       {/* ---------- KPI cards ---------- */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label="คอร์สที่กำลังเรียน"
-          value={activeEnrollments.length.toLocaleString("th-TH")}
+          value={confirmedEnrollments.length.toLocaleString("th-TH")}
           note={`ทั้งหมด ${enrollments.length} รายการลงทะเบียน`}
           accent="#2563EB"
           icon={BookOpen}
@@ -447,17 +538,17 @@ export default function StudentOverview() {
       ) : (
         <>
           {/* ---------- ความคืบหน้า + คาบเรียนที่จะถึง ---------- */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
             {/* Course progress */}
-            <div className="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm lg:col-span-2">
+            <div className="rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
               <h3 className="text-lg font-bold text-gray-900">ความคืบหน้าการเรียน</h3>
-              {activeEnrollments.length === 0 ? (
+              {confirmedEnrollments.length === 0 ? (
                 <p className="mt-8 text-center text-sm text-gray-400">
-                  ยังไม่มีคอร์สที่กำลังเรียน
+                  {emptyLearningMsg}
                 </p>
               ) : (
                 <ul className="mt-5 space-y-5">
-                  {activeEnrollments.map((e) => {
+                  {confirmedEnrollments.map((e) => {
                     const total = e.total_sessions || 0;
                     const remaining = e.remaining_sessions || 0;
                     const done = Math.max(0, total - remaining);
@@ -489,14 +580,14 @@ export default function StudentOverview() {
             </div>
 
             {/* Upcoming classes */}
-            <div className="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6">
               <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
                 <CalendarClock className="h-5 w-5 text-gray-400" />
                 คาบเรียนที่จะถึง
               </h3>
               {upcomingTop.length === 0 ? (
                 <p className="mt-8 text-center text-sm text-gray-400">
-                  ยังไม่มีตารางเรียน
+                  {emptyScheduleMsg}
                 </p>
               ) : (
                 <ul className="mt-5 space-y-4">
@@ -527,12 +618,12 @@ export default function StudentOverview() {
           </div>
 
           {/* ---------- สถานะการเงิน + การแจ้งเตือน ---------- */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
             {/* Finance summary */}
             <div className="space-y-4 lg:col-span-2">
               <h3 className="text-lg font-bold text-gray-900">สรุปการเงิน</h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-red-100 bg-red-50/60 p-5">
+                <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4 sm:p-5">
                   <div className="flex items-center gap-2 text-red-600">
                     <Wallet className="h-4 w-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">
@@ -558,7 +649,7 @@ export default function StudentOverview() {
                     </p>
                   )}
                 </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:p-5">
                   <div className="flex items-center gap-2 text-blue-600">
                     <Clock className="h-4 w-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">
@@ -572,7 +663,7 @@ export default function StudentOverview() {
                     {waitcheckBillings.length} รายการ
                   </p>
                 </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-5">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 sm:p-5">
                   <div className="flex items-center gap-2 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
                     <span className="text-xs font-bold uppercase tracking-wide">
@@ -597,68 +688,18 @@ export default function StudentOverview() {
               </Link>
             </div>
 
-            {/* Alerts */}
-            <div>
-              <h3 className="mb-4 text-lg font-bold text-gray-900">การแจ้งเตือน</h3>
-              <div className="space-y-3">
-                {alerts.map((al, i) => {
-                  const tone =
-                    al.tone === "danger"
-                      ? {
-                          wrap: "border-red-200 bg-red-50/70",
-                          bar: "bg-red-500",
-                          icon: "text-red-500",
-                          title: "text-red-800",
-                          action: "text-red-600 hover:text-red-700",
-                        }
-                      : al.tone === "success"
-                      ? {
-                          wrap: "border-emerald-200 bg-emerald-50/70",
-                          bar: "bg-emerald-500",
-                          icon: "text-emerald-600",
-                          title: "text-emerald-800",
-                          action: "text-emerald-600 hover:text-emerald-700",
-                        }
-                      : {
-                          wrap: "border-blue-200 bg-blue-50/70",
-                          bar: "bg-blue-500",
-                          icon: "text-blue-500",
-                          title: "text-blue-800",
-                          action: "text-blue-600 hover:text-blue-700",
-                        };
-                  return (
-                    <div
-                      key={i}
-                      className={`relative overflow-hidden rounded-xl border p-4 pl-5 ${tone.wrap}`}
-                    >
-                      <span className={`absolute inset-y-0 left-0 w-1 ${tone.bar}`} />
-                      <div className="flex items-start gap-2.5">
-                        <al.icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone.icon}`} />
-                        <div className="min-w-0">
-                          <p className={`text-sm font-bold ${tone.title}`}>
-                            {al.title}
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-                            {al.body}
-                          </p>
-                          <Link
-                            href={al.href}
-                            className={`mt-2 inline-block text-xs font-semibold ${tone.action}`}
-                          >
-                            {al.action}
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Alerts — จอใหญ่: คอลัมน์ขวา (จอเล็กย้ายไปบนสุด) */}
+            {alerts.length > 0 && (
+              <div className="hidden lg:block">
+                <h3 className="mb-4 text-lg font-bold text-gray-900">การแจ้งเตือน</h3>
+                <AlertList alerts={alerts} />
               </div>
-            </div>
+            )}
           </div>
 
           {/* ---------- ชวนเขียนรีวิว ---------- */}
           {reviewableCourses.length > 0 && (
-            <div className="flex flex-col gap-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm sm:p-6 md:flex-row md:items-center md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-500">
                   <Star className="h-6 w-6" fill="currentColor" />

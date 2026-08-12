@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  RefreshCw,
   AlertCircle,
-  FileText,
-  Calendar
+  Loader2
 } from "lucide-react";
 
 import { 
@@ -37,7 +35,7 @@ export default function CustomerPaymentPage() {
   
   // UI Control States
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"billings" | "invoices">("billings");
   const [selectedBillingIds, setSelectedBillingIds] = useState<number[]>([]);
@@ -64,8 +62,16 @@ export default function CustomerPaymentPage() {
     }, 4000);
   };
 
+  // ป้องกันการดึงข้อมูลซ้อน + กันยิงถี่เกินไปตอน refetch-on-focus
+  const isFetchingRef = useRef(false);
+  const lastFetchRef = useRef(0);
+
   // Main Loader
-  const loadData = async () => {
+  // background = true คือ refetch เงียบ ๆ (ไม่โชว์ skeleton) จะโชว์แถบสถานะด้านบนแทน
+  const loadData = async (background = false) => {
+    if (isFetchingRef.current) return; // มีการดึงข้อมูลค้างอยู่แล้ว ข้ามไป
+    isFetchingRef.current = true;
+    if (background) setIsRefetching(true);
     try {
       setError(null);
       const token = localStorage.getItem("token");
@@ -91,19 +97,36 @@ export default function CustomerPaymentPage() {
       setError(errorMessage);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
+      setIsRefetching(false);
+      isFetchingRef.current = false;
+      lastFetchRef.current = Date.now();
     }
   };
 
+  // โหลดข้อมูลครั้งแรก
   useEffect(() => {
     setIsLoading(true);
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    loadData();
-  };
+  // Refetch อัตโนมัติเมื่อผู้ใช้กลับมาโฟกัสหน้าต่าง/แท็บอีกครั้ง (แทนปุ่มรีเฟรช)
+  // ดึงเงียบ ๆ ไม่โชว์ skeleton และ throttle 10 วินาทีเพื่อลดภาระ server
+  useEffect(() => {
+    const REFETCH_THROTTLE_MS = 10_000;
+    const maybeRefetch = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchRef.current < REFETCH_THROTTLE_MS) return;
+      loadData(true);
+    };
+    window.addEventListener("focus", maybeRefetch);
+    document.addEventListener("visibilitychange", maybeRefetch);
+    return () => {
+      window.removeEventListener("focus", maybeRefetch);
+      document.removeEventListener("visibilitychange", maybeRefetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------------- Billings Selection Logic ----------------
   const handleSelectBilling = (id: number) => {
@@ -228,35 +251,18 @@ export default function CustomerPaymentPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn">
+    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Header Section */}
-      <div>
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-[#CC0000]">
-              <span className="h-px w-7 bg-[#CC0000]" />
-              <span className="text-xs font-black uppercase tracking-[0.25em]">การเงินของฉัน</span>
-            </div>
-            <h1 className="mt-2.5 text-3xl md:text-4xl font-black tracking-tight text-gray-900">
-              ชำระเงิน <span className="font-light text-gray-300">/</span> ประวัติการเงิน
-            </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              จัดการค่าใช้จ่ายและตรวจสอบสถานะการชำระเงินของคุณได้ที่นี่
-            </p>
+      {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
+      {isRefetching && (
+        <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
+          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-4 py-1.5 text-xs font-bold text-gray-600 shadow-md backdrop-blur">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#CC0000]" />
+            กำลังอัปเดตข้อมูล...
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="group flex items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600 transition-all hover:border-[#CC0000]/30 hover:text-[#CC0000] disabled:opacity-50 md:self-auto"
-          >
-            <RefreshCw className={`h-4 w-4 transition-colors ${isRefreshing ? "animate-spin text-[#CC0000]" : "text-gray-400 group-hover:text-[#CC0000]"}`} />
-            {isRefreshing ? "กำลังอัปเดต..." : "อัปเดตข้อมูล"}
-          </button>
         </div>
-        <div className="mt-6 h-px bg-gray-200" />
-      </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3">
@@ -280,17 +286,17 @@ export default function CustomerPaymentPage() {
       />
 
       {/* Tab Selector */}
-      <div className="flex gap-6 border-b border-gray-200">
+      <div className="flex gap-4 sm:gap-6 border-b border-gray-200">
         <button
           onClick={() => setActiveTab("billings")}
-          className={`flex cursor-pointer items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-bold transition-all ${
+          className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-xs font-bold transition-all sm:flex-none sm:justify-start sm:gap-2 sm:text-sm ${
             activeTab === "billings"
               ? "border-[#CC0000] text-[#CC0000]"
               : "border-transparent text-gray-500 hover:text-gray-900"
           }`}
         >
-          <FileText className="h-4 w-4" />
-          รายการบิลเรียกเก็บเงิน
+          <span className="sm:hidden">บิลเรียกเก็บเงิน</span>
+          <span className="hidden sm:inline">รายการบิลเรียกเก็บเงิน</span>
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
               activeTab === "billings" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
@@ -301,14 +307,14 @@ export default function CustomerPaymentPage() {
         </button>
         <button
           onClick={() => setActiveTab("invoices")}
-          className={`flex cursor-pointer items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-bold transition-all ${
+          className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-xs font-bold transition-all sm:flex-none sm:justify-start sm:gap-2 sm:text-sm ${
             activeTab === "invoices"
               ? "border-[#CC0000] text-[#CC0000]"
               : "border-transparent text-gray-500 hover:text-gray-900"
           }`}
         >
-          <Calendar className="h-4 w-4" />
-          ประวัติใบแจ้งหนี้
+          <span className="sm:hidden">ใบแจ้งหนี้</span>
+          <span className="hidden sm:inline">ประวัติใบแจ้งหนี้</span>
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
               activeTab === "invoices" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
