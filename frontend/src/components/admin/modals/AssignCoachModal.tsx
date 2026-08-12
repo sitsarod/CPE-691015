@@ -176,7 +176,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, av
           ) : (
             <div className="rounded-xl border border-slate-200 p-3 space-y-3">
               <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5 text-[#CD0D13]" /> เพิ่มโค้ช {emergency ? "(โหมดฉุกเฉิน: แสดงทุกคน)" : "(แสดงเฉพาะคนที่ว่างตรงเวลานี้)"}
+                <Plus className="w-3.5 h-3.5 text-[#CD0D13]" /> เพิ่มโค้ช {emergency ? "(กรณีฉุกเฉิน: แสดงโค้ชทุกคน)" : "(แสดงเฉพาะโค้ชที่ว่างเวลานี้)"}
               </p>
 
               {/* toggle โหมดฉุกเฉิน */}
@@ -188,8 +188,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, av
                   className="mt-0.5 accent-[#CD0D13] cursor-pointer"
                 />
                 <span className="text-[11px] text-amber-700 leading-snug">
-                  <span className="font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> โหมดฉุกเฉิน</span>
-                  ข้ามการเช็คเวลาว่าง — แสดงโค้ชทุกคนและมอบหมายได้แม้โค้ชไม่ว่าง (ใช้เมื่อไม่มีใครว่างตรงเวลานี้จริงๆ)
+                  <span className="font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> กรณีฉุกเฉิน</span>
                 </span>
               </label>
 
