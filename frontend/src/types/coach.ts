@@ -44,6 +44,8 @@ export interface CoachProfile {
   payment_info: string;
   payment_type: CoachPaymentType;
   pay_rate: number;
+  /** QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน (มีเฉพาะใน response ตัวรายละเอียด) */
+  personalQR?: string;
 }
 
 export interface AvailabilitySlot {

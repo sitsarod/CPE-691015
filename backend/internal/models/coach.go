@@ -27,6 +27,15 @@ type Coach struct {
 	PaymentType string  `json:"payment_type" gorm:"type:varchar(20);default:'per_session'" valid:"required~paymentType is required"`
 	PayRate     float64 `json:"pay_rate" gorm:"type:decimal(10,2);default:0"` // อัตราค่าจ้าง: บาท/ครั้ง ถ้า per_session หรือ บาท/เดือน ถ้า monthly
 
+	// PersonalQRCode คือ QR ประจำตัวถาวรของโค้ช ใช้สแกนเช็คชื่อเข้างาน
+	//
+	// ใช้ namespace เดียวกับ QR ของลูกค้า คือค่าไม่ซ้ำกันข้ามทั้งสองตาราง
+	// เพื่อให้เครื่องสแกนตัวเดียวอ่านได้ทั้งนักเรียนและโค้ชโดยไม่ต้องแยกโหมด
+	//
+	// ⚠️ ห้ามคำนวณจากอีเมล ชื่อ หรือเลขบัตรประชาชน ต้องสุ่มผ่าน
+	// services.GenerateUniqueQRCode เท่านั้น (ดูเหตุผลใน services/personal_qr.go)
+	PersonalQRCode string `json:"personalQR" gorm:"type:varchar(64);unique"`
+
 	// FeatureOnHome เลือกให้โค้ชคนนี้แสดงในส่วนบุคลากรของหน้าแรกสาธารณะ
 	FeatureOnHome bool `json:"feature_on_home" gorm:"default:false"`
 

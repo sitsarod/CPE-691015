@@ -28,6 +28,22 @@ func NewAuthController(authService services.AuthService, userService *services.U
 	return &authController{authService: authService, userService: userService}
 }
 
+// encodeQRImage แปลงรหัส QR ประจำตัวเป็นรูป PNG แบบ data URL ให้หน้าบ้านเอาไปแสดงได้เลย
+//
+// ใช้ได้กับทั้ง QR ของนักเรียนและของโค้ช เพราะเป็นรหัสรูปแบบเดียวกัน
+// ถ้า encode ไม่สำเร็จจะคืนค่าว่าง ไม่ทำให้การล็อกอิน/สมัครสมาชิกล้มทั้งคำขอ
+// เพราะ QR เป็นข้อมูลเสริม ไม่ใช่เงื่อนไขของการเข้าสู่ระบบ
+func encodeQRImage(code string) string {
+	if code == "" {
+		return ""
+	}
+	pngBytes, err := qrcode.Encode(code, qrcode.Medium, 256)
+	if err != nil {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
+}
+
 func (ctrl *authController) Login(c *gin.Context) {
 	var input dto.LoginInput
 
@@ -42,14 +58,17 @@ func (ctrl *authController) Login(c *gin.Context) {
 		return
 	}
 
+	// ทั้งนักเรียนและโค้ชมี QR ประจำตัวไว้สแกนเช็คชื่อ จึงส่งรูป QR กลับไปให้ทั้งสองบทบาท
+	// (แอดมินไม่มีโปรไฟล์ทั้งสองแบบ ค่าจะเป็นค่าว่างซึ่งหน้าบ้านมองข้ามได้)
 	var qrBase64 string
 	var nickname string
-	if user.Customer != nil {
+	switch {
+	case user.Customer != nil:
 		nickname = user.Customer.Nickname
-		pngBytes, err := qrcode.Encode(user.Customer.PersonalQRCode, qrcode.Medium, 256)
-		if err == nil {
-			qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
-		}
+		qrBase64 = encodeQRImage(user.Customer.PersonalQRCode)
+	case user.Coach != nil:
+		nickname = user.Coach.Nickname
+		qrBase64 = encodeQRImage(user.Coach.PersonalQRCode)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -62,6 +81,13 @@ func (ctrl *authController) Login(c *gin.Context) {
 			"lastName":  user.LastName,
 			"role":      user.Role,
 			"email":     user.Email,
+
+			// ฟิลด์กลางที่ใช้ได้กับทุกบทบาท — โค้ดใหม่ควรอ่านจากตรงนี้
+			"nickname": nickname,
+			"qrImage":  qrBase64,
+
+			// คงคีย์ "customer" ไว้เพื่อไม่ให้หน้าบ้านที่อ่าน data.customer.qrImage อยู่เดิมพัง
+			// เมื่อย้ายหน้าบ้านไปอ่านฟิลด์ด้านบนครบแล้วค่อยลบคีย์นี้ทิ้ง
 			"customer": gin.H{
 				"nickname": nickname,
 				"qrImage":  qrBase64,
@@ -86,14 +112,13 @@ func (ctrl *authController) Register(c *gin.Context) {
 		return
 	}
 
+	// CreateUser เป็นคนสุ่ม PersonalQRCode ให้ผ่าน pointer ตัวเดียวกันนี้
+	// จึงต้องอ่านค่าหลังเรียก CreateUser เท่านั้น
 	var qrBase64 string
 	var nickname string
 	if input.Customer != nil {
 		nickname = input.Customer.Nickname
-		pngBytes, err := qrcode.Encode(input.Customer.PersonalQRCode, qrcode.Medium, 256)
-		if err == nil {
-			qrBase64 = "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
-		}
+		qrBase64 = encodeQRImage(input.Customer.PersonalQRCode)
 	}
 
 	loginInput := dto.LoginInput{
@@ -117,6 +142,13 @@ func (ctrl *authController) Register(c *gin.Context) {
 			"lastName":  user.LastName,
 			"role":      user.Role,
 			"email":     user.Email,
+
+			// ฟิลด์กลางที่ใช้ได้กับทุกบทบาท — โค้ดใหม่ควรอ่านจากตรงนี้
+			"nickname": nickname,
+			"qrImage":  qrBase64,
+
+			// คงคีย์ "customer" ไว้เพื่อไม่ให้หน้าบ้านที่อ่าน data.customer.qrImage อยู่เดิมพัง
+			// เมื่อย้ายหน้าบ้านไปอ่านฟิลด์ด้านบนครบแล้วค่อยลบคีย์นี้ทิ้ง
 			"customer": gin.H{
 				"nickname": nickname,
 				"qrImage":  qrBase64,

@@ -1,1 +1,0 @@
-package main; import (" CPE-691015/internal/models\; \fmt\; \os\; \time\; \github.com/golang-jwt/jwt/v5\); func main() { token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{\user_id\: 1, \role\: \admin\, \exp\: time.Now().Add(time.Hour).Unix()}); tokenString, _ := token.SignedString([]byte(\my_super_secret_key_1234\)); fmt.Println(tokenString) }

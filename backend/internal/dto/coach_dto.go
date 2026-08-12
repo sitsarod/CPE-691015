@@ -79,6 +79,13 @@ type CoachDetailResponse struct {
 	PaymentInfo    string  `json:"payment_info"`
 	PaymentType    string  `json:"payment_type"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 	PayRate        float64 `json:"pay_rate"`     // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
+
+	// PersonalQRCode คือ QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน
+	//
+	// ตั้งใจใส่ไว้เฉพาะใน response ตัวรายละเอียด (ซึ่งเรียกได้เฉพาะเจ้าของกับ admin)
+	// ไม่ใส่ใน CoachResponse ที่ใช้กับหน้า list เพราะค่านี้เป็นความลับ
+	// ไม่ควรหลุดไปกับ payload ของรายชื่อโค้ชทั้งหมด
+	PersonalQRCode string `json:"personalQR"`
 }
 
 // โครงสร้างย่อยของวันและเวลาว่างแต่ละช่วง

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/services"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -164,8 +165,15 @@ func seedCoaches(db *gorm.DB) {
 						return err
 					}
 
+					// QR ประจำตัวโค้ช สุ่มด้วยตัวสร้างตัวเดียวกับตอนแอดมินเพิ่มโค้ชจริง
+					qrCode, err := services.GenerateUniqueQRCode(tx)
+					if err != nil {
+						return err
+					}
+
 					coach := models.Coach{
 						UserID:         user.ID,
+						PersonalQRCode: qrCode,
 						Nickname:       data.Nickname,
 						Phone:          data.Phone,
 						LineID:         data.LineID,
@@ -213,7 +221,6 @@ func seedCustomers(db *gorm.DB) {
 		ParentEmail       string
 		ParentPhoneNumber string
 		ConsentedPurposes bool
-		PersonalQRCode string
 	}{
 		{
 			FirstName:         "สมศักดิ์",
@@ -229,7 +236,6 @@ func seedCustomers(db *gorm.DB) {
 			ParentEmail:       "parent1@gmail.com",
 			ParentPhoneNumber: "0898765432",
 			ConsentedPurposes: true,
-			PersonalQRCode:    "QR_STUDENT_001",
 		},
 		{
 			FirstName:         "สุดา",
@@ -245,7 +251,6 @@ func seedCustomers(db *gorm.DB) {
 			ParentEmail:       "parent2@gmail.com",
 			ParentPhoneNumber: "0897654321",
 			ConsentedPurposes: true,
-			PersonalQRCode:    "QR_STUDENT_002",
 		},
 		{
 			FirstName:         "มานะ",
@@ -261,7 +266,6 @@ func seedCustomers(db *gorm.DB) {
 			ParentEmail:       "parent3@gmail.com",
 			ParentPhoneNumber: "0896543210",
 			ConsentedPurposes: true,
-			PersonalQRCode:    "QR_STUDENT_003",
 		},
 	}
 
@@ -281,6 +285,14 @@ func seedCustomers(db *gorm.DB) {
 						return err
 					}
 
+					// QR ประจำตัวต้องสุ่มด้วยตัวสร้างตัวเดียวกับตอนสมัครสมาชิกจริง
+					// เพื่อให้ข้อมูล seed มีหน้าตาเหมือนข้อมูลจริงทุกประการ
+					// (เดิม hardcode เป็น QR_STUDENT_001 ซึ่งเดาได้และไม่ตรงกับของจริง)
+					qrCode, err := services.GenerateUniqueQRCode(tx)
+					if err != nil {
+						return err
+					}
+
 					customer := models.Customer{
 						UserID:            user.ID,
 						Nickname:          data.Nickname,
@@ -292,7 +304,7 @@ func seedCustomers(db *gorm.DB) {
 						ParentEmail:       data.ParentEmail,
 						ParentPhoneNumber: data.ParentPhoneNumber,
 						ConsentedPurposes: data.ConsentedPurposes,
-						PersonalQRCode:    data.PersonalQRCode,
+						PersonalQRCode:    qrCode,
 						Status:            models.CustomerStatusActive,
 					}
 					return tx.Create(&customer).Error
