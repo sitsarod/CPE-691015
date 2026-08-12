@@ -17,7 +17,7 @@ export default function ChatSessionsManagement() {
     setIsLoading(true);
     try {
       const data = await autoQaAPI.getAllChatSessions();
-      setSessions(data);
+      setSessions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load chat sessions', err);
     } finally {

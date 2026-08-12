@@ -8,7 +8,7 @@ export interface User {
 
 export interface AutoQA {
   id: number;
-  mode: 'keyword_match' | 'ai_predict';
+  mode: 'keyword_match' | 'ai_predict' | 'admin_reply';
   question: string;
   similar_question: string;
   answer: string;
