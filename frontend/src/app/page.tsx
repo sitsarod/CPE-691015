@@ -157,37 +157,39 @@ export default function Home() {
 
       {/* 4. ส่วนเสียงจากผู้เรียน (รีวิว) */}
       {content?.show_featured_reviews && reviews.length > 0 && (
-        <section id="reviews" className="w-full py-20 bg-white">
+        <section id="reviews" className="w-full py-24 bg-gradient-to-b from-rose-50/40 via-white to-white">
           <div className="container mx-auto px-6 md:px-12 lg:px-24">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="h-px w-8 bg-[#CC0000]/40" />
+              <span className="text-[#CC0000] text-sm font-bold uppercase tracking-widest">Reviews</span>
+              <span className="h-px w-8 bg-[#CC0000]/40" />
+            </div>
             <h2 className="text-4xl font-bold text-gray-800 text-center mb-3">
               {content.reviews_title || "เสียงจากผู้เรียน"}
             </h2>
             {content.reviews_subtitle && (
-              <p className="mb-12 text-center text-gray-500 max-w-2xl mx-auto">{content.reviews_subtitle}</p>
+              <p className="mb-14 text-center text-gray-500 max-w-2xl mx-auto">{content.reviews_subtitle}</p>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {!content.reviews_subtitle && <div className="mb-14" />}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {reviews.map((review) => (
-                <div key={review.id} className="bg-gray-50 border border-gray-200 rounded-2xl p-6 flex flex-col">
-                  <div className="flex items-center gap-1 mb-3">
+                <div
+                  key={review.id}
+                  className="group relative bg-white border border-gray-200 rounded-3xl p-8 flex flex-col items-center text-center shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-[#CC0000]/20 transition-all duration-300"
+                >
+                  {/* ดาว */}
+                  <div className="flex items-center justify-center gap-1 mb-4">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} size={18}
-                        className={star <= review.rating ? "text-amber-400" : "text-gray-300"}
+                      <Star key={star} size={20}
+                        className={star <= review.rating ? "text-amber-400" : "text-gray-200"}
                         fill={star <= review.rating ? "currentColor" : "none"} />
                     ))}
                   </div>
-                  <p className="text-gray-600 text-sm leading-relaxed flex-grow whitespace-pre-line">
-                    {review.comment}
+
+                  {/* เนื้อหารีวิว */}
+                  <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line">
+                    “{review.comment}”
                   </p>
-                  <div className="mt-4 pt-4 border-t border-gray-200 text-sm">
-                    <span className="font-bold text-gray-800">
-                      {review.customer?.nickname ||
-                        [review.customer?.firstName, review.customer?.lastName].filter(Boolean).join(" ") ||
-                        "ผู้เรียน"}
-                    </span>
-                    {review.course?.course_name && (
-                      <span className="text-gray-400"> · {review.course.course_name}</span>
-                    )}
-                  </div>
                 </div>
               ))}
             </div>

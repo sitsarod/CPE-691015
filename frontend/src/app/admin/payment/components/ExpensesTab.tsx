@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, Loader2, Calculator, Plus, X } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
+import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import { createExpense, deleteExpense } from "@/services/paymentAPI";
 import { fetchCoachById, fetchCoachSchedules } from "@/services/coachAPI";
 import { CreateExpenseReq } from "@/types/payment";
@@ -14,7 +15,7 @@ interface CoachWageInfo {
   payRate: number;
   sessionsDone: number; // จำนวนคาบที่สอนไปแล้ว (วันสอนผ่านไปแล้ว) — ใช้เฉพาะโค้ชรายครั้ง
   expected: number;     // ค่าจ้างที่ควรได้ทั้งหมด = sessionsDone * payRate (รายครั้ง) หรือ = payRate เต็มจำนวน (รายเดือน)
-  alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว — ใช้เฉพาะโค้ชรายครั้ง
+  alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว (รายครั้ง = สะสมทั้งหมด, รายเดือน = เฉพาะเดือนนี้)
   unpaid: number;       // ยอดที่เติมลงช่องจำนวนเงินให้อัตโนมัติ
 }
 
@@ -40,6 +41,19 @@ export default function ExpensesTab({
     receipturl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const tableScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
+
+  // แบ่งหน้าตารางค่าใช้จ่าย 10 รายการ/หน้า
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+  // รีเซ็ตกลับหน้าแรกเมื่อจำนวนรายการเปลี่ยน (เพิ่ม/ลบ)
+  useEffect(() => {
+    setPage(1);
+  }, [expenses.length]);
+  const totalPages = Math.max(1, Math.ceil(expenses.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedExpenses = expenses.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   // รายการรายได้ส่วนอื่น ๆ (โบนัส/อื่น ๆ) แบบกรอกเอง เฉพาะตอนจ่ายค่าจ้างโค้ช
   // เพิ่มได้หลายรายการ แต่ละรายการมีคำอธิบายและจำนวนเงินของตัวเอง
   const [otherIncomes, setOtherIncomes] = useState<{ description: string; amount: string }[]>([]);
@@ -77,9 +91,20 @@ export default function ExpensesTab({
       const payRate = coach.pay_rate || 0;
 
       if (paymentType === 'monthly') {
-        // โค้ชรายเดือน: ยอดค้างจ่าย = อัตราต่อเดือนเต็มจำนวนทุกครั้ง ไม่คำนวณจากจำนวนคาบสอน
-        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid: 0, unpaid: payRate });
-        setExpenseForm(prev => ({ ...prev, expenseamount: String(payRate) }));
+        // โค้ชรายเดือน: ยอดค้างจ่าย = เงินเดือน − ค่าจ้างที่จ่ายไปแล้ว "ในเดือนนี้" (กันจ่ายซ้ำในเดือนเดียว)
+        const now = new Date();
+        const y = now.getFullYear();
+        const mo = now.getMonth();
+        const alreadyPaid = expenses
+          .filter(e => {
+            if (e.coach_id !== coachId || e.expensetype !== 'coach_wages' || !e.expensedate) return false;
+            const d = new Date(e.expensedate);
+            return d.getFullYear() === y && d.getMonth() === mo;
+          })
+          .reduce((sum, e) => sum + e.expenseamount, 0);
+        const unpaid = Math.max(payRate - alreadyPaid, 0);
+        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid, unpaid });
+        setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
         return;
       }
 
@@ -230,11 +255,6 @@ export default function ExpensesTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
       {/* Form Column */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 self-start">
-        <div className="mb-5 pb-3 border-b border-slate-100">
-          <h3 className="text-md font-bold text-slate-800">บันทึกค่าใช้จ่ายใหม่</h3>
-          <p className="text-xs text-slate-500 mt-0.5">กรอกข้อมูลเพื่อบันทึกรายการใช้จ่ายในระบบ</p>
-        </div>
-
         <form onSubmit={handleSaveExpense} className="space-y-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600 block">ประเภทรายจ่าย</label>
@@ -292,8 +312,12 @@ export default function ExpensesTab({
                     <span>โค้ชรายเดือน — อัตราต่อเดือน</span>
                     <span className="font-semibold text-slate-800">฿{wageInfo.payRate.toLocaleString()}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>จ่ายแล้วเดือนนี้</span>
+                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
+                  </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
-                    <span className="font-bold text-slate-700">ยอดที่จะบันทึกจ่าย (เต็มจำนวน)</span>
+                    <span className="font-bold text-slate-700">คงค้างจ่าย</span>
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
                   {wageInfo.payRate === 0 && (
@@ -348,7 +372,7 @@ export default function ExpensesTab({
                   <button
                     type="button"
                     onClick={addOtherIncome}
-                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-[#A30A0E] cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] border border-[#CD0D13]/40 rounded-lg px-2.5 py-1 shadow-sm transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
                   </button>
@@ -461,19 +485,18 @@ export default function ExpensesTab({
       <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col self-start">
         <div className="p-6 border-b border-slate-200">
           <h3 className="text-md font-bold text-slate-800">รายการบันทึกค่าใช้จ่ายทั้งหมด</h3>
-          <p className="text-xs text-slate-500 mt-0.5">รวมประวัติการทำรายการจ่ายเงินออกของสถาบัน</p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div ref={tableScrollRef} className="overflow-x-auto no-scrollbar">
+          <table className="w-full md:min-w-[720px] text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
                 <th className="py-3 px-5">วันที่ทำรายการ</th>
-                <th className="py-3 px-5">หมวดหมู่</th>
+                <th className="py-3 px-5 hidden md:table-cell">หมวดหมู่</th>
                 <th className="py-3 px-5">รายละเอียด</th>
-                <th className="py-3 px-5">ผู้รับเงิน (โค้ช)</th>
+                <th className="py-3 px-5 hidden md:table-cell">ผู้รับเงิน (โค้ช)</th>
                 <th className="py-3 px-5 text-right">ยอดจ่าย</th>
-                <th className="py-3 px-5">หลักฐาน</th>
+                <th className="py-3 px-5 hidden md:table-cell">หลักฐาน</th>
                 <th className="py-3 px-5 text-center">จัดการ</th>
               </tr>
             </thead>
@@ -485,7 +508,7 @@ export default function ExpensesTab({
                   </td>
                 </tr>
               ) : (
-                expenses.map(exp => {
+                pagedExpenses.map(exp => {
                   let displayName = "อื่นๆ";
                   if (exp.expensetype === "coach_wages") displayName = "ค่าจ้างโค้ช";
                   else if (exp.expensetype === "coach_other") displayName = "รายได้อื่น (โค้ช)";
@@ -497,7 +520,7 @@ export default function ExpensesTab({
                   return (
                     <tr key={exp.id} className="hover:bg-slate-50/50 text-xs transition-colors">
                       <td className="py-3.5 px-5 text-slate-550 font-semibold">{exp.expensedate?.split('T')[0]}</td>
-                      <td className="py-3.5 px-5 font-bold text-slate-700">
+                      <td className="py-3.5 px-5 font-bold text-slate-700 hidden md:table-cell">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] ${
                           exp.expensetype === 'coach_wages'
                             ? 'bg-rose-50 text-rose-600 border border-rose-100'
@@ -513,13 +536,13 @@ export default function ExpensesTab({
                       <td className="py-3.5 px-5 text-slate-550 max-w-xs truncate" title={exp.expensedescription}>
                         {exp.expensedescription || "-"}
                       </td>
-                      <td className="py-3.5 px-5 font-medium text-slate-800">
+                      <td className="py-3.5 px-5 font-medium text-slate-800 hidden md:table-cell">
                         {exp.coach ? `${exp.coach.nickname}` : "-"}
                       </td>
                       <td className="py-3.5 px-5 text-right font-bold text-slate-900">
                         ฿{exp.expenseamount.toLocaleString()}
                       </td>
-                      <td className="py-3.5 px-5">
+                      <td className="py-3.5 px-5 hidden md:table-cell">
                         {exp.receipturl ? (
                           <a
                             href={exp.receipturl}
@@ -550,6 +573,34 @@ export default function ExpensesTab({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {expenses.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 text-xs">
+            <span className="text-slate-500">
+              แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, expenses.length)} จาก {expenses.length} รายการ
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ก่อนหน้า
+              </button>
+              <span className="text-slate-600 font-semibold whitespace-nowrap">หน้า {safePage}/{totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ถัดไป
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

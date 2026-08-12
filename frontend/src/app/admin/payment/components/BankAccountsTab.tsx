@@ -142,11 +142,6 @@ export default function BankAccountsTab({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-fadeIn">
-      <div className="mb-6 pb-4 border-b border-slate-150">
-        <h3 className="text-lg font-bold text-slate-800">เปิด-ปิดบัญชีรับเงินโอน</h3>
-        <p className="text-sm text-slate-500">เลือกบัญชีธนาคารหลักที่จะให้ผู้เรียนโอนเข้า หรือเพิ่ม/แก้ไขข้อมูลบัญชีธนาคารในระบบ</p>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {bankAccounts.map(account => {
           const isCopied = copiedId === account.ID;

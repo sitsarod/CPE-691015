@@ -96,16 +96,18 @@ function StatCard({
   note,
   accent,
   icon: Icon,
+  className = "",
 }: {
   label: string;
   value: string;
   note: string;
   accent: string;
   icon: LucideIcon;
+  className?: string;
 }) {
   return (
     <div
-      className="rounded-2xl border border-gray-200/80 border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+      className={`rounded-2xl border border-gray-200/80 border-l-4 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5 ${className}`}
       style={{ borderLeftColor: accent }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -499,6 +501,7 @@ export default function StudentOverview() {
           note={`ทั้งหมด ${enrollments.length} รายการลงทะเบียน`}
           accent="#2563EB"
           icon={BookOpen}
+          className="hidden sm:block"
         />
         <StatCard
           label="คาบเรียนคงเหลือ"
@@ -506,6 +509,7 @@ export default function StudentOverview() {
           note="รวมทุกคอร์สที่กำลังเรียน"
           accent="#0D9488"
           icon={Layers}
+          className="hidden sm:block"
         />
         <StatCard
           label="ยอดค้างชำระ"
@@ -513,6 +517,7 @@ export default function StudentOverview() {
           note={dueNote || `${unpaidBillings.length} บิลรอชำระ`}
           accent={unpaidAmount > 0 ? "#E63946" : "#0D9488"}
           icon={Wallet}
+          className="col-span-2 sm:col-span-1"
         />
         <StatCard
           label="คลาสภายใน 7 วัน"
@@ -520,6 +525,7 @@ export default function StudentOverview() {
           note="ตามตารางเรียนของคุณ"
           accent="#7C3AED"
           icon={CalendarClock}
+          className="hidden sm:block"
         />
       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, Users, Search, CheckSquare, Tag, Calendar, PlusCircle, AlertCircle, Info, Pencil } from 'lucide-react';
+import { User, Users, Search, CheckSquare, Tag, Calendar, AlertCircle, Info, Pencil } from 'lucide-react';
 import { BackendUser, BillingDTO } from './types';
 import { createBilling } from "@/services/paymentAPI";
 
@@ -151,13 +151,6 @@ export default function BillingIssueForm({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Form Column */}
       <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="mb-6 pb-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">สร้างใบแจ้งค่าใช้จ่ายใหม่</h3>
-            <p className="text-xs text-slate-500 mt-0.5">กรอกข้อมูล เลือกประเภทเรียกเก็บเงิน และผู้เรียนปลายทางเพื่อส่งรายการเรียกเก็บ</p>
-          </div>
-        </div>
-
         {/* Billing Mode Switcher */}
         <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 max-w-md">
           <button
@@ -195,7 +188,7 @@ export default function BillingIssueForm({
                 <button
                   type="button"
                   onClick={handleSelectAllFiltered}
-                  className="text-xs text-[#CD0D13] hover:text-[#A30A0E] font-bold flex items-center space-x-1 cursor-pointer"
+                  className="text-xs text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] font-bold flex items-center space-x-1.5 cursor-pointer border border-[#CD0D13]/40 rounded-lg px-2.5 py-1.5 shadow-sm transition-colors"
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
                   <span>เลือกทั้งหมดตามตัวกรอง</span>
@@ -216,7 +209,7 @@ export default function BillingIssueForm({
             </div>
 
             {/* Scrollable Checklist */}
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-52 overflow-y-auto space-y-2">
+            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-52 overflow-y-auto no-scrollbar space-y-2">
               {filteredStudents.length === 0 ? (
                 <div className="text-center text-slate-450 py-6 text-xs">
                   ไม่พบผู้เรียนที่ตรงกับคำค้นหา
@@ -336,7 +329,7 @@ export default function BillingIssueForm({
 
           {billingMode === 'group' && (
             /* Cost-splitting visual calculations box */
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-3 gap-4 text-center">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 sm:gap-4 text-center">
               <div>
                 <span className="text-xxs text-slate-400 block font-semibold uppercase tracking-wider">ราคารวมทั้งหมด</span>
                 <span className="text-sm font-bold text-slate-850 mt-1 block">
@@ -412,7 +405,6 @@ export default function BillingIssueForm({
               type="submit"
               className="w-full sm:w-auto bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg shadow-red-200 flex items-center justify-center space-x-2 cursor-pointer"
             >
-              <PlusCircle className="w-5 h-5" />
               <span>ออกบิลส่งบิลเก็บเงิน</span>
             </button>
           </div>
@@ -420,13 +412,13 @@ export default function BillingIssueForm({
       </div>
 
       {/* Invoices History Column */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[600px] self-start">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col lg:h-[600px] self-start">
         <div className="mb-4 pb-3 border-b border-slate-100">
           <h3 className="text-md font-bold text-slate-800">ประวัติออกบิลล่าสุด</h3>
           <p className="text-xs text-slate-500 mt-0.5">รายการเรียกเก็บเงินที่สร้างส่งให้นักเรียน</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-1">
           {billings.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
               <AlertCircle className="w-8 h-8 mb-2" />
