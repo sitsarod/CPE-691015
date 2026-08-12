@@ -109,7 +109,7 @@ export default function CoachManagementPage() {
       ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["uid", "เลขบัตรประชาชน (UID)"],
       ["address", "ที่อยู่"], ["birth_date", "วันเกิด"], ["specialization", "ระดับฝีมือ"],
       ["coach_license", "ใบรับรองผู้ฝึกสอน"],
-      ["bank_account", "เลขบัญชีธนาคาร"], ["payment_info", "ข้อมูลการจ่ายเงิน"],
+      ["bank_account", "ธนาคาร"], ["payment_info", "เลขบัญชี"],
     ];
     for (const [key, label] of required) {
       if (!String(createForm[key]).trim()) {
@@ -169,7 +169,7 @@ export default function CoachManagementPage() {
 
     const required: [keyof EditCoachForm, string][] = [
       ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["address", "ที่อยู่"],
-      ["bank_account", "เลขบัญชีธนาคาร"], ["payment_info", "ข้อมูลการจ่ายเงิน"],
+      ["bank_account", "ธนาคาร"], ["payment_info", "เลขบัญชี"],
       ["specialization", "ระดับฝีมือ"], ["coach_license", "ใบรับรองผู้ฝึกสอน"],
     ];
     for (const [key, label] of required) {

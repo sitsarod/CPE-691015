@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -112,16 +113,24 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 		}
 	}
 
-	// 3) สนามเดียวกันในวันเดียวกันต้องไม่ถูกใช้โดยคาบอื่น (กันจองสนามซ้อน)
-	var courtJobs []models.WorkSchedule
-	if err := tx.Where("court_number = ? AND date = ? AND id <> ?", req.CourtNumber, req.Date, excludeID).Find(&courtJobs).Error; err != nil {
-		return err
-	}
-	for _, w := range courtJobs {
-		ws, _ := timeToMinutesWS(w.StartTime)
-		we, _ := timeToMinutesWS(w.EndTime)
-		if reqStart < we && ws < reqEnd {
-			return fmt.Errorf("%w: สนาม %s ถูกใช้งานในช่วงเวลานี้แล้ว", ErrScheduleConflict, req.CourtNumber)
+	// 3) สนาม (optional): ถ้าระบุสนามมา ต้องไม่ถูกใช้โดย "คาบอื่น" ที่ต่างคาบกันในเวลาชนกัน
+	//    แต่อนุญาตให้สนามซ้ำได้ถ้าเป็น "คาบเดียวกัน" (โค้ชหลายคน co-teach คาบเดียวกัน package_schedule_id ตรงกัน)
+	if strings.TrimSpace(req.CourtNumber) != "" {
+		var courtJobs []models.WorkSchedule
+		if err := tx.Where("court_number = ? AND date = ? AND id <> ?", req.CourtNumber, req.Date, excludeID).Find(&courtJobs).Error; err != nil {
+			return err
+		}
+		for _, w := range courtJobs {
+			ws, _ := timeToMinutesWS(w.StartTime)
+			we, _ := timeToMinutesWS(w.EndTime)
+			if reqStart < we && ws < reqEnd {
+				// เป็นคาบเดียวกัน (co-teach) ไหม? — package_schedule_id ตรงกันทั้งคู่และไม่ใช่ nil
+				sameSession := req.PackageScheduleID != nil && w.PackageScheduleID != nil && *req.PackageScheduleID == *w.PackageScheduleID
+				if sameSession {
+					continue // อนุญาต: โค้ชอีกคนสอนคาบเดียวกันบนสนามเดียวกัน
+				}
+				return fmt.Errorf("%w: สนาม %s ถูกใช้งานโดยคาบอื่นในช่วงเวลานี้แล้ว", ErrScheduleConflict, req.CourtNumber)
+			}
 		}
 	}
 

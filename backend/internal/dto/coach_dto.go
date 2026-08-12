@@ -114,7 +114,7 @@ type CreateWorkScheduleRequest struct {
 	Date        string `json:"date" valid:"required~date is required"` // รูปแบบ YYYY-MM-DD
 	StartTime   string `json:"start_time" valid:"required~startTime is required"`
 	EndTime     string `json:"end_time" valid:"required~endTime is required"`
-	CourtNumber string `json:"court_number" valid:"required~courtNumber is required"`
+	CourtNumber string `json:"court_number"` // optional — เว้นว่างได้ (ยังไม่ระบุสนาม)
 	Description string `json:"description"`
 	// IgnoreAvailability = โหมดฉุกเฉิน: ข้ามการเช็คว่าโค้ชว่างหรือไม่ (แต่ยังเช็คเวลาชน/สนามซ้อน)
 	// ใช้กรณีไม่มีโค้ชคนไหนว่างตรงเวลาเลย แต่แอดมินจำเป็นต้องมอบหมาย

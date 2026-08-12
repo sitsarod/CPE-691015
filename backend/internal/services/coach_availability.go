@@ -75,6 +75,14 @@ func NewCoachAvailabilityService(db *gorm.DB) *CoachAvailabilityService {
 	return &CoachAvailabilityService{db: db}
 }
 
+// GetAll ดึงเวลาว่างของโค้ชทุกคนในครั้งเดียว (query เดียว) — ใช้ในหน้า admin จัดตารางสอน
+// เพื่อเลี่ยงการยิงทีละโค้ช (N+1) frontend จะ group ตาม coach_id เอง
+func (s *CoachAvailabilityService) GetAll() ([]models.CoachAvailability, error) {
+	var all []models.CoachAvailability
+	err := s.db.Find(&all).Error
+	return all, err
+}
+
 // GetByCoachID ดึงตารางเวลาว่างทั้งหมดของ coach คนหนึ่ง (ใช้แสดงหน้า "ตารางเวลาว่าง" ของ coach)
 // coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
 func (s *CoachAvailabilityService) GetByCoachID(coachID uint, userID uint, role string) ([]models.CoachAvailability, error) {

@@ -4,7 +4,7 @@ import Button from "@/components/Button";
 import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
 import { FormError, DetailItem } from "@/components/admin/ManagementUI";
-import { CoachProfile, COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, CoachPaymentType } from "@/types/coach";
+import { CoachProfile, COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, CoachPaymentType, BANK_OPTIONS } from "@/types/coach";
 import { formatDate } from "@/lib/format";
 
 // ข้อมูลที่แก้ไขได้ (ผ่าน PATCH /coaches/:id + /coaches/:id/level)
@@ -83,8 +83,8 @@ export function EditCoachModal({
         </div>
         <InputField label="ที่อยู่" required value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputField label="เลขบัญชีธนาคาร" required value={editForm.bank_account} onChange={(e) => setEditForm({ ...editForm, bank_account: e.target.value })} />
-          <InputField label="ข้อมูลการจ่ายเงิน" required value={editForm.payment_info} onChange={(e) => setEditForm({ ...editForm, payment_info: e.target.value })} />
+          <SelectField label="ธนาคาร" required options={BANK_OPTIONS} value={editForm.bank_account} onChange={(e) => setEditForm({ ...editForm, bank_account: e.target.value })} />
+          <InputField label="เลขบัญชี" required inputMode="numeric" value={editForm.payment_info} onChange={(e) => setEditForm({ ...editForm, payment_info: e.target.value.replace(/[^\d]/g, "") })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField

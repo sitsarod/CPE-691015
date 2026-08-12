@@ -1,12 +1,14 @@
 // frontend/src/types/coach.ts
 
-// ตัวเลือกระดับฝีมือโค้ช (specialization) เรียงจากต่ำไปสูง
+// ตัวเลือกระดับฝีมือโค้ช (specialization) เรียงจากต่ำ (มือใหม่) ไปสูง (โปร) — ระดับหลัก ไม่มี -/+
 export const COACH_LEVEL_OPTIONS = [
+  { label: "BG", value: "BG" },
+  { label: "S", value: "S" },
   { label: "N", value: "N" },
   { label: "P", value: "P" },
-  { label: "S-", value: "S-" },
-  { label: "S", value: "S" },
-  { label: "S+", value: "S+" },
+  { label: "C", value: "C" },
+  { label: "B", value: "B" },
+  { label: "A", value: "A" },
 ];
 
 // ตัวเลือกใบรับรองผู้ฝึกสอน (coach_license) เรียงจากต่ำไปสูง
@@ -14,6 +16,24 @@ export const COACH_LICENSE_OPTIONS = [
   { label: "License C", value: "License C" },
   { label: "License B", value: "License B" },
   { label: "License A", value: "License A" },
+];
+
+// รายชื่อธนาคารให้เลือก (แทนการพิมพ์เอง กันชื่อไม่ตรงกัน)
+export const BANK_OPTIONS = [
+  { label: "ธนาคารกสิกรไทย", value: "ธนาคารกสิกรไทย" },
+  { label: "ธนาคารไทยพาณิชย์", value: "ธนาคารไทยพาณิชย์" },
+  { label: "ธนาคารกรุงเทพ", value: "ธนาคารกรุงเทพ" },
+  { label: "ธนาคารกรุงไทย", value: "ธนาคารกรุงไทย" },
+  { label: "ธนาคารกรุงศรีอยุธยา", value: "ธนาคารกรุงศรีอยุธยา" },
+  { label: "ธนาคารทหารไทยธนชาต (ttb)", value: "ธนาคารทหารไทยธนชาต" },
+  { label: "ธนาคารออมสิน", value: "ธนาคารออมสิน" },
+  { label: "ธ.ก.ส.", value: "ธ.ก.ส." },
+  { label: "ธนาคารซีไอเอ็มบีไทย", value: "ธนาคารซีไอเอ็มบีไทย" },
+  { label: "ธนาคารยูโอบี", value: "ธนาคารยูโอบี" },
+  { label: "ธนาคารเกียรตินาคินภัทร", value: "ธนาคารเกียรตินาคินภัทร" },
+  { label: "ธนาคารทิสโก้", value: "ธนาคารทิสโก้" },
+  { label: "ธนาคารแลนด์ แอนด์ เฮ้าส์", value: "ธนาคารแลนด์ แอนด์ เฮ้าส์" },
+  { label: "ธนาคารอิสลามแห่งประเทศไทย", value: "ธนาคารอิสลามแห่งประเทศไทย" },
 ];
 
 // ประเภทการจ่ายเงินของโค้ช — เลือกได้อย่างใดอย่างหนึ่งเท่านั้น (ไม่กรอกทั้งสองแบบพร้อมกัน)

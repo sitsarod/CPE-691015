@@ -54,6 +54,9 @@ func SetupRoutes(r *gin.Engine) {
 	courseService := services.NewCourseService(db)
 	courseController := controllers.NewCourseController(courseService)
 
+	courtService := services.NewCourtService(db)
+	courtController := controllers.NewCourtController(courtService)
+
 	packageService := services.NewPackageService(db)
 	packageController := controllers.NewPackageController(packageService)
 
@@ -163,6 +166,18 @@ func SetupRoutes(r *gin.Engine) {
 		// ปฏิทินคาบเรียนรายสัปดาห์ (session-centric) — แยก path ออกจาก /work-schedules/:id
 		// เพื่อไม่ให้ route ชนกับ param :id
 		adminOnly.GET("/schedule-sessions", workScheduleController.GetWeekSessions)
+
+		// เวลาว่างของโค้ชทุกคนในครั้งเดียว — ใช้ path แยก (/coach-availabilities) กัน route ชนกับ /coaches/:id
+		adminOnly.GET("/coach-availabilities", coachAvailabilityController.GetAllAvailabilities)
+
+		// --- จัดการสนาม (admin) ---
+		adminCourtGroup := adminOnly.Group("/courts")
+		{
+			adminCourtGroup.GET("", courtController.GetCourts)
+			adminCourtGroup.POST("", courtController.CreateCourt)
+			adminCourtGroup.PATCH("/:id", courtController.UpdateCourt)
+			adminCourtGroup.DELETE("/:id", courtController.DeleteCourt)
+		}
 
 		userGroup := protected.Group("/users")
 		{
