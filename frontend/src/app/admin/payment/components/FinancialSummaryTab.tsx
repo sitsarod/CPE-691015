@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Calendar, CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3 } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3 } from 'lucide-react';
 import { BillingDTO, Expense } from './types';
 import StatsCard from '@/components/StatsCard';
+import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 const MONTH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
@@ -20,11 +21,13 @@ export default function FinancialSummaryTab({
   billings,
   expenses
 }: FinancialSummaryTabProps) {
-  const [summaryTimeframe, setSummaryTimeframe] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('month');
+  const [summaryTimeframe, setSummaryTimeframe] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('today');
   const [summaryStartDate, setSummaryStartDate] = useState('');
   const [summaryEndDate, setSummaryEndDate] = useState('');
-  const [summaryFilterStatus, setSummaryFilterStatus] = useState<'all' | 'pending' | 'paid' | 'unpaid'>('all');
+  const [summaryFilterStatus, setSummaryFilterStatus] = useState<'all' | 'pending' | 'paid' | 'unpaid'>('unpaid');
   const [searchTerm, setSearchTerm] = useState('');
+  const statsScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
+  const tableScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
 
   // คำนวณขอบเขตช่วงเวลา [start, end] ครั้งเดียวต่อการเปลี่ยนตัวกรอง
   // (เดิมคำนวณใหม่ต่อบิลทุกใบ) แล้วให้การเช็คเหลือแค่เทียบตัวเลข
@@ -193,26 +196,19 @@ export default function FinancialSummaryTab({
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Timeframe Filter Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center space-x-2">
-          <Calendar className="w-5 h-5 text-[#CD0D13]" />
-          <div>
-            <h4 className="font-bold text-slate-800 text-sm">ช่วงเวลาแสดงผลทางการเงิน</h4>
-            <p className="text-[10px] text-slate-500">กรองข้อมูลรายรับ รายจ่าย และสถิติตามกรอบเวลา</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {[
             { id: 'today' as const, label: 'วันนี้' },
             { id: 'week' as const, label: 'สัปดาห์นี้' },
             { id: 'month' as const, label: 'เดือนนี้' },
             { id: 'year' as const, label: 'ปีนี้' },
-            { id: 'custom' as const, label: 'เลือกช่วงเวลาเอง' }
+            { id: 'custom' as const, label: 'เลือก' }
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setSummaryTimeframe(t.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 summaryTimeframe === t.id
                   ? 'bg-[#CD0D13] text-white shadow-md'
                   : 'bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100'
@@ -223,7 +219,7 @@ export default function FinancialSummaryTab({
           ))}
 
           {summaryTimeframe === 'custom' && (
-            <div className="flex items-center space-x-2 border-l border-slate-200 pl-3">
+            <div className="flex items-center space-x-2 border-slate-200 sm:border-l sm:pl-3">
               <input
                 type="date"
                 value={summaryStartDate}
@@ -242,48 +238,24 @@ export default function FinancialSummaryTab({
         </div>
       </div>
 
-      {/* Stats Cards Grid (Using Reusable StatsCard) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <StatsCard
-          title="รายรับที่ชำระเงินแล้ว"
-          value={summaryStats.totalPaid}
-          icon={CheckCircle2}
-          colorScheme="emerald"
-        />
-        <StatsCard
-          title="รายจ่ายของสถาบันรวม"
-          value={summaryStats.totalExpenses}
-          icon={Receipt}
-          colorScheme="rose"
-        />
-        <StatsCard
-          title="รายรับสุทธิ (กำไร/ขาดทุน)"
-          value={summaryStats.netRevenue}
-          icon={TrendingUp}
-          colorScheme={summaryStats.netRevenue >= 0 ? 'emerald' : 'rose'}
-        />
-        <StatsCard
-          title="ยอดเรียกเก็บทั้งหมด"
-          value={summaryStats.totalInvoiced}
-          icon={Wallet}
-          colorScheme="blue"
-        />
-        <StatsCard
-          title="ค้างยอดชำระ"
-          value={summaryStats.totalUnpaid}
-          icon={AlertCircle}
-          colorScheme="amber"
-        />
-        <StatsCard
-          title="รอการตรวจสอบ"
-          value={summaryStats.totalPending}
-          icon={Clock}
-          colorScheme="slate"
-        />
+      {/* Stats Cards — จอเล็ก: เลื่อนแนวนอน (swipe) เริ่มจากใบสุดท้าย · จอใหญ่: grid ลำดับปกติ */}
+      <div ref={statsScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory [&>*]:min-w-[85%] [&>*]:snap-center sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-5 sm:overflow-visible sm:snap-none sm:[&>*]:min-w-0">
+        {[
+          { title: "รายรับที่ชำระเงินแล้ว", value: summaryStats.totalPaid, icon: CheckCircle2, colorScheme: 'emerald' as const, order: 'order-6' },
+          { title: "รายจ่ายของสถาบันรวม", value: summaryStats.totalExpenses, icon: Receipt, colorScheme: 'rose' as const, order: 'order-5' },
+          { title: "รายรับสุทธิ (กำไร/ขาดทุน)", value: summaryStats.netRevenue, icon: TrendingUp, colorScheme: summaryStats.netRevenue >= 0 ? 'emerald' as const : 'rose' as const, order: 'order-4' },
+          { title: "ยอดเรียกเก็บทั้งหมด", value: summaryStats.totalInvoiced, icon: Wallet, colorScheme: 'blue' as const, order: 'order-3' },
+          { title: "ค้างยอดชำระ", value: summaryStats.totalUnpaid, icon: AlertCircle, colorScheme: 'amber' as const, order: 'order-2' },
+          { title: "รอการตรวจสอบ", value: summaryStats.totalPending, icon: Clock, colorScheme: 'slate' as const, order: 'order-1' }
+        ].map((c) => (
+          <div key={c.title} className={`${c.order} sm:order-none`}>
+            <StatsCard title={c.title} value={c.value} icon={c.icon} colorScheme={c.colorScheme} />
+          </div>
+        ))}
       </div>
 
-      {/* Monthly income vs expense trend chart */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      {/* Monthly income vs expense trend chart — ซ่อนบนมือถือ (อาศัย hover + แท่งแคบ) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
@@ -291,7 +263,6 @@ export default function FinancialSummaryTab({
             </div>
             <div>
               <h3 className="text-md font-bold text-slate-800">แนวโน้มรายรับ–รายจ่าย 6 เดือนล่าสุด</h3>
-              <p className="text-xs text-slate-500 mt-0.5">เทียบรายรับที่ชำระแล้วกับรายจ่ายของสถาบันในแต่ละเดือน</p>
             </div>
           </div>
           {/* Legend */}
@@ -371,12 +342,11 @@ export default function FinancialSummaryTab({
 
       {/* Split layout for Table and breakdowns */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Invoices List Table */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        {/* Invoices List Table — จอเล็ก: แสดงเฉพาะคอลัมน์สำคัญ (ผู้เรียน/ยอด/ครบกำหนด) · จอใหญ่: ครบทุกคอลัมน์ */}
+        <div className="flex lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col">
           <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h3 className="text-md font-bold text-slate-800">รายการใบเรียกเก็บเงินในช่วงเวลา</h3>
-              <p className="text-xs text-slate-500 mt-0.5">กรองแสดงผลบิลและประวัติการเงินเฉพาะช่วงที่เลือก</p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -404,17 +374,17 @@ export default function FinancialSummaryTab({
             </div>
           </div>
 
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full min-w-[720px] text-left border-collapse">
+          <div ref={tableScrollRef} className="overflow-x-auto no-scrollbar flex-1">
+            <table className="w-full md:min-w-[720px] text-left border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
-                  <th className="py-3 px-4 whitespace-nowrap">รหัสบิล</th>
+                  <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">รหัสบิล</th>
                   <th className="py-3 px-4 whitespace-nowrap">ชื่อผู้เรียน</th>
-                  <th className="py-3 px-4 whitespace-nowrap">ประเภทค่าใช้จ่าย</th>
-                  <th className="py-3 px-4 whitespace-nowrap">รายละเอียด</th>
+                  <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">ประเภทค่าใช้จ่าย</th>
+                  <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">รายละเอียด</th>
                   <th className="py-3 px-4 text-right whitespace-nowrap">ยอดรวม</th>
                   <th className="py-3 px-4 whitespace-nowrap">วันที่ครบกำหนด</th>
-                  <th className="py-3 px-4 whitespace-nowrap">สถานะ</th>
+                  <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">สถานะ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -427,19 +397,19 @@ export default function FinancialSummaryTab({
                 ) : (
                   pagedLogs.map(b => (
                     <tr key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/60 text-xs transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-slate-500 whitespace-nowrap tabular-nums">BILL-{b.id}</td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-500 whitespace-nowrap tabular-nums hidden md:table-cell">BILL-{b.id}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">
                         {b.customer ? `${b.customer.firstName} ${b.customer.lastName}` : "ผู้เรียน"}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{b.billing_type?.billingtypename || "ทั่วไป"}</td>
-                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate" title={b.billingdescription}>
+                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">{b.billing_type?.billingtypename || "ทั่วไป"}</td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate hidden md:table-cell" title={b.billingdescription}>
                         {b.billingdescription}
                       </td>
                       <td className="py-3.5 px-4 text-right font-bold text-slate-800 whitespace-nowrap tabular-nums">
                         ฿{b.billingamount.toLocaleString()}
                       </td>
                       <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{b.billingdue_date?.split('T')[0]}</td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 hidden md:table-cell">
                         <span className={`inline-block whitespace-nowrap text-[9px] font-bold px-2.5 py-1 rounded-full ${
                           b.billingstatus === 'paid'
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
@@ -491,7 +461,6 @@ export default function FinancialSummaryTab({
           <div>
             <div className="mb-4 pb-3 border-b border-slate-100">
               <h3 className="text-md font-bold text-slate-800">รายรับแยกตามประเภท</h3>
-              <p className="text-xs text-slate-500 mt-0.5">ยอดรวมสถิติบิลแบ่งตามประเภทค่าบริการ</p>
             </div>
 
             <div className="space-y-4">
@@ -532,7 +501,6 @@ export default function FinancialSummaryTab({
           <div>
             <div className="mb-4 pb-3 border-b border-slate-100">
               <h3 className="text-md font-bold text-slate-800">รายจ่ายแยกตามประเภท</h3>
-              <p className="text-xs text-slate-500 mt-0.5">ยอดรวมสถิติรายจ่ายแบ่งตามหมวดหมู่</p>
             </div>
 
             <div className="space-y-4">

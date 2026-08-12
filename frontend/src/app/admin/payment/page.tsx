@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { PlusCircle, ClipboardCheck, PieChart, Landmark, Receipt } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { PlusCircle, ClipboardCheck, PieChart, Landmark, Receipt, Loader2, ChevronDown } from "lucide-react";
 import { BackendUser, BillingDTO, BankAccount, Expense, Coach } from "./components/types";
 import Toast from "@/components/Toast";
 import BillingIssueForm from "./components/BillingIssueForm";
@@ -18,9 +18,11 @@ import {
   fetchExpenses,
   updateBilling
 } from "@/services/paymentAPI";
+import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
 
 export default function FinancialPortal() {
   const [subTab, setSubTab] = useState<'issue' | 'slips' | 'summary' | 'banks' | 'expenses'>('issue');
+  const tabRowRef = useHorizontalWheelScroll<HTMLDivElement>();
 
   // Live API States
   const [students, setStudents] = useState<BackendUser[]>([]);
@@ -31,6 +33,10 @@ export default function FinancialPortal() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // ป้องกันการดึงข้อมูลซ้อน + กันยิงถี่เกินไปตอน refetch-on-focus
+  const isFetchingRef = useRef(false);
+  const lastFetchRef = useRef(0);
 
   // UI States
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -47,13 +53,15 @@ export default function FinancialPortal() {
   };
 
   // Fetch live backend data
-  const fetchData = async () => {
-    const isFirstLoad = students.length === 0 && billings.length === 0;
+  // background = true คือ refetch เงียบ ๆ (โชว์ pill) · false คือโหลดครั้งแรก (โชว์ overlay)
+  const fetchData = async (background = false) => {
+    if (isFetchingRef.current) return; // มีการดึงข้อมูลค้างอยู่แล้ว ข้ามไป
+    isFetchingRef.current = true;
     try {
-      if (isFirstLoad) {
-        setIsLoading(true);
-      } else {
+      if (background) {
         setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
       }
       setApiError(null);
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
@@ -80,11 +88,32 @@ export default function FinancialPortal() {
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+      isFetchingRef.current = false;
+      lastFetchRef.current = Date.now();
     }
   };
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch อัตโนมัติเมื่อผู้ใช้กลับมาโฟกัสหน้าต่าง/แท็บอีกครั้ง
+  // ดึงเงียบ ๆ ไม่โชว์ overlay และ throttle 10 วินาทีเพื่อลดภาระ server
+  useEffect(() => {
+    const REFETCH_THROTTLE_MS = 10_000;
+    const maybeRefetch = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchRef.current < REFETCH_THROTTLE_MS) return;
+      fetchData(true);
+    };
+    window.addEventListener("focus", maybeRefetch);
+    document.addEventListener("visibilitychange", maybeRefetch);
+    return () => {
+      window.removeEventListener("focus", maybeRefetch);
+      document.removeEventListener("visibilitychange", maybeRefetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The backend returns one row per (billing, invoice) pairing so VerifySlipsTab
@@ -134,15 +163,23 @@ export default function FinancialPortal() {
 
       triggerToast("แก้ไขข้อมูลบิลสำเร็จเรียบร้อย");
       setIsEditBillingModalOpen(false);
-      fetchData();
+      fetchData(true);
     } catch (err: unknown) {
       triggerToast(err instanceof Error ? err.message : "แก้ไขข้อมูลบิลไม่สำเร็จ", 'error');
       throw err;
     }
   };
 
+  const subTabs = [
+    { id: 'issue' as const, label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
+    { id: 'slips' as const, label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: waitcheckInvoiceCount },
+    { id: 'summary' as const, label: 'สรุปรายรับและการเงิน', icon: PieChart },
+    { id: 'expenses' as const, label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
+    { id: 'banks' as const, label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 font-sans text-slate-800">
+    <div className="min-h-screen bg-slate-50/50 p-3 md:p-8 font-sans text-slate-800">
       
       {/* Toast Messages */}
       {toast && (
@@ -153,35 +190,40 @@ export default function FinancialPortal() {
         />
       )}
 
-      {/* Header section */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <span>ระบบการจัดการธุรกรรมและการเงิน</span>
-            {isRefreshing && (
-              <span className="inline-flex items-center text-[10px] md:text-xs font-semibold text-slate-600 bg-slate-100/90 px-2.5 py-1 rounded-full border border-slate-200 shadow-xs select-none">
-                <span className="relative flex h-2 w-2 mr-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                </span>
-                กำลังอัปเดตข้อมูล...
-              </span>
-            )}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">ออกใบแจ้งยอดผู้เรียน ตรวจสอบภาพสลิปยอดรับ และบันทึกค่าใช้จ่ายสถาบัน</p>
+      {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
+      {isRefreshing && (
+        <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
+          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-4 py-1.5 text-xs font-bold text-gray-600 shadow-md backdrop-blur">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#CC0000]" />
+            กำลังอัปเดตข้อมูล...
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Navigation — จอเล็ก: dropdown · จอใหญ่: แถวแท็บ */}
+      {/* Mobile dropdown */}
+      <div className="sm:hidden mb-6">
+        <div className="relative">
+          <select
+            value={subTab}
+            onChange={(e) => setSubTab(e.target.value as typeof subTab)}
+            className="w-full appearance-none bg-white border border-slate-200 rounded-xl shadow-sm pl-4 pr-10 py-3 text-sm font-bold text-[#CD0D13] outline-none focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100"
+          >
+            {subTabs.map((tab) => (
+              <option key={tab.id} value={tab.id} className="text-slate-800 font-medium">
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ''}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
-      {/* Sub-Navigation Bar */}
-      <div className="bg-white border-b border-slate-200 rounded-xl mb-6 shadow-sm overflow-hidden">
-        <div className="flex overflow-x-auto">
-          {[
-            { id: 'issue' as const, label: 'แจ้งค่าใช้จ่าย / ออกบิล', icon: PlusCircle },
-            { id: 'slips' as const, label: 'ตรวจสอบสลิปแนบ', icon: ClipboardCheck, count: waitcheckInvoiceCount },
-            { id: 'summary' as const, label: 'สรุปรายรับและการเงิน', icon: PieChart },
-            { id: 'expenses' as const, label: 'บันทึกค่าใช้จ่ายสถาบัน', icon: Receipt },
-            { id: 'banks' as const, label: 'บัญชีรับเงินสลับเปิดปิด', icon: Landmark }
-          ].map((tab) => {
+      {/* Desktop tab row */}
+      <div className="hidden sm:block bg-white border-b border-slate-200 rounded-xl mb-6 shadow-sm overflow-hidden">
+        <div ref={tabRowRef} className="flex overflow-x-auto no-scrollbar">
+          {subTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = subTab === tab.id;
             return (
@@ -194,7 +236,7 @@ export default function FinancialPortal() {
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-55'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#CD0D13]' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#CD0D13]' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
                 {tab.count !== undefined && tab.count > 0 && (
                   <span className="bg-[#CD0D13] text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 animate-pulse">
@@ -228,7 +270,7 @@ export default function FinancialPortal() {
             <BillingIssueForm
               students={students}
               billings={dedupedBillings}
-              onFetchData={fetchData}
+              onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
               onOpenEditBilling={(b) => {
                 setEditingBilling(b);
@@ -240,7 +282,7 @@ export default function FinancialPortal() {
           {subTab === 'slips' && (
             <VerifySlipsTab
               billings={billings}
-              onFetchData={fetchData}
+              onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
             />
           )}
@@ -255,7 +297,7 @@ export default function FinancialPortal() {
           {subTab === 'banks' && (
             <BankAccountsTab
               bankAccounts={bankAccounts}
-              onFetchData={fetchData}
+              onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
             />
           )}
@@ -264,7 +306,7 @@ export default function FinancialPortal() {
             <ExpensesTab
               coaches={coaches}
               expenses={expenses}
-              onFetchData={fetchData}
+              onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
             />
           )}

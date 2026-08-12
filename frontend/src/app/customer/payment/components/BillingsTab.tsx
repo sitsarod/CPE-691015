@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { 
   Calendar,
   Clock,
@@ -20,7 +20,7 @@ interface BillingsTabProps {
   onInitiatePayment: () => void;
 }
 
-type SortOption = "default" | "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "due_asc";
+type StatusFilter = "all" | "overdue" | "unfunded" | "waitcheck" | "paid";
 
 // สถานะบิล: แถบสี + ป้าย ให้ใช้ชุดเดียวกันทั้งหน้า
 const STATUS_META: Record<string, { label: string; bar: string; chip: string; dot: string }> = {
@@ -28,6 +28,15 @@ const STATUS_META: Record<string, { label: string; bar: string; chip: string; do
   unfunded:  { label: "ค้างชำระ",        bar: "bg-amber-400",    chip: "border-amber-200 bg-amber-50 text-amber-700",   dot: "bg-amber-400" },
   waitcheck: { label: "รอตรวจสอบ",       bar: "bg-blue-400",     chip: "border-blue-200 bg-blue-50 text-blue-700",      dot: "bg-blue-400" },
   paid:      { label: "ชำระเงินสำเร็จ",   bar: "bg-emerald-400",  chip: "border-emerald-200 bg-emerald-50 text-emerald-700", dot: "bg-emerald-400" }
+};
+
+// ข้อความสถานะว่างตามประเภทรายการที่เลือก
+const EMPTY_BY_STATUS: Record<StatusFilter, { title: string; desc: string }> = {
+  all:       { title: "ยังไม่มีบิลเรียกเก็บเงิน", desc: "ขณะนี้ยังไม่มีรายการบิลในบัญชีของคุณ" },
+  overdue:   { title: "ไม่มีบิลเกินกำหนดชำระ",   desc: "คุณไม่มีบิลที่เกินกำหนดชำระในขณะนี้" },
+  unfunded:  { title: "ไม่มีบิลค้างชำระ",         desc: "คุณชำระบิลครบถ้วนทุกรายการแล้ว" },
+  waitcheck: { title: "ไม่มีบิลรอตรวจสอบ",        desc: "ไม่มีการแจ้งชำระเงินที่กำลังรอแอดมินตรวจสอบ" },
+  paid:      { title: "ยังไม่มีบิลที่ชำระแล้ว",    desc: "เมื่อคุณชำระเงินสำเร็จ รายการจะแสดงอยู่ที่นี่" }
 };
 
 export default function BillingsTab({
@@ -39,14 +48,14 @@ export default function BillingsTab({
   onInitiatePayment
 }: BillingsTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("default");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("unfunded");
 
   // Get only unpaid/overdue billings for checking select all state
   const unpaidBillings = useMemo(() => {
     return billings.filter(b => b.billingstatus === "unfunded" || b.billingstatus === "overdue");
   }, [billings]);
 
-  // Handle Search & Sort calculations
+  // Handle Search & Status filter calculations
   const processedBillings = useMemo(() => {
     let result = [...billings];
 
@@ -60,25 +69,17 @@ export default function BillingsTab({
       );
     }
 
-    // 2. Sort Filter
-    if (sortBy === "default") {
-      // Default sort order: overdue first, then unfunded, waitcheck, paid
-      const order = { overdue: 0, unfunded: 1, waitcheck: 2, paid: 3 };
-      result.sort((a, b) => (order[a.billingstatus] ?? 4) - (order[b.billingstatus] ?? 4));
-    } else if (sortBy === "date_desc") {
-      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === "date_asc") {
-      result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    } else if (sortBy === "amount_desc") {
-      result.sort((a, b) => b.billingamount - a.billingamount);
-    } else if (sortBy === "amount_asc") {
-      result.sort((a, b) => a.billingamount - b.billingamount);
-    } else if (sortBy === "due_asc") {
-      result.sort((a, b) => new Date(a.billingdue_date).getTime() - new Date(b.billingdue_date).getTime());
+    // 2. Status Filter (ประเภทรายการ)
+    if (statusFilter !== "all") {
+      result = result.filter(b => b.billingstatus === statusFilter);
     }
 
+    // 3. เรียงลำดับตามสถานะเสมอ: เกินกำหนด > ค้างชำระ > รอตรวจสอบ > ชำระแล้ว
+    const order = { overdue: 0, unfunded: 1, waitcheck: 2, paid: 3 };
+    result.sort((a, b) => (order[a.billingstatus] ?? 4) - (order[b.billingstatus] ?? 4));
+
     return result;
-  }, [billings, searchQuery, sortBy]);
+  }, [billings, searchQuery, statusFilter]);
 
   // Date format helpers
   const formatDueDate = (dateStr: string) => {
@@ -114,21 +115,20 @@ export default function BillingsTab({
           />
         </div>
 
-        {/* Sort Dropdown */}
+        {/* Status Filter Dropdown */}
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-          <span className="text-xs text-gray-500 font-bold whitespace-nowrap">เรียงลำดับ:</span>
+          <span className="text-xs text-gray-500 font-bold whitespace-nowrap">เลือกประเภทรายการ:</span>
           <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             className="border border-gray-200 bg-white rounded-xl text-xs py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-[#CC0000] text-gray-700 cursor-pointer"
           >
-            <option value="default">สถานะ (เกินกำหนด & ค้างชำระขึ้นก่อน)</option>
-            <option value="date_desc">วันที่บันทึก: ล่าสุดก่อน</option>
-            <option value="date_asc">วันที่บันทึก: เก่าสุดก่อน</option>
-            <option value="amount_desc">ยอดเงิน: สูง - ต่ำ</option>
-            <option value="amount_asc">ยอดเงิน: ต่ำ - สูง</option>
-            <option value="due_asc">วันกำหนดชำระ: ใกล้ที่สุดก่อน</option>
+            <option value="all">ทั้งหมด</option>
+            <option value="overdue">เกินกำหนดชำระ</option>
+            <option value="unfunded">ค้างชำระ</option>
+            <option value="waitcheck">รอตรวจสอบ</option>
+            <option value="paid">ชำระเงินสำเร็จ</option>
           </select>
         </div>
       </div>
@@ -160,12 +160,12 @@ export default function BillingsTab({
             <CheckCircle2 className="h-9 w-9" />
           </div>
           <h3 className="text-lg font-bold text-gray-800">
-            {searchQuery ? "ไม่พบรายการบิลที่ค้นหา" : "ไม่มีบิลรอชำระเงิน"}
+            {searchQuery ? "ไม่พบรายการบิลที่ค้นหา" : EMPTY_BY_STATUS[statusFilter].title}
           </h3>
           <p className="max-w-xs text-sm text-gray-500">
             {searchQuery
               ? "กรุณาลองเปลี่ยนคำค้นหาใหม่อีกครั้ง"
-              : "คุณชำระบิลเรียกเก็บเงินครบถ้วนทุกรายการแล้ว ยอดคงเหลือในบัญชีของคุณเรียบร้อยดี"}
+              : EMPTY_BY_STATUS[statusFilter].desc}
           </p>
         </div>
       ) : (

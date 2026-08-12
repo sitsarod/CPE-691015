@@ -62,6 +62,15 @@ body {
   background: var(--primary-orange);
 }
 
+/* ซ่อนแถบ scrollbar แต่ยังเลื่อน/ปัดได้ปกติ */
+.no-scrollbar {
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* IE / Edge เก่า */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome / Safari / WebKit */
+}
+
 
 .glass-nav {
   background: rgba(255, 255, 255, 0.85);

@@ -2,19 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { reviewAPI } from '@/services/reviewAPI';
-import { Review, UpdateReviewReq, ReviewCategory } from '@/types/review';
+import { Review, ReviewCategory } from '@/types/review';
 import Toast from '@/components/Toast';
 import {
   Star,
   Search,
   Trash2,
-  Pencil,
-  X,
   BookOpen,
   UserRound,
   MessageSquareMore,
   Sparkles,
-  Loader2,
   List,
   MapPin,
   Wrench,
@@ -31,39 +28,19 @@ const CATEGORY_META: Record<ReviewCategory, { label: string; icon: React.Element
   other: { label: 'อื่นๆ', icon: MoreHorizontal },
 };
 
-// ==================== Star Rating ====================
-function StarRating({
-  value,
-  size = 16,
-  onChange,
-}: {
-  value: number;
-  size?: number;
-  onChange?: (v: number) => void;
-}) {
-  const [hover, setHover] = useState(0);
-  const interactive = typeof onChange === 'function';
-
+// ==================== Star Rating (display only) ====================
+function StarRating({ value, size = 16 }: { value: number; size?: number }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => {
-        const filled = star <= (hover || value);
+        const filled = star <= value;
         return (
-          <button
+          <Star
             key={star}
-            type="button"
-            disabled={!interactive}
-            onClick={() => onChange?.(star)}
-            onMouseEnter={() => interactive && setHover(star)}
-            onMouseLeave={() => interactive && setHover(0)}
-            className={interactive ? 'cursor-pointer transition-transform hover:scale-110' : 'cursor-default'}
-          >
-            <Star
-              size={size}
-              className={filled ? 'text-amber-400' : 'text-gray-300'}
-              fill={filled ? 'currentColor' : 'none'}
-            />
-          </button>
+            size={size}
+            className={filled ? 'text-amber-400' : 'text-gray-300'}
+            fill={filled ? 'currentColor' : 'none'}
+          />
         );
       })}
     </div>
@@ -77,12 +54,6 @@ export default function AdminFeedbackPage() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-
-  // แก้ไขรีวิว
-  const [editing, setEditing] = useState<Review | null>(null);
-  const [editRating, setEditRating] = useState(0);
-  const [editComment, setEditComment] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
@@ -168,29 +139,6 @@ export default function AdminFeedbackPage() {
       triggerToast('ลบรีวิวเรียบร้อยแล้ว');
     } catch (error: any) {
       triggerToast(`เกิดข้อผิดพลาดในการลบรีวิว: ${error.message}`, 'error');
-    }
-  };
-
-  const openEdit = (review: Review) => {
-    setEditing(review);
-    setEditRating(review.rating);
-    setEditComment(review.comment);
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editing) return;
-    try {
-      setSaving(true);
-      const payload: UpdateReviewReq = { rating: editRating, comment: editComment };
-      const updated = await reviewAPI.updateReview(editing.id, payload);
-      setReviews((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      setEditing(null);
-      triggerToast('บันทึกรีวิวเรียบร้อยแล้ว');
-    } catch (error: any) {
-      triggerToast(`เกิดข้อผิดพลาดในการบันทึกรีวิว: ${error.message}`, 'error');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -299,68 +247,9 @@ export default function AdminFeedbackPage() {
               key={review.id}
               review={review}
               onToggleFeatured={() => handleToggleFeatured(review)}
-              onEdit={() => openEdit(review)}
               onDelete={() => handleDelete(review.id)}
             />
           ))}
-        </div>
-      )}
-
-      {/* Edit modal */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-800">แก้ไขรีวิว</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEdit} className="p-6 flex flex-col gap-5">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">โดย</p>
-                <p className="font-medium text-gray-800">{customerName(editing)}</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">คะแนน</label>
-                <div className="flex items-center gap-3">
-                  <StarRating value={editRating} size={28} onChange={setEditRating} />
-                  <span className="text-sm font-semibold text-gray-600">{editRating}.0</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ข้อความรีวิว</label>
-                <textarea
-                  required
-                  rows={5}
-                  value={editComment}
-                  onChange={(e) => setEditComment(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditing(null)}
-                  className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || editRating < 1}
-                  className="flex items-center gap-2 px-5 py-2 bg-[#CC0000] hover:bg-[#990000] disabled:opacity-50 text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-colors"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  บันทึก
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
@@ -398,12 +287,10 @@ function StatCard({
 function ReviewCard({
   review,
   onToggleFeatured,
-  onEdit,
   onDelete,
 }: {
   review: Review;
   onToggleFeatured: () => void;
-  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -479,22 +366,13 @@ function ReviewCard({
           {review.is_featured ? 'ยกเลิกหน้าแรก' : 'แสดงหน้าแรก'}
         </button>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onEdit}
-            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="แก้ไข"
-          >
-            <Pencil size={16} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="ลบ"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
+        <button
+          onClick={onDelete}
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          title="ลบ"
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, AlertCircle, Eye, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, AlertCircle, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { BillingDTO } from './types';
 import { confirmSlip, rejectSlip } from "@/services/paymentAPI";
 
@@ -14,7 +14,7 @@ export default function VerifySlipsTab({
   onFetchData,
   onTriggerToast
 }: VerifySlipsTabProps) {
-  const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [slipSearchTerm, setSlipSearchTerm] = useState('');
   const [reviewBilling, setReviewBilling] = useState<(BillingDTO & { groupedBillings?: BillingDTO[] }) | null>(null);
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Record<number, boolean>>({});
@@ -148,11 +148,6 @@ export default function VerifySlipsTab({
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
       <div className="p-6 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800">ตรวจสอบสลิปและโอนเงินเข้า</h3>
-          <p className="text-xs text-slate-500 mt-0.5">กรุณาตรวจสอบความถูกต้องของสลิป ยอดโอน และรหัสอ้างอิงทุกครั้งก่อนกดยืนยัน</p>
-        </div>
-
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
           {/* Search Input */}
           <div className="relative w-full sm:w-64">
@@ -166,8 +161,8 @@ export default function VerifySlipsTab({
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
           </div>
 
-          {/* Status Filter Tab Buttons */}
-          <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto max-w-full">
+          {/* Status Filter Tab Buttons — จอเล็ก: grid 2x2 (ไม่ต้องเลื่อน) · จอใหญ่: แถวเดียว */}
+          <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl w-full sm:flex sm:gap-0 sm:w-auto">
             {[
               { id: 'all' as const, label: 'ทั้งหมด (ส่งสลิป)' },
               { id: 'pending' as const, label: 'รอตรวจสอบ' },
@@ -177,7 +172,7 @@ export default function VerifySlipsTab({
               <button
                 key={f.id}
                 onClick={() => setSlipFilter(f.id)}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap cursor-pointer text-center ${
+                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[11px] font-semibold leading-tight transition-all whitespace-normal sm:whitespace-nowrap cursor-pointer text-center ${
                   slipFilter === f.id
                     ? 'bg-white text-[#CD0D13] shadow-xs font-bold'
                     : 'text-slate-500 hover:text-slate-800'
@@ -265,7 +260,6 @@ export default function VerifySlipsTab({
                         }}
                         className="px-3.5 py-1.5 bg-[#CD0D13] hover:bg-[#A30A0E] text-white text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-red-200"
                       >
-                        <Eye className="w-3.5 h-3.5" />
                         ดูสลิป & ตรวจสอบ
                       </button>
                       
@@ -315,7 +309,7 @@ export default function VerifySlipsTab({
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] animate-fadeIn">
             
             {/* Left side: Slip mockup visualizer */}
-            <div className="md:w-1/2 bg-slate-100 p-6 flex flex-col items-center justify-center border-r border-slate-200 overflow-y-auto">
+            <div className="md:w-1/2 bg-slate-100 p-6 flex flex-col items-center justify-center border-r border-slate-200 overflow-y-auto no-scrollbar">
               <span className="text-xs font-bold text-slate-400 mb-3 block">หลักฐานสลิปการโอนเงิน (Image)</span>
               <span className="text-xs font-bold text-slate-400 mb-3 block">สามารถเปิดแอปธนาคารและแสกน Qr code เพื่อตรวจสอบได้</span>
               
@@ -384,7 +378,7 @@ export default function VerifySlipsTab({
             </div>
 
             {/* Right side: Information and Actions */}
-            <div className="md:w-1/2 p-6 flex flex-col justify-between overflow-y-auto">
+            <div className="md:w-1/2 p-6 flex flex-col justify-between overflow-y-auto no-scrollbar">
               <div>
                 <div className="flex justify-between items-start mb-6">
                   <div>
@@ -412,7 +406,7 @@ export default function VerifySlipsTab({
                   {/* Individual Billing Items list */}
                   <div className="space-y-2">
                     <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">รายการบิลในใบแจ้งหนี้ ({reviewBilling.groupedBillings?.length || 1})</span>
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar pr-1">
                       {reviewBilling.groupedBillings ? (
                         reviewBilling.groupedBillings.map((b) => (
                           <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="p-3 bg-slate-50 rounded-xl border border-slate-250 text-xs flex justify-between items-start gap-4">
