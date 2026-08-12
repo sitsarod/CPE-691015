@@ -139,14 +139,14 @@ export default function InvoicesTab({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between md:justify-end gap-6">
+                  <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-6">
                     <div className="text-left md:text-right">
                       <span className="block text-[10px] font-bold text-gray-400">ยอดเงินรวม:</span>
                       <span className="text-lg font-black text-gray-900">
                         ฿{inv.invoicetotalamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
                       {invoiceStatus === "pending" && (
                         <>
                           <button
