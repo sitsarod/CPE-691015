@@ -1,34 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, RefreshCw, AlertCircle, Dumbbell, Award, Phone, UserRound } from "lucide-react";
+import { RefreshCw, AlertCircle, Dumbbell, Award, Phone, UserRound } from "lucide-react";
 import {
   getAllCoachesAPI,
   getCoachDetailAPI,
-  createCoachAPI,
-  updateCoachAPI,
-  adminUpdateCoachLevelAPI,
   deleteCoachAPI,
   CoachListItem,
-  CreateCoachInput,
 } from "@/services/coachAPI";
 import { CoachProfile } from "@/types/coach";
+import { adminUpdateUserAPI } from "@/services/userAPI";
 import Button from "@/components/Button";
 import { MemberFilterToolbar } from "@/components/admin/MemberFilterToolbar";
 import { Pill, SummaryCard, RowActionMenu } from "@/components/admin/ManagementUI";
 import { ViewCoachModal } from "@/components/admin/modals/ViewCoachModal";
 import { ViewCoachScheduleModal } from "@/components/admin/modals/ViewCoachScheduleModal";
-import { CreateCoachModal } from "@/components/admin/modals/CreateCoachModal";
 import { EditCoachModal, EditCoachForm } from "@/components/admin/modals/EditCoachModal";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
-type ModalMode = "view" | "create" | "edit" | "schedule" | null;
-
-const emptyCreateForm: CreateCoachInput = {
-  user_id: 0, phone: "", lineId: "", facebook: "", uid: "", address: "", birth_date: "", nickname: "",
-  profile_picture: "", specialization: "", coach_license: "", bank_account: "", payment_info: "",
-  payment_type: "per_session", pay_rate: 0,
-};
+// การ "เพิ่มโค้ช" ย้ายไปอยู่หน้าจัดการสมาชิกแล้ว (สร้าง user + โปรไฟล์ใน transaction เดียว)
+// หน้านี้จึงเหลือแค่ ดู / แก้ไข / ดูตารางเวลาว่าง / ลบ
+type ModalMode = "view" | "edit" | "schedule" | null;
 
 const emptyEditForm: EditCoachForm = {
   nickname: "", phone: "", lineId: "", facebook: "", address: "", bank_account: "", payment_info: "",
@@ -47,7 +39,6 @@ export default function CoachManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [createForm, setCreateForm] = useState<CreateCoachInput>(emptyCreateForm);
   const [editForm, setEditForm] = useState<EditCoachForm>(emptyEditForm);
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -90,56 +81,6 @@ export default function CoachManagementPage() {
   const openSchedule = (item: CoachListItem) => {
     setSelected(item);
     setModalMode("schedule");
-  };
-
-  const openCreate = () => {
-    setCreateForm(emptyCreateForm);
-    setFormError(null);
-    setModalMode("create");
-  };
-
-  const handleCreate = async () => {
-    setFormError(null);
-
-    if (!createForm.user_id || createForm.user_id <= 0) {
-      setFormError("กรุณาระบุ User ID ของผู้ใช้ (ต้องเป็นผู้ใช้ที่มี role = coach)");
-      return;
-    }
-    const required: [keyof CreateCoachInput, string][] = [
-      ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["uid", "เลขบัตรประชาชน (UID)"],
-      ["address", "ที่อยู่"], ["birth_date", "วันเกิด"], ["specialization", "ระดับฝีมือ"],
-      ["coach_license", "ใบรับรองผู้ฝึกสอน"],
-      ["bank_account", "ธนาคาร"], ["payment_info", "เลขบัญชี"],
-    ];
-    for (const [key, label] of required) {
-      if (!String(createForm[key]).trim()) {
-        setFormError(`กรุณากรอก: ${label}`);
-        return;
-      }
-    }
-    if (!/^\d{10}$/.test(createForm.phone)) {
-      setFormError("เบอร์โทรต้องเป็นตัวเลข 10 หลัก");
-      return;
-    }
-    if (!/^\d{13}$/.test(createForm.uid)) {
-      setFormError("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
-      return;
-    }
-    if (!createForm.pay_rate || createForm.pay_rate <= 0) {
-      setFormError(createForm.payment_type === "monthly" ? "กรุณากรอกค่าจ้างต่อเดือนให้ถูกต้อง" : "กรุณากรอกค่าจ้างต่อครั้งให้ถูกต้อง");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      await createCoachAPI(createForm);
-      closeModal();
-      await loadCoaches();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "ไม่สามารถสร้างโปรไฟล์โค้ชได้");
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   // เปิดฟอร์มแก้ไข โดยโหลดข้อมูลจาก detail (ที่หน้า View โหลดไว้แล้ว) มา prefill
@@ -187,11 +128,21 @@ export default function CoachManagementPage() {
       return;
     }
 
+    if (!detail) {
+      setFormError("ไม่พบข้อมูลโค้ช กรุณาปิดหน้าต่างแล้วลองใหม่");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      // ข้อมูลโปรไฟล์ทั่วไป + ระดับ/ค่าจ้าง (admin) — ยิงพร้อมกัน
-      await Promise.all([
-        updateCoachAPI(editingId, {
+
+      // ยิงผ่าน endpoint ของแอดมินเส้นเดียว เพราะหน้านี้เป็นหน้าของแอดมิน
+      // และตามนโยบายใหม่ ชื่อเล่น/บัญชีธนาคาร/ข้อมูลจ่ายเงิน ถูกถอดออกจาก
+      // PATCH /coaches/:id (ที่โค้ชเรียกเองได้) แล้ว จึงต้องแก้ทางนี้เท่านั้น
+      //
+      // ใช้ detail.user_id ไม่ใช่ editingId เพราะ endpoint นี้รับ users.id
+      await adminUpdateUserAPI(detail.user_id, {
+        coach: {
           nickname: editForm.nickname.trim(),
           phone: editForm.phone.trim(),
           lineId: editForm.lineId.trim(),
@@ -199,14 +150,13 @@ export default function CoachManagementPage() {
           address: editForm.address.trim(),
           bank_account: editForm.bank_account.trim(),
           payment_info: editForm.payment_info.trim(),
-        }),
-        adminUpdateCoachLevelAPI(editingId, {
           specialization: editForm.specialization.trim(),
           coach_license: editForm.coach_license.trim(),
           payment_type: editForm.payment_type,
           pay_rate: editForm.pay_rate,
-        }),
-      ]);
+        },
+      });
+
       closeModal();
       await loadCoaches();
     } catch (err: unknown) {
@@ -312,10 +262,6 @@ export default function CoachManagementPage() {
           <Button variant="outline" onClick={loadCoaches} disabled={isLoading} className="!w-10 !h-10 !p-0 !rounded-xl border-gray-200" title="รีเฟรชข้อมูล">
             <RefreshCw className={`h-4 w-4 text-gray-600 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-
-          <Button variant="primary" onClick={openCreate} className="!w-auto flex items-center gap-2 rounded-xl px-4 py-2.5 bg-[#E63946] hover:bg-[#d62839]">
-            <Plus className="h-4 w-4" /> เพิ่มโค้ชใหม่
-          </Button>
         </div>
       </div>
 
@@ -353,7 +299,6 @@ export default function CoachManagementPage() {
 
       <ViewCoachModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} detail={detail} isLoadingDetail={isLoadingDetail} onEdit={openEdit} />
       <ViewCoachScheduleModal isOpen={modalMode === "schedule"} onClose={closeModal} coach={selected} />
-      <CreateCoachModal isOpen={modalMode === "create"} onClose={closeModal} createForm={createForm} setCreateForm={setCreateForm} formError={formError} isSubmitting={isSubmitting} onCreate={handleCreate} />
       <EditCoachModal isOpen={modalMode === "edit"} onClose={closeModal} editForm={editForm} setEditForm={setEditForm} detail={detail} formError={formError} isSubmitting={isSubmitting} onSave={handleUpdate} />
     </div>
   );

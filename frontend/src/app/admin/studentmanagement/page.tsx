@@ -4,18 +4,22 @@ import { useState, useEffect } from "react";
 import { RefreshCw, GraduationCap, Phone, UserRound, AlertCircle, Search, BookOpen, CalendarClock } from "lucide-react";
 import {
   getActiveStudentsAPI,
-  getUserProfileAPI,
+  adminGetUserDetailAPI,
+  adminUpdateUserAPI,
+  type AdminUserDetail,
+  type AdminUpdateUserInput,
   deleteUserAPI,
   StudentListResponseDTO,
 } from "@/services/userAPI";
 import Button from "@/components/Button";
 import { SummaryCard, RowActionMenu } from "@/components/admin/ManagementUI";
 import { ViewMemberModal } from "@/components/admin/modals/ViewMemberModal";
+import { EditMemberModal } from "@/components/admin/modals/EditMemberModal";
 import StudentEnrollmentsModal from "@/components/admin/modals/StudentEnrollmentsModal";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
 const getId = (item: any): number => item?.id ?? item?.ID ?? 0;
-type ModalMode = "view" | null;
+type ModalMode = "view" | "edit" | null;
 
 export default function StudentManagementPage() {
   const [students, setStudents] = useState<StudentListResponseDTO[]>([]);
@@ -25,6 +29,11 @@ export default function StudentManagementPage() {
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<any>(null);
+  const [detail, setDetail] = useState<AdminUserDetail | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<AdminUpdateUserInput>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   const [enrollmentsOf, setEnrollmentsOf] = useState<StudentListResponseDTO | null>(null);
@@ -53,14 +62,57 @@ export default function StudentManagementPage() {
   const openView = async (item: StudentListResponseDTO) => {
     setModalMode("view");
     setSelected(item);
+    setDetail(null);
     setIsLoadingDetail(true);
     try {
-      const d = await getUserProfileAPI(item.id);
-      setSelected(d);
+      setDetail(await adminGetUserDetailAPI(item.id));
     } catch {
-      setSelected(item);
+      /* ไม่มีรายละเอียด — modal จะแสดงว่าโหลดไม่ได้ */
     } finally {
       setIsLoadingDetail(false);
+    }
+  };
+
+  /**
+   * เปิดฟอร์มแก้ไข — โหลดรายละเอียดเต็มก่อนเสมอ
+   *
+   * ข้อมูลในตารางไม่มีวันเกิด/เพศ/ข้อมูลผู้ปกครองครบ ถ้า prefill จากแถว
+   * แล้วกดบันทึก ค่าที่ไม่ได้โหลดมาจะถูกทับด้วยค่าว่าง
+   */
+  const openEdit = async (item: StudentListResponseDTO) => {
+    setModalMode("edit");
+    setSelected(item);
+    setFormError(null);
+    setIsLoadingDetail(true);
+    try {
+      const d = detail?.id === item.id ? detail : await adminGetUserDetailAPI(item.id);
+      setDetail(d);
+      setEditingId(d.id);
+      setEditForm({
+        firstName: d.firstName,
+        lastName: d.lastName,
+        email: d.email,
+        ...(d.customer ? { customer: { ...d.customer } } : {}),
+      });
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลนักเรียนได้");
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (editingId == null) return;
+    setFormError(null);
+    try {
+      setIsSubmitting(true);
+      await adminUpdateUserAPI(editingId, editForm);
+      closeModal();
+      await loadStudents();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกการแก้ไขได้");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,9 +293,20 @@ export default function StudentManagementPage() {
       <ViewMemberModal
         isOpen={modalMode === "view"}
         onClose={closeModal}
-        selected={selected}
+        detail={detail}
         isLoadingDetail={isLoadingDetail}
-        getId={getId}
+        onEdit={() => selected && openEdit(selected)}
+      />
+
+      <EditMemberModal
+        isOpen={modalMode === "edit"}
+        onClose={closeModal}
+        role={detail?.role ?? "customer"}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        formError={formError}
+        isSubmitting={isSubmitting || isLoadingDetail}
+        onSave={handleUpdate}
       />
 
       <StudentEnrollmentsModal

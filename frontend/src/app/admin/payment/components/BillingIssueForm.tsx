@@ -53,7 +53,7 @@ export default function BillingIssueForm({
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const fullName = `${s.firstName || ''} ${s.lastName || ''}`.toLowerCase();
-      const nickname = (s.customer?.nickname || '').toLowerCase();
+      const nickname = (s.nickname || '').toLowerCase();
       const query = studentSearchQuery.toLowerCase();
       return fullName.includes(query) || nickname.includes(query);
     });
@@ -70,7 +70,7 @@ export default function BillingIssueForm({
 
   // Toggle select all filtered students
   const handleSelectAllFiltered = () => {
-    const allFilteredIds = filteredStudents.map(s => s.ID);
+    const allFilteredIds = filteredStudents.map(s => s.id);
     const areAllSelected = allFilteredIds.every(id => selectedStudentIds.includes(id));
 
     if (areAllSelected) {
@@ -216,10 +216,10 @@ export default function BillingIssueForm({
                 </div>
               ) : (
                 filteredStudents.map(s => {
-                  const isChecked = selectedStudentIds.includes(s.ID);
+                  const isChecked = selectedStudentIds.includes(s.id);
                   return (
                     <label
-                      key={s.ID}
+                      key={s.id}
                       className={`flex items-center p-2.5 rounded-lg border cursor-pointer transition-all ${
                         isChecked
                           ? 'bg-red-50/50 border-[#CD0D13] text-slate-900 shadow-sm font-semibold'
@@ -229,13 +229,13 @@ export default function BillingIssueForm({
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => toggleSelectStudent(s.ID)}
+                        onChange={() => toggleSelectStudent(s.id)}
                         className="w-4 h-4 text-[#CD0D13] rounded border-slate-300 focus:ring-[#CD0D13] accent-red-650 mr-3"
                       />
                       <div className="flex-1 min-w-0">
                         <span className="text-sm block truncate">
                           {s.firstName} {s.lastName}
-                          {s.customer?.nickname && ` (${s.customer.nickname})`}
+                          {s.nickname && ` (${s.nickname})`}
                         </span>
                       </div>
                     </label>

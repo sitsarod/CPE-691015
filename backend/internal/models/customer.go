@@ -32,7 +32,6 @@ type Customer struct {
     Facebook            string          `json:"facebook" gorm:"type:varchar(255)"`
     ParentEmail       string          `json:"parentEmail" valid:"email~Invalid parent email format,optional"`
     ParentPhoneNumber string          `json:"parentPhoneNumber" valid:"numeric~Parent phone number must contain only numbers,optional"`
-    ConsentedPurposes bool            `json:"consentedPurposes" gorm:"default:false" `
     PersonalQRCode    string          `json:"personalQR" gorm:"unique" valid:"required~Personal QR Code is required"`
     Status            CustomerStatus  `json:"status" gorm:"default:'active'" valid:"required~Status is required"`
 

@@ -42,7 +42,7 @@ export function EditCoachModal({
       onClose={onClose}
       title="แก้ไขข้อมูลโค้ช"
       subtitle="ปรับปรุงข้อมูลโปรไฟล์โค้ช"
-      maxWidth="max-w-2xl"
+      maxWidth="max-w-3xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>ยกเลิก</Button>

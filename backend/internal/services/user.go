@@ -145,35 +145,11 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
     }
 
 
-    updateData := make(map[string]interface{})
-    if input.FirstName != "" {
-        updateData["first_name"] = input.FirstName
-    }
-    if input.LastName != "" {
-        updateData["last_name"] = input.LastName
-    }
-    if input.Email != "" {
-    
-        var existingUser models.User
-        if err := s.db.Where("email = ? AND id != ?", input.Email, id).First(&existingUser).Error; err == nil {
-            return nil, errors.New("อีเมลนี้ถูกใช้งานโดยบัญชีอื่นแล้ว")
-        }
-        updateData["email"] = input.Email
-    }
-    
-    if len(updateData) > 0 {
-        err = s.db.Model(&user).Updates(updateData).Error
-        if err != nil {
-            return nil, err
-        }
-    }
+    // ชื่อ นามสกุล และอีเมล ย้ายไปให้แอดมินแก้ผ่าน PATCH /api/admin/users/:id แล้ว
+    // (ดูเหตุผลที่คอมเมนต์ของ dto.UpdateProfileInput) เส้นนี้จึงเหลือแค่ช่องทางติดต่อ
 
-    
     if user.Role == "customer" && user.Customer != nil {
         customerUpdate := make(map[string]interface{})
-        if input.Nickname != "" {
-            customerUpdate["nickname"] = input.Nickname
-        }
         if input.PhoneNumber != "" {
             customerUpdate["phone_number"] = input.PhoneNumber
         }

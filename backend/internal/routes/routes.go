@@ -189,6 +189,17 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.GET("/users", userController.GetAllUsersController)
 			adminUserGroup.GET("/role", userController.GetUserByRoleController)
 			adminUserGroup.GET("/students", userController.GetActiveStudentsController)
+			// สร้างสมาชิกพร้อมโปรไฟล์ตามบทบาทในทรานแซกชันเดียว — ใช้เส้นนี้เป็นหลัก
+			adminUserGroup.POST("/users", userController.AdminCreateUserController)
+
+			// ดูรายละเอียดสมาชิกแบบเต็ม (รวมโปรไฟล์ตามบทบาท)
+			adminUserGroup.GET("/users/:id", userController.AdminGetUserDetailController)
+
+			// แอดมินแก้ข้อมูลตัวตน/การเงินที่เจ้าตัวแก้เองไม่ได้ (หลังตรวจหลักฐาน)
+			adminUserGroup.PATCH("/users/:id", userController.AdminUpdateUserController)
+
+			// เส้นเดิม: สร้างแค่บัญชีเข้าระบบ ไม่มีโปรไฟล์
+			// เก็บไว้ชั่วคราวเพื่อไม่ให้หน้าเดิมพัง จะลบเมื่อหน้าบ้านย้ายไปใช้ /users ครบแล้ว
 			adminUserGroup.POST("/create", userController.CreateUserController)
 			adminUserGroup.DELETE("/:id", userController.DeleteUserController)
 		}

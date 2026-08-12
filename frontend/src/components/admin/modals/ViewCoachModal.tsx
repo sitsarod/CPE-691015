@@ -27,6 +27,7 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
       isOpen={isOpen}
       onClose={onClose}
       title="รายละเอียดโค้ช"
+      maxWidth="max-w-3xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>ปิด</Button>
