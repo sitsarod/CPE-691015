@@ -17,11 +17,12 @@ import Button from "@/components/Button";
 import { MemberFilterToolbar } from "@/components/admin/MemberFilterToolbar";
 import { Pill, SummaryCard, RowActionMenu } from "@/components/admin/ManagementUI";
 import { ViewCoachModal } from "@/components/admin/modals/ViewCoachModal";
+import { ViewCoachScheduleModal } from "@/components/admin/modals/ViewCoachScheduleModal";
 import { CreateCoachModal } from "@/components/admin/modals/CreateCoachModal";
 import { EditCoachModal, EditCoachForm } from "@/components/admin/modals/EditCoachModal";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
-type ModalMode = "view" | "create" | "edit" | null;
+type ModalMode = "view" | "create" | "edit" | "schedule" | null;
 
 const emptyCreateForm: CreateCoachInput = {
   user_id: 0, phone: "", lineId: "", facebook: "", uid: "", address: "", birth_date: "", nickname: "",
@@ -84,6 +85,11 @@ export default function CoachManagementPage() {
     } catch { /* ใช้ข้อมูลแถวไปก่อน */ } finally {
       setIsLoadingDetail(false);
     }
+  };
+
+  const openSchedule = (item: CoachListItem) => {
+    setSelected(item);
+    setModalMode("schedule");
   };
 
   const openCreate = () => {
@@ -287,7 +293,7 @@ export default function CoachManagementPage() {
       className: "text-right w-20",
       render: (item) => (
         <div className="flex justify-end">
-          <RowActionMenu onView={() => openView(item)} onDelete={() => handleDelete(item)} />
+          <RowActionMenu onView={() => openView(item)} onSchedule={() => openSchedule(item)} onDelete={() => handleDelete(item)} />
         </div>
       ),
     },
@@ -346,6 +352,7 @@ export default function CoachManagementPage() {
       />
 
       <ViewCoachModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} detail={detail} isLoadingDetail={isLoadingDetail} onEdit={openEdit} />
+      <ViewCoachScheduleModal isOpen={modalMode === "schedule"} onClose={closeModal} coach={selected} />
       <CreateCoachModal isOpen={modalMode === "create"} onClose={closeModal} createForm={createForm} setCreateForm={setCreateForm} formError={formError} isSubmitting={isSubmitting} onCreate={handleCreate} />
       <EditCoachModal isOpen={modalMode === "edit"} onClose={closeModal} editForm={editForm} setEditForm={setEditForm} detail={detail} formError={formError} isSubmitting={isSubmitting} onSave={handleUpdate} />
     </div>

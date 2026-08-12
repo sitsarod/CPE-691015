@@ -18,4 +18,9 @@ type WorkSchedule struct {
 
 	CourseID uint    `json:"course_id" gorm:"not null" valid:"required~courseId is required"`
 	Course   *Course `json:"course,omitempty" gorm:"foreignKey:CourseID;constraint:OnDelete:CASCADE;"`
+
+	// ผูกคาบสอนกับคาบเรียนของ package (session-centric assign)
+	// เป็น nullable pointer เพื่อไม่ให้ของเดิมที่ยังไม่มีค่าเหล่านี้พัง และรองรับคาบที่สร้างแบบเก่า (กรอกเวลาเอง)
+	PackageID         *uint `json:"package_id" gorm:"index"`
+	PackageScheduleID *uint `json:"package_schedule_id" gorm:"index"`
 }

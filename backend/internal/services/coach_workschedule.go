@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -11,6 +12,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// weekdayOffset แปลงชื่อวันเป็นจำนวนวันนับจากวันอาทิตย์ (คอลัมน์แรกของสัปดาห์)
+var weekdayOffset = map[string]int{
+	"Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+	"Thursday": 4, "Friday": 5, "Saturday": 6,
+}
+
 type WorkScheduleService interface {
 	AssignWorkSchedule(req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error)
 	GetAll() ([]models.WorkSchedule, error)
@@ -18,6 +25,7 @@ type WorkScheduleService interface {
 	GetByID(id uint) (*models.WorkSchedule, error)
 	Update(id uint, req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error)
 	Delete(id uint) error
+	GetWeekSessions(weekStart string) ([]dto.WeekSessionResponse, error)
 }
 
 type workScheduleService struct {
@@ -64,27 +72,31 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 	}
 
 	// 1) ต้องอยู่ในช่วงเวลาว่างของโค้ชในวันนั้น
-	var availabilities []models.CoachAvailability
-	if err := tx.Where("coach_id = ? AND day_of_week = ?", req.CoachID, dayOfWeekStr).Find(&availabilities).Error; err != nil {
-		return err
-	}
-	if len(availabilities) == 0 {
-		return fmt.Errorf("%w: โค้ชไม่ได้ตั้งเวลาว่างไว้ในวัน %s", ErrScheduleConflict, dayOfWeekStr)
-	}
-	isAvailable := false
-	for _, a := range availabilities {
-		as, err1 := timeToMinutesWS(a.StartTime)
-		ae, err2 := timeToMinutesWS(a.EndTime)
-		if err1 != nil || err2 != nil {
-			continue
+	// ยกเว้นกรณีฉุกเฉิน (IgnoreAvailability = true) ที่แอดมินยืนยันจะ assign แม้โค้ชไม่ว่าง
+	// แต่ยังคงเช็คเวลาชน/สนามซ้อนด้านล่างเสมอ (ห้ามข้าม เพราะ double-booking เป็น error จริง)
+	if !req.IgnoreAvailability {
+		var availabilities []models.CoachAvailability
+		if err := tx.Where("coach_id = ? AND day_of_week = ?", req.CoachID, dayOfWeekStr).Find(&availabilities).Error; err != nil {
+			return err
 		}
-		if reqStart >= as && reqEnd <= ae {
-			isAvailable = true
-			break
+		if len(availabilities) == 0 {
+			return fmt.Errorf("%w: โค้ชไม่ได้ตั้งเวลาว่างไว้ในวัน %s", ErrScheduleConflict, dayOfWeekStr)
 		}
-	}
-	if !isAvailable {
-		return fmt.Errorf("%w: เวลาที่จะมอบหมายอยู่นอกช่วงเวลาว่างของโค้ช", ErrScheduleConflict)
+		isAvailable := false
+		for _, a := range availabilities {
+			as, err1 := timeToMinutesWS(a.StartTime)
+			ae, err2 := timeToMinutesWS(a.EndTime)
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			if reqStart >= as && reqEnd <= ae {
+				isAvailable = true
+				break
+			}
+		}
+		if !isAvailable {
+			return fmt.Errorf("%w: เวลาที่จะมอบหมายอยู่นอกช่วงเวลาว่างของโค้ช", ErrScheduleConflict)
+		}
 	}
 
 	// 2) โค้ชคนเดียวกันต้องไม่มีคาบสอนอื่นซ้อนช่วงเวลานี้ในวันเดียวกัน (ยกเว้น record ตัวเอง)
@@ -118,6 +130,14 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 
 // AssignWorkSchedule สร้างตารางงานใหม่ให้ coach หลังผ่าน validation ครบ (ทำในทรานแซกชันเดียว)
 func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error) {
+	// ห้ามมอบหมายคาบที่วันผ่านไปแล้ว (กันย้อนหลัง — เช็คที่ server ด้วย ไม่ใช่แค่ที่ UI)
+	if d, err := time.Parse("2006-01-02", req.Date); err == nil {
+		today := time.Now().Truncate(24 * time.Hour)
+		if d.Before(today) {
+			return nil, fmt.Errorf("%w: ไม่สามารถมอบหมายคาบสอนของวันที่ผ่านไปแล้ว", ErrScheduleConflict)
+		}
+	}
+
 	var work models.WorkSchedule
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -126,13 +146,15 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 		}
 
 		work = models.WorkSchedule{
-			Date:        req.Date,
-			StartTime:   req.StartTime,
-			EndTime:     req.EndTime,
-			Description: req.Description,
-			Courtnumber: req.CourtNumber,
-			CoachID:     req.CoachID,
-			CourseID:    req.CourseID,
+			Date:              req.Date,
+			StartTime:         req.StartTime,
+			EndTime:           req.EndTime,
+			Description:       req.Description,
+			Courtnumber:       req.CourtNumber,
+			CoachID:           req.CoachID,
+			CourseID:          req.CourseID,
+			PackageID:         req.PackageID,
+			PackageScheduleID: req.PackageScheduleID,
 		}
 		return tx.Create(&work).Error
 	})
@@ -216,6 +238,108 @@ func (s *workScheduleService) Delete(id uint) error {
 		return err
 	}
 	return s.db.Delete(&schedule).Error
+}
+
+// GetWeekSessions คืนคาบเรียนของทุก package ในสัปดาห์ที่เลือก (session-centric)
+// แสดงเฉพาะ package ที่มี enrollment สถานะ active และช่วงสิทธิ์เรียนคลุมสัปดาห์นั้น
+// พร้อมรายชื่อโค้ชที่ถูก assign ให้แต่ละคาบไปแล้ว (ถ้ามี)
+func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessionResponse, error) {
+	start, err := time.Parse("2006-01-02", weekStart)
+	if err != nil {
+		return nil, fmt.Errorf("%w: week_start ต้องเป็น YYYY-MM-DD", ErrScheduleInvalid)
+	}
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	weekEnd := start.AddDate(0, 0, 7).Add(-time.Second) // ถึงสิ้นวันเสาร์
+
+	// 1) enrollment ที่ active และช่วงสิทธิ์คลุมสัปดาห์นี้
+	var enrollments []models.Enrollment
+	if err := s.db.
+		Where("status = ? AND started_at IS NOT NULL AND started_at <= ? AND (expires_at IS NULL OR expires_at >= ?)",
+			models.EnrollmentStatusActive, weekEnd, start).
+		Find(&enrollments).Error; err != nil {
+		return nil, err
+	}
+	if len(enrollments) == 0 {
+		return []dto.WeekSessionResponse{}, nil
+	}
+
+	pkgIDSet := make(map[uint]bool)
+	for _, e := range enrollments {
+		pkgIDSet[e.PackageID] = true
+	}
+	pkgIDs := make([]uint, 0, len(pkgIDSet))
+	for id := range pkgIDSet {
+		pkgIDs = append(pkgIDs, id)
+	}
+
+	// 2) โหลด package พร้อมตารางเรียนและคอร์ส
+	var packages []models.Package
+	if err := s.db.Preload("Schedules").Preload("Course").Where("id IN ?", pkgIDs).Find(&packages).Error; err != nil {
+		return nil, err
+	}
+
+	sessions := make([]dto.WeekSessionResponse, 0)
+	for _, pkg := range packages {
+		courseName := ""
+		courseID := pkg.CourseID
+		if pkg.Course != nil {
+			courseName = pkg.Course.CourseName
+			courseID = pkg.Course.ID
+		}
+
+		for _, sch := range pkg.Schedules {
+			off, ok := weekdayOffset[string(sch.DayOfWeek)]
+			if !ok {
+				continue
+			}
+			dateStr := start.AddDate(0, 0, off).Format("2006-01-02")
+
+			// โค้ชที่ถูก assign ให้คาบนี้แล้ว (match ด้วย package_schedule_id + วันที่)
+			var ws []models.WorkSchedule
+			if err := s.db.Preload("Coach.User").
+				Where("package_schedule_id = ? AND date = ?", sch.ID, dateStr).
+				Find(&ws).Error; err != nil {
+				return nil, err
+			}
+			coaches := make([]dto.WeekSessionCoach, 0, len(ws))
+			for _, w := range ws {
+				name := ""
+				if w.Coach != nil {
+					name = w.Coach.Nickname
+					if name == "" && w.Coach.User != nil {
+						name = w.Coach.User.FirstName + " " + w.Coach.User.LastName
+					}
+				}
+				coaches = append(coaches, dto.WeekSessionCoach{
+					WorkScheduleID: w.ID,
+					CoachID:        w.CoachID,
+					CoachName:      name,
+					CourtNumber:    w.Courtnumber,
+				})
+			}
+
+			sessions = append(sessions, dto.WeekSessionResponse{
+				PackageID:         pkg.ID,
+				PackageScheduleID: sch.ID,
+				CourseID:          courseID,
+				CourseName:        courseName,
+				Date:              dateStr,
+				DayOfWeek:         string(sch.DayOfWeek),
+				StartTime:         sch.StartTime,
+				EndTime:           sch.EndTime,
+				AssignedCoaches:   coaches,
+			})
+		}
+	}
+
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].Date != sessions[j].Date {
+			return sessions[i].Date < sessions[j].Date
+		}
+		return sessions[i].StartTime < sessions[j].StartTime
+	})
+
+	return sessions, nil
 }
 
 // timeToMinutesWS แปลงเวลา "HH:MM" เป็นนาทีนับจากเที่ยงคืน

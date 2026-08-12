@@ -156,6 +156,10 @@ func SetupRoutes(r *gin.Engine) {
 			adminWorkScheduleGroup.DELETE("/:id", workScheduleController.DeleteSchedule)
 		}
 
+		// ปฏิทินคาบเรียนรายสัปดาห์ (session-centric) — แยก path ออกจาก /work-schedules/:id
+		// เพื่อไม่ให้ route ชนกับ param :id
+		adminOnly.GET("/schedule-sessions", workScheduleController.GetWeekSessions)
+
 		userGroup := protected.Group("/users")
 		{
 			userGroup.GET("/:id", userController.GetUserProfileController)

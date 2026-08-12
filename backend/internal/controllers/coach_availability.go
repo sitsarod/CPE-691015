@@ -88,6 +88,11 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		// ErrAvailabilityConflictsSchedule = เวลาว่างใหม่ชนกับคาบที่ assign ไว้แล้ว — ตอบ 409
+		if errors.Is(err, services.ErrAvailabilityConflictsSchedule) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update availability: " + err.Error()})
 		return
 	}

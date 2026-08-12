@@ -198,7 +198,8 @@ export default function CoachAvailabilityPage() {
       setIsEditing(false);
       triggerToast("บันทึกตารางเวลาว่างเรียบร้อยแล้ว");
     } catch (err: unknown) {
-      console.error(err);
+      // error ที่ backend บล็อก (เช่น เวลาว่างชนคาบที่ assign แล้ว) เป็นเคสที่คาดไว้ — แจ้งผ่าน toast พอ
+      // ไม่ใช้ console.error เพราะจะไปกระตุ้น dev overlay ของ Next.js ให้เด้งจอแดงโดยไม่จำเป็น
       triggerToast(err instanceof Error ? err.message : "บันทึกตารางเวลาว่างไม่สำเร็จ", "error");
     } finally {
       setIsSaving(false);

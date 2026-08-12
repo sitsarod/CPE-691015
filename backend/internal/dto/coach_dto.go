@@ -116,6 +116,32 @@ type CreateWorkScheduleRequest struct {
 	EndTime     string `json:"end_time" valid:"required~endTime is required"`
 	CourtNumber string `json:"court_number" valid:"required~courtNumber is required"`
 	Description string `json:"description"`
+	// IgnoreAvailability = โหมดฉุกเฉิน: ข้ามการเช็คว่าโค้ชว่างหรือไม่ (แต่ยังเช็คเวลาชน/สนามซ้อน)
+	// ใช้กรณีไม่มีโค้ชคนไหนว่างตรงเวลาเลย แต่แอดมินจำเป็นต้องมอบหมาย
+	IgnoreAvailability bool `json:"ignore_availability"`
+	// อ้างอิงคาบเรียนของ package ที่กำลัง assign (optional — คาบที่สร้างแบบเก่ายังไม่มีค่าเหล่านี้)
+	PackageID         *uint `json:"package_id"`
+	PackageScheduleID *uint `json:"package_schedule_id"`
+}
+
+// โครงสร้างคาบเรียน 1 คาบในสัปดาห์ (ขยายจาก PackageSchedule เป็นวันที่จริง) สำหรับหน้า assign แบบ session-centric
+type WeekSessionCoach struct {
+	WorkScheduleID uint   `json:"work_schedule_id"`
+	CoachID        uint   `json:"coach_id"`
+	CoachName      string `json:"coach_name"`
+	CourtNumber    string `json:"court_number"`
+}
+
+type WeekSessionResponse struct {
+	PackageID         uint               `json:"package_id"`
+	PackageScheduleID uint               `json:"package_schedule_id"`
+	CourseID          uint               `json:"course_id"`
+	CourseName        string             `json:"course_name"`
+	Date              string             `json:"date"` // YYYY-MM-DD
+	DayOfWeek         string             `json:"day_of_week"`
+	StartTime         string             `json:"start_time"`
+	EndTime           string             `json:"end_time"`
+	AssignedCoaches   []WeekSessionCoach `json:"assigned_coaches"`
 }
 
 // Response สำหรับแสดงผลปฏิทินงานของโค้ชคนนั้นๆ

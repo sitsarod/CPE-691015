@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, Trash2, MoreVertical, AlertCircle } from "lucide-react";
+import { Eye, Trash2, MoreVertical, AlertCircle, CalendarClock } from "lucide-react";
 
 export const BRAND = "#E63946";
 
@@ -94,9 +94,11 @@ export function StatusPill({ active, status }: { active: boolean; status?: strin
 export function RowActionMenu({
   onView,
   onDelete,
+  onSchedule,
 }: {
   onView: () => void;
   onDelete: () => void;
+  onSchedule?: () => void; // optional: แสดงเมนู "ดูตารางเวลาว่าง" เฉพาะเมื่อส่ง handler มา (ใช้กับหน้าจัดการโค้ช)
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -159,6 +161,9 @@ export function RowActionMenu({
           className="fixed z-50 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-black/5"
         >
           <MenuItem icon={Eye} label="ดูรายละเอียด" onClick={() => run(onView)} />
+          {onSchedule && (
+            <MenuItem icon={CalendarClock} label="ดูตารางเวลาว่าง" onClick={() => run(onSchedule)} />
+          )}
           <MenuItem icon={Trash2} label="ลบ" danger onClick={() => run(onDelete)} />
         </div>
       )}

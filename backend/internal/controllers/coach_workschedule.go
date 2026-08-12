@@ -32,6 +32,27 @@ func (ctrl *WorkScheduleController) GetSchedules(c *gin.Context) {
 	c.JSON(http.StatusOK, schedules)
 }
 
+// GetWeekSessions handles GET /api/schedule-sessions?week_start=YYYY-MM-DD
+// คืนคาบเรียนของทุก package ในสัปดาห์ (session-centric) เฉพาะ package ที่มี enrollment active
+func (ctrl *WorkScheduleController) GetWeekSessions(c *gin.Context) {
+	weekStart := c.Query("week_start")
+	if weekStart == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ต้องระบุ week_start (YYYY-MM-DD)"})
+		return
+	}
+
+	sessions, err := ctrl.service.GetWeekSessions(weekStart)
+	if err != nil {
+		if errors.Is(err, services.ErrScheduleInvalid) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve sessions: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sessions)
+}
+
 // GetSchedulesByCoach handles GET /api/coaches/:id/work-schedules
 // ใช้ในหน้า coach ดูตารางสอนของตัวเอง
 func (ctrl *WorkScheduleController) GetSchedulesByCoach(c *gin.Context) {

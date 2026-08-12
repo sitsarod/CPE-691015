@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -13,6 +14,10 @@ import (
 // ErrInvalidAvailability ใช้เมื่อชุดเวลาว่างที่ส่งมาไม่ผ่าน validation
 // controller ควรแมป error นี้เป็น HTTP 400 (client ส่งข้อมูลผิด ไม่ใช่ระบบพัง)
 var ErrInvalidAvailability = errors.New("ข้อมูลเวลาว่างไม่ถูกต้อง")
+
+// ErrAvailabilityConflictsSchedule ใช้เมื่อโค้ชพยายามลบ/แก้เวลาว่างที่มีคาบสอนถูก assign ไว้แล้วในอนาคต
+// controller ควรแมปเป็น HTTP 409 (ผิดกฎธุรกิจ — คาบที่ตกลงไว้แล้วห้ามให้หลุดเงียบๆ)
+var ErrAvailabilityConflictsSchedule = errors.New("แก้ไขเวลาว่างไม่ได้เพราะชนกับคาบสอนที่ถูกมอบหมายไว้แล้ว")
 
 // isValidDayOfWeek ตรวจว่า day เป็น 1 ใน Monday..Sunday (ตรงกับค่าที่ AssignWorkSchedule ใช้เทียบ)
 func isValidDayOfWeek(day string) bool {
@@ -97,6 +102,11 @@ func (s *CoachAvailabilityService) UpdateAvailability(coachID uint, userID uint,
 		return nil, err
 	}
 
+	// กันเคสโค้ชลบ/แก้เวลาว่างที่มีคาบสอนถูก assign ไว้แล้วในอนาคต (คาบที่ตกลงไว้ห้ามหลุดเงียบๆ)
+	if err := s.ensureNoScheduleConflict(coachID, req.Availabilities); err != nil {
+		return nil, err
+	}
+
 	var result []models.CoachAvailability
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -135,4 +145,64 @@ func (s *CoachAvailabilityService) UpdateAvailability(coachID uint, userID uint,
 // DeleteAll ลบเวลาว่างทั้งหมดของ coach (เผื่อใช้กรณี coach อยากล้างตารางแล้วเริ่มใหม่)
 func (s *CoachAvailabilityService) DeleteAll(coachID uint) error {
 	return s.db.Where("coach_id = ?", coachID).Delete(&models.CoachAvailability{}).Error
+}
+
+// ensureNoScheduleConflict ตรวจว่าเวลาว่างชุดใหม่ยังคลุมคาบสอนที่ถูก assign ไว้แล้วในอนาคตครบทุกคาบ
+// ถ้ามีคาบไหนหลุดออกนอกเวลาว่างใหม่ จะคืน ErrAvailabilityConflictsSchedule (บล็อกการบันทึก)
+func (s *CoachAvailabilityService) ensureNoScheduleConflict(coachID uint, avails []dto.AvailabilityDetail) error {
+	today := time.Now().Format("2006-01-02")
+
+	var futureWS []models.WorkSchedule
+	if err := s.db.Where("coach_id = ? AND date >= ?", coachID, today).Find(&futureWS).Error; err != nil {
+		return err
+	}
+	if len(futureWS) == 0 {
+		return nil
+	}
+
+	// สร้าง map: ชื่อวัน -> ช่วงเวลาว่างใหม่ (เป็นนาที)
+	type window struct{ start, end int }
+	byDay := make(map[string][]window)
+	for _, a := range avails {
+		st, err := timeToMinutesWS(a.StartTime)
+		if err != nil {
+			continue
+		}
+		en, err := timeToMinutesWS(a.EndTime)
+		if err != nil {
+			continue
+		}
+		byDay[a.DayOfWeek] = append(byDay[a.DayOfWeek], window{start: st, end: en})
+	}
+
+	for _, w := range futureWS {
+		datePart := w.Date
+		if len(datePart) >= 10 {
+			datePart = datePart[:10] // ตัดส่วน T00:00:00Z ถ้ามี
+		}
+		d, err := time.Parse("2006-01-02", datePart)
+		if err != nil {
+			continue
+		}
+		dayName := d.Weekday().String()
+
+		ws, err1 := timeToMinutesWS(w.StartTime)
+		we, err2 := timeToMinutesWS(w.EndTime)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+
+		covered := false
+		for _, win := range byDay[dayName] {
+			if ws >= win.start && we <= win.end {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return fmt.Errorf("%w: มีคาบสอนที่มอบหมายไว้วันที่ %s เวลา %s-%s ซึ่งอยู่นอกเวลาว่างใหม่ กรุณาติดต่อแอดมินก่อนแก้ไข",
+				ErrAvailabilityConflictsSchedule, datePart, w.StartTime, w.EndTime)
+		}
+	}
+	return nil
 }
