@@ -31,7 +31,8 @@ func NewAuthService(db *gorm.DB) AuthService {
 
 func (s *authService) Login(input dto.LoginInput) (string, string, *models.User, error) {
 	var user models.User
-	err := s.db.Preload("Customer").Where("email = ?", input.Email).First(&user).Error
+	// Preload ทั้ง Customer และ Coach เพราะทั้งสองบทบาทมี QR ประจำตัวที่ต้องส่งกลับตอนล็อกอิน
+	err := s.db.Preload("Customer").Preload("Coach").Where("email = ?", input.Email).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")

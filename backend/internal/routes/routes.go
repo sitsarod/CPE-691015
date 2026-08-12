@@ -85,6 +85,8 @@ func SetupRoutes(r *gin.Engine) {
 	reviewService := services.NewReviewService(db)
 	reviewController := controllers.NewReviewController(reviewService)
 
+	personalQRController := controllers.NewPersonalQRController(db)
+
 	r.Use(middlewares.CORSMiddleware())
 	r.OPTIONS("/*path", func(c *gin.Context) {
 		c.AbortWithStatus(204)
@@ -167,6 +169,11 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.POST("/create", userController.CreateUserController)
 			adminUserGroup.DELETE("/:id", userController.DeleteUserController)
 		}
+
+		// --- QR ประจำตัว ---
+		// อ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param จึงดึง QR ของคนอื่นไม่ได้
+		// ใช้ได้ทั้งนักเรียนและโค้ช (แอดมินจะได้ 404 เพราะไม่มี QR ประจำตัว)
+		protected.GET("/me/qr", personalQRController.GetMyQR)
 
 		// --- ความยินยอมเก็บข้อมูลใบหน้า (PDPA) ---
 		// ทุกเส้นอ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param และไม่รับ customer_id จาก body
