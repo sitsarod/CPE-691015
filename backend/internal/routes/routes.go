@@ -81,6 +81,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	photoController := controllers.NewPhotoController(db)
 
+	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
+	attendanceService := services.NewAttendanceService(db)
+	attendanceController := controllers.NewAttendanceController(attendanceService)
+
 	// ระบบรีวิว/ให้คะแนนคอร์สและโค้ช
 	reviewService := services.NewReviewService(db)
 	reviewController := controllers.NewReviewController(reviewService)
@@ -224,6 +228,26 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
+		}
+
+		// --- เช็คชื่อเข้าเรียน ---
+		//
+		// ทุกเส้นเป็น adminOnly เพราะเครื่องที่สนามล็อกอินด้วยบัญชีแอดมิน
+		// ตัวตนของนักเรียนมาจาก QR ใน body ไม่ใช่จาก JWT — ต่างจากเส้นทางอื่นในระบบ
+		attendanceGroup := adminOnly.Group("/attendance")
+		{
+			attendanceGroup.GET("/openable", attendanceController.GetOpenablePackages)
+			attendanceGroup.GET("/history", attendanceController.GetHistory)
+
+			attendanceGroup.POST("/sessions", attendanceController.OpenSession)
+			attendanceGroup.GET("/sessions/:id", attendanceController.GetSession)
+			// สแกนสองจังหวะ: lookup ไม่เขียนอะไร · check-in บันทึกและหักโควตา
+			attendanceGroup.POST("/sessions/:id/lookup", attendanceController.Lookup)
+			attendanceGroup.POST("/sessions/:id/check-in", attendanceController.CheckIn)
+			attendanceGroup.POST("/sessions/:id/manual", attendanceController.ManualCheckIn)
+			attendanceGroup.PATCH("/sessions/:id/close", attendanceController.CloseSession)
+
+			attendanceGroup.PATCH("/records/:id", attendanceController.UpdateStatus)
 		}
 
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
