@@ -20,6 +20,17 @@ func NewCoachAvailabilityController(s *services.CoachAvailabilityService) *Coach
 	return &CoachAvailabilityController{service: s}
 }
 
+// GetAllAvailabilities handles GET /api/coach-availabilities (admin)
+// คืนเวลาว่างของโค้ชทุกคนในครั้งเดียว (query เดียว) สำหรับหน้าจัดตารางสอน — เลี่ยง N+1
+func (ctrl *CoachAvailabilityController) GetAllAvailabilities(c *gin.Context) {
+	all, err := ctrl.service.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve availabilities: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, all)
+}
+
 // GetAvailability handles GET /api/coaches/:id/availability
 // ใช้ทั้งฝั่ง coach ดูตารางว่างของตัวเอง และฝั่ง admin/frontend ดูตอน filter freetime
 func (ctrl *CoachAvailabilityController) GetAvailability(c *gin.Context) {

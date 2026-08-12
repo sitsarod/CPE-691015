@@ -155,6 +155,20 @@ export async function fetchCoachById(coachId: number, token: string): Promise<Co
   return resData;
 }
 
+// แถวเวลาว่างแบบรวมทุกโค้ช (มี coach_id ติดมาด้วย) จาก endpoint /coach-availabilities
+export interface CoachAvailabilityRow {
+  coach_id: number;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+}
+
+// [GET] ดึงเวลาว่างของโค้ชทุกคนในครั้งเดียว (admin) — เลี่ยงการยิงทีละคน (N+1)
+export async function fetchAllCoachAvailabilities(): Promise<CoachAvailabilityRow[]> {
+  const res = await apiFetch<CoachAvailabilityRow[]>("/coach-availabilities", { method: "GET" });
+  return res || [];
+}
+
 // ดึงตารางเวลาว่างของโค้ช
 export async function fetchCoachAvailability(coachId: number, token: string): Promise<AvailabilitySlot[]> {
   const response = await fetch(`${BASE_URL}/coaches/${coachId}/availability`, {

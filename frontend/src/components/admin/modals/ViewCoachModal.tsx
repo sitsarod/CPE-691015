@@ -65,8 +65,8 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
             <DetailItem label="ระดับฝีมือ" value={detail.specialization} />
             <DetailItem label="ใบรับรองผู้ฝึกสอน" value={detail.coach_license} />
             <DetailItem label="ที่อยู่" value={detail.address} />
-            <DetailItem label="เลขบัญชีธนาคาร" value={detail.bank_account} />
-            <DetailItem label="ข้อมูลการจ่ายเงิน" value={detail.payment_info} />
+            <DetailItem label="ธนาคาร" value={detail.bank_account} />
+            <DetailItem label="เลขบัญชี" value={detail.payment_info} />
             <DetailItem
               label="ประเภทการจ่ายเงิน"
               value={PAYMENT_TYPE_LABEL[detail.payment_type] ?? "-"}

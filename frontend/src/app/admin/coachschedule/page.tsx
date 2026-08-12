@@ -3,10 +3,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users } from "lucide-react";
 
-import { getAllCoachesAPI, fetchCoachAvailability, CoachListItem } from "@/services/coachAPI";
+import { getAllCoachesAPI, fetchAllCoachAvailabilities, CoachListItem } from "@/services/coachAPI";
 import { getWeekSessions, WeekSession } from "@/services/workScheduleAPI";
+import { getCourts, Court } from "@/services/courtAPI";
 import { AvailabilitySlot } from "@/types/coach";
 import { AssignCoachModal } from "@/components/admin/modals/AssignCoachModal";
+import { CourtManageModal } from "@/components/admin/modals/CourtManageModal";
+import { MapPin } from "lucide-react";
 
 const DAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -43,6 +46,8 @@ export default function CoachSchedulePage() {
   const [coaches, setCoaches] = useState<CoachListItem[]>([]);
   const [availByCoach, setAvailByCoach] = useState<Map<number, Map<string, AvailabilitySlot[]>>>(new Map());
   const [sessions, setSessions] = useState<WeekSession[]>([]);
+  const [courts, setCourts] = useState<Court[]>([]);
+  const [courtModalOpen, setCourtModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,30 +66,29 @@ export default function CoachSchedulePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [coachData, sessionData] = await Promise.all([getAllCoachesAPI(), getWeekSessions(weekStartISO)]);
+      // ดึงทั้งหมดพร้อมกันในครั้งเดียว — availability รวมทุกโค้ชมาใน request เดียว (ไม่ยิงทีละคนแล้ว)
+      const [coachData, sessionData, availRows, courtData] = await Promise.all([
+        getAllCoachesAPI(),
+        getWeekSessions(weekStartISO),
+        fetchAllCoachAvailabilities(),
+        getCourts(),
+      ]);
       setCoaches(coachData);
       setSessions(sessionData);
+      setCourts(courtData);
 
-      // เวลาว่างของโค้ชแต่ละคน (ใช้กรองว่าใครว่างตรงเวลาแต่ละคาบ)
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
-      const availResults = await Promise.all(
-        coachData.map(async (c) => {
-          try {
-            return { id: c.id, slots: await fetchCoachAvailability(c.id, token) };
-          } catch {
-            return { id: c.id, slots: [] as AvailabilitySlot[] };
-          }
-        })
-      );
+      // group เวลาว่าง: coach_id -> (day_of_week -> ช่วงเวลา)
       const map = new Map<number, Map<string, AvailabilitySlot[]>>();
-      for (const { id, slots } of availResults) {
-        const byDay = new Map<string, AvailabilitySlot[]>();
-        for (const s of slots) {
-          const list = byDay.get(s.day_of_week);
-          if (list) list.push(s);
-          else byDay.set(s.day_of_week, [s]);
+      for (const row of availRows) {
+        let byDay = map.get(row.coach_id);
+        if (!byDay) {
+          byDay = new Map<string, AvailabilitySlot[]>();
+          map.set(row.coach_id, byDay);
         }
-        map.set(id, byDay);
+        const slot: AvailabilitySlot = { day_of_week: row.day_of_week, start_time: row.start_time, end_time: row.end_time };
+        const list = byDay.get(row.day_of_week);
+        if (list) list.push(slot);
+        else byDay.set(row.day_of_week, [slot]);
       }
       setAvailByCoach(map);
     } catch (err: unknown) {
@@ -149,6 +153,9 @@ export default function CoachSchedulePage() {
           <button onClick={loadData} disabled={isLoading} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer" title="รีเฟรช">
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </button>
+          <button onClick={() => setCourtModalOpen(true)} className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer text-sm font-semibold" title="จัดการสนาม">
+            <MapPin className="h-4 w-4" /> จัดการสนาม
+          </button>
         </div>
       </div>
 
@@ -208,15 +215,15 @@ export default function CoachSchedulePage() {
                             <button
                               key={`${s.package_schedule_id}-${s.date}`}
                               onClick={() => { setActiveSession(s); setActiveIsPast(isPast); }}
-                              className={`w-full text-left rounded-xl border ${color.soft} p-2.5 transition hover:shadow-sm cursor-pointer ${isPast ? "opacity-60" : ""}`}
+                              className={`w-full text-left rounded-xl border ${color.soft} p-3 transition hover:shadow-md cursor-pointer ${isPast ? "opacity-60" : ""}`}
                             >
-                              <div className="flex items-center gap-1.5">
-                                <span className={`h-2 w-2 rounded-full ${color.bar}`} />
-                                <span className="text-[11px] font-bold leading-tight truncate">{s.course_name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${color.bar}`} />
+                                <span className="text-sm font-bold leading-tight truncate">{s.course_name}</span>
                               </div>
-                              <div className="mt-1 text-[10px] font-semibold text-slate-500">{s.start_time} - {s.end_time}</div>
-                              <div className="mt-1.5 flex items-center gap-1 text-[10px]">
-                                <Users className="h-3 w-3 text-slate-400" />
+                              <div className="mt-1.5 text-xs font-semibold text-slate-500">{s.start_time} - {s.end_time}</div>
+                              <div className="mt-2 flex items-center gap-1.5 text-xs">
+                                <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 {hasCoach ? (
                                   <span className="text-slate-600 truncate">{s.assigned_coaches.map((c) => c.coach_name).join(", ")}</span>
                                 ) : (
@@ -248,11 +255,18 @@ export default function CoachSchedulePage() {
         session={activeSession}
         isPast={activeIsPast}
         coaches={coaches}
+        courts={courts}
         availByCoach={availByCoach}
         onChanged={() => {
           setActiveSession(null);
           loadData();
         }}
+      />
+
+      <CourtManageModal
+        isOpen={courtModalOpen}
+        onClose={() => setCourtModalOpen(false)}
+        onChanged={loadData}
       />
     </div>
   );

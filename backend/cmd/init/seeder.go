@@ -76,6 +76,13 @@ func seedAdmins(db *gorm.DB) {
 	}
 }
 
+// coachAvail = ช่วงเวลาว่างของโค้ชสำหรับ seed (วัน + เวลาเริ่ม-จบ)
+type coachAvail struct {
+	Day   models.DayOfWeek
+	Start string
+	End   string
+}
+
 func seedCoaches(db *gorm.DB) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
@@ -93,8 +100,11 @@ func seedCoaches(db *gorm.DB) {
 		ProfilePicture string
 		Specialization string
 		CoachLicense   string
-		BankAccount    string
-		PaymentInfo    string
+		BankAccount    string  // ชื่อธนาคาร (ตรงกับ BANK_OPTIONS ฝั่ง frontend)
+		PaymentInfo    string  // เลขบัญชี (ตัวเลขล้วน)
+		PaymentType    string  // per_session หรือ monthly
+		PayRate        float64 // บาท/ครั้ง หรือ บาท/เดือน ตาม PaymentType
+		Availabilities []coachAvail
 	}{
 		{
 			FirstName:      "ธีรศิลป์",
@@ -108,10 +118,19 @@ func seedCoaches(db *gorm.DB) {
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
 			ProfilePicture: "https://example.com/profiles/coach1.png",
-			Specialization: "S+",
+			Specialization: "S",
 			CoachLicense:   "License A",
-			BankAccount:    "ธ.กสิกรไทย 123-4-56789-0",
-			PaymentInfo:    "PromptPay: 0812345678",
+			BankAccount:    "ธนาคารกสิกรไทย",
+			PaymentInfo:    "1234567890",
+			PaymentType:    "per_session",
+			PayRate:        400,
+			Availabilities: []coachAvail{
+				{models.Monday, "17:00", "21:00"},
+				{models.Wednesday, "17:00", "21:00"},
+				{models.Friday, "17:00", "21:00"},
+				{models.Saturday, "09:00", "12:00"},
+				{models.Sunday, "09:00", "12:00"},
+			},
 		},
 		{
 			FirstName:      "ชนาธิป",
@@ -127,8 +146,15 @@ func seedCoaches(db *gorm.DB) {
 			ProfilePicture: "https://example.com/profiles/coach2.png",
 			Specialization: "S",
 			CoachLicense:   "License B",
-			BankAccount:    "ธ.ไทยพาณิชย์ 987-6-54321-0",
-			PaymentInfo:    "PromptPay: 0823456789",
+			BankAccount:    "ธนาคารไทยพาณิชย์",
+			PaymentInfo:    "9876543210",
+			PaymentType:    "monthly",
+			PayRate:        12000,
+			Availabilities: []coachAvail{
+				{models.Tuesday, "18:00", "21:00"},
+				{models.Thursday, "18:00", "21:00"},
+				{models.Saturday, "13:00", "18:00"},
+			},
 		},
 		{
 			FirstName:      "สารัช",
@@ -144,8 +170,17 @@ func seedCoaches(db *gorm.DB) {
 			ProfilePicture: "https://example.com/profiles/coach3.png",
 			Specialization: "P",
 			CoachLicense:   "License C",
-			BankAccount:    "ธ.กรุงเทพ 111-2-22222-3",
-			PaymentInfo:    "PromptPay: 0834567890",
+			BankAccount:    "ธนาคารกรุงเทพ",
+			PaymentInfo:    "1112222223",
+			PaymentType:    "per_session",
+			PayRate:        350,
+			Availabilities: []coachAvail{
+				{models.Monday, "18:00", "20:00"},
+				{models.Tuesday, "18:00", "20:00"},
+				{models.Wednesday, "18:00", "20:00"},
+				{models.Thursday, "18:00", "20:00"},
+				{models.Friday, "18:00", "20:00"},
+			},
 		},
 	}
 
@@ -186,8 +221,26 @@ func seedCoaches(db *gorm.DB) {
 						CoachLicense:   data.CoachLicense,
 						BankAccount:    data.BankAccount,
 						PaymentInfo:    data.PaymentInfo,
+						PaymentType:    data.PaymentType,
+						PayRate:        data.PayRate,
 					}
-					return tx.Create(&coach).Error
+					if err := tx.Create(&coach).Error; err != nil {
+						return err
+					}
+
+					// seed ตารางเวลาว่างประจำสัปดาห์ของโค้ช
+					for _, a := range data.Availabilities {
+						avail := models.CoachAvailability{
+							CoachID:   coach.ID,
+							DayOfWeek: a.Day,
+							StartTime: a.Start,
+							EndTime:   a.End,
+						}
+						if err := tx.Create(&avail).Error; err != nil {
+							return err
+						}
+					}
+					return nil
 				})
 
 				if err != nil {

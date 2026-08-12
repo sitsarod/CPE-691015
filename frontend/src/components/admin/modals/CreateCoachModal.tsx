@@ -7,7 +7,7 @@ import SelectField from "@/components/SelectField";
 import { CreateCoachInput, getAllCoachesAPI } from "@/services/coachAPI";
 import { getAllUsersAPI } from "@/services/userAPI";
 import { FormError } from "@/components/admin/ManagementUI";
-import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, CoachPaymentType } from "@/types/coach";
+import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, CoachPaymentType, BANK_OPTIONS } from "@/types/coach";
 
 // ตัวเลือกผู้ใช้ที่ยังว่าง (role = coach และยังไม่มีโปรไฟล์โค้ช)
 interface AvailableUser {
@@ -135,8 +135,8 @@ export function CreateCoachModal({
           <InputField label="Facebook (ถ้ามี)" value={createForm.facebook ?? ""} onChange={(e) => setCreateForm({ ...createForm, facebook: e.target.value })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputField label="เลขบัญชีธนาคาร" required value={createForm.bank_account} onChange={(e) => setCreateForm({ ...createForm, bank_account: e.target.value })} />
-          <InputField label="ข้อมูลการจ่ายเงิน" required value={createForm.payment_info} onChange={(e) => setCreateForm({ ...createForm, payment_info: e.target.value })} />
+          <SelectField label="ธนาคาร" required options={BANK_OPTIONS} value={createForm.bank_account} onChange={(e) => setCreateForm({ ...createForm, bank_account: e.target.value })} />
+          <InputField label="เลขบัญชี" required inputMode="numeric" value={createForm.payment_info} onChange={(e) => setCreateForm({ ...createForm, payment_info: e.target.value.replace(/[^\d]/g, "") })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField
