@@ -1,10 +1,14 @@
+// ตรงกับ dto.UserMinDTO ฝั่ง backend (GET /admin/role)
+//
+// เดิม endpoint นี้คืน models.User ดิบ ทำให้ได้ ID ตัวใหญ่และ nickname ซ้อนอยู่ใน customer
+// รวมถึง password hash ที่ติดมาด้วย ตอนนี้เปลี่ยนมาคืน DTO ที่แบนแล้วและไม่มี password
 export interface BackendUser {
-  ID: number;
+  id: number;
   firstName: string;
   lastName: string;
   email: string;
   role: string;
-  customer?: { nickname?: string } | null;
+  nickname: string;
 }
 
 export interface BillingTypeDTO {

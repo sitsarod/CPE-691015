@@ -82,8 +82,9 @@ export default function EditForm() {
       setIsSaving(true);
       setErrorMsg("");
 
+      // ไม่ส่ง email มาแล้ว เพราะ backend ถอดออกจาก UpdateProfileInput
+      // ถ้ายังส่งอยู่จะถูกทิ้งเงียบ ๆ ทำให้เข้าใจผิดว่าบันทึกสำเร็จ
       await updateUserProfileAPI(userId, {
-        email: formData.email,
         phoneNumber: formData.phoneNumber,
         lineId: formData.lineId,
         facebook: formData.facebook,
@@ -158,9 +159,14 @@ export default function EditForm() {
           label="วันเกิด" name="birthDate" type="date" value={formData.birthDate} readOnly disabled 
         />
 
-        <InputField 
-          label="อีเมล" name="email" type="email" value={formData.email} required 
-          onChange={handleChange} placeholder="ระบุอีเมล" 
+        {/*
+          อีเมลแก้เองไม่ได้ เพราะเป็นชื่อผู้ใช้ที่ใช้ล็อกอินและเป็นปลายทางของการกู้รหัสผ่าน
+          ถ้าเปลี่ยนเองได้ ใครที่ยึด session ไปได้จะยึดบัญชีถาวรทันที
+          ต้องแจ้งแอดมินให้เปลี่ยนให้หลังตรวจหลักฐานแทน
+        */}
+        <InputField
+          label="อีเมล (แจ้งแอดมินเพื่อเปลี่ยน)" name="email" type="email" value={formData.email}
+          readOnly disabled
         />
         <InputField 
           label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" type="text" value={formData.phoneNumber} required 

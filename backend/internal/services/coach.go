@@ -203,17 +203,8 @@ func (s *CoachService) Update(id uint, userID uint, role string, req dto.UpdateC
 	if req.Address != nil {
 		updateData["address"] = *req.Address
 	}
-	if req.Nickname != nil {
-		updateData["nickname"] = *req.Nickname
-	}
 	if req.ProfilePicture != nil {
 		updateData["profile_picture"] = *req.ProfilePicture
-	}
-	if req.BankAccount != nil {
-		updateData["bank_account"] = *req.BankAccount
-	}
-	if req.PaymentInfo != nil {
-		updateData["payment_info"] = *req.PaymentInfo
 	}
 
 	if len(updateData) > 0 {

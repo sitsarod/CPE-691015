@@ -1,9 +1,69 @@
 package controllers
 
 import (
+	"errors"
+
 	"CPE-691015/internal/models"
+
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
+
+// fieldLabelTH แปลงชื่อฟิลด์ใน DTO เป็นชื่อภาษาไทยที่ผู้ใช้เข้าใจ
+//
+// เพิ่มชื่อฟิลด์ใหม่ที่นี่ที่เดียว ใช้ได้กับทุก endpoint ที่เรียก bindErrorMessage
+var fieldLabelTH = map[string]string{
+	"Role":              "สิทธิ์การใช้งาน",
+	"FirstName":         "ชื่อ",
+	"LastName":          "นามสกุล",
+	"Email":             "อีเมล",
+	"Password":          "รหัสผ่าน",
+	"Nickname":          "ชื่อเล่น",
+	"Gender":            "เพศ",
+	"BirthDate":         "วันเกิด",
+	"PhoneNumber":       "หมายเลขโทรศัพท์",
+	"ParentEmail":       "อีเมลผู้ปกครอง",
+	"ParentPhoneNumber": "หมายเลขโทรศัพท์ผู้ปกครอง",
+}
+
+// bindErrorMessage สร้างข้อความ error ที่บอกได้ว่าฟิลด์ไหนผิดและผิดยังไง
+//
+// ถ้าตอบข้อความรวม ๆ ว่า "ข้อมูลไม่ถูกต้อง" ผู้ใช้จะไม่รู้ว่าต้องแก้ตรงไหน
+// และเราก็ดีบักยากเวลามีคนแจ้งว่าสมัครไม่ผ่าน
+//
+// รายงานแค่ฟิลด์แรกที่ผิดพอ เพราะหน้าบ้านแสดง error ทีละข้อความอยู่แล้ว
+func bindErrorMessage(err error) string {
+	var verrs validator.ValidationErrors
+	if !errors.As(err, &verrs) || len(verrs) == 0 {
+		// ไม่ใช่ error จาก validator (เช่น JSON เพี้ยน) จึงบอกได้แค่กว้าง ๆ
+		return "ข้อมูลที่ส่งมาไม่ถูกต้องหรือขาดฟิลด์จำเป็น"
+	}
+
+	e := verrs[0]
+	label, ok := fieldLabelTH[e.Field()]
+	if !ok {
+		label = e.Field()
+	}
+
+	switch e.Tag() {
+	case "required":
+		return "กรุณากรอก: " + label
+	case "email":
+		return "รูปแบบ" + label + "ไม่ถูกต้อง"
+	case "oneof":
+		return label + "ต้องเป็นค่าใดค่าหนึ่งใน: " + e.Param()
+	case "numeric":
+		return label + "ต้องเป็นตัวเลขเท่านั้น"
+	case "len":
+		return label + "ต้องมี " + e.Param() + " หลัก"
+	case "max":
+		return label + "ต้องยาวไม่เกิน " + e.Param() + " ตัวอักษร"
+	case "min":
+		return label + "ต้องยาวอย่างน้อย " + e.Param() + " ตัวอักษร"
+	default:
+		return label + "ไม่ถูกต้อง"
+	}
+}
 
 // GetAuthContext ดึง userID และ role ที่ AuthMiddleware เซ็ตไว้ออกมาอย่างปลอดภัย
 //

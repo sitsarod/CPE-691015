@@ -3,16 +3,44 @@
 import { useState, useEffect } from "react";
 import { Plus, RefreshCw, Users, UserCheck, Dumbbell, ShieldCheck, AlertCircle } from "lucide-react";
 import Button from "@/components/Button";
-import { getAllUsersAPI, getUserProfileAPI, updateUserProfileAPI, createUserAPI, deleteUserAPI, CreateUserInput } from "@/services/userAPI";
-import { UserProfileResponseDTO, UpdateProfileInput } from "@/types/user";
+import {
+  getAllUsersAPI,
+  adminGetUserDetailAPI,
+  adminCreateUserAPI,
+  adminUpdateUserAPI,
+  deleteUserAPI,
+  type AdminCreateUserInput,
+  type AdminUpdateUserInput,
+  type AdminUserDetail,
+} from "@/services/userAPI";
+import { UserProfileResponseDTO } from "@/types/user";
 import { SummaryCard, RoleBadge, StatusPill, RowActionMenu, normalizeRole, isActive, type RoleKey } from "@/components/admin/ManagementUI";
 import { ViewMemberModal } from "@/components/admin/modals/ViewMemberModal";
-import { CreateMemberModal } from "@/components/admin/modals/CreateMemberModal";
+import { CreateMemberModal, emptyCustomer, emptyCoach } from "@/components/admin/modals/CreateMemberModal";
+import { EditMemberModal } from "@/components/admin/modals/EditMemberModal";
 import { MemberFilterToolbar } from "@/components/admin/MemberFilterToolbar";
 import { DataTable, Column } from "@/components/admin/DataTable";
 
 export const getId = (item: UserProfileResponseDTO): number => item.id ?? (item as unknown as { ID: number }).ID;
 type ModalMode = "view" | "edit" | "create" | null;
+
+/**
+ * ค่าเริ่มต้นของฟอร์มสร้างสมาชิก
+ *
+ * แนบโปรไฟล์เปล่าไว้ทั้งสองก้อนตั้งแต่แรก เพื่อให้สลับบทบาทไปมาแล้วค่าที่กรอกค้างไว้
+ * ไม่หาย และ modal ไม่ต้องเช็ค null ทุกช่อง — ตอนส่งค่อยเลือกส่งเฉพาะก้อนที่ตรงกับ role
+ */
+function emptyCreateForm(): AdminCreateUserInput {
+  return {
+    role: "customer",
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    customer: { ...emptyCustomer },
+    coach: { ...emptyCoach },
+  };
+}
 
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<UserProfileResponseDTO[]>([]);
@@ -27,10 +55,10 @@ export default function AdminMembersPage() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [editForm, setEditForm] = useState<UpdateProfileInput>({});
-  const [createForm, setCreateForm] = useState<CreateUserInput>({
-    role: "customer", firstName: "", lastName: "", email: "", password: "",
-  });
+  const [detail, setDetail] = useState<AdminUserDetail | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<AdminUpdateUserInput>({});
+  const [createForm, setCreateForm] = useState<AdminCreateUserInput>(emptyCreateForm());
 
   const loadAllMembers = async () => {
     try {
@@ -50,31 +78,83 @@ export default function AdminMembersPage() {
   const closeModal = () => {
     setModalMode(null);
     setSelected(null);
+    setDetail(null);
+    setEditingId(null);
     setFormError(null);
   };
 
   const openView = async (item: UserProfileResponseDTO) => {
     setModalMode("view");
     setSelected(item);
+    setDetail(null);
     setIsLoadingDetail(true);
     try {
-      const detail = await getUserProfileAPI(getId(item));
-      setSelected(detail);
-    } catch { /* ใช้ข้อมูลเดิม */ } finally {
+      setDetail(await adminGetUserDetailAPI(getId(item)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถดึงรายละเอียดสมาชิกได้");
+    } finally {
       setIsLoadingDetail(false);
     }
   };
 
+  /**
+   * เปิดฟอร์มแก้ไข
+   *
+   * ต้องโหลดรายละเอียดเต็มก่อนเสมอ เพราะข้อมูลในตาราง (UserProfileResponseDTO)
+   * ไม่มีฟิลด์ของโค้ชและไม่มีวันเกิด/เลขบัตร — ถ้า prefill จากแถวจะได้ฟอร์มที่ว่างเปล่า
+   * แล้วกดบันทึกทับข้อมูลเดิมหายหมด
+   */
+  const openEdit = async (item: UserProfileResponseDTO) => {
+    setModalMode("edit");
+    setSelected(item);
+    setFormError(null);
+    setIsLoadingDetail(true);
+
+    try {
+      const d = detail?.id === getId(item) ? detail : await adminGetUserDetailAPI(getId(item));
+      setDetail(d);
+      setEditingId(d.id);
+      setEditForm({
+        firstName: d.firstName,
+        lastName: d.lastName,
+        email: d.email,
+        ...(d.customer ? { customer: { ...d.customer } } : {}),
+        ...(d.coach ? { coach: { ...d.coach } } : {}),
+      });
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลสมาชิกได้");
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (editingId == null) return;
+    setFormError(null);
+
+    try {
+      setIsSubmitting(true);
+      await adminUpdateUserAPI(editingId, editForm);
+      closeModal();
+      await loadAllMembers();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถบันทึกการแก้ไขได้");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const openCreate = () => {
-    setCreateForm({ role: "customer", firstName: "", lastName: "", email: "", password: "" });
+    setCreateForm(emptyCreateForm());
     setFormError(null);
     setModalMode("create");
   };
 
   const handleCreate = async () => {
     setFormError(null);
+
     if (!createForm.firstName.trim() || !createForm.lastName.trim() || !createForm.email.trim() || !createForm.password) {
-      setFormError("กรุณากรอกข้อมูลให้ครบทุกช่อง");
+      setFormError("กรุณากรอกข้อมูลบัญชีให้ครบทุกช่อง");
       return;
     }
     if (createForm.password.length < 6) {
@@ -82,13 +162,59 @@ export default function AdminMembersPage() {
       return;
     }
 
+    // ตรวจโปรไฟล์ตามบทบาทก่อนยิง เพื่อให้ผู้ใช้เห็น error ทันทีโดยไม่ต้องรอ round-trip
+    // (เซิร์ฟเวอร์ตรวจซ้ำอีกชั้นอยู่แล้ว ตรงนี้เป็นแค่ความสะดวก ไม่ใช่ด่านความปลอดภัย)
+    if (createForm.role === "customer") {
+      const c = createForm.customer;
+      if (!c?.nickname.trim()) return setFormError("กรุณากรอก: ชื่อเล่น");
+      if (!c.gender) return setFormError("กรุณาเลือก: เพศ");
+      if (!c.birthDate) return setFormError("กรุณากรอก: วันเกิด");
+      if (!/^\d{10}$/.test(c.phoneNumber)) return setFormError("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
+    }
+
+    if (createForm.role === "coach") {
+      const co = createForm.coach;
+      if (!co?.nickname.trim()) return setFormError("กรุณากรอก: ชื่อเล่น");
+      if (!/^\d{10}$/.test(co.phone)) return setFormError("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
+      if (!/^\d{13}$/.test(co.uid)) return setFormError("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก");
+      if (!co.birth_date) return setFormError("กรุณากรอก: วันเกิด");
+      if (!co.address.trim()) return setFormError("กรุณากรอก: ที่อยู่");
+      if (!co.specialization) return setFormError("กรุณาเลือก: ระดับฝีมือ");
+      if (!co.coach_license) return setFormError("กรุณาเลือก: ใบรับรองผู้ฝึกสอน");
+      if (!co.bank_account.trim()) return setFormError("กรุณากรอก: เลขบัญชีธนาคาร");
+      if (!co.payment_info.trim()) return setFormError("กรุณากรอก: ข้อมูลการจ่ายเงิน");
+      if (!co.pay_rate || co.pay_rate <= 0) return setFormError("กรุณากรอกค่าจ้างให้มากกว่า 0");
+    }
+
     try {
       setIsSubmitting(true);
-      await createUserAPI({ ...createForm, email: createForm.email.trim().toLowerCase() });
+
+      // ส่งเฉพาะโปรไฟล์ที่ตรงกับบทบาท ไม่งั้นเซิร์ฟเวอร์จะได้ก้อนที่ไม่เกี่ยวติดไปด้วย
+      const payload: AdminCreateUserInput = {
+        role: createForm.role,
+        firstName: createForm.firstName.trim(),
+        lastName: createForm.lastName.trim(),
+        email: createForm.email.trim().toLowerCase(),
+        password: createForm.password,
+      };
+      if (createForm.role === "customer" && createForm.customer) {
+        payload.customer = {
+          ...createForm.customer,
+          // ช่อง date ให้ค่ามาเป็น YYYY-MM-DD แต่ backend รอ time.Time จึงต้องแปลงเป็น ISO
+          birthDate: createForm.customer.birthDate
+            ? new Date(createForm.customer.birthDate).toISOString()
+            : null,
+        };
+      }
+      if (createForm.role === "coach" && createForm.coach) {
+        payload.coach = createForm.coach;
+      }
+
+      await adminCreateUserAPI(payload);
       closeModal();
       await loadAllMembers();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "ไม่สามารถสร้างผู้ใช้ได้");
+      setFormError(err instanceof Error ? err.message : "ไม่สามารถสร้างสมาชิกได้");
     } finally {
       setIsSubmitting(false);
     }
@@ -216,8 +342,25 @@ export default function AdminMembersPage() {
       />
 
       {/* Modals */}
-      <ViewMemberModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} isLoadingDetail={isLoadingDetail} getId={getId} />
+      <ViewMemberModal
+        isOpen={modalMode === "view"}
+        onClose={closeModal}
+        detail={detail}
+        isLoadingDetail={isLoadingDetail}
+        onEdit={() => selected && openEdit(selected)}
+      />
       <CreateMemberModal isOpen={modalMode === "create"} onClose={closeModal} createForm={createForm} setCreateForm={setCreateForm} formError={formError} isSubmitting={isSubmitting} onCreate={handleCreate} />
+
+      <EditMemberModal
+        isOpen={modalMode === "edit"}
+        onClose={closeModal}
+        role={detail?.role ?? ""}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        formError={formError}
+        isSubmitting={isSubmitting || isLoadingDetail}
+        onSave={handleUpdate}
+      />
     </div>
   );
 }

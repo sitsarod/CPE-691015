@@ -48,15 +48,19 @@ export interface CreateCoachInput {
 }
 
 // ข้อมูลที่แก้ไขได้ผ่าน PATCH /coaches/:id (ข้อมูลทั่วไป)
+/**
+ * ข้อมูลที่ "โค้ชแก้เองได้" ผ่าน PATCH /coaches/:id
+ *
+ * ตามนโยบายของทีม เจ้าตัวแก้ได้เฉพาะช่องทางติดต่อ
+ * ส่วนชื่อเล่น บัญชีธนาคาร และข้อมูลจ่ายเงิน ย้ายไปให้แอดมินแก้ผ่าน
+ * adminUpdateUserAPI (PATCH /admin/users/:id) แล้ว
+ */
 export interface UpdateCoachInput {
   phone?: string;
   lineId?: string;
   facebook?: string;
   address?: string;
-  nickname?: string;
   profile_picture?: string;
-  bank_account?: string;
-  payment_info?: string;
 }
 
 // ข้อมูลที่แอดมินแก้ได้ผ่าน PATCH /coaches/:id/level (ระดับ + ค่าจ้าง)

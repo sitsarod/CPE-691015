@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"CPE-691015/internal/dto"
-	"CPE-691015/internal/models"
-	"CPE-691015/internal/services"
 	"encoding/base64"
 	"net/http"
+
+	"CPE-691015/internal/dto"
+	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/skip2/go-qrcode"
@@ -97,17 +97,19 @@ func (ctrl *authController) Login(c *gin.Context) {
 }
 
 func (ctrl *authController) Register(c *gin.Context) {
-	var input models.User
+	// ใช้ DTO ไม่ใช่ models.User เพื่อไม่ให้ client กำหนดฟิลด์อ่อนไหวเอง
+	// (รายละเอียดเหตุผลอยู่ที่คอมเมนต์ของ dto.RegisterRequest)
+	var req dto.RegisterRequest
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้องหรือขาดฟิลด์จำเป็น"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
-	rawPassword := input.Password
-	input.Role = models.CustomerRole
+	input := req.ToUser()
+	rawPassword := req.Password
 
-	if err := ctrl.userService.CreateUser(&input); err != nil {
+	if err := ctrl.userService.CreateUser(input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

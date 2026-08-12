@@ -19,18 +19,24 @@ type CreateCoachRequest struct {
 	PayRate        float64 `json:"pay_rate" valid:"required~payRate is required"`         // บาทต่อครั้ง (per_session) หรือ บาทต่อเดือน (monthly)
 }
 
-// Request สำหรับ coach แก้ไขข้อมูลตัวเอง
-// ตั้งใจไม่ใส่ Specialization และ PayRate/PaymentType ไว้ที่นี่ เพราะ coach ไม่ควรแก้ระดับ/ค่าจ้างตัวเองได้
-// ฟิลด์เหล่านี้แก้ผ่าน AdminUpdateCoachRequest โดย admin เท่านั้น
+// UpdateCoachRequest คือข้อมูลที่ coach แก้ไขเองได้
+//
+// นโยบายของทีม: เจ้าตัวแก้ได้เฉพาะ "ช่องทางติดต่อ" ที่เปลี่ยนบ่อยและความเสี่ยงต่ำ
+// ส่วนข้อมูลตัวตนและการเงินต้องให้แอดมินแก้ให้หลังตรวจหลักฐาน
+// (ผ่าน PATCH /api/admin/users/:id)
+//
+// ⚠️ BankAccount กับ PaymentInfo เคยอยู่ในนี้ แต่ถูกย้ายออกโดยตั้งใจ
+// เพราะเป็นเป้าหมายอันดับหนึ่งของคนที่ยึดบัญชีโค้ชได้ — เปลี่ยนเลขบัญชีปุ๊บ
+// เงินเดือนเข้ากระเป๋าคนอื่นทันที และกว่าจะรู้ตัวก็สิ้นเดือนแล้ว
+//
+// ⚠️ Nickname ก็ถูกย้ายออกเช่นกัน เพราะเป็นชื่อที่ใช้อ้างอิงตัวตนในระบบ
+// (โผล่ในตารางเช็คชื่อและใบเสร็จ) ถ้าเปลี่ยนเองได้จะสับสนว่าใครเป็นใคร
 type UpdateCoachRequest struct {
-    Phone          *string `json:"phone"`
+	Phone          *string `json:"phone"`
 	LineID         *string `json:"lineId"`
 	Facebook       *string `json:"facebook"`
-    Address        *string `json:"address"`
-    Nickname       *string `json:"nickname"`
-    ProfilePicture *string `json:"profile_picture"`
-    BankAccount    *string `json:"bank_account"`
-    PaymentInfo    *string `json:"payment_info"`
+	Address        *string `json:"address"`
+	ProfilePicture *string `json:"profile_picture"`
 }
 
 // Request สำหรับ admin แก้ไขระดับ (specialization), ใบรับรองผู้ฝึกสอน (coach_license),

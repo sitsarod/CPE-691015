@@ -273,7 +273,6 @@ func seedCustomers(db *gorm.DB) {
 		BirthDate         time.Time
 		ParentEmail       string
 		ParentPhoneNumber string
-		ConsentedPurposes bool
 	}{
 		{
 			FirstName:         "สมศักดิ์",
@@ -288,7 +287,6 @@ func seedCustomers(db *gorm.DB) {
 			BirthDate:         time.Date(2010, 1, 15, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent1@gmail.com",
 			ParentPhoneNumber: "0898765432",
-			ConsentedPurposes: true,
 		},
 		{
 			FirstName:         "สุดา",
@@ -303,7 +301,6 @@ func seedCustomers(db *gorm.DB) {
 			BirthDate:         time.Date(2012, 5, 20, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent2@gmail.com",
 			ParentPhoneNumber: "0897654321",
-			ConsentedPurposes: true,
 		},
 		{
 			FirstName:         "มานะ",
@@ -318,7 +315,6 @@ func seedCustomers(db *gorm.DB) {
 			BirthDate:         time.Date(2011, 11, 11, 0, 0, 0, 0, time.UTC),
 			ParentEmail:       "parent3@gmail.com",
 			ParentPhoneNumber: "0896543210",
-			ConsentedPurposes: true,
 		},
 	}
 
@@ -356,7 +352,6 @@ func seedCustomers(db *gorm.DB) {
 						Facebook:          data.Facebook,
 						ParentEmail:       data.ParentEmail,
 						ParentPhoneNumber: data.ParentPhoneNumber,
-						ConsentedPurposes: data.ConsentedPurposes,
 						PersonalQRCode:    qrCode,
 						Status:            models.CustomerStatusActive,
 					}

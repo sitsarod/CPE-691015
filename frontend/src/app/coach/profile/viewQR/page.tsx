@@ -10,7 +10,7 @@ import PersonalQRCard from "@/components/PersonalQRCard";
  */
 export default function CoachViewQRPage() {
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-start justify-center p-4 md:p-8">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-start justify-center p-4 md:p-8">
       <div className="w-full max-w-xl space-y-6">
         <div className="space-y-2">
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">บัตรเช็กชื่อเข้างาน</h1>
