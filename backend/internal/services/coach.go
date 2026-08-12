@@ -144,9 +144,17 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 		return nil, ErrCoachInvalidPaymentType
 	}
 
+	// QR ประจำตัวโค้ช สุ่มจากฝั่งเซิร์ฟเวอร์เสมอ ไม่รับค่าจาก client
+	// (ใช้ namespace เดียวกับ QR ของนักเรียน — ไม่ซ้ำกันข้ามสองตาราง)
+	qrCode, err := GenerateUniqueQRCode(s.db)
+	if err != nil {
+		return nil, err
+	}
+
 	coach := models.Coach{
 		UserID:         req.UserID,
 		Phone:          req.Phone,
+		PersonalQRCode: qrCode,
 		LineID:         req.LineID,
 		Facebook:       req.Facebook,
 		Uid:            req.Uid,

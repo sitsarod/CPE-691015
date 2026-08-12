@@ -118,9 +118,17 @@ func (s *UserService) CreateUser(user *models.User) error {
 
 	if user.Role == models.CustomerRole && user.Customer != nil {
 		user.Customer.Status = models.CustomerStatusActive
-		if user.Customer.PersonalQRCode == "" {
-			user.Customer.PersonalQRCode = "QR_" + user.Email
+
+		// QR ประจำตัวต้องสุ่มจากฝั่งเซิร์ฟเวอร์เสมอ และเขียนทับค่าที่ client ส่งมาทุกครั้ง
+		//
+		// เดิมใช้ "QR_" + อีเมล ซึ่งคำนวณย้อนกลับได้ ใครรู้อีเมลก็สร้าง QR ของคนนั้นได้
+		// และการปล่อยให้ client กำหนดเองยังเปิดช่องให้จองค่าของคนอื่นไว้ล่วงหน้า
+		// (personal_qr_code เป็น unique) ทำให้เหยื่อสมัครสมาชิกไม่ผ่าน
+		qrCode, err := GenerateUniqueQRCode(s.db)
+		if err != nil {
+			return err
 		}
+		user.Customer.PersonalQRCode = qrCode
 	}
 
 	return s.db.Create(user).Error
