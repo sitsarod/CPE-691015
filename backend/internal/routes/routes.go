@@ -373,11 +373,11 @@ func SetupRoutes(r *gin.Engine) {
 		adminOnly.DELETE("/admin/chat-sessions/:id", autoQAController.DeleteChatSession)
 		adminOnly.POST("/admin/chat-sessions/:id/reply", autoQAController.AdminReply)
 
-		protectedAutoQAGroup := adminOnly.Group("/auto-qas")
+		protectedAutoQAGroup := adminOnly.Group("/admin/auto-qas")
 		{
-			protectedAutoQAGroup.GET("/", autoQAController.GetAllAutoQAs)
+			protectedAutoQAGroup.GET("", autoQAController.GetAllAutoQAs)
 			protectedAutoQAGroup.GET("/:id", autoQAController.GetAutoQAByID)
-			protectedAutoQAGroup.POST("/", autoQAController.CreateAutoQA)
+			protectedAutoQAGroup.POST("", autoQAController.CreateAutoQA)
 			protectedAutoQAGroup.PATCH("/:id", autoQAController.UpdateAutoQA)
 			protectedAutoQAGroup.DELETE("/:id", autoQAController.DeleteAutoQA)
 		}
