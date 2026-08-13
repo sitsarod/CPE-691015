@@ -107,8 +107,8 @@ func SetupRoutes(r *gin.Engine) {
 			authGroup.POST("/login", authController.Login)
 			authGroup.POST("/register", authController.Register)
 			authGroup.POST("/refresh", authController.Refresh)
-			authGroup.POST("/send-otp", authController.SendOTP)
-			authGroup.POST("/verify-otp", authController.VerifyOTP)
+			//authGroup.POST("/send-otp", authController.SendOTP)
+			//authGroup.POST("/verify-otp", authController.VerifyOTP)
 		}
 		publicUserGroup := api.Group("/users")
 		{

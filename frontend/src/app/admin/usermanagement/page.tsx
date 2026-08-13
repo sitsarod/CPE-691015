@@ -157,8 +157,8 @@ export default function AdminMembersPage() {
       setFormError("กรุณากรอกข้อมูลบัญชีให้ครบทุกช่อง");
       return;
     }
-    if (createForm.password.length < 6) {
-      setFormError("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+    if (createForm.password.length < 8) {
+      setFormError("รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร");
       return;
     }
 

@@ -194,6 +194,10 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 		return nil, errors.New("กรุณาใช้อีเมลที่เป็น @gmail.com เท่านั้น")
 	}
 
+	if err := ValidatePasswordStrength(req.Password); err != nil {
+		return nil, err
+	}
+
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, errors.New("ไม่สามารถเข้ารหัสผ่านได้")

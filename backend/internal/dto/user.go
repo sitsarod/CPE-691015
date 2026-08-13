@@ -18,7 +18,7 @@ type CreateUserRequest struct {
 	Email     string `json:"email" binding:"required,email"`
 
 	// max=72 เพราะ bcrypt ตัดส่วนที่เกิน 72 ไบต์ทิ้งเงียบ ๆ (ดู RegisterRequest)
-	Password string `json:"password" binding:"required,max=72"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 }
 
 // ToUser แปลง request เป็น models.User ที่พร้อมบันทึก

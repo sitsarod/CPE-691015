@@ -40,6 +40,15 @@ export default function RegisterPage() {
       newErrors.parentEmail = "กรุณาระบุรูปแบบอีเมลผู้ปกครองให้ถูกต้อง";
     }
 
+    // เกณฑ์ต้องตรงกับฝั่ง backend (dto.RegisterRequest + services.ValidatePasswordStrength)
+    // ถ้าไม่ตรงกัน ผู้ใช้จะกดสมัครแล้วเจอ error จากเซิร์ฟเวอร์ทีหลังโดยไม่รู้สาเหตุ
+    if (formData.password.length < 8) {
+      newErrors.password = "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
+    } else if (formData.password.length > 72) {
+      // 72 คือเพดานของ bcrypt ที่ backend ใช้ ถ้าเกินจะถูกตัดทิ้งเงียบ ๆ
+      newErrors.password = "รหัสผ่านต้องไม่เกิน 72 ตัวอักษร";
+    }
+
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน";
     }

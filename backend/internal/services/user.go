@@ -104,6 +104,10 @@ func (s *UserService) CreateUser(user *models.User) error {
 	}
 	user.Email = cleanEmail // อัปเดตอีเมลที่จัดฟอร์แมตแล้วกลับเข้าไป
 
+	if err := ValidatePasswordStrength(user.Password); err != nil {
+		return err
+	}
+
 	var existingUser models.User
 
 	if err := s.db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {

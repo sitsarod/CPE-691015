@@ -28,7 +28,7 @@ type RegisterRequest struct {
 	// max=72 เพราะ bcrypt ตัดข้อมูลส่วนที่เกิน 72 ไบต์ทิ้งเงียบ ๆ
 	// ถ้าไม่กันไว้ รหัสผ่านยาวเกินจะถูกตัดโดยที่ไม่มีใครรู้
 	// (ภาษาไทย 1 ตัวอักษร = 3 ไบต์ จึงชนเพดานเร็วกว่าที่คิด)
-	Password string `json:"password" binding:"required,max=72"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 
 	Customer RegisterCustomerProfile `json:"customer"`
 }
