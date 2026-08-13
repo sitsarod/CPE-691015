@@ -24,7 +24,7 @@ type AdminCreateUserRequest struct {
 	Email     string `json:"email" binding:"required,email"`
 
 	// max=72 เพราะ bcrypt ตัดส่วนที่เกิน 72 ไบต์ทิ้งเงียบ ๆ
-	Password string `json:"password" binding:"required,max=72"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 
 	// ต้องส่งมาให้ตรงกับ Role — service เป็นคนตรวจ เพราะ binding tag
 	// เขียนเงื่อนไข "ต้องมีเมื่อ role เป็นค่านี้" ได้ไม่สวย

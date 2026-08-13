@@ -83,7 +83,7 @@ export function CreateMemberModal({
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <InputField label="อีเมล (@gmail.com)" type="email" required value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
-          <InputField label="รหัสผ่าน" type="password" required value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="อย่างน้อย 6 ตัวอักษร" />
+          <InputField label="รหัสผ่าน" type="password" required value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="อย่างน้อย 8 ตัวอักษร" />
         </div>
 
         {/* ── โปรไฟล์ผู้เรียน ── */}

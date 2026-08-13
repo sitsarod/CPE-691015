@@ -25,7 +25,7 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
       const response = await fetch(`${baseUrl}/auth/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userData?.email }),
+        body: JSON.stringify({ identifier: userData?.identifier }),
       });
 
       const data = await response.json();
@@ -55,27 +55,19 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
           </div>
         )}
 
-        {/* การ์ดแสดงข้อมูลโปรไฟล์ */}
-        <div className="flex items-center gap-4 p-5 bg-gray-50 border border-gray-200 rounded-2xl mb-8">
-          <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border border-gray-300 flex-shrink-0">
-            <img 
-              src={userData?.avatarUrl || "/slide3.jpg"} 
-              alt="User Avatar" 
-              className="w-full h-full object-cover" 
-            />
-          </div>
+        {/*
+          การ์ดยืนยันบัญชี
 
-          <div className="flex flex-col text-left space-y-0.5">
-            <h3 className="text-lg font-bold text-gray-900">
-              {userData?.firstName} {userData?.lastName}
-            </h3>
-            {userData?.nickname && (
-              <p className="text-sm font-semibold text-orange-600">
-                ชื่อเล่น: {userData?.nickname}
-              </p>
-            )}
-            <p className="text-xs text-gray-500">{userData?.email}</p>
-          </div>
+          แสดงเฉพาะอีเมล/เบอร์ที่ปิดบังแล้ว พอให้เจ้าของดูออกว่าใช่บัญชีตัวเอง
+          ตั้งใจไม่โชว์ชื่อจริง ชื่อเล่น และรูปโปรไฟล์ เพราะหน้านี้เข้าถึงได้
+          โดยไม่ต้องล็อกอิน ใครกรอกเบอร์คนอื่นก็เห็นข้อมูลเขาได้ทันที
+        */}
+        <div className="p-5 bg-gray-50 border border-gray-200 rounded-2xl mb-8">
+          <p className="text-xs text-gray-500 mb-1">พบบัญชีที่ตรงกับข้อมูลนี้</p>
+          <p className="text-base font-bold text-gray-900">{userData?.maskedEmail}</p>
+          {userData?.maskedPhone && (
+            <p className="text-sm text-gray-500 mt-0.5">{userData.maskedPhone}</p>
+          )}
         </div>
 
         {/* ปุ่มควบคุม */}

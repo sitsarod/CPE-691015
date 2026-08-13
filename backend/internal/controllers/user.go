@@ -366,25 +366,20 @@ func (h *UserController) FindAccount(c *gin.Context) {
 		return
 	}
 
-	// แกะข้อมูล Nickname และ PhoneNumber ออกมาจาก Customer Struct (ถ้ามี)
-	nickname := ""
+	// ⚠️ เส้นนี้เรียกได้โดยไม่ต้องล็อกอิน จึงคืนได้เฉพาะข้อมูลที่ปิดบังแล้ว
+	//
+	// เดิมคืนชื่อจริง นามสกุล ชื่อเล่น อีเมลเต็ม เบอร์เต็ม และ role ทำให้ไล่ยิงเบอร์
+	// เพื่อกวาดรายชื่อสมาชิกทั้งระบบได้ (ดูเหตุผลเต็มที่ dto.FindAccountResponse)
 	phoneNumber := ""
 	if user.Customer != nil {
-		nickname = user.Customer.Nickname
 		phoneNumber = user.Customer.PhoneNumber
 	}
 
-	// ส่งกลับไปให้ React/Next.js นำไปแสดงผล
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"user": gin.H{
-			"id":          user.ID,
-			"firstName":   user.FirstName,
-			"lastName":    user.LastName,
-			"nickname":    nickname,
-			"email":       user.Email,
-			"phoneNumber": phoneNumber,
-			"role":        user.Role,
+		"user": dto.FindAccountResponse{
+			MaskedEmail: dto.MaskEmail(user.Email),
+			MaskedPhone: dto.MaskPhone(phoneNumber),
 		},
 	})
 }

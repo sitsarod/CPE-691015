@@ -33,7 +33,7 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: userData?.email,
+          identifier: userData?.identifier,
           otp: otp,
         }),
       });
@@ -59,7 +59,7 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
       <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">ยืนยัน OTP</h1>
         <p className="text-sm text-gray-500 mb-8">
-          เราได้ส่งรหัส OTP ไปที่อีเมล <span className="font-semibold text-gray-800">{userData?.email}</span> แล้ว
+          เราได้ส่งรหัส OTP ไปที่อีเมล <span className="font-semibold text-gray-800">{userData?.maskedEmail}</span> แล้ว
         </p>
 
         {errorMsg && (
