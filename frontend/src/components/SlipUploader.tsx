@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Receipt } from 'lucide-react';
 import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
+import ImageLightbox from '@/components/ImageLightbox';
 
 export interface SlipUploaderProps {
   onUploadSuccess: (url: string) => void;
@@ -16,6 +17,7 @@ export default function SlipUploader({
   onError
 }: SlipUploaderProps) {
   const [uploading, setUploading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,6 +36,7 @@ export default function SlipUploader({
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("folder", "slip"); // แยกเก็บรูปสลิปไว้โฟลเดอร์ slip
 
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
       const res = await fetch(`${baseUrl}/upload`, {
@@ -90,17 +93,19 @@ export default function SlipUploader({
         {!uploading && currentUrl && (
           <div className="mt-3 w-full flex items-center justify-between p-2 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-semibold border border-emerald-100">
             <span className="truncate max-w-[120px]">อัปโหลดรูปภาพเรียบร้อย</span>
-            <a
-              href={currentUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-emerald-800"
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="underline hover:text-emerald-800 cursor-pointer"
             >
               ดูรูปภาพแนบ
-            </a>
+            </button>
           </div>
         )}
       </div>
+
+      {/* ป็อปอัพดูรูปที่แนบ — ไม่เปิดแท็บใหม่ */}
+      <ImageLightbox url={previewOpen ? currentUrl : null} onClose={() => setPreviewOpen(false)} alt="รูปภาพที่แนบ" />
     </div>
   );
 }

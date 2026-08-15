@@ -1,20 +1,23 @@
-import React, { useState, useMemo } from 'react';
-import { Search, AlertCircle, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, AlertCircle, X, ChevronDown, ChevronUp, Banknote } from 'lucide-react';
 import { BillingDTO } from './types';
-import { confirmSlip, rejectSlip } from "@/services/paymentAPI";
+import { confirmSlip, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
 export interface VerifySlipsTabProps {
   billings: BillingDTO[];
   onFetchData: () => void;
   onTriggerToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  // ฟิลเตอร์เริ่มต้น (ใช้ตอน deep-link มาจากแดชบอร์ด เช่น ?filter=unpaid)
+  initialFilter?: 'all' | 'pending' | 'approved' | 'rejected' | 'unpaid';
 }
 
 export default function VerifySlipsTab({
   billings,
   onFetchData,
-  onTriggerToast
+  onTriggerToast,
+  initialFilter
 }: VerifySlipsTabProps) {
-  const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid'>(initialFilter ?? 'pending');
   const [slipSearchTerm, setSlipSearchTerm] = useState('');
   const [reviewBilling, setReviewBilling] = useState<(BillingDTO & { groupedBillings?: BillingDTO[] }) | null>(null);
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Record<number, boolean>>({});
@@ -52,6 +55,8 @@ export default function VerifySlipsTab({
         matchesStatus = b.billingstatus === 'paid';
       } else if (slipFilter === 'rejected') {
         matchesStatus = b.billingstatus === 'unfunded' && !!b.slipurl;
+      } else if (slipFilter === 'unpaid') {
+        matchesStatus = b.billingstatus === 'unfunded' || b.billingstatus === 'overdue';
       }
 
       const studentName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.toLowerCase();
@@ -118,6 +123,20 @@ export default function VerifySlipsTab({
     });
   }, [waitcheckBillings]);
 
+  // แบ่งหน้ารายการ 10 รายการ/หน้า (เหมือนตารางใบเรียกเก็บเงินในหน้าสรุปการเงิน)
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+  // รีเซ็ตกลับหน้าแรกเมื่อฟิลเตอร์/คำค้นเปลี่ยน
+  useEffect(() => {
+    setPage(1);
+  }, [slipFilter, slipSearchTerm]);
+  const totalPages = Math.max(1, Math.ceil(groupedWaitcheckBillings.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedGroups = useMemo(
+    () => groupedWaitcheckBillings.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [groupedWaitcheckBillings, safePage]
+  );
+
   // Slip Approvals
   const handleApproveSlip = async (invoiceId: number) => {
     try {
@@ -145,6 +164,37 @@ export default function VerifySlipsTab({
     }
   };
 
+  // ลูกค้าจ่ายเงินสด: บิลค้างชำระที่ยังไม่มีใบแจ้งหนี้ จะสร้างใบแจ้งหนี้แบบ "cash" แล้วยืนยันให้เลย
+  // ถ้ามีใบแจ้งหนี้อยู่แล้ว (เช่นสลิปเคยถูกปฏิเสธ) ให้ยืนยันใบเดิม
+  const [cashSubmitting, setCashSubmitting] = useState(false);
+  const handleCashPayment = async (billing: BillingDTO & { groupedBillings?: BillingDTO[] }) => {
+    if (!window.confirm(
+      `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ฿${billing.billingamount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ใช่หรือไม่?`
+    )) return;
+
+    setCashSubmitting(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+      let invoiceId = billing.invoice_id;
+      if (!invoiceId) {
+        const billingIds = billing.groupedBillings?.length
+          ? billing.groupedBillings.map(b => b.id)
+          : [billing.id];
+        const invoice = await createInvoice(billing.customer_id, billingIds, 'cash', token || "");
+        invoiceId = invoice.id;
+      }
+      await confirmSlip(invoiceId, token || "");
+
+      onTriggerToast('บันทึกการชำระเงินสดเรียบร้อยแล้ว');
+      setReviewBilling(null);
+      onFetchData();
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'บันทึกการชำระเงินสดไม่สำเร็จ', 'error');
+    } finally {
+      setCashSubmitting(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
       <div className="p-6 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -167,7 +217,8 @@ export default function VerifySlipsTab({
               { id: 'all' as const, label: 'ทั้งหมด (ส่งสลิป)' },
               { id: 'pending' as const, label: 'รอตรวจสอบ' },
               { id: 'approved' as const, label: 'อนุมัติแล้ว' },
-              { id: 'rejected' as const, label: 'ปฏิเสธแล้ว' }
+              { id: 'rejected' as const, label: 'ปฏิเสธแล้ว' },
+              { id: 'unpaid' as const, label: 'ค้างชำระ' }
             ].map(f => (
               <button
                 key={f.id}
@@ -198,11 +249,11 @@ export default function VerifySlipsTab({
             </p>
           </div>
         ) : (
-          groupedWaitcheckBillings.map(group => {
+          pagedGroups.map(group => {
             const isExpanded = !!expandedInvoiceIds[group.invoiceId || 0];
             const identifierText = group.invoiceId ? `ใบแจ้งหนี้ #${group.invoiceId}` : `บิล #BILL-${group.billings[0]?.id}`;
             const customerName = group.customer ? `${group.customer.firstName} ${group.customer.lastName}` : "ผู้เรียน";
-            
+
             // Status styling based on billing status
             let statusBg = "bg-slate-100 text-slate-700 border-slate-200";
             let statusText = "ไม่ทราบสถานะ";
@@ -212,9 +263,10 @@ export default function VerifySlipsTab({
             } else if (group.billingstatus === 'waitcheck') {
               statusBg = "bg-amber-50 text-amber-700 border-amber-250";
               statusText = "รอตรวจสอบ";
-            } else if (group.billingstatus === 'unfunded') {
+            } else if (group.billingstatus === 'unfunded' || group.billingstatus === 'overdue') {
               statusBg = "bg-rose-50 text-rose-700 border-rose-250";
-              statusText = "สลิปไม่ผ่าน";
+              // มีสลิปแนบมาแต่ไม่ผ่าน = "สลิปไม่ผ่าน" · ไม่มีสลิป = ยังค้างชำระ
+              statusText = group.slipurl ? "สลิปไม่ผ่าน" : "ค้างชำระ";
             }
 
             return (
@@ -303,6 +355,34 @@ export default function VerifySlipsTab({
         )}
       </div>
 
+      {/* Pagination controls */}
+      {groupedWaitcheckBillings.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-t border-slate-200 text-xs">
+          <span className="text-slate-500">
+            แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, groupedWaitcheckBillings.length)} จาก {groupedWaitcheckBillings.length} รายการ
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              ก่อนหน้า
+            </button>
+            <span className="text-slate-600 font-semibold whitespace-nowrap">หน้า {safePage}/{totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              ถัดไป
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Slip Review Detail Modal */}
       {reviewBilling && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs transition-opacity duration-300">
@@ -325,54 +405,14 @@ export default function VerifySlipsTab({
                   />
                 </div>
               ) : (
-                <div className="w-full max-w-[280px] bg-[#f8f9fa] rounded-2xl shadow-xl border border-slate-200 overflow-hidden relative font-sans text-slate-800">
-                  <div className="p-4 text-white text-center relative bg-[#00a859]">
-                    <span className="text-[9px] uppercase font-semibold tracking-widest opacity-85">E-Slip Authentication</span>
-                    <h4 className="text-base font-extrabold mt-1">โอนเงินสำเร็จ</h4>
-                    <div className="absolute right-3 top-3 bg-white/20 p-1.5 rounded-full border border-white/20">
-                      <Check className="w-4 h-4 text-white" />
-                    </div>
+                <div className="w-full max-w-[280px] bg-white rounded-2xl border border-dashed border-slate-300 p-8 flex flex-col items-center text-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+                    <AlertCircle className="w-7 h-7" />
                   </div>
-
-                  <div className="p-5 space-y-4 text-xs">
-                    <div className="text-center pb-3 border-b border-dashed border-slate-350">
-                      <span className="text-[10px] text-slate-400 block font-semibold">จำนวนเงิน</span>
-                      <span className="text-2xl font-black text-slate-800 block mt-1">
-                        ฿{reviewBilling.billingamount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">จาก:</span>
-                        <span className="font-bold text-slate-850">
-                          {reviewBilling.customer ? `${reviewBilling.customer.firstName} ${reviewBilling.customer.lastName}` : "ผู้เรียน"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">ถึง:</span>
-                        <span className="font-bold text-slate-855">บจก. คอร์สเซ็นเตอร์ ไทยแลนด์</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">คำอธิบาย:</span>
-                        <span className="font-bold text-slate-855 text-right truncate max-w-[150px]" title={reviewBilling.billingdescription}>
-                          {reviewBilling.billingdescription}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">วันครบกำหนด:</span>
-                        <span className="font-bold text-slate-855">{reviewBilling.billingdue_date?.split('T')[0]}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">บิลอ้างอิง:</span>
-                        <span className="font-bold text-slate-855">BILL-{reviewBilling.id}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-200 text-center">
-                      <span className="text-[9px] text-slate-400 block font-semibold">Verified with Database</span>
-                    </div>
-                  </div>
+                  <h4 className="text-sm font-bold text-slate-700">ยังไม่มีสลิปแนบ</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    บิลนี้ยังไม่ได้ชำระเงิน หรือยังไม่มีการอัปโหลดสลิปโอนเงิน จึงยังไม่มีหลักฐานให้ตรวจสอบ
+                  </p>
                 </div>
               )}
             </div>
@@ -479,6 +519,23 @@ export default function VerifySlipsTab({
                       className="flex-1 bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-red-200 flex items-center justify-center space-x-1.5 text-sm cursor-pointer"
                     >
                       <span>อนุมัติยอดเงินโอน</span>
+                    </button>
+                  </div>
+                ) : (reviewBilling.billingstatus === 'unfunded' || reviewBilling.billingstatus === 'overdue') ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleCashPayment(reviewBilling)}
+                      disabled={cashSubmitting}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center justify-center gap-1.5 text-sm cursor-pointer"
+                    >
+                      <Banknote className="w-4 h-4" />
+                      <span>{cashSubmitting ? 'กำลังบันทึก...' : 'ลูกค้าชำระแบบเงินสด'}</span>
+                    </button>
+                    <button
+                      onClick={() => { setReviewBilling(null); }}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 text-sm transition-all cursor-pointer"
+                    >
+                      ปิดหน้าต่าง
                     </button>
                   </div>
                 ) : (

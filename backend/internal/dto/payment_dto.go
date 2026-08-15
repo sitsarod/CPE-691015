@@ -68,6 +68,9 @@ type BillingDTO struct {
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
 	TransactionID string          `json:"transactionid,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
+	// PaidAt = เวลาที่ยืนยันการชำระเงินจริง (invoice.UpdatedAt ตอนสถานะเป็น success)
+	// ใช้สำหรับจัดยอดรายรับให้อยู่ในช่วงเวลาที่จ่ายจริง ไม่ใช่วันที่ออกบิล
+	PaidAt *time.Time `json:"paid_at,omitempty"`
 }
 
 // ToBillingDTO maps models.Billing to BillingDTO
@@ -133,6 +136,9 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 		// Derive status from the invoice status for this specific transaction mapping
 		if invoice.Status == models.InvoiceSuccess {
 			dto.Status = "paid"
+			// invoice.UpdatedAt = เวลาที่ยืนยันการชำระเงิน (Save ตอน ConfirmPayment)
+			paidAt := invoice.UpdatedAt
+			dto.PaidAt = &paidAt
 		} else if invoice.Status == models.InvoicePending {
 			if invoice.SlipImageUrl != "" {
 				dto.Status = "waitcheck"

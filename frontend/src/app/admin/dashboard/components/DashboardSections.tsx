@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, ArrowUpRight } from "lucide-react";
+import { Bell, TrendingUp, TrendingDown, Award } from "lucide-react";
 import { fmtBaht, fmtPct } from "./buildDashboard";
 import type {
   ActivityRow,
@@ -100,13 +100,14 @@ export function TopCourses({ courses }: { courses: CourseRow[] }) {
         <p className="mt-8 text-center text-sm text-gray-400">ยังไม่มีข้อมูลการลงทะเบียน</p>
       ) : (
         <ul className="mt-5 space-y-2">
-          {courses.map((c) => (
+          {courses.map((c, i) => (
             <li
               key={c.name}
               className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-gray-50"
             >
-              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${c.tint}`}>
-                <c.icon className="h-5 w-5" />
+              {/* ไอคอนอันดับ: แสดงเลขลำดับความขายดี (1 = ขายดีสุด) คงสีพื้นตาม tint เดิม */}
+              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base font-black tabular-nums ${c.tint}`}>
+                {i + 1}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
@@ -130,11 +131,24 @@ export function RealtimeInsights({ insights }: { insights: Insights }) {
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-gray-900">ข้อมูลเชิงลึกแบบเรียลไทม์</h2>
 
-      <div className="rounded-2xl bg-blue-600 p-5 text-white shadow-sm shadow-blue-600/20">
-        <p className="text-sm font-medium text-blue-100">นักเรียนใหม่เดือนนี้</p>
-        <p className="mt-1 text-4xl font-bold tabular-nums">{insights.newThisMonth}</p>
-        <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-100">
-          <ArrowUpRight className="h-3.5 w-3.5" />
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
+        <p className="text-sm font-medium text-gray-500">นักเรียนใหม่เดือนนี้</p>
+        <div className="mt-2 flex items-baseline gap-1.5">
+          <span className="text-2xl font-bold tabular-nums text-gray-900">
+            {insights.newThisMonth}
+          </span>
+          <span className="text-sm text-gray-400">คน</span>
+        </div>
+        <p
+          className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${
+            insights.newDelta >= 0 ? "text-emerald-600" : "text-rose-600"
+          }`}
+        >
+          {insights.newDelta >= 0 ? (
+            <TrendingUp className="h-3.5 w-3.5" />
+          ) : (
+            <TrendingDown className="h-3.5 w-3.5" />
+          )}
           {fmtPct(insights.newDelta, 0)} จากเดือนก่อน
         </p>
       </div>
@@ -160,9 +174,21 @@ export function RealtimeInsights({ insights }: { insights: Insights }) {
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-100 text-sm font-bold text-rose-600">
             {insights.topCoachName.slice(0, 2).toUpperCase()}
           </div>
-          <div>
-            <p className="text-sm font-bold text-gray-900">{insights.topCoachName}</p>
-            <p className="text-xs text-gray-500">โค้ชในระบบ</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-bold text-gray-900">{insights.topCoachName}</p>
+              {insights.topCoachStudents > 0 && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                  <Award className="h-3 w-3" />
+                  โค้ชดีเด่น
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-xs text-gray-500">
+              {insights.topCoachStudents > 0
+                ? `ดูแลนักเรียน ${insights.topCoachStudents} คน · สอนไปแล้ว ${insights.topCoachSessions} คาบ`
+                : "โค้ชในระบบ"}
+            </p>
           </div>
         </div>
       </div>

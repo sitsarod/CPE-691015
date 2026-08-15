@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Loader2, Calculator, Plus, X } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
+import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import { createExpense, deleteExpense } from "@/services/paymentAPI";
 import { fetchCoachById, fetchCoachSchedules } from "@/services/coachAPI";
@@ -41,6 +42,8 @@ export default function ExpensesTab({
     receipturl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // รูปหลักฐาน/ใบเสร็จที่เปิดดูแบบป็อปอัพ (ไม่เปิดแท็บใหม่)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
   const tableScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
 
@@ -521,7 +524,7 @@ export default function ExpensesTab({
                     <tr key={exp.id} className="hover:bg-slate-50/50 text-xs transition-colors">
                       <td className="py-3.5 px-5 text-slate-550 font-semibold">{exp.expensedate?.split('T')[0]}</td>
                       <td className="py-3.5 px-5 font-bold text-slate-700 hidden md:table-cell">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] ${
+                        <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[9px] ${
                           exp.expensetype === 'coach_wages'
                             ? 'bg-rose-50 text-rose-600 border border-rose-100'
                             : exp.expensetype === 'coach_other'
@@ -544,14 +547,13 @@ export default function ExpensesTab({
                       </td>
                       <td className="py-3.5 px-5 hidden md:table-cell">
                         {exp.receipturl ? (
-                          <a
-                            href={exp.receipturl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[#CD0D13] hover:underline font-bold text-[10px] flex items-center space-x-0.5"
+                          <button
+                            type="button"
+                            onClick={() => setReceiptUrl(exp.receipturl)}
+                            className="text-[#CD0D13] hover:underline font-bold text-[10px] flex items-center space-x-0.5 cursor-pointer"
                           >
                             <span>เปิดดูรูป</span>
-                          </a>
+                          </button>
                         ) : (
                           <span className="text-slate-400 text-[10px]">-</span>
                         )}
@@ -602,6 +604,9 @@ export default function ExpensesTab({
           </div>
         )}
       </div>
+
+      {/* ป็อปอัพดูรูปหลักฐาน/ใบเสร็จ — ไม่เปิดแท็บใหม่ */}
+      <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="หลักฐานการชำระเงิน" />
     </div>
   );
 }

@@ -22,7 +22,31 @@ import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
 
 export default function FinancialPortal() {
   const [subTab, setSubTab] = useState<'issue' | 'slips' | 'summary' | 'banks' | 'expenses'>('issue');
+  // ฟิลเตอร์เริ่มต้นของแท็บตรวจสอบสลิป เมื่อ deep-link มาจากที่อื่น (เช่นแดชบอร์ด)
+  const [initialSlipFilter, setInitialSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid' | undefined>(undefined);
   const tabRowRef = useHorizontalWheelScroll<HTMLDivElement>();
+
+  // เปิดแท็บ/ฟิลเตอร์ตาม query param ตอนเข้าหน้า เช่น /admin/payment?tab=slips&filter=unpaid
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab && ['issue', 'slips', 'summary', 'banks', 'expenses'].includes(tab)) {
+      setSubTab(tab as 'issue' | 'slips' | 'summary' | 'banks' | 'expenses');
+    }
+    const filter = params.get('filter');
+    if (filter && ['all', 'pending', 'approved', 'rejected', 'unpaid'].includes(filter)) {
+      setInitialSlipFilter(filter as 'all' | 'pending' | 'approved' | 'rejected' | 'unpaid');
+    }
+  }, []);
+
+  // แสดง skeleton สั้น ๆ ทุกครั้งที่สลับแท็บ เพื่อให้รู้สึกลื่นและรู้ว่ากำลังโหลดเนื้อหาแท็บใหม่
+  const [tabLoading, setTabLoading] = useState(false);
+  useEffect(() => {
+    setTabLoading(true);
+    const t = setTimeout(() => setTabLoading(false), 400);
+    return () => clearTimeout(t);
+  }, [subTab]);
 
   // Live API States
   const [students, setStudents] = useState<BackendUser[]>([]);
@@ -266,6 +290,10 @@ export default function FinancialPortal() {
       {/* Main Tabs Container */}
       {!isLoading && (
         <div className="min-h-[500px]">
+          {tabLoading ? (
+            <TabSkeleton />
+          ) : (
+          <>
           {subTab === 'issue' && (
             <BillingIssueForm
               students={students}
@@ -284,6 +312,7 @@ export default function FinancialPortal() {
               billings={billings}
               onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
+              initialFilter={initialSlipFilter}
             />
           )}
 
@@ -310,6 +339,8 @@ export default function FinancialPortal() {
               onTriggerToast={triggerToast}
             />
           )}
+          </>
+          )}
         </div>
       )}
 
@@ -321,6 +352,40 @@ export default function FinancialPortal() {
         onSave={handleSaveBillingEdit}
       />
 
+    </div>
+  );
+}
+
+// Skeleton แบบทั่วไป (การ์ดสถิติ + บล็อกตาราง) ใช้ระหว่างสลับแท็บ
+function TabSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6" aria-hidden="true">
+      {/* แถวการ์ดด้านบน */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-2/3 bg-slate-100 rounded" />
+              <div className="h-5 w-1/2 bg-slate-200 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* บล็อกตาราง/เนื้อหาหลัก */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="h-4 w-40 bg-slate-200 rounded" />
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-4">
+              <div className="h-3 w-24 bg-slate-100 rounded" />
+              <div className="h-3 flex-1 bg-slate-100 rounded" />
+              <div className="h-3 w-16 bg-slate-100 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

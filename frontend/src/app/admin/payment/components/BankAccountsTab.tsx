@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Landmark, Pencil, Trash2, X, Copy, Check } from 'lucide-react';
 import { BankAccount } from './types';
+import { BANK_OPTIONS } from '@/types/coach';
 import {
   toggleBankAccount,
   deleteBankAccount,
@@ -304,14 +305,21 @@ export default function BankAccountsTab({
             <form onSubmit={handleSaveBank} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 block">ชื่อธนาคาร</label>
-                <input
-                  type="text"
-                  placeholder="ตัวอย่าง: ธนาคารกสิกรไทย"
+                <select
                   value={bankForm.bank_name}
                   onChange={(e) => setBankForm(prev => ({ ...prev, bank_name: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
                   required
-                />
+                >
+                  <option value="">-- เลือกธนาคาร --</option>
+                  {/* รองรับค่าเดิมที่เคยพิมพ์เองและไม่มีในรายการ ให้ยังแสดง/เก็บค่าไว้ได้ */}
+                  {bankForm.bank_name && !BANK_OPTIONS.some(b => b.value === bankForm.bank_name) && (
+                    <option value={bankForm.bank_name}>{bankForm.bank_name}</option>
+                  )}
+                  {BANK_OPTIONS.map(b => (
+                    <option key={b.value} value={b.value}>{b.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">

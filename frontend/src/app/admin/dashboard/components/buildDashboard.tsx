@@ -4,10 +4,6 @@ import {
   BadgeCheck,
   Users,
   BookOpen,
-  Zap,
-  Footprints,
-  GraduationCap,
-  Timer,
   UserPlus,
   CreditCard,
   AlertTriangle,
@@ -53,11 +49,12 @@ const pctChange = (cur: number, prev: number) => {
   return ((cur - prev) / prev) * 100;
 };
 
-const COURSE_STYLES: { icon: LucideIcon; tint: string }[] = [
-  { icon: Zap, tint: "bg-blue-100 text-blue-600" },
-  { icon: Footprints, tint: "bg-emerald-100 text-emerald-600" },
-  { icon: GraduationCap, tint: "bg-amber-100 text-amber-600" },
-  { icon: Timer, tint: "bg-violet-100 text-violet-600" },
+// สีพื้นหลังของกล่องเลขอันดับหลักสูตรขายดี (วนซ้ำตามอันดับ 1-4)
+const COURSE_TINTS: string[] = [
+  "bg-blue-100 text-blue-600",
+  "bg-emerald-100 text-emerald-600",
+  "bg-amber-100 text-amber-600",
+  "bg-violet-100 text-violet-600",
 ];
 
 export interface RawDashboard {
@@ -188,8 +185,7 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       name,
       students: v.students.size,
       revenue: `+${fmtBaht(v.revenue)}`,
-      icon: COURSE_STYLES[i % COURSE_STYLES.length].icon,
-      tint: COURSE_STYLES[i % COURSE_STYLES.length].tint,
+      tint: COURSE_TINTS[i % COURSE_TINTS.length],
     }));
 
   // ---- กิจกรรมล่าสุด ----
@@ -273,7 +269,7 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       title: "การชำระเงินเกินกำหนด",
       body: `มีบิลค้างชำระเกินกำหนด ${overdue.length} รายการ รวม ${fmtBaht(sumAmt(overdue))}`,
       action: "จัดการการชำระเงิน",
-      href: "/admin/payment",
+      href: "/admin/payment?tab=slips&filter=unpaid",
     });
   }
   if (pending.length > 0) {
@@ -283,7 +279,7 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       title: "บิลค้างชำระ (รอชำระเงิน)",
       body: `มีบิลค้างชำระจากการสมัครคอร์ส ${pending.length} รายการ รวม ${fmtBaht(sumAmt(pending))}`,
       action: "จัดการการชำระเงิน",
-      href: "/admin/payment",
+      href: "/admin/payment?tab=slips&filter=unpaid",
     });
   }
   if (waitcheck.length > 0) {
@@ -293,7 +289,7 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       title: "สลิปรอตรวจสอบ",
       body: `มีสลิปการโอนเงินรอการยืนยัน ${waitcheck.length} รายการ`,
       action: "ตรวจสอบสลิป",
-      href: "/admin/payment",
+      href: "/admin/payment?tab=slips&filter=pending",
     });
   }
   if (nearFullCourses.length > 0) {
@@ -341,7 +337,49 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   );
   const sessionUsage =
     totalSessions > 0 ? ((totalSessions - remainingSessions) / totalSessions) * 100 : 0;
-  const topCoach = coaches[0];
+  // ---- โค้ชดีเด่น: จัดอันดับจากผลงานจริง ----
+  // โยงโค้ชกับคอร์สผ่านเจ้าของคอร์ส (course.user email) แล้วนับนักเรียน/คาบที่สอนไปแล้ว
+  // ต่อโค้ช จาก enrollment ที่กำลังเรียน/เรียนจบ (active/completed)
+  const coachByEmail = new Map<string, Coach>();
+  coaches.forEach((c) => {
+    const email = c.email?.toLowerCase().trim();
+    if (email) coachByEmail.set(email, c);
+  });
+  const coachEmailByCourseId = new Map<number, string>();
+  courses.forEach((c) => {
+    const email = c.user?.email?.toLowerCase().trim();
+    if (email && coachByEmail.has(email)) coachEmailByCourseId.set(c.id, email);
+  });
+  const statsByCoach = new Map<string, { students: Set<string>; sessions: number }>();
+  enrollments.forEach((e) => {
+    const st = e.status?.toLowerCase();
+    if (st !== "active" && st !== "completed") return;
+    const courseId = e.package?.course?.id;
+    if (courseId == null) return;
+    const email = coachEmailByCourseId.get(courseId);
+    if (!email) return;
+    let agg = statsByCoach.get(email);
+    if (!agg) {
+      agg = { students: new Set(), sessions: 0 };
+      statsByCoach.set(email, agg);
+    }
+    agg.students.add(e.customer?.email?.trim() || `enr:${e.id}`);
+    agg.sessions += Math.max(0, (e.total_sessions || 0) - (e.remaining_sessions || 0));
+  });
+
+  let topCoachEmail: string | null = null;
+  let topCoachStudents = 0;
+  let topCoachSessions = 0;
+  statsByCoach.forEach((agg, email) => {
+    const students = agg.students.size;
+    if (students > topCoachStudents || (students === topCoachStudents && agg.sessions > topCoachSessions)) {
+      topCoachStudents = students;
+      topCoachSessions = agg.sessions;
+      topCoachEmail = email;
+    }
+  });
+  // ถ้าไม่มีข้อมูลผลงานเลย ให้ fallback เป็นโค้ชคนแรก (สถิติ = 0 การ์ดจะไม่ติดป้ายดีเด่น)
+  const topCoach = topCoachEmail ? coachByEmail.get(topCoachEmail) : coaches[0];
 
   const insights: Insights = {
     newThisMonth,
@@ -353,6 +391,8 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
         `${topCoach.firstName ?? ""} ${topCoach.lastName ?? ""}`.trim() ||
         "โค้ช"
       : "—",
+    topCoachStudents,
+    topCoachSessions,
   };
 
   return { kpis, chart: buckets, courses: courseRows, activities, alerts, insights };
