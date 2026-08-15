@@ -109,6 +109,9 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		return
 	}
 
+	// โฟลเดอร์ย่อยสำหรับแยกประเภทรูป (profile/slip/news) — ส่งมาจาก client ผ่าน form field "folder"
+	subfolder := services.SanitizeSubfolder(c.PostForm("folder"))
+
 	// เก็บบน Cloudinary เมื่อถูกตั้งค่า
 	if ctrl.cloudinary != nil {
 		src, err := file.Open()
@@ -118,7 +121,7 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		}
 		defer src.Close()
 
-		url, err := ctrl.cloudinary.UploadFile(c.Request.Context(), src)
+		url, err := ctrl.cloudinary.UploadFileToFolder(c.Request.Context(), src, subfolder)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ขึ้น Cloudinary ไม่สำเร็จ: " + err.Error()})
 			return
@@ -128,8 +131,13 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		return
 	}
 
-	// Create uploads directory if not exists
+	// Create uploads directory if not exists — แยกโฟลเดอร์ย่อยตามประเภทให้ตรงกับฝั่ง Cloudinary
 	uploadDir := "./uploads"
+	urlPath := "/uploads/"
+	if subfolder != "" {
+		uploadDir = filepath.Join(uploadDir, subfolder)
+		urlPath = "/uploads/" + subfolder + "/"
+	}
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
 		return
@@ -146,6 +154,6 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 
 	// Return the local URL
 	c.JSON(http.StatusOK, gin.H{
-		"url": "http://localhost:8000/uploads/" + filename,
+		"url": "http://localhost:8000" + urlPath + filename,
 	})
 }

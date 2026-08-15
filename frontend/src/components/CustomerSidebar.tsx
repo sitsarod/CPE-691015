@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X } from "lucide-react";
 
 const navItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -14,7 +14,7 @@ const navItems = [
   { href: "/customer/feedback", icon: <StarCheck />, label: "รีวิวของฉัน" },
 ];
 
-// Mobile bottom bar: 4 primary icons + a "more" button that reveals the rest
+// Mobile bottom bar: 4 primary icons + a "more" button that opens a full-screen menu
 const primaryItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
   { href: "/customer/overview", icon: <LayoutDashboard />, label: "แดชบอร์ด" },
@@ -22,19 +22,12 @@ const primaryItems = [
   { href: "/customer/enrollment", icon: <ClipboardList />, label: "คอร์ส" },
 ];
 
-const moreItems = [
-  { href: "/customer/schedule", icon: <Calendar />, label: "ตารางเรียน" },
-  { href: "/customer/feedback", icon: <StarCheck />, label: "รีวิวของฉัน" },
-  { href: "/customer/profile", icon: <UserCircle />, label: "โปรไฟล์" },
-];
-
 export default function CustomerSidebar() {
   const pathname = usePathname();
 
   const [userName, setUserName] = useState("กำลังโหลด...");
   const [userEmail, setUserEmail] = useState("");
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const storedFirstName = localStorage.getItem("firstName");
@@ -46,17 +39,21 @@ export default function CustomerSidebar() {
     if (storedEmail) setUserEmail(storedEmail);
   }, []);
 
+  // ล็อก scroll พื้นหลังตอนเปิดเมนูเต็มหน้าจอ
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
-  const moreActive = moreItems.some((item) => item.href === pathname);
+  // ปิดเมนูอัตโนมัติเมื่อเปลี่ยนหน้า
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // ปุ่ม "เพิ่มเติม" ต้อง active เมื่อหน้าปัจจุบันไม่ได้อยู่ใน primary bar
+  const moreActive = !primaryItems.some((item) => item.href === pathname);
 
   return (
     <>
@@ -91,45 +88,81 @@ export default function CustomerSidebar() {
           <BottomBarItem key={item.href} href={item.href} icon={item.icon} label={item.label} active={pathname === item.href} />
         ))}
 
-        <div className="relative flex flex-1 min-w-0" ref={moreRef}>
-          <button
-            type="button"
-            aria-label="เพิ่มเติม"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((open) => !open)}
-            className={`flex flex-1 min-w-0 items-center justify-center py-3.5 transition-colors ${
-              moreOpen || moreActive ? "text-[#CC0000]" : "text-gray-600"
-            }`}
-          >
-            <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-              <MoreHorizontal className="w-8 h-8" />
-            </div>
-          </button>
-
-          {moreOpen && (
-            <div className="absolute bottom-full right-1 mb-2 flex flex-col items-center gap-1 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
-              {moreItems.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-label={item.label}
-                    onClick={() => setMoreOpen(false)}
-                    className={`flex h-[52px] w-[52px] items-center justify-center rounded-xl transition-colors ${
-                      active ? "bg-[#FFF0F0] text-[#CC0000]" : "text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 [&>svg]:w-8 [&>svg]:h-8">
-                      {item.icon}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          aria-label="เพิ่มเติม"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(true)}
+          className={`flex flex-1 min-w-0 items-center justify-center py-3.5 transition-colors ${
+            menuOpen || moreActive ? "text-[#CC0000]" : "text-gray-600"
+          }`}
+        >
+          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+            <MoreHorizontal className="w-8 h-8" />
+          </div>
+        </button>
       </nav>
+
+      {/* Mobile (< md): เมนูเต็มหน้าจอ แสดงทุกเมนูพร้อมชื่อ */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
+          <div className="absolute inset-0 flex flex-col bg-white">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-bold text-gray-900">เมนูทั้งหมด</h2>
+              <button
+                type="button"
+                aria-label="ปิดเมนู"
+                onClick={() => setMenuOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-3 gap-3">
+                {navItems.map((item) => {
+                  const active = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-colors ${
+                        active ? "border-[#CC0000] bg-[#FFF0F0]" : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className={`flex h-9 w-9 items-center justify-center flex-shrink-0 [&>svg]:w-8 [&>svg]:h-8 ${active ? "text-[#CC0000]" : "text-[#CC0000]"}`}>
+                        {item.icon}
+                      </div>
+                      <span className={`text-xs font-semibold leading-tight ${active ? "text-[#CC0000]" : "text-gray-700"}`}>
+                        {item.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <Link
+                href="/customer/profile"
+                onClick={() => setMenuOpen(false)}
+                className={`mt-4 flex items-center gap-4 rounded-2xl border p-4 transition-colors ${
+                  pathname === "/customer/profile" ? "border-[#CC0000] bg-[#FFF0F0]" : "border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
+                  <UserCircle className="w-8 h-8" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[15px] font-bold text-gray-800 leading-tight truncate">{userName}</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5 truncate">{userEmail}</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

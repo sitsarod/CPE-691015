@@ -1,6 +1,7 @@
-import React from "react";
-import { ChevronDown, ChevronUp, ExternalLink, FileText } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { InvoiceDTO } from "./types";
+import ImageLightbox from "@/components/ImageLightbox";
 
 interface InvoicesTabProps {
   invoices: InvoiceDTO[];
@@ -17,6 +18,9 @@ export default function InvoicesTab({
   onPayExistingInvoice,
   onCancelInvoice
 }: InvoicesTabProps) {
+  // สลิปที่เปิดดูแบบป็อปอัพ (ไม่เปิดแท็บใหม่)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+
   // Format date helper
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
@@ -187,15 +191,13 @@ export default function InvoicesTab({
                       )}
 
                       {(invoiceStatus === "waitcheck" || invoiceStatus === "success" || invoiceStatus === "rejected") && inv.slipurl && (
-                        <a
-                          href={inv.slipurl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => setReceiptUrl(inv.slipurl)}
                           className="px-3.5 py-1.5 border border-gray-300 hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                         >
                           ดูรูปสลิปเดิม
-                          <ExternalLink className="w-3 h-3 text-gray-400" />
-                        </a>
+                        </button>
                       )}
                       <button
                         onClick={() => onToggleExpand(inv.id)}
@@ -243,6 +245,9 @@ export default function InvoicesTab({
           })}
         </div>
       )}
+
+      {/* ป็อปอัพดูรูปสลิป — ไม่เปิดแท็บใหม่ */}
+      <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="สลิปโอนเงิน" />
     </div>
   );
 }

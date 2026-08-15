@@ -83,9 +83,9 @@ const daysFromNow = (iso: string): number => {
 
 const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "คอร์สของฉัน", href: "/customer/enrollment", icon: BookOpen },
-  { label: "ชำระเงิน", href: "/customer/payment", icon: CreditCard },
+  { label: "การเงิน", href: "/customer/payment", icon: CreditCard },
   { label: "ตารางเรียน", href: "/customer/schedule", icon: CalendarDays },
-  { label: "ฟีดแบ็ก", href: "/customer/feedback", icon: MessageCircleMore },
+  { label: "รีวิว", href: "/customer/feedback", icon: MessageCircleMore },
 ];
 
 /* ------------------------------- KPI card ------------------------------- */
@@ -161,7 +161,7 @@ function AlertList({ alerts }: { alerts: AlertItem[] }) {
                 bar: "bg-red-500",
                 icon: "text-red-500",
                 title: "text-red-800",
-                action: "text-red-600 hover:text-red-700",
+                action: "bg-red-600 text-white shadow-red-600/25 hover:bg-red-700",
               }
             : al.tone === "success"
             ? {
@@ -169,14 +169,14 @@ function AlertList({ alerts }: { alerts: AlertItem[] }) {
                 bar: "bg-emerald-500",
                 icon: "text-emerald-600",
                 title: "text-emerald-800",
-                action: "text-emerald-600 hover:text-emerald-700",
+                action: "bg-emerald-600 text-white shadow-emerald-600/25 hover:bg-emerald-700",
               }
             : {
                 wrap: "border-blue-200 bg-blue-50/70",
                 bar: "bg-blue-500",
                 icon: "text-blue-500",
                 title: "text-blue-800",
-                action: "text-blue-600 hover:text-blue-700",
+                action: "bg-blue-600 text-white shadow-blue-600/25 hover:bg-blue-700",
               };
         return (
           <div
@@ -191,9 +191,10 @@ function AlertList({ alerts }: { alerts: AlertItem[] }) {
                 <p className="mt-1 text-xs leading-relaxed text-gray-600">{al.body}</p>
                 <Link
                   href={al.href}
-                  className={`mt-2 inline-block text-xs font-semibold ${tone.action}`}
+                  className={`mt-2.5 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition ${tone.action}`}
                 >
                   {al.action}
+                  <ArrowUpRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
             </div>
@@ -381,12 +382,21 @@ export default function StudentOverview() {
 
   // ----- การแจ้งเตือน -----
   const alerts: AlertItem[] = [];
-  if (overdueBillings.length > 0) {
+  // แจ้งเตือนบิลค้างชำระ "ทุกใบ" (unfunded + overdue) — เดิมดักแค่ overdue
+  // ทำให้บิลที่ยังไม่เกินกำหนด (unfunded) ไม่ขึ้นเตือน แต่ยังโชว์ยอดค้างในการ์ด
+  if (unpaidBillings.length > 0) {
+    const hasOverdue = overdueBillings.length > 0;
     alerts.push({
       tone: "danger",
-      icon: AlertTriangle,
-      title: "มีบิลเกินกำหนดชำระ",
-      body: `คุณมีบิลค้างชำระเกินกำหนด ${overdueBillings.length} รายการ กรุณาชำระโดยเร็ว`,
+      icon: hasOverdue ? AlertTriangle : Wallet,
+      title: hasOverdue ? "มีบิลเกินกำหนดชำระ" : "มีบิลค้างชำระ",
+      body: hasOverdue
+        ? `คุณมีบิลค้างชำระ ${unpaidBillings.length} รายการ รวม ${fmtBaht(
+            unpaidAmount
+          )} (เกินกำหนด ${overdueBillings.length} รายการ) กรุณาชำระโดยเร็ว`
+        : `คุณมีบิลค้างชำระ ${unpaidBillings.length} รายการ รวม ${fmtBaht(
+            unpaidAmount
+          )}${dueNote ? ` · ${dueNote}` : ""}`,
       action: "ไปหน้าชำระเงิน",
       href: "/customer/payment",
     });

@@ -18,7 +18,6 @@ export interface CourseRow {
   name: string;
   students: number;
   revenue: string;
-  icon: LucideIcon;
   tint: string;
 }
 
@@ -44,6 +43,8 @@ export interface Insights {
   sessionUsage: number;
   coachCount: number;
   topCoachName: string;
+  topCoachStudents: number; // จำนวนนักเรียนที่โค้ชดีเด่นดูแล (0 = ไม่มีข้อมูลผลงาน)
+  topCoachSessions: number; // จำนวนคาบที่สอนไปแล้วของโค้ชดีเด่น
 }
 
 export interface DashboardData {

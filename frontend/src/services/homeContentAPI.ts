@@ -96,6 +96,7 @@ export const homeContentAPI = {
   uploadImage: async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('folder', 'home'); // รูปเนื้อหาหน้าแรก แยกเก็บไว้โฟลเดอร์ home
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const headers: HeadersInit = {};

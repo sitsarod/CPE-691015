@@ -83,15 +83,25 @@ export default function FinancialSummaryTab({
     const coursesBreakdown: { [key: string]: number } = {};
 
     for (const b of billings) {
-      if (!isDateInTimeframe(b.created_at || b.billingdue_date)) continue;
       const amt = b.billingamount;
-      totalInvoiced += amt;
-      if (b.billingstatus === 'paid') totalPaid += amt;
-      else if (b.billingstatus === 'waitcheck') totalPending += amt;
-      else if (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') totalUnpaid += amt;
+      // ยอดเรียกเก็บ/ค้าง/รอตรวจ = อิงวันที่ออกบิล (created_at)
+      const createdIn = isDateInTimeframe(b.created_at || b.billingdue_date);
 
-      const typeName = b.billing_type?.billingtypename || "อื่นๆ";
-      coursesBreakdown[typeName] = (coursesBreakdown[typeName] || 0) + amt;
+      if (b.billingstatus === 'paid') {
+        // รายรับที่จ่ายจริง = อิงวันที่ชำระเงิน (paid_at) ไม่ใช่วันที่ออกบิล
+        // เช่น ออกบิลวันที่ 1 แต่ลูกค้าจ่ายวันที่ 2 → ยอดต้องนับเป็นของวันที่ 2
+        if (isDateInTimeframe(b.paid_at || b.created_at || b.billingdue_date)) {
+          totalPaid += amt;
+          // รายรับแยกตามประเภท = เฉพาะบิลที่ชำระแล้วจริง (ไม่นับที่ยังค้าง/รอตรวจ)
+          const typeName = b.billing_type?.billingtypename || "อื่นๆ";
+          coursesBreakdown[typeName] = (coursesBreakdown[typeName] || 0) + amt;
+        }
+      }
+      else if (b.billingstatus === 'waitcheck') { if (createdIn) totalPending += amt; }
+      else if (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') { if (createdIn) totalUnpaid += amt; }
+
+      // ยอดเรียกเก็บทั้งหมดในช่วงเวลา = ทุกบิลที่ออกในช่วงนั้น (ทุกสถานะ)
+      if (createdIn) totalInvoiced += amt;
     }
 
     let totalExpenses = 0;
@@ -133,7 +143,8 @@ export default function FinancialSummaryTab({
 
     billings.forEach(b => {
       if (b.billingstatus !== 'paid') return;
-      const ds = b.created_at || b.billingdue_date;
+      // จัดรายรับเข้าเดือนตามวันที่ชำระเงินจริง (paid_at)
+      const ds = b.paid_at || b.created_at || b.billingdue_date;
       if (!ds) return;
       const d = new Date(ds);
       const i = indexOf(d.getFullYear(), d.getMonth());
@@ -470,8 +481,8 @@ export default function FinancialSummaryTab({
                 </div>
               ) : (
                 Object.entries(summaryStats.coursesBreakdown).map(([typeName, totalAmount]) => {
-                  const totalInvoiced = summaryStats.totalInvoiced || 1;
-                  const percentage = Math.round((totalAmount / totalInvoiced) * 100);
+                  const totalPaid = summaryStats.totalPaid || 1;
+                  const percentage = Math.round((totalAmount / totalPaid) * 100);
                   return (
                     <div key={typeName} className="space-y-1">
                       <div className="flex justify-between text-xs font-medium">

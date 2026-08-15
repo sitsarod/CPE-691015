@@ -85,6 +85,7 @@ export const announcementAPI = {
   uploadImage: async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('folder', 'news'); // แยกเก็บรูปข่าว/ประกาศไว้โฟลเดอร์ news
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const headers: HeadersInit = {};

@@ -45,6 +45,7 @@ export interface BillingDTO {
   invoice_id?: number;
   transactionid?: string;
   created_at: string;
+  paid_at?: string; // เวลาที่ยืนยันชำระเงินจริง (มีเฉพาะบิลที่ paid)
 }
 
 export interface BankAccount {

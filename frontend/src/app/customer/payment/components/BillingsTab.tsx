@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
-import { 
+import {
   Calendar,
   Clock,
-  ExternalLink,
   CheckCircle2,
   Search,
   SlidersHorizontal,
@@ -10,6 +9,7 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import { BillingDTO } from "./types";
+import ImageLightbox from "@/components/ImageLightbox";
 
 interface BillingsTabProps {
   billings: BillingDTO[];
@@ -49,6 +49,8 @@ export default function BillingsTab({
 }: BillingsTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("unfunded");
+  // สลิปที่เปิดดูแบบป็อปอัพ (ไม่เปิดแท็บใหม่)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
   // Get only unpaid/overdue billings for checking select all state
   const unpaidBillings = useMemo(() => {
@@ -229,15 +231,16 @@ export default function BillingsTab({
                     ฿{b.billingamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
                   {b.billingstatus === "paid" && b.slipurl && (
-                    <a
-                      href={b.slipurl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-0.5 text-[10px] font-bold text-[#CC0000] hover:underline"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      type="button"
+                      className="flex items-center gap-0.5 text-[10px] font-bold text-[#CC0000] hover:underline cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReceiptUrl(b.slipurl);
+                      }}
                     >
-                      ดูสลิปโอนเงิน <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
+                      ดูสลิปโอนเงิน
+                    </button>
                   )}
                 </div>
               </div>
@@ -280,6 +283,9 @@ export default function BillingsTab({
           </div>
         </div>
       )}
+
+      {/* ป็อปอัพดูสลิปโอนเงิน — ไม่เปิดแท็บใหม่ */}
+      <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="สลิปโอนเงิน" />
     </div>
   );
 }
