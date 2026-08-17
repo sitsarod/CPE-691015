@@ -82,11 +82,19 @@ type FaceConsentPolicyRes struct {
 }
 
 // FaceConsentHistoryItem คือหนึ่งแถวในประวัติความยินยอม (สำหรับแอดมินตรวจสอบย้อนหลัง)
+//
+// เจ้าของแถวเป็นได้ทั้งนักเรียนและโค้ช จึงใช้ชื่อฟิลด์กลาง ๆ ว่า Subject
+// แล้วบอกบทบาทไว้ที่ SubjectRole แทนการมีชุดฟิลด์แยกตามบทบาท
 type FaceConsentHistoryItem struct {
-	ID            uint      `json:"id"`
-	CustomerID    uint      `json:"customer_id"` // customers.id
-	CustomerName  string    `json:"customer_name"`
-	CustomerEmail string    `json:"customer_email"`
+	ID uint `json:"id"`
+
+	// SubjectRole บอกว่าแถวนี้เป็นของใคร: "customer" หรือ "coach"
+	SubjectRole string `json:"subject_role"`
+	// SubjectID คือ customers.id หรือ coaches.id ตาม SubjectRole
+	SubjectID    uint   `json:"subject_id"`
+	SubjectName  string `json:"subject_name"`
+	SubjectEmail string `json:"subject_email"`
+
 	Action        string    `json:"action"`
 	PolicyVersion string    `json:"policy_version"`
 	ActedAt       time.Time `json:"acted_at"`

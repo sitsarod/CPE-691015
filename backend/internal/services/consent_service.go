@@ -14,7 +14,69 @@ import (
 var (
 	ErrInvalidConsentAction = errors.New("การกระทำไม่ถูกต้อง (รองรับเฉพาะ granted หรือ declined)")
 	ErrNothingToWithdraw    = errors.New("ไม่มีความยินยอมที่ให้ถอน เนื่องจากท่านยังไม่ได้ให้ความยินยอมไว้")
+	ErrConsentNotApplicable = errors.New("บัญชีนี้ไม่ต้องให้ความยินยอมเก็บข้อมูลใบหน้า")
+	ErrConsentUserNotFound  = errors.New("ไม่พบบัญชีผู้ใช้งานนี้")
+	ErrCoachProfileNotFound = errors.New("ไม่พบโปรไฟล์โค้ชของผู้ใช้งานนี้")
 )
+
+// consentSubject คือ "เจ้าของความยินยอม" หนึ่งราย ซึ่งเป็นได้ทั้งนักเรียนและโค้ช
+//
+// ทั้งสองบทบาทต้องให้ความยินยอมด้วยเหตุผลเดียวกัน คือใช้สแกนใบหน้าเช็คชื่อ
+// (นักเรียนเช็คชื่อเข้าเรียน โค้ชเช็คชื่อเข้างาน) แต่โปรไฟล์อยู่คนละตาราง
+// struct นี้จึงทำหน้าที่ห่อความต่างนั้นไว้ที่เดียว โค้ดส่วนอื่นของ service
+// จะได้ไม่ต้องเขียน if role == ... ซ้ำทุกฟังก์ชัน
+//
+// ⚠️ CustomerID กับ CoachID ต้องมีค่าแค่ตัวใดตัวหนึ่งเสมอ (ตรงกับ CHECK constraint
+// ของตาราง biometric_consents) — สร้าง struct นี้ผ่าน resolveSubject เท่านั้น
+type consentSubject struct {
+	Role       models.UserRole
+	CustomerID *uint
+	CoachID    *uint
+	Status     models.FaceConsentStatus
+}
+
+// scope ใส่เงื่อนไข WHERE ให้ตรงกับเจ้าของแถว ใช้ตอน query ตาราง biometric_consents
+func (s consentSubject) scope(db *gorm.DB) *gorm.DB {
+	if s.CoachID != nil {
+		return db.Where("coach_id = ?", *s.CoachID)
+	}
+	return db.Where("customer_id = ?", *s.CustomerID)
+}
+
+// resolveSubject หา "เจ้าของความยินยอม" จาก users.id ที่ได้มาจาก JWT
+//
+// แยกตาม role ของ user แทนการเดาจากว่ามีโปรไฟล์ไหนอยู่ เพราะ role คือแหล่งความจริง
+// ที่ระบบใช้ตัดสินสิทธิ์ที่อื่นอยู่แล้ว ถ้าเดาเอาแล้ววันหนึ่งมีคนมีทั้งสองโปรไฟล์
+// ความยินยอมจะไปลงผิดตารางโดยไม่มีใครรู้
+func (s *ConsentService) resolveSubject(userID uint) (*consentSubject, error) {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, ErrConsentUserNotFound
+	}
+
+	switch user.Role {
+	case models.CustomerRole:
+		var customer models.Customer
+		if err := s.db.Where("user_id = ?", userID).First(&customer).Error; err != nil {
+			return nil, ErrCustomerProfileNotFound
+		}
+		id := customer.ID
+		return &consentSubject{Role: models.CustomerRole, CustomerID: &id, Status: customer.FaceConsentStatus}, nil
+
+	case models.CoachRole:
+		var coach models.Coach
+		if err := s.db.Where("user_id = ?", userID).First(&coach).Error; err != nil {
+			return nil, ErrCoachProfileNotFound
+		}
+		id := coach.ID
+		return &consentSubject{Role: models.CoachRole, CoachID: &id, Status: coach.FaceConsentStatus}, nil
+
+	default:
+		// แอดมินไม่ได้เช็คชื่อด้วยใบหน้า จึงไม่มีอะไรให้ยินยอม
+		// ตอบเป็น error เฉพาะทางแทน 500 เพื่อให้หน้าเว็บแสดงข้อความที่ถูกต้องได้
+		return nil, ErrConsentNotApplicable
+	}
+}
 
 type ConsentService struct {
 	db *gorm.DB
@@ -62,17 +124,12 @@ type ConsentMeta struct {
 
 // GetStatus คืนสถานะความยินยอมปัจจุบันของผู้ใช้ (รับเป็น users.id)
 func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, error) {
-	customerID, err := ResolveCustomerID(s.db, userID)
+	subject, err := s.resolveSubject(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var customer models.Customer
-	if err := s.db.First(&customer, customerID).Error; err != nil {
-		return nil, ErrCustomerNotFound
-	}
-
-	status := customer.FaceConsentStatus
+	status := subject.Status
 	if status == "" {
 		// แถวที่ถูกสร้างก่อนจะมีฟิลด์นี้จะเป็นค่าว่าง — ถือว่ายังไม่เคยถาม
 		status = models.FaceConsentUnknown
@@ -93,7 +150,7 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 
 	// ดึงแถวล่าสุดจากตาราง audit มาเติมรายละเอียดว่าตอบเมื่อไหร่ ตามประกาศเวอร์ชันไหน
 	var latest models.BiometricConsent
-	err = s.db.Where("customer_id = ?", customerID).Order("acted_at DESC, id DESC").First(&latest).Error
+	err = subject.scope(s.db).Order("acted_at DESC, id DESC").First(&latest).Error
 	if err == nil {
 		res.PolicyVersion = latest.PolicyVersion
 		actedAt := latest.ActedAt
@@ -105,10 +162,11 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 	return res, nil
 }
 
-// Record บันทึกการยินยอม/ปฏิเสธของผู้ใช้ (รับเป็น users.id)
+// Record บันทึกการยินยอม/ปฏิเสธของผู้ใช้ (รับเป็น users.id) ใช้ได้ทั้งนักเรียนและโค้ช
 //
-// เขียนแถวใหม่ลง biometric_consents และอัปเดต Customer.FaceConsentStatus ใน transaction
-// เดียวกันเสมอ เพื่อไม่ให้ตาราง audit กับสถานะปัจจุบันหลุดจากกัน
+// เขียนแถวใหม่ลง biometric_consents และอัปเดตสถานะในตารางโปรไฟล์ของเจ้าตัว
+// (customers หรือ coaches) ใน transaction เดียวกันเสมอ
+// เพื่อไม่ให้ตาราง audit กับสถานะปัจจุบันหลุดจากกัน
 func (s *ConsentService) Record(userID uint, action models.ConsentAction, meta ConsentMeta) (*dto.FaceConsentStatusRes, error) {
 	// รับเฉพาะสองค่านี้ — การถอนความยินยอมต้องไปทาง Withdraw เท่านั้น
 	// เพราะมีขั้นตอนลบข้อมูลที่เก็บไว้พ่วงอยู่ด้วย
@@ -116,12 +174,12 @@ func (s *ConsentService) Record(userID uint, action models.ConsentAction, meta C
 		return nil, ErrInvalidConsentAction
 	}
 
-	customerID, err := ResolveCustomerID(s.db, userID)
+	subject, err := s.resolveSubject(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.writeConsent(customerID, userID, action, meta); err != nil {
+	if err := s.writeConsent(subject, userID, action, meta); err != nil {
 		return nil, err
 	}
 
@@ -130,23 +188,18 @@ func (s *ConsentService) Record(userID uint, action models.ConsentAction, meta C
 
 // Withdraw ถอนความยินยอมและลบข้อมูลใบหน้าที่เก็บไว้ (รับเป็น users.id)
 func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConsentStatusRes, error) {
-	customerID, err := ResolveCustomerID(s.db, userID)
+	subject, err := s.resolveSubject(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var customer models.Customer
-	if err := s.db.First(&customer, customerID).Error; err != nil {
-		return nil, ErrCustomerNotFound
-	}
-
 	// ถอนได้เฉพาะคนที่เคยยินยอมไว้จริง — กันไม่ให้เกิดแถว withdrawn ลอย ๆ
 	// ที่ไม่มี granted นำหน้า ซึ่งจะทำให้ประวัติอ่านแล้วสับสน
-	if customer.FaceConsentStatus != models.FaceConsentGranted {
+	if subject.Status != models.FaceConsentGranted {
 		return nil, ErrNothingToWithdraw
 	}
 
-	if err := s.writeConsent(customerID, userID, models.ConsentWithdrawn, meta); err != nil {
+	if err := s.writeConsent(subject, userID, models.ConsentWithdrawn, meta); err != nil {
 		return nil, err
 	}
 
@@ -158,12 +211,17 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 }
 
 // writeConsent เขียนแถว audit + อัปเดตสถานะปัจจุบัน ใน transaction เดียว
-func (s *ConsentService) writeConsent(customerID uint, actorUserID uint, action models.ConsentAction, meta ConsentMeta) error {
+//
+// สองอย่างนี้ต้องสำเร็จหรือล้มเหลวพร้อมกันเสมอ ถ้าแยกกันแล้วอันหนึ่งพลาด
+// จะได้สถานะที่ไม่มีหลักฐานรองรับ หรือหลักฐานที่ไม่ตรงกับสถานะที่ระบบใช้จริง
+// ซึ่งทั้งสองแบบใช้ยืนยันความชอบด้วยกฎหมายไม่ได้
+func (s *ConsentService) writeConsent(subject *consentSubject, actorUserID uint, action models.ConsentAction, meta ConsentMeta) error {
 	now := time.Now()
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		record := models.BiometricConsent{
-			CustomerID:      customerID,
+			CustomerID:      subject.CustomerID,
+			CoachID:         subject.CoachID,
 			Action:          action,
 			PolicyVersion:   models.FaceConsentPolicyVersion,
 			ActedAt:         now,
@@ -177,9 +235,17 @@ func (s *ConsentService) writeConsent(customerID uint, actorUserID uint, action 
 			return errors.New("ไม่สามารถบันทึกความยินยอมได้")
 		}
 
-		if err := tx.Model(&models.Customer{}).
-			Where("id = ?", customerID).
-			Update("face_consent_status", action.ToConsentStatus()).Error; err != nil {
+		// อัปเดตค่า denormalize ในตารางโปรไฟล์ให้ตรงกับแถวที่เพิ่งเขียน
+		status := action.ToConsentStatus()
+
+		var result *gorm.DB
+		if subject.CoachID != nil {
+			result = tx.Model(&models.Coach{}).Where("id = ?", *subject.CoachID).Update("face_consent_status", status)
+		} else {
+			result = tx.Model(&models.Customer{}).Where("id = ?", *subject.CustomerID).Update("face_consent_status", status)
+		}
+
+		if result.Error != nil {
 			return errors.New("ไม่สามารถอัปเดตสถานะความยินยอมได้")
 		}
 
@@ -189,19 +255,22 @@ func (s *ConsentService) writeConsent(customerID uint, actorUserID uint, action 
 
 // GetHistory ดึงประวัติความยินยอมทั้งหมด (สำหรับแอดมินใช้ตรวจสอบย้อนหลังตาม PDPA)
 //
-// ถ้าระบุ customerUserID (users.id) จะกรองเฉพาะของคนนั้น ถ้าเป็น 0 คือดึงทั้งหมด
-func (s *ConsentService) GetHistory(customerUserID uint) ([]dto.FaceConsentHistoryItem, error) {
+// ถ้าระบุ subjectUserID (users.id) จะกรองเฉพาะของคนนั้น ถ้าเป็น 0 คือดึงทั้งหมด
+// รวมทั้งของนักเรียนและโค้ชในชุดเดียว เรียงตามเวลาที่ตอบ
+func (s *ConsentService) GetHistory(subjectUserID uint) ([]dto.FaceConsentHistoryItem, error) {
 	query := s.db.Model(&models.BiometricConsent{}).
 		Preload("Customer").
 		Preload("Customer.User").
+		Preload("Coach").
+		Preload("Coach.User").
 		Order("acted_at DESC, id DESC")
 
-	if customerUserID != 0 {
-		customerID, err := ResolveCustomerID(s.db, customerUserID)
+	if subjectUserID != 0 {
+		subject, err := s.resolveSubject(subjectUserID)
 		if err != nil {
 			return nil, err
 		}
-		query = query.Where("customer_id = ?", customerID)
+		query = subject.scope(query)
 	}
 
 	var records []models.BiometricConsent
@@ -213,20 +282,37 @@ func (s *ConsentService) GetHistory(customerUserID uint) ([]dto.FaceConsentHisto
 	for _, r := range records {
 		item := dto.FaceConsentHistoryItem{
 			ID:            r.ID,
-			CustomerID:    r.CustomerID,
 			Action:        string(r.Action),
 			PolicyVersion: r.PolicyVersion,
 			ActedAt:       r.ActedAt,
 		}
+
 		// แมปเป็น DTO เท่าที่จำเป็น ไม่ส่ง models.User ดิบออกไป
 		// เพราะ User.Password ยังใช้ tag json:"password" อยู่ ถ้าส่งดิบ bcrypt hash จะรั่ว
-		if r.Customer != nil {
-			item.CustomerName = r.Customer.Nickname
-			if r.Customer.User != nil {
-				item.CustomerName = r.Customer.User.FirstName + " " + r.Customer.User.LastName
-				item.CustomerEmail = r.Customer.User.Email
+		switch {
+		case r.CoachID != nil:
+			item.SubjectRole = string(models.CoachRole)
+			item.SubjectID = *r.CoachID
+			if r.Coach != nil {
+				item.SubjectName = r.Coach.Nickname
+				if r.Coach.User != nil {
+					item.SubjectName = r.Coach.User.FirstName + " " + r.Coach.User.LastName
+					item.SubjectEmail = r.Coach.User.Email
+				}
+			}
+
+		case r.CustomerID != nil:
+			item.SubjectRole = string(models.CustomerRole)
+			item.SubjectID = *r.CustomerID
+			if r.Customer != nil {
+				item.SubjectName = r.Customer.Nickname
+				if r.Customer.User != nil {
+					item.SubjectName = r.Customer.User.FirstName + " " + r.Customer.User.LastName
+					item.SubjectEmail = r.Customer.User.Email
+				}
 			}
 		}
+
 		items = append(items, item)
 	}
 

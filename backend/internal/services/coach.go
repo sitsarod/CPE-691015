@@ -6,6 +6,7 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -23,8 +24,14 @@ func NewCoachService(db *gorm.DB) *CoachService {
 var ErrCoachForbidden = errors.New("ไม่มีสิทธิ์แก้ไขข้อมูลของโค้ชคนอื่น")
 
 // ErrCoachSelfOnly ใช้เมื่อ action นั้นสงวนไว้ให้โค้ชเจ้าของเท่านั้น (แม้แต่ admin ก็แก้ไม่ได้)
-// เช่น การแก้ไขวันเวลาว่างของโค้ช
-var ErrCoachSelfOnly = errors.New("เฉพาะโค้ชเจ้าของเท่านั้นที่แก้ไขวันเวลาว่างได้ admin ไม่มีสิทธิ์แก้")
+// เช่น การแก้ไขวันเวลาว่าง และการแก้ข้อมูลบัญชีรับเงินของตัวเอง
+var ErrCoachSelfOnly = errors.New("เฉพาะโค้ชเจ้าของบัญชีเท่านั้นที่ทำรายการนี้ได้ admin ไม่มีสิทธิ์")
+
+// ErrWrongPassword ใช้เมื่อยืนยันรหัสผ่านซ้ำแล้วไม่ตรง (step-up authentication)
+//
+// ข้อความตั้งใจบอกแค่ว่า "รหัสผ่านไม่ถูกต้อง" ไม่บอกว่าบัญชีมีจริงหรือไม่
+// เพราะจุดนี้ผู้เรียกล็อกอินอยู่แล้ว การบอกมากกว่านี้ไม่ช่วยเจ้าตัวแต่ช่วยคนเดา
+var ErrWrongPassword = errors.New("รหัสผ่านไม่ถูกต้อง")
 
 // Sentinel errors ตอนสร้างโค้ช — ให้ controller แยก HTTP status ได้
 //   ErrCoachUserNotFound  = user_id ไม่มีในระบบ (400)
@@ -211,6 +218,61 @@ func (s *CoachService) Update(id uint, userID uint, role string, req dto.UpdateC
 		if err := s.db.Model(&coach).Updates(updateData).Error; err != nil {
 			return nil, err
 		}
+	}
+
+	if err := s.db.First(&coach, id).Error; err != nil {
+		return nil, err
+	}
+	return &coach, nil
+}
+
+// UpdateBankAccount แก้ข้อมูลรับเงินของโค้ช โดยต้องยืนยันรหัสผ่านปัจจุบันก่อน
+//
+// เจตนาของฟังก์ชันนี้ต่างจาก Update ตรงที่กันคนละภัย:
+//   - Update กัน IDOR (คนอื่นมาแก้ข้อมูลเรา)
+//   - ตัวนี้กันคนที่ "เป็นเรา" อยู่แล้วในสายตาระบบ แต่ไม่ใช่เราจริง
+//     เช่นคนที่หยิบเครื่องที่เปิดค้างไว้ หรือได้ token ไปจากที่อื่น
+//
+// จึงใช้ VerifyCoachSelf ไม่ใช่ VerifyCoachOwnership — admin เรียกเส้นนี้ไม่ได้
+// เพราะ admin ไม่รู้รหัสผ่านของโค้ชอยู่แล้ว จะยืนยันตัวตนซ้ำไม่ผ่านแน่นอน
+//
+// หมายเหตุ: admin ยังแก้เลขบัญชีโค้ชได้อยู่ผ่านอีกเส้นหนึ่ง
+// (PATCH /admin/users/:id → dto.AdminUpdateCoachProfile) ตามนโยบายของทีมที่ว่า
+// โค้ชส่งหลักฐานมาให้แอดมินตรวจแล้วแอดมินแก้ให้ได้ ทางนี้จึงไม่ได้มาแทนที่ทางนั้น
+// แต่เพิ่มทางที่โค้ชทำเองได้โดยไม่ต้องรอแอดมิน
+//
+// ⚠️ แปลว่าเส้นทางของ admin ยังเป็นจุดเสี่ยงที่เหลืออยู่ — ถ้าบัญชี admin ถูกยึด
+// คนร้ายเปลี่ยนปลายทางเงินของโค้ชทุกคนได้รวดเดียวโดยไม่ต้องรู้รหัสผ่านใคร
+// ถ้าจะปิดช่องนั้นต้องถอด BankAccount/PaymentInfo ออกจาก AdminUpdateCoachProfile
+// แล้วให้ทุกการเปลี่ยนเลขบัญชีวิ่งผ่านฟังก์ชันนี้ทางเดียว
+func (s *CoachService) UpdateBankAccount(id uint, userID uint, role string, req dto.UpdateCoachBankRequest) (*models.Coach, error) {
+	if err := VerifyCoachSelf(s.db, id, userID, role); err != nil {
+		return nil, err
+	}
+
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, ErrCoachForbidden
+	}
+
+	// เทียบรหัสผ่านกับ hash — bcrypt.CompareHashAndPassword ใช้เวลาคงที่อยู่แล้ว
+	// จึงไม่รั่วข้อมูลผ่าน timing
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
+		return nil, ErrWrongPassword
+	}
+
+	var coach models.Coach
+	if err := s.db.First(&coach, id).Error; err != nil {
+		return nil, err
+	}
+
+	updateData := map[string]interface{}{
+		"bank_account": req.BankAccount,
+		"payment_info": req.PaymentInfo,
+	}
+
+	if err := s.db.Model(&coach).Updates(updateData).Error; err != nil {
+		return nil, err
 	}
 
 	if err := s.db.First(&coach, id).Error; err != nil {

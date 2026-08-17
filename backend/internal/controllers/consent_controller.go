@@ -74,7 +74,9 @@ func (ctrl *ConsentController) RecordConsent(c *gin.Context) {
 		return
 	}
 
-	message := "บันทึกความยินยอมเรียบร้อยแล้ว ท่านจะเช็คชื่อเข้าเรียนได้ทั้งการสแกนใบหน้าและ QR code ส่วนบุคคล"
+	// ข้อความเป็นกลางระหว่างบทบาทโดยตั้งใจ — นักเรียนเช็คชื่อเข้าเรียน โค้ชเช็คชื่อเข้างาน
+	// ใช้ endpoint เดียวกัน จึงไม่ระบุว่า "เข้าเรียน" หรือ "เข้างาน"
+	message := "บันทึกความยินยอมเรียบร้อยแล้ว ท่านจะเช็คชื่อได้ทั้งการสแกนใบหน้าและ QR code ส่วนบุคคล"
 	if models.ConsentAction(input.Action) == models.ConsentDeclined {
 		message = "รับทราบแล้ว ระบบจะไม่เก็บข้อมูลใบหน้าของท่าน และจะใช้ QR code ส่วนบุคคลในการเช็คชื่อ"
 	}
@@ -142,10 +144,16 @@ func (ctrl *ConsentController) metaFrom(c *gin.Context) services.ConsentMeta {
 // (ไม่ตอบ 500 กับทุกกรณีแบบที่โมดูล payment/billing ยังเป็นอยู่)
 func (ctrl *ConsentController) respondError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, services.ErrCustomerProfileNotFound), errors.Is(err, services.ErrCustomerNotFound):
+	case errors.Is(err, services.ErrCustomerProfileNotFound),
+		errors.Is(err, services.ErrCustomerNotFound),
+		errors.Is(err, services.ErrCoachProfileNotFound),
+		errors.Is(err, services.ErrConsentUserNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrInvalidConsentAction):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// แอดมินไม่มีอะไรให้ยินยอม — 403 เพราะเป็นเรื่องบทบาท ไม่ใช่ข้อมูลหาย
+	case errors.Is(err, services.ErrConsentNotApplicable):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrNothingToWithdraw):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:

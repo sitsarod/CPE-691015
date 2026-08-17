@@ -39,6 +39,26 @@ type UpdateCoachRequest struct {
 	ProfilePicture *string `json:"profile_picture"`
 }
 
+// UpdateCoachBankRequest คือการแก้ข้อมูลรับเงินของโค้ช ซึ่งต้องยืนยันรหัสผ่านก่อน
+//
+// แยกออกจาก UpdateCoachRequest โดยตั้งใจ เพราะสองอย่างนี้มีระดับความเสี่ยงต่างกันมาก
+// เบอร์โทรกรอกผิดแล้วแก้ใหม่ได้ แต่เลขบัญชีผิด (หรือถูกคนอื่นเปลี่ยน) = เงินเดือน
+// เข้ากระเป๋าคนอื่น และกว่าจะรู้ตัวก็สิ้นเดือนแล้ว
+//
+// การขอรหัสผ่านซ้ำตรงนี้คือ "step-up authentication" — ป้องกันกรณีที่คนร้าย
+// ได้ session ของโค้ชไป (เครื่องเปิดค้างไว้ / token ถูกขโมย) แต่ไม่รู้รหัสผ่าน
+// เพราะการมี token อย่างเดียวยังไม่พอจะเปลี่ยนปลายทางเงินได้
+//
+// ⚠️ CurrentPassword ต้องไม่ถูกเขียนลง log หรือส่งกลับใน response เด็ดขาด
+type UpdateCoachBankRequest struct {
+	// CurrentPassword คือรหัสผ่านปัจจุบันของเจ้าของบัญชี ใช้ยืนยันตัวตนซ้ำเท่านั้น
+	// ไม่ได้เอาไปเปลี่ยนรหัสผ่านใด ๆ
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+
+	BankAccount string `json:"bank_account" binding:"required"`
+	PaymentInfo string `json:"payment_info" binding:"required"`
+}
+
 // Request สำหรับ admin แก้ไขระดับ (specialization), ใบรับรองผู้ฝึกสอน (coach_license),
 // ประเภทการจ่ายเงิน (payment_type) และอัตราค่าจ้าง (pay_rate) ของ coach
 // แยกออกจาก UpdateCoachRequest โดยตั้งใจ เพื่อไม่ให้ coach เรียก endpoint เดียวกันแล้วแก้ค่าพวกนี้ได้เอง

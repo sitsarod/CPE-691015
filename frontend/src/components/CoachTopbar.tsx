@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, Settings, User, LogOut } from "lucide-react";
+import { Bell, Settings, User, LogOut, ShieldCheck } from "lucide-react";
 
 export default function CoachTopbar() {
   const router = useRouter();
@@ -73,7 +73,18 @@ export default function CoachTopbar() {
                 className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
               >
                 <User className="w-5 h-5" />
-                ตั้งค่าโปรไฟล์
+                โปรไฟล์ของฉัน
+              </Link>
+
+              {/* ทางลัดไปหน้าความยินยอม PDPA — ตาม ม.19 วรรคห้า การถอนความยินยอม
+                  ต้องทำได้ง่ายเท่ากับตอนให้ ถ้าซ่อนลึกจะถือว่าไม่ได้จัดให้ถอนได้โดยง่าย */}
+              <Link
+                href="/coach/settings/privacy"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                ความเป็นส่วนตัว
               </Link>
 
               <hr className="my-1 border-gray-100" />

@@ -32,6 +32,14 @@ let refreshPromise: Promise<boolean> | null = null;
  * ถ้าเจอ 401 (access token หมดอายุ) จะลองใช้ refresh token ขอ token ใหม่ก่อน
  * - ถ้า refresh สำเร็จ → ยิง request เดิมซ้ำด้วย token ใหม่แบบเนียน ๆ (ผู้ใช้ไม่รู้สึก)
  * - ถ้า refresh ไม่ได้ (หมดอายุ/ไม่มี) → ล้าง session แล้วเด้งไปหน้า login
+ *
+ * ⚠️ กติกาที่ backend ต้องทำตาม: ตอบ 401 ได้เฉพาะเรื่อง "token ใช้ไม่ได้" เท่านั้น
+ *
+ * เพราะไฟล์นี้ตีความ 401 ทุกตัวว่า session ตาย แล้วเด้งผู้ใช้ออก ถ้า endpoint ไหน
+ * ตอบ 401 ด้วยเหตุผลอื่น (เช่น กรอกรหัสผ่านยืนยันผิด) ผู้ใช้จะถูกล็อกเอาต์
+ * ทั้งที่ token ยังดีอยู่ — เคยเกิดมาแล้วกับ PATCH /coaches/:id/bank
+ *
+ * เหตุผลอื่นให้ใช้ 403 พร้อมข้อความอธิบาย
  */
 export default function SessionGuard() {
   useEffect(() => {

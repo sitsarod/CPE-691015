@@ -63,6 +63,33 @@ export interface UpdateCoachInput {
   profile_picture?: string;
 }
 
+/**
+ * ข้อมูลรับเงินที่โค้ชแก้เองได้ผ่าน PATCH /coaches/:id/bank
+ *
+ * แยก endpoint จาก updateCoachAPI เพราะเส้นนี้ต้องยืนยันรหัสผ่านซ้ำ
+ * (step-up authentication) — กันกรณีคนอื่นได้ session ของโค้ชไปแล้วเปลี่ยน
+ * ปลายทางเงินเดือน ซึ่งกว่าจะรู้ตัวก็สิ้นเดือนแล้ว
+ *
+ * แอดมินเรียกเส้นนี้ไม่ได้ (backend คืน 403) เพราะไม่รู้รหัสผ่านโค้ชอยู่แล้ว
+ */
+export interface UpdateCoachBankInput {
+  /** รหัสผ่านปัจจุบันของโค้ช ใช้ยืนยันตัวตนเท่านั้น ไม่ได้เปลี่ยนรหัสผ่าน */
+  currentPassword: string;
+  bank_account: string;
+  payment_info: string;
+}
+
+// [PATCH] โค้ชแก้ข้อมูลบัญชีรับเงินของตัวเอง (ต้องยืนยันรหัสผ่าน)
+export async function updateCoachBankAccountAPI(
+  coachId: number,
+  data: UpdateCoachBankInput
+): Promise<CoachProfile> {
+  return await apiFetch<CoachProfile>(`/coaches/${coachId}/bank`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 // ข้อมูลที่แอดมินแก้ได้ผ่าน PATCH /coaches/:id/level (ระดับ + ค่าจ้าง)
 export interface AdminUpdateCoachInput {
   specialization?: string;
@@ -125,6 +152,16 @@ export async function deleteCoachAPI(coachId: number): Promise<void> {
   await apiFetch<{ message: string }>(`/coaches/${coachId}`, {
     method: "DELETE",
   });
+}
+
+/**
+ * ดึงโปรไฟล์ของโค้ชที่ล็อกอินอยู่ โดยให้ apiFetch แนบ token ให้เอง
+ *
+ * ต่างจาก fetchMyCoachProfile ด้านล่างตรงที่ไม่ต้องรับ token เข้ามาเป็นพารามิเตอร์
+ * (ตัวเก่ายังอยู่เพราะมีหน้าอื่นเรียกใช้ ค่อยย้ายมาใช้ตัวนี้ทีหลัง)
+ */
+export async function getMyCoachProfileAPI(): Promise<CoachProfile> {
+  return await apiFetch<CoachProfile>("/coaches/me", { method: "GET" });
 }
 
 // ดึงข้อมูลโปรไฟล์ของโค้ชที่ล็อกอินอยู่ (resolve coach_id จาก JWT ที่ backend เอง)
