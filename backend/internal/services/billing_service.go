@@ -2,11 +2,25 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
 )
+
+// notifyBillIssued แจ้งลูกค้าเมื่อมีบิลใหม่รอชำระ (best-effort)
+// customerUserID = users.id (คอลัมน์ billings.customer_id อ้าง users.id)
+func notifyBillIssued(db *gorm.DB, customerUserID, billingID uint, amount float64, desc string) {
+	CreateNotification(db, customerUserID,
+		"bill_issued",
+		fmt.Sprintf("bill-%d", billingID),
+		"มีบิลรอชำระ",
+		fmt.Sprintf("%s • ยอด ฿%.2f รอการชำระเงิน", desc, amount),
+		"/customer/payment?tab=billings",
+		"warning",
+	)
+}
 
 type BillingService struct {
 	db *gorm.DB
@@ -44,6 +58,7 @@ func (s *BillingService) CreateSingleBilling(customerID uint, adminID uint, bill
 		return errors.New("ไม่สามารถสร้างบิลเรียกเก็บเงินได้")
 	}
 
+	notifyBillIssued(s.db, customerID, billing.ID, amount, description)
 	return nil
 }
 
@@ -59,7 +74,14 @@ func (s *BillingService) CreateBulkBillings(customerIDs []uint, adminID uint, bi
 		return errors.New("ไม่พบข้อมูลประเภทการเรียกเก็บเงิน")
 	}
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	// เก็บบิลที่สร้างสำเร็จไว้แจ้งเตือนหลัง commit (ถ้า tx ล้มจะไม่ถูกใช้)
+	type issued struct {
+		userID    uint
+		billingID uint
+	}
+	var created []issued
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		for _, customerID := range customerIDs {
 			// ตรวจสอบว่า UserID มีตัวตนจริง
 			var user models.User
@@ -80,9 +102,18 @@ func (s *BillingService) CreateBulkBillings(customerIDs []uint, adminID uint, bi
 			if err := tx.Create(&billing).Error; err != nil {
 				return errors.New("ไม่สามารถสร้างบิลกลุ่มได้")
 			}
+			created = append(created, issued{userID: customerID, billingID: billing.ID})
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	for _, c := range created {
+		notifyBillIssued(s.db, c.userID, c.billingID, amount, description)
+	}
+	return nil
 }
 
 // CreateSplitBillingFromAttendance สร้างบิลแบบหารค่าใช้จ่ายจากเช็คอินของนักเรียน
@@ -137,8 +168,15 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 	totalAmount := hourlyRate * hours
 	splitAmount := totalAmount / float64(len(uniqueUserIDs))
 
+	// เก็บบิลที่สร้างสำเร็จไว้แจ้งเตือนหลัง commit
+	type issued struct {
+		userID    uint
+		billingID uint
+	}
+	var created []issued
+
 	// ใช้ Transaction ในการบันทึกบิลทุกคน
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		for customerID := range uniqueUserIDs {
 			billing := models.Billing{
 				Description:   description,
@@ -153,9 +191,18 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 			if err := tx.Create(&billing).Error; err != nil {
 				return errors.New("ไม่สามารถบันทึกบิลหารเฉลี่ยของบางคนได้")
 			}
+			created = append(created, issued{userID: customerID, billingID: billing.ID})
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	for _, c := range created {
+		notifyBillIssued(s.db, c.userID, c.billingID, splitAmount, description)
+	}
+	return nil
 }
 
 // GetAllBillings ดึงรายการบิลทั้งหมดในระบบ (สำหรับ Admin)

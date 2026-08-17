@@ -171,6 +171,20 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 	if err != nil {
 		return nil, err
 	}
+
+	// แจ้งโค้ชว่าได้รับมอบหมายคาบสอนใหม่ (work.CoachID = coaches.id → หา users.id จาก Coach.UserID)
+	var coach models.Coach
+	if e := s.db.First(&coach, work.CoachID).Error; e == nil && coach.UserID != 0 {
+		CreateNotification(s.db, coach.UserID,
+			"work_assigned",
+			fmt.Sprintf("workschedule-%d", work.ID),
+			"ได้รับมอบหมายคาบสอนใหม่",
+			fmt.Sprintf("วันที่ %s เวลา %s-%s น.", work.Date, work.StartTime, work.EndTime),
+			"/coach/schedule",
+			"info",
+		)
+	}
+
 	return &work, nil
 }
 

@@ -278,6 +278,29 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 		return nil, err
 	}
 
+	// แจ้งเตือนตามผลลัพธ์ของการสมัคร
+	if newEnrollment.Status == models.EnrollmentStatusPending {
+		// นักเรียนใหม่: รออนุมัติ → แจ้งแอดมินทุกคน
+		NotifyAdmins(s.db,
+			"enrollment_request",
+			fmt.Sprintf("enrollment-%d", newEnrollment.ID),
+			"มีคำขอสมัครเรียนใหม่",
+			"มีนักเรียนส่งคำขอสมัครเรียน รอการอนุมัติ",
+			"/admin/enrollments",
+			"info",
+		)
+	} else if newEnrollment.BillingID != nil {
+		// เคยเรียนคอร์สนี้แล้ว: เปิดสิทธิ์ทันทีพร้อมบิลรอชำระ → แจ้งลูกค้า (userID = users.id)
+		CreateNotification(s.db, userID,
+			"bill_issued",
+			fmt.Sprintf("bill-%d", *newEnrollment.BillingID),
+			"มีบิลรอชำระ",
+			"ลงทะเบียนเรียบร้อย มีบิลค่าคอร์สรอการชำระเงิน",
+			"/customer/payment?tab=billings",
+			"warning",
+		)
+	}
+
 	return &newEnrollment, nil
 }
 
@@ -333,6 +356,24 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 
 	if err != nil {
 		return nil, err
+	}
+
+	// แจ้งลูกค้าว่าคำขอได้รับการอนุมัติ (enrollment.CustomerID = customers.id → แปลงเป็น users.id)
+	if targetUserID, rerr := ResolveUserID(s.db, enrollment.CustomerID); rerr == nil {
+		body := "คำขอสมัครเรียนของคุณได้รับการอนุมัติแล้ว เริ่มเรียนได้เลย"
+		href := "/customer/enrollment"
+		if enrollment.Status == models.EnrollmentStatusAwaitingPayment {
+			body = "คำขอได้รับการอนุมัติ กรุณาชำระเงินเพื่อเริ่มเรียน"
+			href = "/customer/payment?tab=billings"
+		}
+		CreateNotification(s.db, targetUserID,
+			"enrollment_approved",
+			fmt.Sprintf("enrollment-%d-approved", enrollment.ID),
+			"คำขอสมัครได้รับการอนุมัติ",
+			body,
+			href,
+			"success",
+		)
 	}
 
 	return &enrollment, nil

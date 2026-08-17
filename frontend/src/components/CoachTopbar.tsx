@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, Settings, User, LogOut, ShieldCheck } from "lucide-react";
+import { Settings, User, LogOut, ShieldCheck } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function CoachTopbar() {
   const router = useRouter();
@@ -50,10 +51,7 @@ export default function CoachTopbar() {
 
       <div className="flex items-center gap-8">
 
-        <button className="text-[#CC0000] hover:opacity-80 transition relative flex items-center justify-center w-10 h-10">
-          <Bell className="w-7 h-7" />
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white"></span>
-        </button>
+        <NotificationBell viewAllHref="/coach/notifications" />
 
         <div className="relative" ref={dropdownRef}>
           <button

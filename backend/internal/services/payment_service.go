@@ -2,7 +2,9 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"time"
 
 	"gorm.io/gorm"
 	"CPE-691015/internal/models"
@@ -156,6 +158,18 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, err
 	}
 
+	// แจ้งแอดมินให้ตรวจสลิป (ยกเว้นกรณี auto-verify ยืนยันไปแล้ว จึงไม่รบกวน)
+	if result.Status != models.InvoiceSuccess {
+		NotifyAdmins(s.db,
+			"slip_uploaded",
+			fmt.Sprintf("invoice-%d-%d", invoiceID, time.Now().Unix()),
+			"มีสลิปรอตรวจสอบ",
+			fmt.Sprintf("ลูกค้าแนบสลิปโอนเงิน ใบแจ้งหนี้ #%d ยอด ฿%.2f", invoiceID, result.TotalAmount),
+			"/admin/payment?tab=slips&filter=pending",
+			"warning",
+		)
+	}
+
 	return &result, nil
 }
 
@@ -218,6 +232,17 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 		return
 	}
 	log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านและยืนยันการชำระเงินอัตโนมัติสำเร็จ (transRef=%s)", invoiceID, data.TransRef)
+
+	// แจ้งแอดมินทุกคนว่ามีการชำระเงินสำเร็จโดยระบบตรวจสลิปอัตโนมัติ
+	// (ConfirmPayment ด้านบนแจ้งฝั่งลูกค้าไปแล้ว — อันนี้เพิ่มฝั่งแอดมินเฉพาะเคส auto-verify)
+	NotifyAdmins(s.db,
+		"payment_auto_verified",
+		fmt.Sprintf("invoice-%d-autoverify", invoiceID),
+		"มีการชำระเงินสำเร็จ (auto-verify)",
+		fmt.Sprintf("ใบแจ้งหนี้ #%d ยอด ฿%.2f ได้รับการยืนยันอัตโนมัติโดยระบบตรวจสลิป", invoiceID, invoice.TotalAmount),
+		"/admin/payment?tab=slips&filter=approved",
+		"success",
+	)
 }
 
 // ConfirmPayment ยืนยันการชำระเงินโดยผู้ดูแลระบบ (Admin)
@@ -285,6 +310,16 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error)
 		return nil, err
 	}
 
+	// แจ้งลูกค้าว่าการชำระเงินได้รับการยืนยันแล้ว (result.CustomerID = users.id)
+	CreateNotification(s.db, result.CustomerID,
+		"payment_confirmed",
+		fmt.Sprintf("invoice-%d-confirmed", invoiceID),
+		"ชำระเงินสำเร็จ",
+		fmt.Sprintf("การชำระเงินใบแจ้งหนี้ #%d ยอด ฿%.2f ได้รับการยืนยันแล้ว", invoiceID, result.TotalAmount),
+		"/customer/payment?tab=invoices",
+		"success",
+	)
+
 	return &result, nil
 }
 
@@ -338,6 +373,16 @@ func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) 
 	if err := s.db.Preload("PaymentItem").Preload("PaymentItem.Billing").First(&result, invoiceID).Error; err != nil {
 		return nil, err
 	}
+
+	// แจ้งลูกค้าว่าสลิปไม่ผ่าน ให้อัปโหลดใหม่
+	CreateNotification(s.db, result.CustomerID,
+		"payment_rejected",
+		fmt.Sprintf("invoice-%d-rejected-%d", invoiceID, time.Now().Unix()),
+		"สลิปไม่ผ่านการตรวจสอบ",
+		fmt.Sprintf("สลิปใบแจ้งหนี้ #%d ไม่ผ่านการตรวจสอบ กรุณาตรวจสอบและอัปโหลดสลิปใหม่", invoiceID),
+		"/customer/payment?tab=billings",
+		"danger",
+	)
 
 	return &result, nil
 }

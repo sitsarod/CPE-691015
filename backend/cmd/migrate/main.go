@@ -69,6 +69,7 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.Court{},
+		&models.Notification{},
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}

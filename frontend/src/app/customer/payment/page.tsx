@@ -39,6 +39,13 @@ export default function CustomerPaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"billings" | "invoices">("billings");
   const [selectedBillingIds, setSelectedBillingIds] = useState<number[]>([]);
+
+  // เปิดแท็บตาม query param เมื่อ deep-link มาจากการแจ้งเตือน เช่น /customer/payment?tab=invoices
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "billings" || tab === "invoices") setActiveTab(tab);
+  }, []);
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Record<number, boolean>>({});
 
   // Checkout Modal Context States

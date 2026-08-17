@@ -1,9 +1,11 @@
 package services
 
 import (
+	"errors"
+	"fmt"
+
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
-	"errors"
 	"gorm.io/gorm"
 )
 
@@ -39,6 +41,25 @@ func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest) (*models.Ex
 	// Preload relations
 	if err := s.db.Preload("Coach").Preload("Coach.User").First(&expense, expense.ID).Error; err != nil {
 		return nil, err
+	}
+
+	// แจ้งโค้ชเมื่อแอดมินบันทึกค่าจ้าง/รายได้ให้ (expense.Coach.UserID = users.id)
+	if expense.CoachID != nil && expense.Coach != nil && expense.Coach.UserID != 0 {
+		label := "ค่าใช้จ่าย"
+		switch expense.Type {
+		case models.ExpenseTypeCoach:
+			label = "ค่าจ้างการสอน"
+		case models.ExpenseTypeCoachOther:
+			label = "รายได้อื่น / โบนัส"
+		}
+		CreateNotification(s.db, expense.Coach.UserID,
+			"coach_expense",
+			fmt.Sprintf("expense-%d", expense.ID),
+			"มีการบันทึกรายได้ให้คุณ",
+			fmt.Sprintf("%s ยอด ฿%.2f", label, expense.Amount),
+			"/coach/payment",
+			"success",
+		)
 	}
 
 	return &expense, nil
