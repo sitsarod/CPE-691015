@@ -109,6 +109,16 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		return
 	}
 
+	// ตรวจว่าเป็นรูปจริงและขนาดไม่เกิน ก่อนทำอะไรต่อ
+	//
+	// เส้นนี้ใช้อัปโหลดรูปโปรไฟล์ สลิปโอนเงิน และภาพข่าว ซึ่งเป็นรูปทั้งหมด
+	// จึงตรวจด้วยกติกาของรูป และตั้งนามสกุลเองจากเนื้อไฟล์ที่ตรวจได้ (ดู upload.go)
+	ext, err := ValidateImageUpload(file)
+	if err != nil {
+		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
 	// โฟลเดอร์ย่อยสำหรับแยกประเภทรูป (profile/slip/news) — ส่งมาจาก client ผ่าน form field "folder"
 	subfolder := services.SanitizeSubfolder(c.PostForm("folder"))
 
@@ -143,8 +153,12 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		return
 	}
 
-	// Generate a unique filename using timestamp
-	filename := fmt.Sprintf("%d-%s", time.Now().UnixNano(), filepath.Base(file.Filename))
+	// ตั้งชื่อไฟล์เองทั้งหมด ไม่เอาชื่อเดิมจาก client มาใช้แม้แต่ส่วนเดียว
+	//
+	// ของเดิมใช้ filepath.Base(file.Filename) ต่อท้าย ทำให้อัปโหลด evil.html
+	// แล้วได้ไฟล์ 123-evil.html ที่เสิร์ฟจาก origin เดียวกับเว็บ = stored XSS
+	// ชื่อไฟล์เดิมไม่ได้ถูกใช้อ้างอิงที่ไหน จึงทิ้งได้เลย
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
 	filePath := filepath.Join(uploadDir, filename)
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {

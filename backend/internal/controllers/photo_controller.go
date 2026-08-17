@@ -58,6 +58,14 @@ func (ctrl *PhotoController) UploadFacePhoto(c *gin.Context) {
 		return
 	}
 
+	// ตรวจว่าเป็นรูปจริงและขนาดไม่เกิน ก่อนเขียนอะไรลงดิสก์
+	// ext ที่ได้มาจากการตรวจเนื้อไฟล์ ไม่ใช่จากชื่อไฟล์ที่ client ส่งมา (ดู upload.go)
+	ext, err := ValidateImageUpload(file)
+	if err != nil {
+		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
 	// สร้างโฟลเดอร์สำหรับเก็บภาพถ่ายใบหน้า
 	uploadDir := "./uploads/faces"
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
@@ -65,7 +73,7 @@ func (ctrl *PhotoController) UploadFacePhoto(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("face-%d-%d%s", customerID, time.Now().UnixNano(), filepath.Ext(file.Filename))
+	filename := fmt.Sprintf("face-%d-%d%s", customerID, time.Now().UnixNano(), ext)
 	filePath := filepath.Join(uploadDir, filename)
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {

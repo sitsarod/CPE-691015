@@ -11,6 +11,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Sentinel errors ของการลบผู้ใช้ — ให้ controller แมป HTTP status ได้ถูก
+// ไม่ใช่ตอบ 500 ทั้งที่เป็นเรื่องกติกาการใช้งาน ไม่ใช่ระบบพัง
+var (
+	// ErrLastAdmin กันไม่ให้ระบบเหลือศูนย์แอดมิน ซึ่งกู้คืนในระบบไม่ได้
+	ErrLastAdmin = errors.New("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก")
+
+	// ErrDeleteSelf กันแอดมินเผลอลบบัญชีตัวเองระหว่างใช้งานอยู่
+	ErrDeleteSelf = errors.New("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ")
+)
+
 type UserService struct{
 	db *gorm.DB
 }
@@ -186,12 +196,155 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
 }
 
 // Delete removes a user from the database [DELETE]
-func (s *UserService) DeleteUser(id uint) error {
+// DeleteUser ลบผู้ใช้งานหนึ่งคน พร้อมโปรไฟล์ตามบทบาทของเขา
+//
+// actorUserID คือ users.id ของแอดมินที่กดลบ ใช้กันไม่ให้ลบตัวเอง
+//
+// ─── ทำไมต้องมีด่านตรวจ ───
+//
+// ของเดิมเป็น s.db.Delete(&user) เปล่า ๆ ซึ่งมีปัญหาสองข้อ:
+//
+//  1. ลบแอดมินคนสุดท้ายได้ พอลบแล้วจะไม่มีใครเข้าหน้าแอดมินได้อีกเลย
+//     และระบบยังไม่มีคำสั่งสร้างแอดมินจากเครื่อง ต้องไปแก้ในฐานข้อมูลมือเปล่า
+//     ถือเป็นความเสียหายที่กู้คืนในระบบไม่ได้ จึงต้องกันไว้ตั้งแต่แรก
+//
+//  2. ลบแถว users อย่างเดียว ทิ้งแถว customers/coaches ค้างไว้
+//     แถวพวกนั้นยังเก็บชื่อ เบอร์ เลขบัตรประชาชน และเลขบัญชีธนาคารอยู่ครบ
+//     ซึ่งขัด PDPA (เก็บข้อมูลไว้ทั้งที่ไม่มีฐานให้เก็บแล้ว) และทำให้
+//     ข้อมูลกำพร้าไปโผล่ในรายงานที่ join ข้ามตาราง
+func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 	var user models.User
 	if err := s.db.First(&user, id).Error; err != nil {
 		return err
 	}
-	return s.db.Delete(&user).Error
+
+	// กันลบตัวเอง — แอดมินที่เผลอลบบัญชีตัวเองจะยังถือ token ที่ใช้ได้อยู่
+	// จนกว่าจะหมดอายุ กลายเป็นสถานะกำกวมที่ debug ยาก
+	// และถ้าเป็นแอดมินคนเดียวก็จะไม่มีใครกู้ให้ได้ด้วย
+	if user.ID == actorUserID {
+		return ErrDeleteSelf
+	}
+
+	if user.Role == models.AdminRole {
+		var remaining int64
+		if err := s.db.Model(&models.User{}).
+			Where("role = ? AND id <> ?", models.AdminRole, user.ID).
+			Count(&remaining).Error; err != nil {
+			return err
+		}
+		if remaining == 0 {
+			return ErrLastAdmin
+		}
+	}
+
+	// ลบ user กับข้อมูลพ่วงทั้งหมดใน transaction เดียว
+	// ถ้าแยกกันแล้วอันหลังพลาด จะเหลือข้อมูลส่วนตัวค้างโดยไม่มีบัญชีเจ้าของ
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		switch user.Role {
+		case models.CustomerRole:
+			if err := deleteCustomerData(tx, user.ID); err != nil {
+				return err
+			}
+		case models.CoachRole:
+			if err := deleteCoachData(tx, user.ID); err != nil {
+				return err
+			}
+		}
+
+		return tx.Delete(&user).Error
+	})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ข้อมูลพ่วงของคนที่ถูกลบ — อะไรลบตาม อะไรเก็บไว้
+//
+// ⚠️ ต้องลบเองทุกตาราง เพราะ ON DELETE CASCADE ของฐานข้อมูล "ใช้ไม่ได้" ที่นี่
+//
+// เหตุผล: โมเดลทุกตัวฝัง gorm.Model ซึ่งมี DeletedAt แปลว่า tx.Delete()
+// ยิงคำสั่ง UPDATE deleted_at ไม่ใช่ DELETE จริง ส่วน cascade ของฐานข้อมูล
+// ทำงานตอนมี DELETE จริงเท่านั้น จึงไม่มีอะไรเกิดขึ้นเลย
+// (ต่อให้ประกาศ constraint:OnDelete:CASCADE ไว้ครบ ก็ยังไม่ทำงานอยู่ดี)
+//
+// ─── ตารางที่ "เก็บไว้" โดยตั้งใจ อย่าเผลอไปเพิ่มให้มันถูกลบ ───
+//
+//	billings / invoices / payment_items / expenses
+//	    เอกสารการเงิน ต้องเก็บตามอายุความทางบัญชีและภาษี
+//	    ลบทิ้งแล้วยอดในรายงานย้อนหลังจะไม่ตรงกับที่เคยออกใบเสร็จไป
+//
+//	enrollments
+//	    ผูกกับใบเสร็จและใช้พิสูจน์ว่าเคยจ่ายค่าคอร์สอะไรไป
+//
+//	coach_attendances / student_attendances
+//	    ประวัติเช็กชื่อ ใช้คิดค่าจ้างย้อนหลังและยืนยันว่ามาเรียนจริง
+//
+//	work_schedules ของวันที่ผ่านมาแล้ว
+//	    เป็นบันทึกการทำงานจริงที่ใช้คิดค่าจ้าง (ส่วนคาบในอนาคตลบทิ้ง ดูด้านล่าง)
+//
+//	reviews
+//	    คนอื่นใช้ประกอบการตัดสินใจเลือกคอร์ส ถ้าลบตามคนที่ลาออกไป
+//	    คะแนนเฉลี่ยของคอร์สจะกระโดดโดยไม่มีใครรู้สาเหตุ
+//
+//	biometric_consents
+//	    ⚠️ ห้ามลบเด็ดขาด เป็นตาราง append-only ที่ใช้พิสูจน์ว่าการเก็บข้อมูล
+//	    ใบหน้าในอดีตชอบด้วยกฎหมาย ถ้าลบไปพร้อมเจ้าตัวจะพิสูจน์ย้อนหลังไม่ได้เลย
+//
+// เพราะแถว customers/coaches เป็น soft delete ตารางข้างบนจึงยัง join กลับมา
+// หาชื่อเจ้าของได้ด้วย Unscoped() ตอนตรวจสอบย้อนหลัง — เป็นเหตุผลที่ไม่ใช้ hard delete
+// ─────────────────────────────────────────────────────────────────────────────
+
+// deleteCustomerData ลบโปรไฟล์ผู้เรียนและข้อมูลชีวภาพของเขา
+func deleteCustomerData(tx *gorm.DB, userID uint) error {
+	var customer models.Customer
+	if err := tx.Where("user_id = ?", userID).First(&customer).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
+			return nil
+		}
+		return err
+	}
+
+	// ภาพใบหน้าและค่า face embedding เป็นข้อมูลชีวภาพ (PDPA ม.26)
+	// เมื่อไม่มีสถานะนักเรียนแล้ว ฐานที่ใช้เก็บก็หมดไปด้วย จึงต้องลบทันที
+	if err := tx.Where("customer_id = ?", customer.ID).Delete(&models.Photo{}).Error; err != nil {
+		return err
+	}
+
+	return tx.Delete(&customer).Error
+}
+
+// deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
+func deleteCoachData(tx *gorm.DB, userID uint) error {
+	var coach models.Coach
+	if err := tx.Where("user_id = ?", userID).First(&coach).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	// ข้อมูลชีวภาพ เหตุผลเดียวกับฝั่งผู้เรียน
+	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.Photo{}).Error; err != nil {
+		return err
+	}
+
+	// เวลาว่างประจำสัปดาห์ — เป็นข้อมูลสำหรับจัดตารางล่วงหน้าเท่านั้น ไม่มีคุณค่าย้อนหลัง
+	// ถ้าไม่ลบ โค้ชที่ออกไปแล้วจะยังโผล่เป็นตัวเลือกในหน้าจัดตารางของแอดมิน
+	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.CoachAvailability{}).Error; err != nil {
+		return err
+	}
+
+	// คาบสอนตั้งแต่วันนี้เป็นต้นไป — ยังไม่เกิดขึ้นจริง ต้องเอาออกจากปฏิทิน
+	// ส่วนคาบก่อนหน้านี้เก็บไว้ เพราะเป็นบันทึกการทำงานที่ใช้คิดค่าจ้างย้อนหลัง
+	//
+	// เทียบวันที่แบบข้อความได้เพราะคอลัมน์เก็บรูปแบบ YYYY-MM-DD ซึ่งเรียงตามตัวอักษร
+	// แล้วได้ลำดับเวลาที่ถูกต้องพอดี
+	today := time.Now().Format("2006-01-02")
+	if err := tx.Where("coach_id = ? AND date >= ?", coach.ID, today).
+		Delete(&models.WorkSchedule{}).Error; err != nil {
+		return err
+	}
+
+	return tx.Delete(&coach).Error
 }
 
 // IsActiveStudent ตรวจสอบว่าลูกค้ามีคอร์สที่กำลังเรียนอยู่หรือไม่

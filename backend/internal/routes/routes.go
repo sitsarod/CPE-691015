@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"strings"
+
 	"CPE-691015/internal/config"
 	"CPE-691015/internal/controllers"
 	"CPE-691015/internal/middlewares"
@@ -49,6 +51,23 @@ func SetupRoutes(r *gin.Engine) {
 	expenseController := controllers.NewExpenseController(expenseService, cloudinaryService)
 
 	r.Use(middlewares.CORSMiddleware())
+	// ไฟล์ที่ผู้ใช้อัปโหลด — เสิร์ฟพร้อม header กันเบราว์เซอร์เดาชนิดไฟล์เอง
+	//
+	// เป็นเกราะชั้นที่สอง ชั้นแรกคือ controllers.ValidateImageUpload/ValidateVideoUpload
+	// ที่ปฏิเสธไฟล์ที่ไม่ใช่รูป/วิดีโอตั้งแต่ตอนอัปโหลด
+	//
+	// nosniff บังคับให้เบราว์เซอร์เชื่อ Content-Type ที่เราส่งไปเท่านั้น ไม่ไปเดาเอง
+	// จากเนื้อไฟล์ ซึ่งเป็นพฤติกรรมที่ทำให้ไฟล์ที่ดูเหมือนรูปถูกรันเป็น HTML ได้
+	//
+	// CSP sandbox ตัดสิทธิ์ทุกอย่างของหน้าที่โหลดจาก path นี้ ต่อให้มีสคริปต์
+	// หลุดเข้าไปได้จริง มันก็อ่าน localStorage ของเว็บหลัก (ที่เก็บ token) ไม่ได้
+	r.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/uploads/") {
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Header("Content-Security-Policy", "sandbox; default-src 'none'")
+		}
+		c.Next()
+	})
 	r.Static("/uploads", "./uploads")
 
 	courseService := services.NewCourseService(db)
@@ -104,15 +123,25 @@ func SetupRoutes(r *gin.Engine) {
 
 		authGroup := api.Group("/auth")
 		{
-			authGroup.POST("/login", authController.Login)
-			authGroup.POST("/register", authController.Register)
+			// จำกัดจำนวนครั้งที่ยิงได้ต่อ IP — endpoint พวกนี้เปิดสาธารณะและรับรหัสผ่าน
+			// ถ้าไม่จำกัด คนร้ายเดารหัสรัว ๆ ได้ไม่จำกัดครั้ง
+			authGroup.POST("/login", middlewares.LoginRateLimit(), authController.Login)
+			authGroup.POST("/register", middlewares.SensitiveRateLimit(), authController.Register)
+			// /refresh ไม่ใส่ rate limit โดยตั้งใจ — refresh token เดาไม่ได้อยู่แล้ว
+			// (ไม่ใช่รหัสผ่านที่คนตั้งเอง) จึงไม่ใช่เป้าของการเดารัว
+			// และถ้าใส่แล้วโดนบล็อก SessionGuard จะตีความว่า session ตาย
+			// แล้วเด้งผู้ใช้ที่ยังล็อกอินอยู่ดี ๆ ออกจากระบบ
 			authGroup.POST("/refresh", authController.Refresh)
-			//authGroup.POST("/send-otp", authController.SendOTP)
-			//authGroup.POST("/verify-otp", authController.VerifyOTP)
+			// ⚠️ ตอนเปิด OTP กลับมาใช้ อย่าลืมใส่ SensitiveRateLimit() ด้วย
+			// เพราะ OTP 6 หลักเดาสุ่มถูกได้ใน 1 ล้านครั้ง ถ้ายิงได้ไม่จำกัดคือเดาได้แน่นอน
+			//authGroup.POST("/send-otp", middlewares.SensitiveRateLimit(), authController.SendOTP)
+			//authGroup.POST("/verify-otp", middlewares.SensitiveRateLimit(), authController.VerifyOTP)
 		}
 		publicUserGroup := api.Group("/users")
 		{
-			publicUserGroup.POST("/find", userController.FindAccount)
+			// เปิดสาธารณะและตอบว่ามีบัญชีนี้อยู่จริงหรือไม่ ถ้ายิงได้ไม่จำกัด
+			// จะกวาดรายชื่อสมาชิกทั้งระบบได้ด้วยการไล่ยิงเบอร์โทร
+			publicUserGroup.POST("/find", middlewares.LoginRateLimit(), userController.FindAccount)
 		}
 
 		api.GET("/enrollments/courses", enrollmentController.GetAvailableCourses)
@@ -138,7 +167,7 @@ func SetupRoutes(r *gin.Engine) {
 			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                     // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
 			coachGroup.GET("/:id", coachController.GetCoachByID)                                // เจ้าของ หรือ admin
 			coachGroup.PATCH("/:id", coachController.UpdateCoach)                               // เจ้าของ หรือ admin (บาง field)
-			coachGroup.PATCH("/:id/bank", coachController.UpdateCoachBankAccount)               // เจ้าของเท่านั้น + ต้องยืนยันรหัสผ่านซ้ำ
+			coachGroup.PATCH("/:id/bank", middlewares.SensitiveRateLimit(), coachController.UpdateCoachBankAccount) // เจ้าของเท่านั้น + ยืนยันรหัสผ่านซ้ำ + จำกัดจำนวนครั้ง
 			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
 			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability) // เจ้าของเท่านั้น (admin แก้ไม่ได้)
 			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)   // เจ้าของ หรือ admin
