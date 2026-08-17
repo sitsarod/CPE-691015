@@ -499,9 +499,7 @@ export default function AdminAttendancePage() {
         {/* ── ซ้าย: รับการเช็คชื่อ ── */}
         {isOpen && (
           <div className="flex min-h-0 flex-col gap-3">
-            {/* กล้องหยุดอ่าน 3 จังหวะ: ระหว่างรอนักเรียนกดยืนยัน · ระหว่างกำลังบันทึก
-                · และช่วงพัก 3 วินาทีหลังจบคนหนึ่งคน แล้ว resume ให้เองทั้งหมด */}
-            {useCamera && (
+            {useCamera ? (
               <QRScanner
                 onScan={runLookup}
                 paused={pendingScan !== null || isConfirming || cooldown > 0}
@@ -520,6 +518,19 @@ export default function AdminAttendancePage() {
                   )
                 }
               />
+            ) : (
+              <div className="space-y-3">
+                <div className="flex aspect-[4/3] max-h-[52vh] w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50">
+                  <CameraOff className="h-12 w-12 text-gray-400" strokeWidth={1.5} />
+                  <p className="text-lg font-semibold text-gray-600">กล้องปิดอยู่</p>
+                </div>
+
+                {/* บรรทัดสถานะให้อยู่ตำแหน่งเดียวกับของ QRScanner */}
+                <p className="flex items-center gap-2 text-gray-500">
+                  <CameraOff className="h-4 w-4" />
+                  ปิดกล้องไว้ — รับเฉพาะรหัสที่พิมพ์เอง
+                </p>
+              </div>
             )}
 
             {/* ปิดกล้องอยู่ → ผลมาขึ้นเป็นแถบตรงนี้ (ตอนเปิดกล้องมันไปขึ้นทับบนภาพ)
