@@ -221,7 +221,29 @@ export default function AdminMembersPage() {
   };
 
   const handleDeleteMember = async (item: UserProfileResponseDTO) => {
-    if (!confirm(`ต้องการลบสมาชิก "${item.firstName} ${item.lastName}" ใช่หรือไม่?`)) return;
+    // ด่านฝั่งหน้าเว็บนี้มีไว้เพื่อบอกผู้ใช้เร็ว ๆ ก่อนเจอกล่องยืนยันเท่านั้น
+    // ตัวที่บังคับจริงคือ backend (services.DeleteUser) ห้ามถอดออกจากตรงนั้น
+    // เพราะยิง API ตรงข้ามหน้าเว็บได้เสมอ
+    const currentUserId = Number(localStorage.getItem("user_id"));
+    if (getId(item) === currentUserId) {
+      alert("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ");
+      return;
+    }
+
+    // นับสดตรงนี้แทนการอ่านจาก stats ด้านล่าง เพื่อไม่ให้ฟังก์ชันนี้
+    // ไปผูกกับลำดับการประกาศตัวแปรในไฟล์ ซึ่งเป็นจุดที่พังง่ายตอนมีคนย้ายโค้ด
+    const adminCount = members.filter((m) => normalizeRole(m.role) === "admin").length;
+    if (normalizeRole(item.role) === "admin" && adminCount <= 1) {
+      alert("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก");
+      return;
+    }
+
+    const confirmMessage =
+      `ต้องการลบสมาชิก "${item.firstName} ${item.lastName}" ใช่หรือไม่?\n\n` +
+      `ข้อมูลโปรไฟล์ทั้งหมดของคนนี้จะถูกลบไปด้วย (เบอร์โทร ที่อยู่ เลขบัตรประชาชน บัญชีธนาคาร)`;
+
+    if (!confirm(confirmMessage)) return;
+
     try {
       await deleteUserAPI(getId(item));
       await loadAllMembers();

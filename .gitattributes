@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# บังคับรูปแบบการขึ้นบรรทัดใหม่ให้เหมือนกันทุกเครื่อง
+#
+# ปัญหาที่แก้: ทีมทำงานบน Windows (CRLF) แต่ไฟล์ในรีโปปนกันทั้ง CRLF และ LF
+# ผลคือเวลาแก้ไฟล์แค่บรรทัดเดียว git มองว่าทั้งไฟล์เปลี่ยน ทำให้
+#   - git diff อ่านไม่รู้เรื่อง มองไม่ออกว่าจริง ๆ แก้อะไรไป
+#   - review งานกันไม่ได้ เพราะทุก PR ขึ้นเป็นพันบรรทัด
+#   - เกิด conflict ปลอมตอน merge/stash pop ทั้งที่ไม่มีใครแก้ทับกันจริง
+#
+# text=auto  = ให้ git ตัดสินเองว่าไฟล์ไหนเป็นไฟล์ข้อความ
+# eol=lf     = เก็บลงรีโปและ checkout ออกมาเป็น LF เสมอ ไม่ว่าอยู่ OS ไหน
+#
+# ทั้ง Go, Node และ VS Code ทำงานกับ LF บน Windows ได้ปกติ
+# ─────────────────────────────────────────────────────────────────────────────
+* text=auto eol=lf
+
+# ไฟล์ที่ต้องเป็น CRLF จริง ๆ เพราะ Windows เท่านั้นที่รัน
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# ─── ไฟล์ไบนารี: ห้ามแตะ ───
+# ถ้า git เผลอ "แปลงบรรทัด" ให้ไฟล์พวกนี้ ไฟล์จะพังทันที
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.zip  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.mp4  binary
+*.mov  binary
+*.pt   binary
+*.onnx binary
+
+# ─── ไฟล์ที่สร้างอัตโนมัติ ───
+# ทำเครื่องหมายว่าเป็น generated เพื่อให้ GitHub ยุบ diff ให้เอง
+# และไม่นับรวมในสถิติภาษาของโปรเจกต์
+package-lock.json linguist-generated=true -diff
+go.sum            linguist-generated=true
