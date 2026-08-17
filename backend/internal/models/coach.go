@@ -36,6 +36,16 @@ type Coach struct {
 	// services.GenerateUniqueQRCode เท่านั้น (ดูเหตุผลใน services/personal_qr.go)
 	PersonalQRCode string `json:"personalQR" gorm:"type:varchar(64);unique"`
 
+	// FaceConsentStatus คือสถานะความยินยอมให้เก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)
+	// โค้ชก็ต้องให้ความยินยอมเหมือนนักเรียน เพราะใช้สแกนหน้าเช็คชื่อเข้างาน
+	//
+	// เป็นค่าที่ denormalize มาจากแถวล่าสุดของตาราง biometric_consents โดยตั้งใจ
+	// (แถวที่ coach_id ตรงกับโค้ชคนนี้)
+	//
+	// ⚠️ กติกาเดียวกับฝั่ง Customer: การเขียน biometric_consents และการอัปเดตฟิลด์นี้
+	// ต้องอยู่ใน transaction เดียวกันเสมอ ไม่งั้นหลักฐานกับสถานะจะหลุดจากกัน
+	FaceConsentStatus FaceConsentStatus `json:"face_consent_status" gorm:"type:varchar(20);default:'unknown'"`
+
 	// FeatureOnHome เลือกให้โค้ชคนนี้แสดงในส่วนบุคลากรของหน้าแรกสาธารณะ
 	FeatureOnHome bool `json:"feature_on_home" gorm:"default:false"`
 

@@ -138,6 +138,7 @@ func SetupRoutes(r *gin.Engine) {
 			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                     // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
 			coachGroup.GET("/:id", coachController.GetCoachByID)                                // เจ้าของ หรือ admin
 			coachGroup.PATCH("/:id", coachController.UpdateCoach)                               // เจ้าของ หรือ admin (บาง field)
+			coachGroup.PATCH("/:id/bank", coachController.UpdateCoachBankAccount)               // เจ้าของเท่านั้น + ต้องยืนยันรหัสผ่านซ้ำ
 			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
 			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability) // เจ้าของเท่านั้น (admin แก้ไม่ได้)
 			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)   // เจ้าของ หรือ admin

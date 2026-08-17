@@ -15,7 +15,8 @@ const (
 	ConsentWithdrawn ConsentAction = "withdrawn" // เคยยินยอมแล้วขอถอนภายหลัง
 )
 
-// FaceConsentStatus คือสถานะปัจจุบันของลูกค้าหนึ่งราย (เก็บซ้ำไว้ที่ตาราง customers)
+// FaceConsentStatus คือสถานะปัจจุบันของคนหนึ่งคน
+// เก็บซ้ำ (denormalize) ไว้ที่ตาราง customers และ coaches ตามบทบาทของเจ้าตัว
 type FaceConsentStatus string
 
 const (
@@ -36,7 +37,11 @@ const (
 //   face-v1.1 — เพิ่มอ้างอิงมาตรากฎหมาย ข้อมูลติดต่อผู้ควบคุมข้อมูล (ม.23(5))
 //               ผู้ที่อาจได้รับข้อมูล (ม.23(4)) และผลของการถอนความยินยอม (ม.19 วรรคหก)
 //               พร้อมแก้ข้อความให้ชัดว่าเมื่อยินยอมแล้วเช็คชื่อได้ทั้งสแกนใบหน้าและ QR code
-const FaceConsentPolicyVersion = "face-v1.1"
+//   face-v1.2 — ขยายให้ครอบคลุมโค้ช ซึ่งใช้สแกนใบหน้าเช็คชื่อเข้างานเช่นกัน
+//               เดิมข้อความเขียนถึงนักเรียนฝ่ายเดียว (ระยะเวลาเก็บอิงสถานะนักเรียน
+//               ผลของการปฏิเสธอิงค่าเล่าเรียน) ถ้าให้โค้ชกดยินยอมตามข้อความเดิม
+//               จะกลายเป็นความยินยอมที่ไม่ได้แจ้งวัตถุประสงค์ของโค้ชจริง ซึ่งใช้ไม่ได้ตาม ม.23
+const FaceConsentPolicyVersion = "face-v1.2"
 
 // ToConsentStatus แปลงการกระทำหนึ่งครั้งเป็นสถานะปัจจุบัน
 func (a ConsentAction) ToConsentStatus() FaceConsentStatus {
@@ -55,17 +60,29 @@ func (a ConsentAction) ToConsentStatus() FaceConsentStatus {
 // BiometricConsent เก็บประวัติการให้ความยินยอมเก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)
 //
 // ตารางนี้เป็น append-only — ห้าม UPDATE หรือลบแถวเดิมเด็ดขาด
-// การเปลี่ยนใจทุกครั้งให้ INSERT แถวใหม่ สถานะปัจจุบันคือแถวล่าสุดของ customer นั้น
-// (และถูก denormalize ไว้ที่ Customer.FaceConsentStatus เพื่อไม่ต้อง query หาแถวล่าสุดทุกครั้ง)
+// การเปลี่ยนใจทุกครั้งให้ INSERT แถวใหม่ สถานะปัจจุบันคือแถวล่าสุดของเจ้าของนั้น
+// (และถูก denormalize ไว้ที่ Customer.FaceConsentStatus / Coach.FaceConsentStatus
+// เพื่อไม่ต้อง query หาแถวล่าสุดทุกครั้ง)
 //
 // เหตุผลที่ต้อง append-only: ต้องพิสูจน์ย้อนหลังได้ว่าใครยินยอมเมื่อไหร่ ตามประกาศเวอร์ชันไหน
 // ถ้า update ทับ ประวัติจะหาย และพิสูจน์ความชอบด้วยกฎหมายของการเก็บข้อมูลไม่ได้
+//
+// ⚠️ เจ้าของแถวเป็นได้ทั้งนักเรียนและโค้ช (โค้ชใช้สแกนหน้าเช็คชื่อเข้างานเหมือนกัน)
+// จึงมี FK สองตัวและต้องมีค่า "ตัวใดตัวหนึ่งเท่านั้น" เสมอ — บังคับด้วย CHECK constraint
+// ที่ตัว struct ด้านล่าง อย่าใส่ทั้งคู่หรือปล่อยว่างทั้งคู่เด็ดขาด เพราะจะกลายเป็น
+// หลักฐานที่ชี้ตัวเจ้าของข้อมูลไม่ได้ ซึ่งใช้ตาม PDPA ไม่ได้เลย
+// ใช้ ConsentSubject ที่ชั้น service เป็นตัวประกอบแถว จะได้ไม่ต้องจำกติกานี้เอง
 type BiometricConsent struct {
 	gorm.Model
 
 	// CustomerID คือ customers.id (ไม่ใช่ users.id) — แปลงที่ชั้น service ด้วย ResolveCustomerID
-	CustomerID uint      `json:"customer_id" gorm:"index;not null"`
+	// เป็น pointer เพราะแถวของโค้ชจะปล่อยเป็น NULL
+	CustomerID *uint     `json:"customer_id" gorm:"index;check:chk_consent_subject,(customer_id IS NULL) <> (coach_id IS NULL)"`
 	Customer   *Customer `json:"-" gorm:"foreignKey:CustomerID"`
+
+	// CoachID คือ coaches.id (ไม่ใช่ users.id) — แถวของนักเรียนจะปล่อยเป็น NULL
+	CoachID *uint  `json:"coach_id" gorm:"index"`
+	Coach   *Coach `json:"-" gorm:"foreignKey:CoachID"`
 
 	Action        ConsentAction `json:"action" gorm:"type:varchar(20);not null"`
 	PolicyVersion string        `json:"policy_version" gorm:"type:varchar(20);not null"`

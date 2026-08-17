@@ -206,6 +206,57 @@ func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 	c.JSON(http.StatusOK, toCoachResponse(coach))
 }
 
+// UpdateCoachBankAccount handles PATCH /api/coaches/:id/bank
+//
+// แยก endpoint ออกจาก PATCH /coaches/:id เพราะเส้นนี้ต้องยืนยันรหัสผ่านซ้ำ
+// ถ้ารวมไว้เส้นเดียวกัน การแก้เบอร์โทรธรรมดาก็จะต้องกรอกรหัสผ่านตาม
+// ซึ่งกวนเกินจำเป็นจนคนเลิกใช้ และเผลอ ๆ จะไปจบที่ยกเลิกการยืนยันทั้งหมด
+func (ctrl *CoachController) UpdateCoachBankAccount(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	var req dto.UpdateCoachBankRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกเลขบัญชี ข้อมูลการจ่ายเงิน และรหัสผ่านให้ครบ"})
+		return
+	}
+
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	coach, err := ctrl.service.UpdateBankAccount(uint(id), userID, role, req)
+	if err != nil {
+		switch {
+		// ⚠️ ต้องเป็น 403 ห้ามใช้ 401 เด็ดขาด
+		//
+		// ตามตำรา HTTP การยืนยันตัวตนไม่ผ่านควรเป็น 401 แต่ระบบนี้มีข้อตกลงว่า
+		// 401 = "access token ใช้ไม่ได้แล้ว" เท่านั้น เพราะ SessionGuard ฝั่งหน้าเว็บ
+		// ดักทุก 401 ไปลอง refresh token แล้วถ้ายังไม่ผ่านจะเด้งผู้ใช้ออกจากระบบ
+		//
+		// ถ้าตอบ 401 ตรงนี้ โค้ชที่พิมพ์รหัสผ่านผิดแค่ครั้งเดียวจะถูกล็อกเอาต์ทันที
+		// ทั้งที่ token ยังดีอยู่ — กติกาคือ 401 สงวนไว้ให้เรื่อง token เท่านั้น
+		// ส่วนการยืนยันซ้ำที่ไม่ผ่านให้ใช้ 403 พร้อมข้อความอธิบาย
+		case errors.Is(err, services.ErrWrongPassword),
+			errors.Is(err, services.ErrCoachForbidden),
+			errors.Is(err, services.ErrCoachSelfOnly):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกข้อมูลบัญชีธนาคารได้"})
+		}
+		return
+	}
+
+	// คืน detail (มีเลขบัญชีติดมาด้วย) ให้หน้าเว็บยืนยันกับตาได้ว่าบันทึกค่าอะไรลงไป
+	// ปลอดภัยเพราะเป็นข้อมูลของเจ้าตัวเอง และเพิ่งยืนยันรหัสผ่านผ่านมาหมาด ๆ
+	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
+}
+
 // AdminUpdateCoach handles PATCH /api/coaches/:id/level
 // เฉพาะ admin เท่านั้นที่แก้ specialization (ระดับ), payment_type และ pay_rate (ค่าจ้าง) ได้
 // route ต้องผูกกับ adminOnly middleware (RequireRole("admin")) เท่านั้น

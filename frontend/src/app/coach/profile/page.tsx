@@ -3,8 +3,13 @@
 import ProfileView from "@/components/ProfileView";
 
 // ใช้ ProfileView ตัวเดียวกับฝั่งผู้เรียน/แอดมิน หน้าตาจึงเหมือนกันทุกอย่าง
-// ยังไม่ส่ง editHref เพราะฝั่งโค้ชยังไม่มีหน้าแก้ไขโปรไฟล์ของตัวเอง
-// (แก้ผ่านหน้าแอดมินอย่างเดียว) แต่ QR เช็กชื่อเข้างานมีแล้ว
+// หน้าแก้ไขให้โค้ชแก้ได้เฉพาะช่องทางติดต่อ ส่วนข้อมูลตัวตนและการเงินยังต้องให้แอดมินแก้ให้
 export default function CoachProfilePage() {
-  return <ProfileView fallbackName="โค้ช" qrHref="/coach/profile/viewQR" />;
+  return (
+    <ProfileView
+      fallbackName="โค้ช"
+      editHref="/coach/settings/profile"
+      qrHref="/coach/profile/viewQR"
+    />
+  );
 }
