@@ -203,7 +203,7 @@ export default function FinancialPortal() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-3 md:p-8 font-sans text-slate-800">
+    <div className="mx-auto max-w-7xl font-sans text-slate-800">
       
       {/* Toast Messages */}
       {toast && (

@@ -66,7 +66,7 @@ export default function AdminEnrollmentsPage() {
   if (error) return <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">{error}</div>;
 
   return (
-    <div className="p-8">
+    <div className="mx-auto max-w-7xl">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">จัดการคำขอสมัครเรียน</h1>

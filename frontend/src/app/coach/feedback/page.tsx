@@ -97,7 +97,7 @@ export default function CoachFeedbackPage() {
   ];
 
   return (
-    <div className="w-full">
+    <div className="mx-auto max-w-7xl">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}

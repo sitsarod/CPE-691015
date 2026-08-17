@@ -3,7 +3,7 @@ import EditSidebar from './_components/EditSidebar';
 export default function SettingLayout({ children }: { children: React.ReactNode }) {
   return (
 
-    <div className="w-full bg-white text-gray-900 flex flex-row font-sans">
+    <div className="mx-auto max-w-7xl w-full bg-white text-gray-900 flex flex-row font-sans">
       
 
       <EditSidebar /> 

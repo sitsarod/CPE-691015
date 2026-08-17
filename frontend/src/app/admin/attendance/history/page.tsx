@@ -103,7 +103,7 @@ export default function AttendanceHistoryPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-7xl">
       <Link
         href="/admin/attendance"
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"

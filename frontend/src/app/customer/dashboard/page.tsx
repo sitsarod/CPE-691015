@@ -126,14 +126,14 @@ export default function CustomerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center rounded-2xl">
+      <div className="mx-auto max-w-7xl min-h-screen bg-gray-50 flex items-center justify-center rounded-2xl">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CC0000]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-gray-50 text-gray-900 font-sans selection:bg-[#CC0000] selection:text-white pb-20 rounded-2xl overflow-hidden shadow-sm">
+    <div className="mx-auto max-w-7xl min-h-[calc(100vh-80px)] bg-gray-50 text-gray-900 font-sans selection:bg-[#CC0000] selection:text-white pb-20 rounded-2xl overflow-hidden shadow-sm">
 
       {/* Hero Cinematic Section (Kept Dark for Image Visibility) */}
       <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden group">

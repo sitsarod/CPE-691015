@@ -128,7 +128,7 @@ export default function CoachSchedulePage() {
   const goThisWeek = () => setWeekStart(startOfWeek(new Date()));
 
   return (
-    <div className="mx-auto max-w-[1500px]">
+    <div className="mx-auto max-w-7xl">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>

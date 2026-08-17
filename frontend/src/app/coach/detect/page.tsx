@@ -136,7 +136,7 @@ export default function CoachDetectPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-[#CC0000]">

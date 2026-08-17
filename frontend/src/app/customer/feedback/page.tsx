@@ -176,7 +176,7 @@ export default function CustomerFeedbackPage() {
   const featuredCount = myReviews.filter((r) => r.is_featured).length;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-[#CC0000]">
@@ -451,7 +451,7 @@ export default function CustomerFeedbackPage() {
 // โครงหน้าตอนโหลด — ล้อ layout จริง (header + การ์ดสถิติ + ฟอร์ม + รายการ)
 function FeedbackSkeleton() {
   return (
-    <div className="mx-auto max-w-4xl animate-pulse space-y-8">
+    <div className="mx-auto max-w-7xl animate-pulse space-y-8">
       {/* Header */}
       <div>
         <div className="h-3 w-32 rounded bg-gray-200" />

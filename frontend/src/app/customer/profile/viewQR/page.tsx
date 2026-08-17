@@ -14,7 +14,7 @@ import PersonalQRCard from "@/components/PersonalQRCard";
  */
 export default function ViewQRPage() {
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-start justify-center p-4 md:p-8">
+    <div className="mx-auto max-w-7xl min-h-[calc(100vh-96px)] bg-white flex items-start justify-center">
       <div className="w-full max-w-xl space-y-6">
         <div className="space-y-2">
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">บัตรเช็กชื่อ</h1>

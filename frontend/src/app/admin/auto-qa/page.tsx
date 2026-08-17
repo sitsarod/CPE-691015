@@ -93,7 +93,7 @@ export default function AutoQAManagement() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto text-black">
+    <div className="mx-auto max-w-7xl text-black">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">จัดการคลังข้อมูล Q&A</h1>
         <button

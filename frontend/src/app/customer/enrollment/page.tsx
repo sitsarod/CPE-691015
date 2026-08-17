@@ -205,7 +205,7 @@ export default function EnrollmentPage() {
   if (error) return <div className="p-6 text-center text-red-600">{error}</div>;
 
   return (
-    <div className="w-full">
+    <div className="mx-auto max-w-7xl">
       {/* ---------------- ส่วนที่ 1: คอร์สของฉัน ---------------- */}
       <div className="mb-14">
         <h1 className="mb-8 text-[22px] font-bold text-gray-900">คอร์สของฉัน</h1>
