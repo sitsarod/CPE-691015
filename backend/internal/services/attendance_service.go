@@ -32,14 +32,32 @@ var (
 	ErrAttendanceExpired = errors.New("เลยเวลาเช็คชื่อของคาบนี้แล้ว")
 )
 
+
 const attendanceGraceMinutes = 30
+
+func classWindow(startTime, endTime string) (from, to int, ok bool) {
+	start, err1 := timeToMinutesWS(startTime)
+	end, err2 := timeToMinutesWS(endTime)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return start - attendanceGraceMinutes, end + attendanceGraceMinutes, true
+}
+
+func isInClassWindow(startTime, endTime string, now time.Time) bool {
+	from, to, ok := classWindow(startTime, endTime)
+	if !ok {
+		return false
+	}
+	nowMinutes := now.Hour()*60 + now.Minute()
+	return nowMinutes >= from && nowMinutes <= to
+}
 
 // ─── เปิดรอบ ─────────────────────────────────────────────────────────────────
 
 func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, error) {
-	now := time.Now()
+	now := nowLocal()
 	today := now.Weekday().String()
-	nowMinutes := now.Hour()*60 + now.Minute()
 
 	var schedules []models.PackageSchedule
 	if err := s.db.Where("day_of_week = ?", today).Find(&schedules).Error; err != nil {
@@ -50,12 +68,7 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 
 	result := make([]dto.OpenablePackageDTO, 0)
 	for _, sch := range schedules {
-		start, err1 := timeToMinutesWS(sch.StartTime)
-		end, err2 := timeToMinutesWS(sch.EndTime)
-		if err1 != nil || err2 != nil {
-			continue 
-		}
-		if nowMinutes < start-attendanceGraceMinutes || nowMinutes > end+attendanceGraceMinutes {
+		if !isInClassWindow(sch.StartTime, sch.EndTime, now) {
 			continue
 		}
 
@@ -82,8 +95,10 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			item.CourseName = pkg.Course.CourseName
 		}
 
+		dayStart, dayEnd := dayBounds(now)
 		var existing models.AttendanceSession
-		if err := s.db.Where("package_id = ? AND session_date = ?", pkg.ID, dateOnly(now)).
+		if err := s.db.Where("package_id = ? AND session_date >= ? AND session_date < ?",
+			pkg.ID, dayStart, dayEnd).
 			First(&existing).Error; err == nil {
 			id := existing.ID
 			item.ExistingSessionID = &id
@@ -98,7 +113,7 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 
 // OpenSession เปิดรอบเช็คชื่อของแพ็กเกจหนึ่งสำหรับวันนี้
 func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.AttendanceSessionDTO, error) {
-	now := time.Now()
+	now := nowLocal()
 
 	var pkg models.Package
 	if err := s.db.Preload("Course").Preload("Schedules").First(&pkg, packageID).Error; err != nil {
@@ -113,7 +128,7 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 
 	session := models.AttendanceSession{
 		PackageID:         pkg.ID,
-		SessionDate:       dateOnly(now),
+		SessionDate:       sessionDateValue(now),
 		Status:            models.AttendanceSessionOpen,
 		OpenedAt:          now,
 		OpenedByUserID:    adminUserID,
@@ -123,8 +138,10 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 
 	if err := s.db.Create(&session).Error; err != nil {
 
+		dayStart, dayEnd := dayBounds(now)
 		var existing models.AttendanceSession
-		if e := s.db.Where("package_id = ? AND session_date = ?", pkg.ID, dateOnly(now)).
+		if e := s.db.Where("package_id = ? AND session_date >= ? AND session_date < ?",
+			pkg.ID, dayStart, dayEnd).
 			First(&existing).Error; e == nil {
 			return nil, ErrSessionExists
 		}
@@ -216,26 +233,35 @@ func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageID uint) ([]mo
 	return enrollments, nil
 }
 
-func dateOnly(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+
+func sessionDateValue(t time.Time) time.Time {
+	y, m, d := t.In(appLocation()).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+
+func dayBounds(t time.Time) (string, string) {
+	start := sessionDateValue(t)
+	return start.Format("2006-01-02"), start.AddDate(0, 0, 1).Format("2006-01-02")
+}
+
+func sameDay(a, b time.Time) bool {
+	loc := appLocation()
+	ay, am, ad := a.In(loc).Date()
+	by, bm, bd := b.In(loc).Date()
+	return ay == by && am == bm && ad == bd
 }
 
 // findCurrentSchedule หาคาบของแพ็กเกจที่ครอบเวลาปัจจุบันอยู่ (รวมผ่อนผันหัวท้าย)
 func findCurrentSchedule(schedules []models.PackageSchedule, now time.Time) *models.PackageSchedule {
 	today := now.Weekday().String()
-	nowMinutes := now.Hour()*60 + now.Minute()
 
 	for i := range schedules {
 		sch := &schedules[i]
 		if string(sch.DayOfWeek) != today {
 			continue
 		}
-		start, err1 := timeToMinutesWS(sch.StartTime)
-		end, err2 := timeToMinutesWS(sch.EndTime)
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		if nowMinutes >= start-attendanceGraceMinutes && nowMinutes <= end+attendanceGraceMinutes {
+		if isInClassWindow(sch.StartTime, sch.EndTime, now) {
 			return sch
 		}
 	}
@@ -243,20 +269,39 @@ func findCurrentSchedule(schedules []models.PackageSchedule, now time.Time) *mod
 }
 
 
-func withinSessionWindow(session *models.AttendanceSession, now time.Time) bool {
-	// รอบของวันอื่นเช็คไม่ได้เด็ดขาด กันเช็คย้อนหลังข้ามวัน
-	if !dateOnly(now).Equal(dateOnly(session.SessionDate)) {
-		return false
+func minutesToClock(m int) string {
+	if m < 0 {
+		m += 24 * 60
+	}
+	return fmt.Sprintf("%02d:%02d", (m/60)%24, m%60)
+}
+
+
+func checkSessionWindow(session *models.AttendanceSession, now time.Time) error {
+	loc := appLocation()
+
+	if !sameDay(now, session.OpenedAt) {
+		return fmt.Errorf("%w (รอบนี้เปิดไว้วันที่ %s แต่วันนี้คือ %s)",
+			ErrAttendanceExpired,
+			session.OpenedAt.In(loc).Format("2006-01-02"),
+			now.In(loc).Format("2006-01-02"))
 	}
 
-	start, err1 := timeToMinutesWS(session.ScheduleStartTime)
-	end, err2 := timeToMinutesWS(session.ScheduleEndTime)
-	if err1 != nil || err2 != nil {
-		return true
+	from, to, ok := classWindow(session.ScheduleStartTime, session.ScheduleEndTime)
+	if !ok {
+
+		return nil
 	}
 
-	nowMinutes := now.Hour()*60 + now.Minute()
-	return nowMinutes >= start-attendanceGraceMinutes && nowMinutes <= end+attendanceGraceMinutes
+	if !isInClassWindow(session.ScheduleStartTime, session.ScheduleEndTime, now) {
+		return fmt.Errorf("%w (ตอนนี้ %s · คาบ %s–%s · เช็คได้ %s–%s)",
+			ErrAttendanceExpired,
+			now.In(loc).Format("15:04"),
+			session.ScheduleStartTime, session.ScheduleEndTime,
+			minutesToClock(from), minutesToClock(to))
+	}
+
+	return nil
 }
 
 
@@ -268,17 +313,16 @@ type scanContext struct {
 	CourseName string
 }
 
-// loadOpenSession — ด่าน 1 (รอบยังเปิด) และ 6 (ยังอยู่ในหน้าต่างเวลา)
 func (s *AttendanceService) loadOpenSession(tx *gorm.DB, sessionID uint) (*models.AttendanceSession, error) {
 	var session models.AttendanceSession
 	if err := tx.First(&session, sessionID).Error; err != nil {
 		return nil, ErrSessionNotFound
 	}
 	if session.Status != models.AttendanceSessionOpen {
-		return nil, ErrSessionClosed
+		return nil, fmt.Errorf("%w (สถานะรอบตอนนี้คือ %q)", ErrSessionClosed, session.Status)
 	}
-	if !withinSessionWindow(&session, time.Now()) {
-		return nil, ErrAttendanceExpired
+	if err := checkSessionWindow(&session, nowLocal()); err != nil {
+		return nil, err
 	}
 	return &session, nil
 }

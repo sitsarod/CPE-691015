@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"strings"
-	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -81,7 +80,7 @@ func (s *AttendanceService) checkIn(
 			return err
 		}
 
-		now := time.Now()
+		now := nowLocal()
 		sessionIDVal := session.ID
 
 		var studentUserID *uint
@@ -101,11 +100,19 @@ func (s *AttendanceService) checkIn(
 		}
 
 		if err := tx.Create(&record).Error; err != nil {
-			return ErrAlreadyCheckedIn
+			if isUniqueViolation(err) {
+				return ErrAlreadyCheckedIn
+			}
+			return errors.New("ไม่สามารถบันทึกการเช็คชื่อได้")
 		}
 
 		if err := deductSession(tx, ctx.Enrollment.ID); err != nil {
 			return err
+		}
+		remaining := ctx.Enrollment.RemainingSessions - 1
+		var fresh models.Enrollment
+		if err := tx.Select("remaining_sessions").First(&fresh, ctx.Enrollment.ID).Error; err == nil {
+			remaining = fresh.RemainingSessions
 		}
 
 		result = dto.CheckInResultDTO{
@@ -115,7 +122,7 @@ func (s *AttendanceService) checkIn(
 			Nickname:          ctx.Nickname,
 			CheckInMethod:     string(method),
 			CheckInTime:       now,
-			RemainingSessions: ctx.Enrollment.RemainingSessions - 1,
+			RemainingSessions: remaining,
 		}
 		return nil
 	})

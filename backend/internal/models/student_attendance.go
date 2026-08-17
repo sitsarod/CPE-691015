@@ -13,6 +13,7 @@ const (
 	CheckInMethodFaceScan CheckInMethod = "face_scan"
 	CheckInMethodManual   CheckInMethod = "manual"
 	CheckInMethodQRCode   CheckInMethod = "qr_code"
+	CheckInMethodSystem CheckInMethod = "system"
 )
  
 type AttendanceStatus string
