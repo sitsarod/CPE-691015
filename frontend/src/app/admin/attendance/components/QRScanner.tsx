@@ -68,34 +68,20 @@ function loadHtml5Qrcode(): Promise<Html5QrcodeCtor> {
 
 
 function ScanFrame({ paused }: { paused: boolean }) {
-
-  const corner = "absolute h-9 w-9 border-white drop-shadow-[0_0_3px_rgba(0,0,0,0.9)]";
+  const corner = `absolute h-9 w-9 drop-shadow-[0_0_3px_rgba(0,0,0,0.9)] transition-colors ${
+    paused ? "border-amber-400" : "border-white"
+  }`;
 
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <style>{`
-        @keyframes attendanceScanline {
-          from { top: 6%; }
-          to   { top: 94%; }
-        }
-      `}</style>
-
       <div
         className="relative aspect-square w-[62%] max-w-[300px] rounded-3xl"
-
         style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.22)" }}
       >
         <span className={`${corner} left-0 top-0 rounded-tl-3xl border-l-4 border-t-4`} />
         <span className={`${corner} right-0 top-0 rounded-tr-3xl border-r-4 border-t-4`} />
         <span className={`${corner} bottom-0 left-0 rounded-bl-3xl border-b-4 border-l-4`} />
         <span className={`${corner} bottom-0 right-0 rounded-br-3xl border-b-4 border-r-4`} />
-
-        {!paused && (
-          <span
-            className="absolute inset-x-5 h-0.5 rounded-full bg-white shadow-[0_0_12px_2px_rgba(255,255,255,0.7)]"
-            style={{ animation: "attendanceScanline 2s ease-in-out infinite alternate" }}
-          />
-        )}
       </div>
 
       <p
@@ -203,8 +189,26 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
 
   return (
     <div className="space-y-3">
-      <div className="relative max-h-[52vh] overflow-hidden rounded-2xl bg-black">
-        <div id={ELEMENT_ID} className="w-full" />
+    
+      <div className="relative aspect-[4/3] max-h-[52vh] w-full overflow-hidden rounded-2xl bg-black">
+        <div
+          id={ELEMENT_ID}
+          className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+        />
+
+        {status === "starting" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-400">
+            <Loader2 className="h-10 w-10 animate-spin" />
+            <p className="text-sm">กำลังเปิดกล้อง...</p>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500">
+            <CameraOff className="h-12 w-12" strokeWidth={1.5} />
+            <p className="text-lg font-semibold text-gray-400">เปิดกล้องไม่ได้</p>
+          </div>
+        )}
 
         {status === "running" && <ScanFrame paused={paused} />}
 
@@ -239,15 +243,15 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
       )}
 
       {status === "error" && (
-        <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-4 text-amber-800">
-          <CameraOff className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-medium">{errorMessage}</p>
-            <p className="mt-1 text-sm">
+        <p className="flex items-start gap-2 text-amber-700">
+          <CameraOff className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {errorMessage}
+            <span className="block text-sm text-amber-600">
               ใช้ช่องพิมพ์รหัสด้านล่างแทนได้เลย ผลลัพธ์เหมือนกันทุกอย่าง
-            </p>
-          </div>
-        </div>
+            </span>
+          </span>
+        </p>
       )}
     </div>
   );
