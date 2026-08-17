@@ -123,6 +123,7 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 			setStr(data, "coach_license", p.CoachLicense)
 			setStr(data, "bank_account", p.BankAccount)
 			setStr(data, "payment_info", p.PaymentInfo)
+			setStr(data, "prompt_pay", p.PromptPay)
 			setStr(data, "payment_type", p.PaymentType)
 			if p.PayRate != nil {
 				data["pay_rate"] = *p.PayRate

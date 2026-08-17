@@ -61,6 +61,7 @@ type AdminCreateCoachProfile struct {
 	CoachLicense   string  `json:"coach_license" binding:"required"`
 	BankAccount    string  `json:"bank_account" binding:"required"`
 	PaymentInfo    string  `json:"payment_info" binding:"required"`
+	PromptPay      string  `json:"prompt_pay" binding:"required"` // พร้อมเพย์ (บังคับ)
 	PaymentType    string  `json:"payment_type" binding:"required,oneof=per_session monthly"`
 	PayRate        float64 `json:"pay_rate" binding:"required,gt=0"`
 
@@ -128,6 +129,7 @@ type AdminUpdateCoachProfile struct {
 	CoachLicense   *string  `json:"coach_license"`
 	BankAccount    *string  `json:"bank_account"`
 	PaymentInfo    *string  `json:"payment_info"`
+	PromptPay      *string  `json:"prompt_pay"`
 	PaymentType    *string  `json:"payment_type" binding:"omitempty,oneof=per_session monthly"`
 	PayRate        *float64 `json:"pay_rate" binding:"omitempty,gt=0"`
 }
@@ -185,6 +187,7 @@ type AdminCoachDetail struct {
 	CoachLicense   string  `json:"coach_license"`
 	BankAccount    string  `json:"bank_account"`
 	PaymentInfo    string  `json:"payment_info"`
+	PromptPay      string  `json:"prompt_pay"`
 	PaymentType    string  `json:"payment_type"`
 	PayRate        float64 `json:"pay_rate"`
 }
@@ -233,6 +236,7 @@ func ToAdminUserDetail(u *models.User) AdminUserDetailResponse {
 			CoachLicense:   co.CoachLicense,
 			BankAccount:    co.BankAccount,
 			PaymentInfo:    co.PaymentInfo,
+			PromptPay:      co.PromptPay,
 			PaymentType:    co.PaymentType,
 			PayRate:        co.PayRate,
 		}
@@ -301,6 +305,7 @@ func (r *AdminCreateUserRequest) ToCoach(userID uint) *models.Coach {
 		CoachLicense:   strings.TrimSpace(r.Coach.CoachLicense),
 		BankAccount:    strings.TrimSpace(r.Coach.BankAccount),
 		PaymentInfo:    strings.TrimSpace(r.Coach.PaymentInfo),
+		PromptPay:      strings.TrimSpace(r.Coach.PromptPay),
 		PaymentType:    strings.TrimSpace(r.Coach.PaymentType),
 		PayRate:        r.Coach.PayRate,
 	}

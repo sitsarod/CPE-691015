@@ -64,6 +64,7 @@ func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
 		ProfilePicture:    coach.ProfilePicture,
 		BankAccount:       coach.BankAccount,
 		PaymentInfo:       coach.PaymentInfo,
+		PromptPay:         coach.PromptPay,
 		PaymentType:       coach.PaymentType,
 		PayRate:           coach.PayRate,
 		PersonalQRCode:    coach.PersonalQRCode,

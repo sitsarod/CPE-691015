@@ -2,7 +2,7 @@ import Modal from "@/components/Modal";
 import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
 import { AdminCreateUserInput } from "@/services/userAPI";
-import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS } from "@/types/coach";
+import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, BANK_OPTIONS } from "@/types/coach";
 import { FormError } from "@/components/admin/ManagementUI";
 import Button from "@/components/Button";
 
@@ -157,9 +157,10 @@ export function CreateMemberModal({
               <SelectField label="ใบรับรองผู้ฝึกสอน" required options={COACH_LICENSE_OPTIONS} value={coach.coach_license} onChange={(e) => setCoach({ coach_license: e.target.value })} />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField label="เลขบัญชีธนาคาร" required value={coach.bank_account} onChange={(e) => setCoach({ bank_account: e.target.value })} />
-              <InputField label="ข้อมูลการจ่ายเงิน" required value={coach.payment_info} onChange={(e) => setCoach({ payment_info: e.target.value })} />
+              <SelectField label="ธนาคาร" required options={BANK_OPTIONS} value={coach.bank_account} onChange={(e) => setCoach({ bank_account: e.target.value })} />
+              <InputField label="เลขบัญชี" required inputMode="numeric" value={coach.payment_info} onChange={(e) => setCoach({ payment_info: e.target.value.replace(/[^\d]/g, "") })} />
             </div>
+            <InputField label="พร้อมเพย์" required inputMode="numeric" value={coach.prompt_pay ?? ""} onChange={(e) => setCoach({ prompt_pay: e.target.value.replace(/[^\d]/g, "") })} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <SelectField label="ประเภทการจ่ายเงิน" required options={COACH_PAYMENT_TYPE_OPTIONS} value={coach.payment_type} onChange={(e) => setCoach({ payment_type: e.target.value })} />
               <InputField
@@ -191,7 +192,7 @@ export const emptyCustomer: NonNullable<AdminCreateUserInput["customer"]> = {
 
 export const emptyCoach: NonNullable<AdminCreateUserInput["coach"]> = {
   nickname: "", phone: "", uid: "", birth_date: "", address: "",
-  specialization: "", coach_license: "", bank_account: "", payment_info: "",
+  specialization: "", coach_license: "", bank_account: "", payment_info: "", prompt_pay: "",
   payment_type: "per_session", pay_rate: 0,
   lineId: "", facebook: "", profile_picture: "",
 };

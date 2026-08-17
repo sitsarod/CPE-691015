@@ -15,6 +15,7 @@ type CreateCoachRequest struct {
 	CoachLicense   string  `json:"coach_license" valid:"required~coachLicense is required"`
 	BankAccount    string  `json:"bank_account" valid:"required~bankAccount is required"`
 	PaymentInfo    string  `json:"payment_info" valid:"required~paymentInfo is required"`
+	PromptPay      string  `json:"prompt_pay"`                                            // พร้อมเพย์ (ไม่บังคับ)
 	PaymentType    string  `json:"payment_type" valid:"required~paymentType is required"` // "per_session" หรือ "monthly"
 	PayRate        float64 `json:"pay_rate" valid:"required~payRate is required"`         // บาทต่อครั้ง (per_session) หรือ บาทต่อเดือน (monthly)
 }
@@ -57,6 +58,7 @@ type UpdateCoachBankRequest struct {
 
 	BankAccount string `json:"bank_account" binding:"required"`
 	PaymentInfo string `json:"payment_info" binding:"required"`
+	PromptPay   string `json:"prompt_pay"` // พร้อมเพย์ (ไม่บังคับ) — แก้พร้อมข้อมูลบัญชี
 }
 
 // Request สำหรับ admin แก้ไขระดับ (specialization), ใบรับรองผู้ฝึกสอน (coach_license),
@@ -103,6 +105,7 @@ type CoachDetailResponse struct {
 	ProfilePicture string  `json:"profile_picture"`
 	BankAccount    string  `json:"bank_account"`
 	PaymentInfo    string  `json:"payment_info"`
+	PromptPay      string  `json:"prompt_pay"`
 	PaymentType    string  `json:"payment_type"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 	PayRate        float64 `json:"pay_rate"`     // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 
