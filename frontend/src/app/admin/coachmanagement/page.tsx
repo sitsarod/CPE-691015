@@ -23,7 +23,7 @@ import { DataTable, Column } from "@/components/admin/DataTable";
 type ModalMode = "view" | "edit" | "schedule" | null;
 
 const emptyEditForm: EditCoachForm = {
-  nickname: "", phone: "", lineId: "", facebook: "", address: "", bank_account: "", payment_info: "",
+  nickname: "", phone: "", lineId: "", facebook: "", address: "", bank_account: "", payment_info: "", prompt_pay: "",
   specialization: "", coach_license: "", payment_type: "per_session", pay_rate: 0,
 };
 
@@ -95,6 +95,7 @@ export default function CoachManagementPage() {
       address: detail.address ?? "",
       bank_account: detail.bank_account ?? "",
       payment_info: detail.payment_info ?? "",
+      prompt_pay: detail.prompt_pay ?? "",
       specialization: detail.specialization ?? "",
       coach_license: detail.coach_license ?? "",
       payment_type: detail.payment_type ?? "per_session",
@@ -150,6 +151,7 @@ export default function CoachManagementPage() {
           address: editForm.address.trim(),
           bank_account: editForm.bank_account.trim(),
           payment_info: editForm.payment_info.trim(),
+          prompt_pay: editForm.prompt_pay.trim(),
           specialization: editForm.specialization.trim(),
           coach_license: editForm.coach_license.trim(),
           payment_type: editForm.payment_type,

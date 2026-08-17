@@ -95,6 +95,7 @@ export interface AdminCoachDetail {
   coach_license: string;
   bank_account: string;
   payment_info: string;
+  prompt_pay: string;
   payment_type: string;
   pay_rate: number;
 }
@@ -148,6 +149,7 @@ export interface AdminCreateCoachProfile {
   coach_license: string;
   bank_account: string;
   payment_info: string;
+  prompt_pay?: string; // พร้อมเพย์ (ไม่บังคับ)
   payment_type: string;
   pay_rate: number;
   lineId?: string;
@@ -196,6 +198,7 @@ export interface AdminUpdateCoachProfile {
   coach_license?: string;
   bank_account?: string;
   payment_info?: string;
+  prompt_pay?: string;
   payment_type?: string;
   pay_rate?: number;
 }

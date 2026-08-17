@@ -72,7 +72,7 @@ export default function Modal({
         </div>
 
         {/* Body */}
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div className="p-5 overflow-y-auto overscroll-contain">{children}</div>
 
         {/* Footer */}
         {footer && (

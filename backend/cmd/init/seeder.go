@@ -102,6 +102,7 @@ func seedCoaches(db *gorm.DB) {
 		CoachLicense   string
 		BankAccount    string  // ชื่อธนาคาร (ตรงกับ BANK_OPTIONS ฝั่ง frontend)
 		PaymentInfo    string  // เลขบัญชี (ตัวเลขล้วน)
+		PromptPay      string  // พร้อมเพย์ (เบอร์มือถือ/เลขบัตร) — ไม่บังคับ
 		PaymentType    string  // per_session หรือ monthly
 		PayRate        float64 // บาท/ครั้ง หรือ บาท/เดือน ตาม PaymentType
 		Availabilities []coachAvail
@@ -122,6 +123,7 @@ func seedCoaches(db *gorm.DB) {
 			CoachLicense:   "License A",
 			BankAccount:    "ธนาคารกสิกรไทย",
 			PaymentInfo:    "1234567890",
+			PromptPay:      "0812345678",
 			PaymentType:    "per_session",
 			PayRate:        400,
 			Availabilities: []coachAvail{
@@ -148,6 +150,7 @@ func seedCoaches(db *gorm.DB) {
 			CoachLicense:   "License B",
 			BankAccount:    "ธนาคารไทยพาณิชย์",
 			PaymentInfo:    "9876543210",
+			PromptPay:      "0823456789",
 			PaymentType:    "monthly",
 			PayRate:        12000,
 			Availabilities: []coachAvail{
@@ -172,6 +175,7 @@ func seedCoaches(db *gorm.DB) {
 			CoachLicense:   "License C",
 			BankAccount:    "ธนาคารกรุงเทพ",
 			PaymentInfo:    "1112222223",
+			PromptPay:      "0834567890",
 			PaymentType:    "per_session",
 			PayRate:        350,
 			Availabilities: []coachAvail{
@@ -221,6 +225,7 @@ func seedCoaches(db *gorm.DB) {
 						CoachLicense:   data.CoachLicense,
 						BankAccount:    data.BankAccount,
 						PaymentInfo:    data.PaymentInfo,
+						PromptPay:      data.PromptPay,
 						PaymentType:    data.PaymentType,
 						PayRate:        data.PayRate,
 					}

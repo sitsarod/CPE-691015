@@ -173,6 +173,7 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 		CoachLicense:   req.CoachLicense,
 		BankAccount:    req.BankAccount,
 		PaymentInfo:    req.PaymentInfo,
+		PromptPay:      req.PromptPay,
 		PaymentType:    req.PaymentType,
 		PayRate:        req.PayRate,
 	}
@@ -269,6 +270,7 @@ func (s *CoachService) UpdateBankAccount(id uint, userID uint, role string, req 
 	updateData := map[string]interface{}{
 		"bank_account": req.BankAccount,
 		"payment_info": req.PaymentInfo,
+		"prompt_pay":   req.PromptPay,
 	}
 
 	if err := s.db.Model(&coach).Updates(updateData).Error; err != nil {

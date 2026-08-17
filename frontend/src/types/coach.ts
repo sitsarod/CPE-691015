@@ -62,6 +62,7 @@ export interface CoachProfile {
   profile_picture: string;
   bank_account: string;
   payment_info: string;
+  prompt_pay?: string;
   payment_type: CoachPaymentType;
   pay_rate: number;
   /** QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน (มีเฉพาะใน response ตัวรายละเอียด) */

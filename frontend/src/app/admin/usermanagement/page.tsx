@@ -181,8 +181,9 @@ export default function AdminMembersPage() {
       if (!co.address.trim()) return setFormError("กรุณากรอก: ที่อยู่");
       if (!co.specialization) return setFormError("กรุณาเลือก: ระดับฝีมือ");
       if (!co.coach_license) return setFormError("กรุณาเลือก: ใบรับรองผู้ฝึกสอน");
-      if (!co.bank_account.trim()) return setFormError("กรุณากรอก: เลขบัญชีธนาคาร");
-      if (!co.payment_info.trim()) return setFormError("กรุณากรอก: ข้อมูลการจ่ายเงิน");
+      if (!co.bank_account.trim()) return setFormError("กรุณาเลือก: ธนาคาร");
+      if (!co.payment_info.trim()) return setFormError("กรุณากรอก: เลขบัญชี");
+      if (!co.prompt_pay?.trim()) return setFormError("กรุณากรอก: พร้อมเพย์");
       if (!co.pay_rate || co.pay_rate <= 0) return setFormError("กรุณากรอกค่าจ้างให้มากกว่า 0");
     }
 

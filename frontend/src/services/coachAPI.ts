@@ -43,6 +43,7 @@ export interface CreateCoachInput {
   coach_license: string;
   bank_account: string;
   payment_info: string;
+  prompt_pay?: string; // พร้อมเพย์ (ไม่บังคับ)
   payment_type: CoachPaymentType;
   pay_rate: number;
 }
@@ -77,6 +78,7 @@ export interface UpdateCoachBankInput {
   currentPassword: string;
   bank_account: string;
   payment_info: string;
+  prompt_pay?: string; // พร้อมเพย์ (ไม่บังคับ)
 }
 
 // [PATCH] โค้ชแก้ข้อมูลบัญชีรับเงินของตัวเอง (ต้องยืนยันรหัสผ่าน)

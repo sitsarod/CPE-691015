@@ -68,6 +68,7 @@ export function ViewCoachModal({ isOpen, onClose, selected, detail, isLoadingDet
             <DetailItem label="ที่อยู่" value={detail.address} />
             <DetailItem label="ธนาคาร" value={detail.bank_account} />
             <DetailItem label="เลขบัญชี" value={detail.payment_info} />
+            <DetailItem label="พร้อมเพย์" value={detail.prompt_pay || "-"} />
             <DetailItem
               label="ประเภทการจ่ายเงิน"
               value={PAYMENT_TYPE_LABEL[detail.payment_type] ?? "-"}
