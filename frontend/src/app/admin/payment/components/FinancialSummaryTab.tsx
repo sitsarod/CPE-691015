@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3 } from 'lucide-react';
+import { CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3, Image as ImageIcon } from 'lucide-react';
 import { BillingDTO, Expense } from './types';
 import StatsCard from '@/components/StatsCard';
+import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 const MONTH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -26,6 +27,7 @@ export default function FinancialSummaryTab({
   const [summaryEndDate, setSummaryEndDate] = useState('');
   const [summaryFilterStatus, setSummaryFilterStatus] = useState<'all' | 'pending' | 'paid' | 'unpaid'>('unpaid');
   const [searchTerm, setSearchTerm] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null); // สลิปที่กำลังเปิดดูใน lightbox
   const statsScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
   const tableScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
 
@@ -396,12 +398,13 @@ export default function FinancialSummaryTab({
                   <th className="py-3 px-4 text-right whitespace-nowrap">ยอดรวม</th>
                   <th className="py-3 px-4 whitespace-nowrap">วันที่ครบกำหนด</th>
                   <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">สถานะ</th>
+                  <th className="py-3 px-4 whitespace-nowrap text-center">สลิป</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredSummaryLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       <p className="text-xs">ไม่พบข้อมูลใบเรียกเก็บเงินตามฟิลเตอร์</p>
                     </td>
                   </tr>
@@ -430,6 +433,20 @@ export default function FinancialSummaryTab({
                         }`}>
                           {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
                         </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {b.slipurl ? (
+                          <button
+                            type="button"
+                            onClick={() => setReceiptUrl(b.slipurl!)}
+                            className="inline-flex items-center gap-1 text-[#CD0D13] hover:text-[#A30A0E] font-semibold cursor-pointer"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            ดูรูป
+                          </button>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -555,6 +572,9 @@ export default function FinancialSummaryTab({
           </div>
         </div>
       </div>
+
+      {/* ป็อปอัพดูสลิป */}
+      <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="สลิปการโอนเงิน" />
     </div>
   );
 }

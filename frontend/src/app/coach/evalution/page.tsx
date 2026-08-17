@@ -88,7 +88,7 @@ export default function CoachEvalutionPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}

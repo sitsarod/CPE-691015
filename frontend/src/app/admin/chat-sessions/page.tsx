@@ -86,7 +86,7 @@ export default function ChatSessionsManagement() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto text-black">
+    <div className="mx-auto max-w-7xl text-black">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">จัดการแชท & รายชื่อลูกค้า (CRM)</h1>
       </div>

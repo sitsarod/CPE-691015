@@ -236,7 +236,7 @@ export default function BillingsTab({
                       className="flex items-center gap-0.5 text-[10px] font-bold text-[#CC0000] hover:underline cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setReceiptUrl(b.slipurl);
+                        setReceiptUrl(b.slipurl ?? null);
                       }}
                     >
                       ดูสลิปโอนเงิน

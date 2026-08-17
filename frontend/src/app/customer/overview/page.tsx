@@ -4,7 +4,7 @@ import StudentOverview from "./components/StudentOverview";
 
 export default function CustomerOverviewPage() {
   return (
-    <div className="w-full">
+    <div className="mx-auto max-w-7xl">
       <StudentOverview />
     </div>
   );

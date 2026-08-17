@@ -136,7 +136,7 @@ export default function CustomerSchedulePage() {
   const timeSlots = Array.from({ length: totalHours + 1 }, (_, i) => minHour + i);
 
   return (
-    <div className="w-full pb-24 space-y-8">
+    <div className="mx-auto max-w-7xl pb-24 space-y-8">
       {expiredCount > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <CalendarX className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />

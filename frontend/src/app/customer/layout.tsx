@@ -13,7 +13,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
         <div className="flex flex-col min-h-screen pt-24 pb-24 pl-0 md:pb-0 md:pl-[84px]">
 
-          <main className="flex-1 p-8 bg-white">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-white">
             {children}
           </main>
 

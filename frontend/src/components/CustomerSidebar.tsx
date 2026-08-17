@@ -60,7 +60,7 @@ export default function CustomerSidebar() {
       {/* Desktop / tablet (md+): vertical sidebar */}
       <aside className="hidden md:flex fixed top-24 left-0 h-[calc(100vh-96px)] bg-white flex-col z-40 transition-all duration-300 ease-in-out w-[84px] hover:w-[260px] group overflow-hidden">
 
-        <div className="flex-1 flex flex-col min-w-[260px] overflow-y-auto overflow-x-hidden py-4">
+        <div className="flex-1 flex flex-col min-w-[260px] overflow-y-auto overflow-x-hidden no-scrollbar py-4">
           <nav className="flex flex-col gap-3 w-full my-auto">
             {navItems.map((item) => (
               <SidebarItem key={item.href} href={item.href} icon={item.icon} label={item.label} active={pathname === item.href} />
@@ -120,7 +120,7 @@ export default function CustomerSidebar() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-4">
               <div className="grid grid-cols-3 gap-3">
                 {navItems.map((item) => {
                   const active = pathname === item.href;

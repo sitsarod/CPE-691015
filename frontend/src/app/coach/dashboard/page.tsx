@@ -74,7 +74,7 @@ export default function CoachDashboardPage() {
     .slice(0, 5);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl space-y-8 animate-fadeIn">
       <div className="border-b border-gray-150 pb-6">
         <h1 className="text-3xl font-black text-gray-900 tracking-tight">
           สวัสดี, {profile.nickname || profile.first_name}

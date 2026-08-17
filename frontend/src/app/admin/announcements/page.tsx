@@ -178,7 +178,7 @@ export default function AdminAnnouncementsPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-500">
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

@@ -73,11 +73,8 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   const { users, students, courses, billings, expenses, enrollments, coaches } = raw;
 
   // ---- ตัวเลขรวม ----
+  // รายได้/รายจ่าย/กำไร ใช้ยอด "เดือนนี้" (คำนวณจาก bucket เดือนปัจจุบันด้านล่าง)
   const paidBillings = billings.filter((b) => b.billingstatus === "paid");
-  const totalRevenue = paidBillings.reduce((s, b) => s + (b.billingamount || 0), 0);
-  const totalExpense = expenses.reduce((s, e) => s + (e.expenseamount || 0), 0);
-  const netProfit = totalRevenue - totalExpense;
-  const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
   // "นักเรียน" = customer ที่มีคอร์สกำลังเรียนอยู่ (enrollment active + เหลือคาบ)
   // ดึงจาก /admin/students โดยตรง ไม่ใช่นับทุกบัญชี customer
@@ -102,7 +99,9 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   });
   const bucketByKey = new Map(buckets.map((b) => [b.key, b]));
   paidBillings.forEach((b) => {
-    const bk = bucketByKey.get(monthKey(b.created_at));
+    // จัดรายได้เข้าเดือนตามวันที่ชำระจริง (paid_at) ให้ตรงกับหน้าสรุปการเงิน
+    // fallback เป็นวันที่ออกบิลถ้า backend ยังไม่ส่ง paid_at มา
+    const bk = bucketByKey.get(monthKey(b.paid_at || b.created_at));
     if (bk) bk.revenue += b.billingamount || 0;
   });
   expenses.forEach((e) => {
@@ -115,31 +114,37 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   const revChange = pctChange(last.revenue, prev.revenue);
   const expChange = pctChange(last.expense, prev.expense);
 
+  // ยอดของ "เดือนนี้" (bucket สุดท้าย = เดือนปัจจุบัน)
+  const monthRevenue = last.revenue;
+  const monthExpense = last.expense;
+  const monthNetProfit = monthRevenue - monthExpense;
+  const monthMargin = monthRevenue > 0 ? (monthNetProfit / monthRevenue) * 100 : 0;
+
   // ---- KPI ----
   const kpis: Kpi[] = [
     {
-      label: "รายได้ทั้งหมด",
-      value: fmtBaht(totalRevenue),
+      label: "รายได้เดือนนี้",
+      value: fmtBaht(monthRevenue),
       accent: "#2563EB",
       icon: revChange >= 0 ? TrendingUp : TrendingDown,
       trend: { up: revChange >= 0, text: fmtPct(revChange), note: "เทียบกับเดือนที่แล้ว" },
     },
     {
-      label: "ค่าใช้จ่ายทั้งหมด",
-      value: fmtBaht(totalExpense),
+      label: "ค่าใช้จ่ายเดือนนี้",
+      value: fmtBaht(monthExpense),
       accent: "#E63946",
       icon: expChange > 0 ? TrendingUp : TrendingDown,
       trend: { up: expChange <= 0, text: fmtPct(expChange), note: "เทียบกับเดือนที่แล้ว" }, // ค่าใช้จ่ายลด = ดี
     },
     {
-      label: "กำไรสุทธิ",
-      value: fmtBaht(netProfit),
-      accent: netProfit >= 0 ? "#0D9488" : "#E63946",
+      label: "กำไรสุทธิเดือนนี้",
+      value: fmtBaht(monthNetProfit),
+      accent: monthNetProfit >= 0 ? "#0D9488" : "#E63946",
       icon: BadgeCheck,
       trend: {
-        up: netProfit >= 0,
-        text: netProfit >= 0 ? "ดี" : "ขาดทุน",
-        note: `มาร์จิ้น ${margin.toFixed(0)}%`,
+        up: monthNetProfit >= 0,
+        text: monthNetProfit >= 0 ? "ดี" : "ขาดทุน",
+        note: `มาร์จิ้น ${monthMargin.toFixed(0)}%`,
       },
     },
     {

@@ -251,7 +251,7 @@ export default function CustomerPaymentPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl space-y-6 sm:space-y-8 animate-fadeIn">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}

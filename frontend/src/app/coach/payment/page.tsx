@@ -363,7 +363,7 @@ export default function CoachPaymentPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn">
+    <div className="mx-auto max-w-7xl space-y-6 animate-fadeIn">
       {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
       {isRefreshing && (
         <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
