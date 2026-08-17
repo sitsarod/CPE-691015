@@ -22,7 +22,7 @@ func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto
 			return ErrSessionNotFound
 		}
 
-		now := time.Now()
+		now := nowLocal()
 
 		res := tx.Model(&models.AttendanceSession{}).
 			Where("id = ? AND status = ?", sessionID, models.AttendanceSessionOpen).
@@ -54,6 +54,9 @@ func (s *AttendanceService) markAbsentees(
 	adminUserID uint,
 	now time.Time,
 ) error {
+
+	expireStaleEnrollments(tx)
+
 	enrollments, err := s.activeEnrollments(tx, session.PackageID)
 	if err != nil {
 		return err
@@ -82,7 +85,7 @@ func (s *AttendanceService) markAbsentees(
 
 		record := models.StudentAttendance{
 			CheckInTime:         now,
-			CheckInMethod:       models.CheckInMethodManual,
+			CheckInMethod:       models.CheckInMethodSystem,
 			Status:              models.AttendanceStatusAbsent,
 			EnrollmentID:        e.ID,
 			UserID:              studentUserID,
@@ -90,6 +93,10 @@ func (s *AttendanceService) markAbsentees(
 			RecordedByUserID:    &adminUserID,
 		}
 		if err := tx.Create(&record).Error; err != nil {
+
+			if isUniqueViolation(err) {
+				continue
+			}
 			return errors.New("ไม่สามารถบันทึกการขาดเรียนได้")
 		}
 
@@ -188,8 +195,11 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 	return &result, nil
 }
 
+const maxHistoryRows = 500
+
 func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.AttendanceHistoryItemDTO, error) {
 	query := s.db.Model(&models.StudentAttendance{}).
+		Limit(maxHistoryRows).
 		Preload("Enrollment").
 		Preload("Enrollment.Customer").
 		Preload("Enrollment.Customer.User").
