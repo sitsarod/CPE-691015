@@ -4,10 +4,12 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Bell, MessageSquareText, Settings, User, LogOut, LayoutDashboard } from "lucide-react";
+import { MessageSquareText, Settings, User, LogOut, LayoutDashboard } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+
 export default function CustomerTopbar() {
   const router = useRouter();
-  
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -49,10 +51,7 @@ export default function CustomerTopbar() {
 
       <div className="flex items-center gap-8">
         
-        <button className="text-[#CC0000] hover:opacity-80 transition relative flex items-center justify-center w-10 h-10">
-          <Bell className="w-7 h-7" />
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white"></span>
-        </button>
+        <NotificationBell viewAllHref="/admin/notifications" />
 
         <button className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]">
           <MessageSquareText className="w-7 h-7 text-[#CC0000]" />

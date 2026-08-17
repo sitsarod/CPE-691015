@@ -113,6 +113,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	personalQRController := controllers.NewPersonalQRController(db)
 
+	// ระบบแจ้งเตือน (per user) — หน้าเว็บ derive แล้ว sync ขึ้นมาเก็บ + จำสถานะอ่าน + ประวัติ
+	notificationService := services.NewNotificationService(db)
+	notificationController := controllers.NewNotificationController(notificationService)
+
 	r.Use(middlewares.CORSMiddleware())
 	r.OPTIONS("/*path", func(c *gin.Context) {
 		c.AbortWithStatus(204)
@@ -233,6 +237,23 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.POST("/create", userController.CreateUserController)
 			adminUserGroup.DELETE("/:id", userController.DeleteUserController)
 		}
+
+		// --- ระบบแจ้งเตือน ---
+		// ทุกเส้นอ้างตัวตนจาก JWT (userID) จึงเห็น/แก้ได้เฉพาะแจ้งเตือนของตัวเอง
+		notifGroup := protected.Group("/notifications")
+		{
+			notifGroup.GET("", notificationController.List)
+			// /sync ยังไม่ถูกเรียกใช้ (ระบบเป็น event-driven) — เก็บไว้ใช้อนาคตกับแจ้งเตือน
+			// ที่ derive ฝั่ง client เช่น เบราว์เซอร์ไม่รองรับกล้อง ดู NotificationService.Sync
+			notifGroup.POST("/sync", notificationController.Sync)
+			notifGroup.POST("/read-all", notificationController.MarkAllRead)
+			notifGroup.PATCH("/:id/read", notificationController.MarkRead)
+			notifGroup.DELETE("", notificationController.Clear)
+		}
+
+		// SSE stream แจ้งเตือนเรียลไทม์ — auth ผ่าน query token เอง (EventSource ตั้ง header ไม่ได้)
+		// จึงอยู่นอก protected group ที่ใช้ AuthMiddleware
+		api.GET("/notifications/stream", notificationController.Stream)
 
 		// --- QR ประจำตัว ---
 		// อ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param จึงดึง QR ของคนอื่นไม่ได้

@@ -145,8 +145,8 @@ type AlertItem = {
   icon: LucideIcon;
   title: string;
   body: string;
-  action: string;
-  href: string;
+  action?: string;
+  href?: string;
 };
 
 // รายการการ์ดแจ้งเตือน — ใช้ซ้ำได้ทั้งตำแหน่งบนสุด (จอเล็ก) และในคอลัมน์ขวา (จอใหญ่)
@@ -189,13 +189,15 @@ function AlertList({ alerts }: { alerts: AlertItem[] }) {
               <div className="min-w-0">
                 <p className={`text-sm font-bold ${tone.title}`}>{al.title}</p>
                 <p className="mt-1 text-xs leading-relaxed text-gray-600">{al.body}</p>
-                <Link
-                  href={al.href}
-                  className={`mt-2.5 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition ${tone.action}`}
-                >
-                  {al.action}
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
+                {al.href && al.action && (
+                  <Link
+                    href={al.href}
+                    className={`mt-2.5 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm transition ${tone.action}`}
+                  >
+                    {al.action}
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -437,8 +439,6 @@ export default function StudentOverview() {
       icon: CheckCircle2,
       title: "ทุกอย่างเรียบร้อย",
       body: "ไม่มีบิลค้างชำระหรือรายการที่ต้องดำเนินการในขณะนี้",
-      action: "ดูตารางเรียน",
-      href: "/customer/schedule",
     });
   }
 
