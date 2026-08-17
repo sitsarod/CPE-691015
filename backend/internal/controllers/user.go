@@ -240,10 +240,22 @@ func (c *UserController) DeleteUserController(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
-	if err := c.userService.DeleteUser(uint(id)); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	// ต้องรู้ว่าใครเป็นคนกดลบ เพื่อกันแอดมินลบบัญชีตัวเอง
+	actorUserID, _, ok := GetAuthContext(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	if err := c.userService.DeleteUser(uint(id), actorUserID); err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
-		} else {
+		// 409 Conflict — คำขอถูกต้องทุกอย่าง แต่ขัดกับสถานะปัจจุบันของระบบ
+		// (เหลือแอดมินคนเดียว / กำลังลบตัวเองอยู่) ไม่ใช่ 400 ที่แปลว่าส่งข้อมูลมาผิด
+		case errors.Is(err, services.ErrLastAdmin), errors.Is(err, services.ErrDeleteSelf):
+			ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบผู้ใช้งานได้"})
 		}
 		return

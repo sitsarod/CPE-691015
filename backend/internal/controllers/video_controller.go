@@ -43,6 +43,13 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		return
 	}
 
+	// ตรวจว่าเป็นวิดีโอจริงและขนาดไม่เกิน ก่อนเขียนอะไรลงดิสก์ (ดูเหตุผลใน upload.go)
+	ext, err := ValidateVideoUpload(file)
+	if err != nil {
+		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
 	// สร้างโฟลเดอร์สำหรับเก็บวิดีโอ
 	uploadDir := "./uploads/videos"
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
@@ -50,7 +57,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("video-%d%s", time.Now().UnixNano(), filepath.Ext(file.Filename))
+	filename := fmt.Sprintf("video-%d%s", time.Now().UnixNano(), ext)
 	filePath := filepath.Join(uploadDir, filename)
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {

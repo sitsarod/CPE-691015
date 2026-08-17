@@ -45,6 +45,19 @@ func main() {
 	// 2. สร้าง Gin HTTP Engine
 	r := gin.Default()
 
+	// ⚠️ ต้องตั้งก่อนใช้ rate limit ที่นับตาม IP
+	//
+	// โดยดีฟอลต์ Gin เชื่อ header X-Forwarded-For จากใครก็ได้ แปลว่า c.ClientIP()
+	// คืนค่าที่ผู้เรียกใส่มาเองได้ คนร้ายจึงเปลี่ยน IP ปลอมทุก request
+	// แล้วยิงเดารหัสผ่านได้ไม่จำกัด ทั้งที่มี rate limit อยู่
+	//
+	// SetTrustedProxies(nil) = ไม่เชื่อ proxy ใครเลย ให้ใช้ IP จริงของ TCP connection
+	// ถ้าวันหนึ่งเอา nginx/cloudflare มาคั่นหน้า ต้องกลับมาใส่ IP ของตัวนั้นตรงนี้
+	// ไม่งั้น request ทุกอันจะกลายเป็น IP ของ proxy ตัวเดียว แล้วคนทั้งระบบโดนบล็อกพร้อมกัน
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("ตั้งค่า trusted proxies ไม่สำเร็จ: %v", err)
+	}
+
 	// ใช้งาน CORS Middleware ก่อนลงทะเบียน Routes เพื่อให้อนุญาตการเข้าถึงจาก Next.js
 	r.Use(middlewares.CORSMiddleware())
 
