@@ -199,15 +199,51 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 		return nil, ErrNothingToWithdraw
 	}
 
-	if err := s.writeConsent(subject, userID, models.ConsentWithdrawn, meta); err != nil {
+	// เขียนแถวถอนความยินยอม และลบภาพใบหน้าออกจากฐานใน transaction เดียวกัน
+	//
+	// ต้องอยู่ใน transaction เดียวกันเพราะถ้าแยกกันแล้วอันหลังพลาด จะเกิดกรณี
+	// "บันทึกว่าถอนแล้ว แต่ข้อมูลใบหน้ายังอยู่" ซึ่งคือการเก็บข้อมูลชีวภาพ
+	// โดยไม่มีฐานความยินยอมรองรับ — ผิดตรงกับที่ประกาศไว้กับผู้ใช้พอดี
+	photoFiles, err := s.withdrawAndDeletePhotos(subject, userID, meta)
+	if err != nil {
 		return nil, err
 	}
 
-	// TODO (เฟสเก็บรูปใบหน้า): ลบไฟล์รูปบนดิสก์ + hard delete แถว face_images ของ customer นี้
-	// ต้องทำใน transaction เดียวกับ writeConsent ด้านบน มิฉะนั้นอาจเกิดกรณีบันทึกว่าถอนแล้ว
-	// แต่ข้อมูลใบหน้ายังค้างอยู่ ซึ่งเป็นการเก็บข้อมูลโดยไม่มีฐานความยินยอมรองรับ
+	// ลบไฟล์จริงหลัง commit เท่านั้น (ดูเหตุผลที่ RemovePhotoFiles)
+	RemovePhotoFiles(photoFiles)
 
 	return s.GetStatus(userID)
+}
+
+// withdrawAndDeletePhotos เขียนแถวถอนความยินยอม + ลบภาพใบหน้า ในทรานแซกชันเดียว
+//
+// คืนรายการ URL ของไฟล์ที่ต้องลบตามหลัง commit
+func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, error) {
+	var photoFiles []string
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := writeConsentTx(tx, subject, actorUserID, models.ConsentWithdrawn, meta); err != nil {
+			return err
+		}
+
+		var files []string
+		var err error
+		if subject.CoachID != nil {
+			files, err = DeleteCoachPhotos(tx, *subject.CoachID)
+		} else {
+			files, err = DeleteCustomerPhotos(tx, *subject.CustomerID)
+		}
+		if err != nil {
+			return err
+		}
+
+		photoFiles = files
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return photoFiles, nil
 }
 
 // writeConsent เขียนแถว audit + อัปเดตสถานะปัจจุบัน ใน transaction เดียว
@@ -216,41 +252,47 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 // จะได้สถานะที่ไม่มีหลักฐานรองรับ หรือหลักฐานที่ไม่ตรงกับสถานะที่ระบบใช้จริง
 // ซึ่งทั้งสองแบบใช้ยืนยันความชอบด้วยกฎหมายไม่ได้
 func (s *ConsentService) writeConsent(subject *consentSubject, actorUserID uint, action models.ConsentAction, meta ConsentMeta) error {
-	now := time.Now()
-
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		record := models.BiometricConsent{
-			CustomerID:      subject.CustomerID,
-			CoachID:         subject.CoachID,
-			Action:          action,
-			PolicyVersion:   models.FaceConsentPolicyVersion,
-			ActedAt:         now,
-			GrantedByUserID: actorUserID,
-			IPAddress:       meta.IPAddress,
-			UserAgent:       meta.UserAgent,
-			// IsMinor / GuardianEmail ปล่อยเป็นค่าว่างโดยตั้งใจ — รอบนี้ยังไม่ประเมินกรณีผู้เยาว์
-		}
-
-		if err := tx.Create(&record).Error; err != nil {
-			return errors.New("ไม่สามารถบันทึกความยินยอมได้")
-		}
-
-		// อัปเดตค่า denormalize ในตารางโปรไฟล์ให้ตรงกับแถวที่เพิ่งเขียน
-		status := action.ToConsentStatus()
-
-		var result *gorm.DB
-		if subject.CoachID != nil {
-			result = tx.Model(&models.Coach{}).Where("id = ?", *subject.CoachID).Update("face_consent_status", status)
-		} else {
-			result = tx.Model(&models.Customer{}).Where("id = ?", *subject.CustomerID).Update("face_consent_status", status)
-		}
-
-		if result.Error != nil {
-			return errors.New("ไม่สามารถอัปเดตสถานะความยินยอมได้")
-		}
-
-		return nil
+		return writeConsentTx(tx, subject, actorUserID, action, meta)
 	})
+}
+
+// writeConsentTx คือเนื้อในของ writeConsent ที่แยกออกมาเพื่อให้เรียกซ้อนใน
+// transaction ที่เปิดอยู่แล้วได้ (ใช้ตอนถอนความยินยอมซึ่งต้องลบรูปในทรานแซกชันเดียวกัน)
+//
+// ห้ามเปิด transaction ซ้อนในนี้ — ตัวเรียกเป็นคนคุม transaction เอง
+func writeConsentTx(tx *gorm.DB, subject *consentSubject, actorUserID uint, action models.ConsentAction, meta ConsentMeta) error {
+	record := models.BiometricConsent{
+		CustomerID:      subject.CustomerID,
+		CoachID:         subject.CoachID,
+		Action:          action,
+		PolicyVersion:   models.FaceConsentPolicyVersion,
+		ActedAt:         time.Now(),
+		GrantedByUserID: actorUserID,
+		IPAddress:       meta.IPAddress,
+		UserAgent:       meta.UserAgent,
+		// IsMinor / GuardianEmail ปล่อยเป็นค่าว่างโดยตั้งใจ — รอบนี้ยังไม่ประเมินกรณีผู้เยาว์
+	}
+
+	if err := tx.Create(&record).Error; err != nil {
+		return errors.New("ไม่สามารถบันทึกความยินยอมได้")
+	}
+
+	// อัปเดตค่า denormalize ในตารางโปรไฟล์ให้ตรงกับแถวที่เพิ่งเขียน
+	status := action.ToConsentStatus()
+
+	var result *gorm.DB
+	if subject.CoachID != nil {
+		result = tx.Model(&models.Coach{}).Where("id = ?", *subject.CoachID).Update("face_consent_status", status)
+	} else {
+		result = tx.Model(&models.Customer{}).Where("id = ?", *subject.CustomerID).Update("face_consent_status", status)
+	}
+
+	if result.Error != nil {
+		return errors.New("ไม่สามารถอัปเดตสถานะความยินยอมได้")
+	}
+
+	return nil
 }
 
 // GetHistory ดึงประวัติความยินยอมทั้งหมด (สำหรับแอดมินใช้ตรวจสอบย้อนหลังตาม PDPA)

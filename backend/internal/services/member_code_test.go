@@ -5,39 +5,12 @@ import (
 	"testing"
 
 	"CPE-691015/internal/models"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
-
-func newMemberCodeTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
-		Logger:                                   logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("เปิด sqlite ไม่สำเร็จ: %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("ดึง *sql.DB ไม่สำเร็จ: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(&models.Customer{}, &models.Coach{}); err != nil {
-		t.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
-	}
-	return db
-}
 
 // ฐานว่างต้องได้รหัสแรกเป็นเลข 1
 func TestGenerateMemberCodeStartsAtOne(t *testing.T) {
 	t.Setenv("SCHOOL_CODE", "KY")
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	code, err := GenerateMemberCode(db, models.CustomerRole)
 	if err != nil {
@@ -54,7 +27,7 @@ func TestGenerateMemberCodeStartsAtOne(t *testing.T) {
 // ซึ่งเจ้าหน้าที่จะเข้าใจว่าข้อมูลหาย (เป็นเหตุผลที่เปลี่ยนมาใช้ KYS/KYC)
 func TestGenerateMemberCodeKeepsSequencesSeparate(t *testing.T) {
 	t.Setenv("SCHOOL_CODE", "KY")
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	db.Create(&models.Customer{UserID: 1, Gender: models.GenderMale, MemberCode: "KYS0001", PersonalQRCode: "q1"})
 	db.Create(&models.Coach{UserID: 2, Uid: "1", MemberCode: "KYC0001", PersonalQRCode: "q2"})
@@ -78,7 +51,7 @@ func TestGenerateMemberCodeKeepsSequencesSeparate(t *testing.T) {
 
 // แอดมินไม่มีรหัสประจำตัว เพราะไม่ได้เช็คชื่อเข้าเรียนหรือเข้างาน
 func TestGenerateMemberCodeRejectsAdmin(t *testing.T) {
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	if _, err := GenerateMemberCode(db, models.AdminRole); !errors.Is(err, ErrMemberCodeNoRole) {
 		t.Fatalf("ควรได้ ErrMemberCodeNoRole แต่ได้: %v", err)
@@ -90,7 +63,7 @@ func TestGenerateMemberCodeRejectsAdmin(t *testing.T) {
 // คอลัมน์เป็น unique ระดับฐานข้อมูล ถ้าไม่นับรวมจะพังตอน INSERT แทน
 func TestGenerateMemberCodeSkipsSoftDeleted(t *testing.T) {
 	t.Setenv("SCHOOL_CODE", "KY")
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	c := models.Customer{UserID: 1, Gender: models.GenderMale, MemberCode: "KYS0005", PersonalQRCode: "q1"}
 	db.Create(&c)
@@ -111,7 +84,7 @@ func TestGenerateMemberCodeSkipsSoftDeleted(t *testing.T) {
 // ถ้าวันหนึ่งมีคนเอาศูนย์นำหน้าออก การเรียงจะเพี้ยนทันที (KYS9 > KYS10)
 func TestGenerateMemberCodeCrossesDigitBoundary(t *testing.T) {
 	t.Setenv("SCHOOL_CODE", "KY")
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	db.Create(&models.Customer{UserID: 1, Gender: models.GenderMale, MemberCode: "KYS0009", PersonalQRCode: "q1"})
 
@@ -179,7 +152,7 @@ func TestFormatMemberCode(t *testing.T) {
 
 // เปลี่ยนอักษรย่อแล้วเลขต้องเริ่มนับใหม่ ไม่ไปต่อจากของสถาบันอื่น
 func TestGenerateMemberCodeIsScopedToPrefix(t *testing.T) {
-	db := newMemberCodeTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	t.Setenv("SCHOOL_CODE", "KY")
 	db.Create(&models.Customer{UserID: 1, Gender: models.GenderMale, MemberCode: "KYS0050", PersonalQRCode: "q1"})

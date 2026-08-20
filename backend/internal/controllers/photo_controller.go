@@ -142,16 +142,20 @@ func (ctrl *PhotoController) DeleteFacePhoto(c *gin.Context) {
 		}
 	}
 
-	// ลบไฟล์ในไดเรกทอรี (ทางเลือก)
-	// ดึงชื่อไฟล์จาก URL
-	uName := filepath.Base(photo.PhotoURL)
-	diskPath := filepath.Join("./uploads/faces", uName)
-	_ = os.Remove(diskPath) // พยายามลบ แต่ถ้าผิดพลาดก็ปล่อยผ่าน
-
-	if err := ctrl.db.Delete(&photo).Error; err != nil {
+	// ลบแถวก่อน แล้วค่อยลบไฟล์จริง — ลำดับนี้สำคัญ
+	//
+	// ถ้าลบไฟล์ก่อนแล้วลบแถวพลาด จะเหลือแถวที่ชี้ไปหาไฟล์ที่ไม่มีอยู่ ซึ่งกู้ไม่ได้
+	// กลับกันถ้าลบแถวสำเร็จแล้วลบไฟล์พลาด จะเหลือไฟล์กำพร้าที่ตามเก็บทีหลังได้
+	//
+	// Unscoped เพราะ FaceEmbedding เป็นข้อมูลชีวภาพ การ soft delete
+	// เท่ากับยังเก็บไว้แค่ซ่อนจาก query ซึ่งไม่นับว่าลบตาม PDPA
+	if err := ctrl.db.Unscoped().Delete(&photo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลรูปภาพออกจากระบบได้"})
 		return
 	}
+
+	// ใช้ตัวเดียวกับตอนลบสมาชิกและตอนถอนความยินยอม (services/photo_storage.go)
+	services.RemovePhotoFiles([]string{photo.PhotoURL})
 
 	c.JSON(http.StatusOK, gin.H{"message": "ลบรูปภาพใบหน้าเรียบร้อยแล้ว"})
 }

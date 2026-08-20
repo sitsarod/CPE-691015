@@ -6,38 +6,7 @@ import (
 	"testing"
 
 	"CPE-691015/internal/models"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
-
-// newQRTestDB สร้าง in-memory sqlite สำหรับเทส QR ประจำตัว
-//
-// ใช้แนวเดียวกับ newSyncTestDB ใน user_service_test.go คือปิด FK constraint
-// และบังคับ MaxOpenConns=1 เพราะ in-memory DB ผูกกับ connection เดียว
-func newQRTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
-		Logger:                                   logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("เปิด sqlite ไม่สำเร็จ: %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("ดึง *sql.DB ไม่สำเร็จ: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(&models.Customer{}, &models.Coach{}); err != nil {
-		t.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
-	}
-	return db
-}
 
 // newTestCustomer สร้าง Customer ตัวอย่างที่ผ่านข้อบังคับของตาราง
 //
@@ -112,7 +81,7 @@ func TestQRTokenIsRandom(t *testing.T) {
 // จำลองช่องโหว่เดิมโดยตรง: เดิมรหัสคือ "QR_" + อีเมล ทำให้ใครรู้อีเมล
 // ก็สร้างรหัสของคนนั้นได้ เทสนี้กันไม่ให้ใครเผลอทำแบบนั้นอีก
 func TestQRNotDerivedFromEmail(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 	const email = "student1@gmail.com"
 
 	code, err := GenerateUniqueQRCode(db)
@@ -132,7 +101,7 @@ func TestQRNotDerivedFromEmail(t *testing.T) {
 // TestQRUniqueAcrossBothTables ตรวจว่ารหัสไม่ชนกับที่ถูกใช้ไปแล้ว
 // ทั้งในตารางนักเรียนและตารางโค้ช (ใช้ namespace ร่วมกัน)
 func TestQRUniqueAcrossBothTables(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	const takenByCustomer = "QR_taken_by_customer"
 	const takenByCoach = "QR_taken_by_coach"
@@ -174,7 +143,7 @@ func TestQRUniqueAcrossBothTables(t *testing.T) {
 // สำคัญเพราะ personal_qr_code เป็น unique ที่ระดับฐานข้อมูล และ soft delete
 // ไม่ได้ลบแถวจริง ถ้าไม่นับรวมจะสุ่มได้ค่าซ้ำแล้วไปพังตอน INSERT แทน
 func TestQRTakenIncludesSoftDeleted(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	c := *newTestCustomer(1, "QR_soft_deleted")
 	if err := db.Create(&c).Error; err != nil {
@@ -195,7 +164,7 @@ func TestQRTakenIncludesSoftDeleted(t *testing.T) {
 
 // TestReissueChangesCode ตรวจว่าการออกใบใหม่เปลี่ยนค่าจริง และค่าเดิมใช้ไม่ได้อีก
 func TestReissueChangesCode(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	first, err := GenerateUniqueQRCode(db)
 	if err != nil {
@@ -234,7 +203,7 @@ func TestReissueChangesCode(t *testing.T) {
 
 // TestReissueCoach ตรวจว่าออกใบใหม่ให้โค้ชได้เหมือนกัน
 func TestReissueCoach(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	first, err := GenerateUniqueQRCode(db)
 	if err != nil {
@@ -257,7 +226,7 @@ func TestReissueCoach(t *testing.T) {
 // TestReissueNotFound ตรวจว่าออกใบใหม่ให้ id ที่ไม่มีอยู่จริงต้องได้ error
 // ไม่ใช่เงียบ ๆ ผ่านไป (กันบั๊กที่แอดมินกดออกใบใหม่ให้คนที่ถูกลบไปแล้ว)
 func TestReissueNotFound(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	if _, err := ReissueCustomerQRCode(db, 99999); err == nil {
 		t.Error("ออกใบใหม่ให้ customer id ที่ไม่มีอยู่ ต้องได้ error")
@@ -271,7 +240,7 @@ func TestReissueNotFound(t *testing.T) {
 //
 // เป็นสมมติฐานที่ระบบเช็คชื่อจะพึ่งพา: สแกน 1 ครั้ง ต้องรู้แน่ชัดว่าใคร
 func TestQRLookupIsUnambiguous(t *testing.T) {
-	db := newQRTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Coach{})
 
 	const total = 50
 	codes := make([]string, 0, total)

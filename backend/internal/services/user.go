@@ -249,20 +249,35 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 
 	// ลบ user กับข้อมูลพ่วงทั้งหมดใน transaction เดียว
 	// ถ้าแยกกันแล้วอันหลังพลาด จะเหลือข้อมูลส่วนตัวค้างโดยไม่มีบัญชีเจ้าของ
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	//
+	// ไฟล์ภาพใบหน้าบนดิสก์ลบ "หลัง" commit เท่านั้น เพราะการลบไฟล์ย้อนกลับไม่ได้
+	// ถ้าลบระหว่าง transaction แล้ว rollback ทีหลัง จะได้แถวที่ยังอยู่แต่ไฟล์หายไป
+	// ซึ่งซ่อมไม่ได้ (ดูเหตุผลเต็มที่ services.RemovePhotoFiles)
+	var photoFiles []string
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var files []string
+		var err error
+
 		switch user.Role {
 		case models.CustomerRole:
-			if err := deleteCustomerData(tx, user.ID); err != nil {
-				return err
-			}
+			files, err = deleteCustomerData(tx, user.ID)
 		case models.CoachRole:
-			if err := deleteCoachData(tx, user.ID); err != nil {
-				return err
-			}
+			files, err = deleteCoachData(tx, user.ID)
 		}
+		if err != nil {
+			return err
+		}
+		photoFiles = files
 
 		return tx.Delete(&user).Error
 	})
+	if err != nil {
+		return err
+	}
+
+	RemovePhotoFiles(photoFiles)
+	return nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,44 +318,53 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // deleteCustomerData ลบโปรไฟล์ผู้เรียนและข้อมูลชีวภาพของเขา
-func deleteCustomerData(tx *gorm.DB, userID uint) error {
+//
+// คืนรายการ URL ของไฟล์ภาพที่ต้องลบตามหลัง transaction commit
+func deleteCustomerData(tx *gorm.DB, userID uint) ([]string, error) {
 	var customer models.Customer
 	if err := tx.Where("user_id = ?", userID).First(&customer).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 
 	// ภาพใบหน้าและค่า face embedding เป็นข้อมูลชีวภาพ (PDPA ม.26)
 	// เมื่อไม่มีสถานะนักเรียนแล้ว ฐานที่ใช้เก็บก็หมดไปด้วย จึงต้องลบทันที
-	if err := tx.Where("customer_id = ?", customer.ID).Delete(&models.Photo{}).Error; err != nil {
-		return err
+	photoFiles, err := DeleteCustomerPhotos(tx, customer.ID)
+	if err != nil {
+		return nil, err
 	}
 
-	return tx.Delete(&customer).Error
+	if err := tx.Delete(&customer).Error; err != nil {
+		return nil, err
+	}
+	return photoFiles, nil
 }
 
 // deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
-func deleteCoachData(tx *gorm.DB, userID uint) error {
+//
+// คืนรายการ URL ของไฟล์ภาพที่ต้องลบตามหลัง transaction commit
+func deleteCoachData(tx *gorm.DB, userID uint) ([]string, error) {
 	var coach models.Coach
 	if err := tx.Where("user_id = ?", userID).First(&coach).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 
 	// ข้อมูลชีวภาพ เหตุผลเดียวกับฝั่งผู้เรียน
-	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.Photo{}).Error; err != nil {
-		return err
+	photoFiles, err := DeleteCoachPhotos(tx, coach.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	// เวลาว่างประจำสัปดาห์ — เป็นข้อมูลสำหรับจัดตารางล่วงหน้าเท่านั้น ไม่มีคุณค่าย้อนหลัง
 	// ถ้าไม่ลบ โค้ชที่ออกไปแล้วจะยังโผล่เป็นตัวเลือกในหน้าจัดตารางของแอดมิน
 	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.CoachAvailability{}).Error; err != nil {
-		return err
+		return nil, err
 	}
 
 	// คาบสอนตั้งแต่วันนี้เป็นต้นไป — ยังไม่เกิดขึ้นจริง ต้องเอาออกจากปฏิทิน
@@ -351,10 +375,13 @@ func deleteCoachData(tx *gorm.DB, userID uint) error {
 	today := time.Now().Format("2006-01-02")
 	if err := tx.Where("coach_id = ? AND date >= ?", coach.ID, today).
 		Delete(&models.WorkSchedule{}).Error; err != nil {
-		return err
+		return nil, err
 	}
 
-	return tx.Delete(&coach).Error
+	if err := tx.Delete(&coach).Error; err != nil {
+		return nil, err
+	}
+	return photoFiles, nil
 }
 
 // IsActiveStudent ตรวจสอบว่าลูกค้ามีคอร์สที่กำลังเรียนอยู่หรือไม่

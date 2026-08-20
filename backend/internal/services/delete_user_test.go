@@ -8,39 +8,13 @@ import (
 
 	"CPE-691015/internal/models"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
-// newDeleteTestDB สร้าง in-memory sqlite พร้อมตารางที่ DeleteUser ต้องใช้
-//
-// แยกจาก newSyncTestDB เพราะชุดนี้ต้องมีตาราง users/coaches ด้วย
-// ปิด FK constraint ตอน migrate เพื่อไม่ให้ต้องสร้างตารางที่ไม่เกี่ยวข้องตามมาทั้งพวง
+// newDeleteTestDB สร้าง DB พร้อมทุกตารางที่การลบสมาชิกไปแตะ
 func newDeleteTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
-		Logger:                                   logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("เปิด sqlite ไม่สำเร็จ: %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("ดึง *sql.DB ไม่สำเร็จ: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(
-		&models.User{}, &models.Customer{}, &models.Coach{},
-		&models.Photo{}, &models.CoachAvailability{}, &models.WorkSchedule{},
-	); err != nil {
-		t.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
-	}
-	return db
+	return newTestDB(t, &models.User{}, &models.Customer{}, &models.Coach{},
+		&models.Photo{}, &models.CoachAvailability{}, &models.WorkSchedule{})
 }
 
 // seedUser สร้างผู้ใช้หนึ่งคนตามบทบาทที่กำหนด แล้วคืน id

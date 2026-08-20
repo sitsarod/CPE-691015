@@ -6,36 +6,8 @@ import (
 
 	"CPE-691015/internal/models"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
-
-// newSyncTestDB สร้าง in-memory sqlite (pure-Go, ไม่ต้องใช้ CGO) สำหรับเทส SyncCustomerStatuses
-// ปิด FK constraint ตอน migrate เพื่อไม่ให้ไปพันกับตารางอื่นที่ไม่ได้ใช้ในเทสนี้
-// และบังคับ MaxOpenConns=1 ให้ทุก query ใช้ connection เดียวกัน (in-memory DB ผูกกับ connection)
-func newSyncTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
-		Logger:                                   logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("เปิด sqlite ไม่สำเร็จ: %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("ดึง *sql.DB ไม่สำเร็จ: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(&models.Customer{}, &models.Enrollment{}); err != nil {
-		t.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
-	}
-	return db
-}
 
 // seedCustomer สร้างลูกค้า 1 รายพร้อมกำหนด status และ created_at เอง
 func seedCustomer(
@@ -119,7 +91,7 @@ func itoa(u uint) string {
 
 // TestSyncCustomerStatuses ครอบคลุมกติกาการปรับสถานะ active/inactive อัตโนมัติ
 func TestSyncCustomerStatuses(t *testing.T) {
-	db := newSyncTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Enrollment{})
 	svc := NewUserService(db)
 
 	now := time.Now()
@@ -183,7 +155,7 @@ func TestSyncCustomerStatuses(t *testing.T) {
 
 // TestSyncCustomerStatuses_Idempotent เรียกซ้ำแล้วผลต้องไม่เปลี่ยน (ไม่มี side-effect สะสม)
 func TestSyncCustomerStatuses_Idempotent(t *testing.T) {
-	db := newSyncTestDB(t)
+	db := newTestDB(t, &models.Customer{}, &models.Enrollment{})
 	svc := NewUserService(db)
 
 	old := time.Now().AddDate(0, -4, 0)
