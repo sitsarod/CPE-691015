@@ -33,6 +33,12 @@ type Customer struct {
     ParentEmail       string          `json:"parentEmail" valid:"email~Invalid parent email format,optional"`
     ParentPhoneNumber string          `json:"parentPhoneNumber" valid:"numeric~Parent phone number must contain only numbers,optional"`
     PersonalQRCode    string          `json:"personalQR" gorm:"unique" valid:"required~Personal QR Code is required"`
+
+    // MemberCode คือรหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYS0001
+    //
+    // ⚠️ ทำหน้าที่ "อ้างอิงถึงคน" เท่านั้น ห้ามใช้ยืนยันตัวตนแทน PersonalQRCode
+    // เพราะเป็นเลขเรียงกันที่เดาต่อได้ (ดูเหตุผลเต็มใน services/member_code.go)
+    MemberCode        string          `json:"memberCode" gorm:"type:varchar(16);uniqueIndex"`
     Status            CustomerStatus  `json:"status" gorm:"default:'active'" valid:"required~Status is required"`
 
     // FaceConsentStatus คือสถานะความยินยอมให้เก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)

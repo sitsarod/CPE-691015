@@ -69,6 +69,8 @@ export async function createUserAPI(
 
 /** โปรไฟล์ผู้เรียนแบบเต็ม (ตรงกับ dto.AdminCustomerDetail) */
 export interface AdminCustomerDetail {
+  /** รหัสประจำตัว เช่น KYS0001 — แสดงอย่างเดียว เซิร์ฟเวอร์ออกให้ตอนสร้างบัญชี */
+  memberCode: string;
   nickname: string;
   gender: string;
   birthDate: string;
@@ -83,6 +85,8 @@ export interface AdminCustomerDetail {
 
 /** โปรไฟล์โค้ชแบบเต็ม (ตรงกับ dto.AdminCoachDetail) */
 export interface AdminCoachDetail {
+  /** รหัสประจำตัว เช่น KYC0001 — เดินเลขแยกจากผู้เรียน */
+  memberCode: string;
   nickname: string;
   phone: string;
   lineId: string;

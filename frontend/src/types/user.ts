@@ -6,6 +6,14 @@ export interface UserProfileResponseDTO {
   role: string;
   isStudent: boolean;
 
+  /**
+   * รหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYS0001 (นักเรียน) หรือ KYC0001 (โค้ช)
+   *
+   * ⚠️ ใช้อ้างอิงถึงคนเท่านั้น ห้ามใช้แทน personalQR ในการยืนยันตัวตน
+   * เพราะเป็นเลขเรียงกันที่เดาต่อได้
+   */
+  memberCode?: string;
+
   nickname?: string;
   phoneNumber?: string;
   lineId?: string;

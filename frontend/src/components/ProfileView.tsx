@@ -60,6 +60,8 @@ export default function ProfileView({
     [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || fallbackName;
 
   const details = [
+    // วางรหัสประจำตัวไว้บนสุด เพราะเป็นสิ่งที่ต้องหยิบไปบอกเจ้าหน้าที่บ่อยที่สุด
+    { label: "รหัสประจำตัว", value: profile?.memberCode },
     { label: "ชื่อเล่น", value: profile?.nickname },
     { label: "อีเมล", value: profile?.email },
     { label: "สิทธิ์การใช้งาน", value: profile?.role ? ROLE_LABEL[profile.role] ?? profile.role : undefined },

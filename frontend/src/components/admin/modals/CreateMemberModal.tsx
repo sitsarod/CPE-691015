@@ -82,7 +82,14 @@ export function CreateMemberModal({
           <InputField label="นามสกุล" required value={createForm.lastName} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputField label="อีเมล (@gmail.com)" type="email" required value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
+          {/* บัญชีแอดมินควรใช้อีเมลที่เปิดไว้เป็นของโรงเรียน (เช่น koyama@gmail.com)
+              ไม่ใช่อีเมลส่วนตัวของพนักงาน เพราะพอคนนั้นลาออก บัญชีจะติดตัวเขาไปด้วย
+              เป็นแนวปฏิบัติ ไม่ได้บังคับในโค้ด จึงบอกไว้ตรงนี้ให้คนกรอกเห็น */}
+          <InputField
+            label={role === "admin" ? "อีเมล (ใช้อีเมลกลางของโรงเรียน ไม่ใช่อีเมลส่วนตัว)" : "อีเมล"}
+            type="email" required value={createForm.email}
+            onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+          />
           <InputField label="รหัสผ่าน" type="password" required value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="อย่างน้อย 8 ตัวอักษร" />
         </div>
 
