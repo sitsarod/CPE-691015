@@ -38,7 +38,7 @@ type Customer struct {
     //
     // ⚠️ ทำหน้าที่ "อ้างอิงถึงคน" เท่านั้น ห้ามใช้ยืนยันตัวตนแทน PersonalQRCode
     // เพราะเป็นเลขเรียงกันที่เดาต่อได้ (ดูเหตุผลเต็มใน services/member_code.go)
-    MemberCode        string          `json:"memberCode" gorm:"type:varchar(16);uniqueIndex"`
+    MemberCode        string          `json:"memberCode" gorm:"type:varchar(16);index"`
     Status            CustomerStatus  `json:"status" gorm:"default:'active'" valid:"required~Status is required"`
 
     // FaceConsentStatus คือสถานะความยินยอมให้เก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)

@@ -216,3 +216,44 @@ func memberCodeTaken(db *gorm.DB, code string) (bool, error) {
 	}
 	return n > 0, nil
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Index ของรหัสประจำตัว
+// ─────────────────────────────────────────────────────────────────────────────
+
+// EnsureMemberCodeIndexes สร้าง unique index แบบมีเงื่อนไข ให้กับคอลัมน์ member_code
+//
+// ⚠️ ทำไมต้องเป็น "partial index" ไม่ใช่ uniqueIndex ธรรมดา
+//
+// ตอนแรกประกาศ gorm:"uniqueIndex" ไว้ที่โมเดล ซึ่งพังทันทีที่มีสมาชิกมากกว่า
+// หนึ่งคนที่ยังไม่มีรหัส เพราะ Go string ที่ไม่ได้ตั้งค่าคือ "" ไม่ใช่ NULL
+// และในสายตาฐานข้อมูล "" ก็เป็นค่าหนึ่ง สองแถวที่เป็น "" เหมือนกันจึงชน unique
+//
+// อาการที่เกิดจริง: seeder สร้างผู้เรียนคนที่สองไม่ผ่าน และเทสที่สร้าง
+// ผู้เรียนหลายคนพังหมด ทั้งที่ไม่มีใครตั้งใจใส่รหัสซ้ำเลย
+//
+// index แบบมีเงื่อนไขแก้ให้ตรงจุด คือ "บังคับไม่ให้ซ้ำเฉพาะแถวที่มีรหัสจริง"
+// ส่วนแถวที่ยังไม่มีรหัสจะมีกี่แถวก็ได้
+//
+// เรียกหลัง AutoMigrate เสมอ (cmd/migrate, cmd/init และ newTestDB ในเทส)
+// เพื่อให้ของจริงกับของในเทสมีกติกาเดียวกัน
+func EnsureMemberCodeIndexes(db *gorm.DB) error {
+	statements := []string{
+		// ทิ้ง index ตัวเก่าที่ GORM สร้างไว้จากแท็ก uniqueIndex ก่อน
+		// ถ้าไม่ทิ้ง ฐานข้อมูลเดิมจะยังบังคับกติกาเก่าอยู่
+		`DROP INDEX IF EXISTS idx_customers_member_code`,
+		`DROP INDEX IF EXISTS idx_coaches_member_code`,
+
+		`CREATE UNIQUE INDEX IF NOT EXISTS uniq_customers_member_code
+		 ON customers (member_code) WHERE member_code <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uniq_coaches_member_code
+		 ON coaches (member_code) WHERE member_code <> ''`,
+	}
+
+	for _, sql := range statements {
+		if err := db.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}

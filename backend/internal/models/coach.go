@@ -44,7 +44,7 @@ type Coach struct {
 	// เจ้าหน้าที่พิมพ์รหัสแล้วหาเจอเลย ไม่ต้องเลือกก่อนว่าจะค้นนักเรียนหรือโค้ช
 	//
 	// ⚠️ ห้ามใช้ยืนยันตัวตนแทน PersonalQRCode (ดู services/member_code.go)
-	MemberCode string `json:"memberCode" gorm:"type:varchar(16);uniqueIndex"`
+	MemberCode string `json:"memberCode" gorm:"type:varchar(16);index"`
 
 	// FaceConsentStatus คือสถานะความยินยอมให้เก็บข้อมูลใบหน้า (ข้อมูลชีวภาพ)
 	// โค้ชก็ต้องให้ความยินยอมเหมือนนักเรียน เพราะใช้สแกนหน้าเช็คชื่อเข้างาน

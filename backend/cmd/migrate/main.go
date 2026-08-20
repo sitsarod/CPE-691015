@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/services"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -72,6 +73,11 @@ func main() {
 		&models.Notification{},
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
+	}
+
+	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ (ดู services.EnsureMemberCodeIndexes)
+	if err := services.EnsureMemberCodeIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของรหัสประจำตัวไม่สำเร็จ: %v", err)
 	}
 
 	fmt.Println("อัปเดตสคีมาเรียบร้อย — เพิ่มคอลัมน์/ตารางที่ขาดของทุกโมเดลแล้ว (ข้อมูลเดิมอยู่ครบ)")

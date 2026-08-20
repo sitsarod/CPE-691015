@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"CPE-691015/internal/models" // เปลี่ยน "backend" เป็นชื่อโมดูลใน go.mod ของเธอนะยะ!
+	"CPE-691015/internal/services"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -75,6 +76,12 @@ func main() {
 	}
 
 	// === SEEDING DEFAULT DATA ===
+	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ ต้องสร้างก่อน seed
+	// ไม่งั้นข้อมูลตัวอย่างที่ยังไม่มีรหัสประจำตัวจะชนกันเอง
+	if err := services.EnsureMemberCodeIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของรหัสประจำตัวไม่สำเร็จ: %v", err)
+	}
+
 	seedBillingTypes(db)
 	seedAdmins(db)
 	seedCoaches(db)
