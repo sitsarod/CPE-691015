@@ -33,7 +33,7 @@ export default function RegisterPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(formData.email)) {
-      newErrors.email = "กรุณาระบุรูปแบบอีเมลให้ถูกต้อง (เช่น example@gmail.com)";
+      newErrors.email = "กรุณาระบุรูปแบบอีเมลให้ถูกต้อง";
     }
 
     if (formData.parentEmail && !emailRegex.test(formData.parentEmail)) {

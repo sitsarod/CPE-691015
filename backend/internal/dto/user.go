@@ -48,12 +48,18 @@ type TokenResponse struct {
 // ฟิลด์ชุดล่างมาจากตาราง customers จึงมีเฉพาะผู้ใช้ role = customer
 // ใช้ omitempty เพื่อไม่ให้แอดมิน/โค้ชได้ฟิลด์ว่างเปล่าติดไปด้วย
 type UserProfileResponseDTO struct {
-	ID        uint   `json:"id"`
-	Email     string `json:"email" binding:"required,email,endswith=@gmail.com"`
+	ID uint `json:"id"`
+	// ไม่มี binding tag เพราะ struct นี้เป็น "ขาออก" อย่างเดียว ไม่เคยถูก bind จาก request
+	// (ของเดิมมี endswith=@gmail.com ติดอยู่ซึ่งไม่เคยทำงาน อ่านแล้วเข้าใจผิดว่าบังคับ)
+	Email string `json:"email"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Role      string `json:"role"`
 	IsStudent bool   `json:"isStudent"`
+
+	// MemberCode คือรหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYS0001 (นักเรียน) หรือ KYC0001 (โค้ช)
+	// มีทั้งผู้เรียนและโค้ช ใช้อ้างอิงถึงตัวเองเวลาติดต่อเจ้าหน้าที่
+	MemberCode string `json:"memberCode,omitempty"`
 
 	Nickname          string     `json:"nickname,omitempty"`
 	PhoneNumber       string     `json:"phoneNumber,omitempty"`
