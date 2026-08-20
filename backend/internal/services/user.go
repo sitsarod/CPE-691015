@@ -5,7 +5,6 @@ import (
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
 	"errors"
-	"strings"
 	"time"
 	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
@@ -108,9 +107,11 @@ func (s *UserService) GetUserProfile(id uint) (*models.User, error) {
 // CreateUser inserts a new user and their customer profile into the database [POST]
 func (s *UserService) CreateUser(user *models.User) error {
 	
-	cleanEmail := strings.ToLower(strings.TrimSpace(user.Email))
-	if !strings.HasSuffix(cleanEmail, "@gmail.com") {
-		return errors.New("กรุณาใช้อีเมลที่เป็น @gmail.com เท่านั้น")
+	// กติกาอีเมลขึ้นกับบทบาท (ดู email_policy.go)
+	// ผู้เรียน/โค้ชใช้อีเมลอะไรก็ได้ ส่วนแอดมินห้ามใช้อีเมลฟรีสาธารณะ
+	cleanEmail := NormalizeEmail(user.Email)
+	if err := ValidateEmailForRole(cleanEmail, user.Role); err != nil {
+		return err
 	}
 	user.Email = cleanEmail // อัปเดตอีเมลที่จัดฟอร์แมตแล้วกลับเข้าไป
 
@@ -143,6 +144,15 @@ func (s *UserService) CreateUser(user *models.User) error {
 			return err
 		}
 		user.Customer.PersonalQRCode = qrCode
+
+		// รหัสประจำตัวแบบอ่านออกพูดได้ (เช่น KYS0001) — เซิร์ฟเวอร์ออกให้เสมอ
+		// เขียนทับค่าที่ client ส่งมาทุกครั้ง เพราะเป็น unique
+		// ถ้าปล่อยให้กำหนดเองได้จะจองรหัสของคนอื่นไว้ล่วงหน้าได้
+		memberCode, err := GenerateMemberCode(s.db, models.CustomerRole)
+		if err != nil {
+			return err
+		}
+		user.Customer.MemberCode = memberCode
 	}
 
 	return s.db.Create(user).Error

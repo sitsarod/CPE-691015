@@ -168,6 +168,13 @@ type AdminCustomerDetail struct {
 	ParentPhoneNumber string `json:"parentPhoneNumber"`
 	Status            string `json:"status"`
 
+	// MemberCode คือรหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYS0001
+	//
+	// ต่างจาก PersonalQRCode ตรงที่ไม่ใช่ความลับ จึงแสดงให้แอดมินเห็นได้
+	// เพราะมีไว้ให้อ้างอิงถึงคนโดยเฉพาะ (แจ้งทางโทรศัพท์ เขียนใบเสร็จ ฯลฯ)
+	// แสดงอย่างเดียว แก้ไม่ได้ — เซิร์ฟเวอร์เป็นคนออกให้ตอนสร้างบัญชี
+	MemberCode string `json:"memberCode"`
+
 	// FaceConsentStatus แสดงอย่างเดียว แก้ที่นี่ไม่ได้
 	// ต้องให้เจ้าตัวกดยินยอม/ถอนเองผ่าน /consents/face เพื่อให้มีหลักฐานตาม PDPA
 	FaceConsentStatus string `json:"faceConsentStatus"`
@@ -175,6 +182,8 @@ type AdminCustomerDetail struct {
 
 // AdminCoachDetail โปรไฟล์โค้ชแบบเต็ม
 type AdminCoachDetail struct {
+	// MemberCode รหัสประจำตัว แสดงอย่างเดียว (ดูเหตุผลที่ AdminCustomerDetail)
+	MemberCode     string  `json:"memberCode"`
 	Nickname       string  `json:"nickname"`
 	Phone          string  `json:"phone"`
 	LineID         string  `json:"lineId"`
@@ -218,12 +227,14 @@ func ToAdminUserDetail(u *models.User) AdminUserDetailResponse {
 			ParentEmail:       c.ParentEmail,
 			ParentPhoneNumber: c.ParentPhoneNumber,
 			Status:            string(c.Status),
+			MemberCode:        c.MemberCode,
 			FaceConsentStatus: string(c.FaceConsentStatus),
 		}
 	}
 
 	if co := u.Coach; co != nil {
 		res.Coach = &AdminCoachDetail{
+			MemberCode:     co.MemberCode,
 			Nickname:       co.Nickname,
 			Phone:          co.Phone,
 			LineID:         co.LineID,

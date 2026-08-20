@@ -67,6 +67,8 @@ export interface CoachProfile {
   pay_rate: number;
   /** QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน (มีเฉพาะใน response ตัวรายละเอียด) */
   personalQR?: string;
+  /** รหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYC0001 — ไม่ใช่ความลับ ใช้อ้างอิงถึงคน */
+  memberCode?: string;
 }
 
 export interface AvailabilitySlot {

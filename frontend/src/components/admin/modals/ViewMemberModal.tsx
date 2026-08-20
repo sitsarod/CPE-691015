@@ -93,6 +93,8 @@ export function ViewMemberModal({ isOpen, onClose, detail, isLoadingDetail, onEd
             <section>
               <h3 className="mb-3 text-xs font-bold text-gray-500">ข้อมูลผู้เรียน</h3>
               <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                {/* รหัสประจำตัวไว้ให้เจ้าหน้าที่อ้างอิงถึงคนนี้ (ต่างจาก id ที่เป็นเลขในฐานข้อมูล) */}
+                <DetailItem label="รหัสประจำตัว" value={detail.customer.memberCode} />
                 <DetailItem label="ชื่อเล่น" value={detail.customer.nickname} />
                 <DetailItem label="เพศ" value={GENDER_LABEL[detail.customer.gender] ?? "-"} />
                 <DetailItem label="วันเกิด" value={detail.customer.birthDate} />
@@ -114,6 +116,7 @@ export function ViewMemberModal({ isOpen, onClose, detail, isLoadingDetail, onEd
             <section>
               <h3 className="mb-3 text-xs font-bold text-gray-500">ข้อมูลโค้ช</h3>
               <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                <DetailItem label="รหัสประจำตัว" value={detail.coach.memberCode} />
                 <DetailItem label="ชื่อเล่น" value={detail.coach.nickname} />
                 <DetailItem label="เบอร์โทรศัพท์" value={detail.coach.phone} />
                 <DetailItem label="เลขบัตรประชาชน" value={detail.coach.uid} />

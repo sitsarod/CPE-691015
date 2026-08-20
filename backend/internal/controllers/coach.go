@@ -68,6 +68,7 @@ func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
 		PaymentType:       coach.PaymentType,
 		PayRate:           coach.PayRate,
 		PersonalQRCode:    coach.PersonalQRCode,
+		MemberCode:        coach.MemberCode,
 	}
 
 	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service

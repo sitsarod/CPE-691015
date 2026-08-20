@@ -115,6 +115,10 @@ type CoachDetailResponse struct {
 	// ไม่ใส่ใน CoachResponse ที่ใช้กับหน้า list เพราะค่านี้เป็นความลับ
 	// ไม่ควรหลุดไปกับ payload ของรายชื่อโค้ชทั้งหมด
 	PersonalQRCode string `json:"personalQR"`
+
+	// MemberCode คือรหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYC0001
+	// ไม่ใช่ความลับ (ต่างจาก PersonalQRCode) จึงแสดงได้ตามปกติ
+	MemberCode string `json:"memberCode"`
 }
 
 // โครงสร้างย่อยของวันและเวลาว่างแต่ละช่วง

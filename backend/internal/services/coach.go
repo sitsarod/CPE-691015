@@ -158,10 +158,17 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 		return nil, err
 	}
 
+	// รหัสประจำตัวแบบอ่านออกพูดได้ ใช้ชุดเลขเดียวกับนักเรียน
+	memberCode, err := GenerateMemberCode(s.db, models.CoachRole)
+	if err != nil {
+		return nil, err
+	}
+
 	coach := models.Coach{
 		UserID:         req.UserID,
 		Phone:          req.Phone,
 		PersonalQRCode: qrCode,
+		MemberCode:     memberCode,
 		LineID:         req.LineID,
 		Facebook:       req.Facebook,
 		Uid:            req.Uid,

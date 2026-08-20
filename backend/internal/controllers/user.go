@@ -37,7 +37,14 @@ func toUserProfileResponse(u *models.User) dto.UserProfileResponseDTO {
 		Role:      string(u.Role),
 	}
 
+	if u.Coach != nil {
+		// โค้ชก็มีรหัสประจำตัวเหมือนกัน ใช้ชุดเลขเดียวกับผู้เรียน
+		res.MemberCode = u.Coach.MemberCode
+		res.Nickname = u.Coach.Nickname
+	}
+
 	if u.Customer != nil {
+		res.MemberCode = u.Customer.MemberCode
 		res.Nickname = u.Customer.Nickname
 		res.PhoneNumber = u.Customer.PhoneNumber
 		res.LineID = u.Customer.LineID
@@ -161,7 +168,11 @@ func (ctrl *UserController) AdminUpdateUserController(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
 		case errors.Is(err, services.ErrEmailTaken), errors.Is(err, services.ErrCoachDuplicateUID):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		case errors.Is(err, services.ErrProfileNotFound):
+		case errors.Is(err, services.ErrProfileNotFound),
+			errors.Is(err, services.ErrAdminEmailDomain),
+			errors.Is(err, services.ErrEmailInvalid):
+			// ต้องส่งข้อความจริงกลับไป ไม่งั้นแอดมินเห็นแค่ "อัปเดตไม่ได้"
+			// แล้วไม่มีทางรู้ว่าติดที่กติกาโดเมนอีเมล
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})

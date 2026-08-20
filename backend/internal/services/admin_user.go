@@ -43,7 +43,14 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 			userUpdate["last_name"] = strings.TrimSpace(*req.LastName)
 		}
 		if req.Email != nil {
-			email := strings.ToLower(strings.TrimSpace(*req.Email))
+			email := NormalizeEmail(*req.Email)
+
+			// ต้องตรวจกติกาตามบทบาทตรงนี้ด้วย ไม่ใช่แค่ตอนสร้าง
+			// ไม่งั้นแอดมินสร้างบัญชีด้วยอีเมลโรงเรียนให้ผ่านด่านก่อน
+			// แล้วค่อยกลับมาแก้เป็น gmail ทีหลังได้ กลายเป็นด่านที่ข้ามได้ง่าย ๆ
+			if err := ValidateEmailForRole(email, user.Role); err != nil {
+				return err
+			}
 
 			var dup int64
 			if err := tx.Model(&models.User{}).
@@ -190,9 +197,11 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 		}
 	}
 
-	cleanEmail := strings.ToLower(strings.TrimSpace(req.Email))
-	if !strings.HasSuffix(cleanEmail, "@gmail.com") {
-		return nil, errors.New("กรุณาใช้อีเมลที่เป็น @gmail.com เท่านั้น")
+	// ใช้กติกาเดียวกับตอนสมัครผ่านหน้าเว็บ (ดู email_policy.go)
+	// เดิมตรงนี้ก๊อปเงื่อนไขมาจาก UserService.CreateUser ทำให้ต้องแก้สองที่ทุกครั้ง
+	cleanEmail := NormalizeEmail(req.Email)
+	if err := ValidateEmailForRole(cleanEmail, models.UserRole(req.Role)); err != nil {
+		return nil, err
 	}
 
 	if err := ValidatePasswordStrength(req.Password); err != nil {
@@ -235,6 +244,12 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 			}
 			customer.PersonalQRCode = qrCode
 
+			memberCode, err := GenerateMemberCode(tx, models.CustomerRole)
+			if err != nil {
+				return err
+			}
+			customer.MemberCode = memberCode
+
 			if err := tx.Create(customer).Error; err != nil {
 				return err
 			}
@@ -258,6 +273,12 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 				return err
 			}
 			coach.PersonalQRCode = qrCode
+
+			memberCode, err := GenerateMemberCode(tx, models.CoachRole)
+			if err != nil {
+				return err
+			}
+			coach.MemberCode = memberCode
 
 			if err := tx.Create(coach).Error; err != nil {
 				return err
