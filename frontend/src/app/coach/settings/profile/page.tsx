@@ -41,7 +41,7 @@ export default function CoachEditProfilePage() {
 
   // แยกจาก readOnlyData เพราะสองช่องนี้แก้เองได้ แต่ต้องยืนยันรหัสผ่านก่อน
   // จึงมีการ์ดของตัวเองอยู่ท้ายหน้า ไม่ปนกับฟอร์มช่องทางติดต่อ
-  const [bank, setBank] = useState({ account: "", info: "" });
+  const [bank, setBank] = useState({ account: "", info: "", promptPay: "" });
 
   const [formData, setFormData] = useState({
     phone: "",
@@ -67,6 +67,7 @@ export default function CoachEditProfilePage() {
         setBank({
           account: profile.bank_account || "",
           info: profile.payment_info || "",
+          promptPay: profile.prompt_pay || "",
         });
         setFormData({
           phone: profile.phone || "",
@@ -243,6 +244,7 @@ export default function CoachEditProfilePage() {
               coachId={coachId}
               initialBankAccount={bank.account}
               initialPaymentInfo={bank.info}
+              initialPromptPay={bank.promptPay}
             />
           </div>
         )}

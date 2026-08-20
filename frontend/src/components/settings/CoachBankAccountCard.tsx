@@ -5,7 +5,9 @@ import { Landmark, ShieldAlert } from "lucide-react";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
 import InputField from "@/components/InputField";
+import SelectField from "@/components/SelectField";
 import { updateCoachBankAccountAPI } from "@/services/coachAPI";
+import { BANK_OPTIONS } from "@/types/coach";
 
 /**
  * ส่วนแก้ข้อมูลบัญชีรับเงินของโค้ช
@@ -20,24 +22,31 @@ import { updateCoachBankAccountAPI } from "@/services/coachAPI";
  */
 interface Props {
   coachId: number;
+  /** ชื่อธนาคาร (คอลัมน์ bank_account) */
   initialBankAccount: string;
+  /** เลขบัญชี (คอลัมน์ payment_info) */
   initialPaymentInfo: string;
+  /** เบอร์พร้อมเพย์ */
+  initialPromptPay: string;
 }
 
 export default function CoachBankAccountCard({
   coachId,
   initialBankAccount,
   initialPaymentInfo,
+  initialPromptPay,
 }: Props) {
   // ค่าที่บันทึกลงฐานแล้วจริง ๆ ใช้เทียบว่ามีอะไรเปลี่ยนไหม และใช้ย้อนค่าตอนกดยกเลิก
   const [saved, setSaved] = useState({
     bankAccount: initialBankAccount,
     paymentInfo: initialPaymentInfo,
+    promptPay: initialPromptPay,
   });
 
   const [draft, setDraft] = useState({
     bankAccount: initialBankAccount,
     paymentInfo: initialPaymentInfo,
+    promptPay: initialPromptPay,
   });
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -47,7 +56,9 @@ export default function CoachBankAccountCard({
   const [notice, setNotice] = useState<string | null>(null);
 
   const isDirty =
-    draft.bankAccount !== saved.bankAccount || draft.paymentInfo !== saved.paymentInfo;
+    draft.bankAccount !== saved.bankAccount ||
+    draft.paymentInfo !== saved.paymentInfo ||
+    draft.promptPay !== saved.promptPay;
 
   const closeConfirm = () => {
     setIsConfirmOpen(false);
@@ -57,7 +68,7 @@ export default function CoachBankAccountCard({
   };
 
   const handleReset = () => {
-    setDraft({ bankAccount: saved.bankAccount, paymentInfo: saved.paymentInfo });
+    setDraft({ ...saved });
     setNotice(null);
   };
 
@@ -71,16 +82,22 @@ export default function CoachBankAccountCard({
     setError(null);
 
     try {
+      // ⚠️ ต้องส่ง prompt_pay ไปด้วยทุกครั้ง แม้ผู้ใช้ไม่ได้แก้ช่องนี้
+      //
+      // ฝั่ง service เขียนทั้งสามคอลัมน์แบบไม่มีเงื่อนไข ถ้าไม่ส่งมาจะกลายเป็น
+      // ค่าว่างแล้วลบพร้อมเพย์เดิมทิ้ง ทั้งที่ผู้ใช้แค่มาแก้เลขบัญชีเฉย ๆ
       const updated = await updateCoachBankAccountAPI(coachId, {
         currentPassword: password,
         bank_account: draft.bankAccount,
         payment_info: draft.paymentInfo,
+        prompt_pay: draft.promptPay,
       });
 
       // ยึดค่าที่ backend ตอบกลับเป็นความจริง ไม่ใช่ค่าที่พิมพ์ไว้ในฟอร์ม
       const next = {
         bankAccount: updated.bank_account ?? draft.bankAccount,
         paymentInfo: updated.payment_info ?? draft.paymentInfo,
+        promptPay: updated.prompt_pay ?? draft.promptPay,
       };
       setSaved(next);
       setDraft(next);
@@ -115,26 +132,44 @@ export default function CoachBankAccountCard({
               </div>
             )}
 
+            {/* ชื่อคอลัมน์กับความหมายสลับกันอยู่: bank_account เก็บ "ชื่อธนาคาร"
+                ส่วน payment_info เก็บ "เลขบัญชี" — แก้ชื่อคอลัมน์ตอนนี้จะกระทบโค้ดเพื่อน
+                หลายจุด จึงใช้ label สื่อความหมายที่ถูกต้องแทน ให้ตรงกับหน้าจัดการสมาชิก */}
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField
-                label="เลขบัญชีธนาคาร"
+              <SelectField
+                label="ธนาคาร"
                 name="bankAccount"
+                options={BANK_OPTIONS}
                 value={draft.bankAccount}
                 onChange={(e) => {
                   setDraft((prev) => ({ ...prev, bankAccount: e.target.value }));
                   setNotice(null);
                 }}
-                placeholder="ระบุเลขบัญชี"
               />
               <InputField
-                label="ข้อมูลการจ่ายเงิน (ชื่อธนาคาร / ชื่อบัญชี)"
+                label="เลขบัญชี"
                 name="paymentInfo"
+                inputMode="numeric"
                 value={draft.paymentInfo}
                 onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, paymentInfo: e.target.value }));
+                  setDraft((prev) => ({ ...prev, paymentInfo: e.target.value.replace(/\D/g, "") }));
                   setNotice(null);
                 }}
-                placeholder="เช่น ธนาคารกสิกรไทย / สมชาย ใจดี"
+                placeholder="ระบุเลขบัญชี"
+              />
+            </div>
+
+            <div className="mt-4">
+              <InputField
+                label="พร้อมเพย์"
+                name="promptPay"
+                inputMode="numeric"
+                value={draft.promptPay}
+                onChange={(e) => {
+                  setDraft((prev) => ({ ...prev, promptPay: e.target.value.replace(/\D/g, "") }));
+                  setNotice(null);
+                }}
+                placeholder="เบอร์โทรหรือเลขบัตรประชาชนที่ผูกพร้อมเพย์"
               />
             </div>
           </div>
@@ -194,8 +229,9 @@ export default function CoachBankAccountCard({
               คนที่ถูกหลอกให้กดมักไม่ได้อ่านฟอร์มด้านหลัง modal */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
             <p className="font-bold">ค่าจ้างงวดถัดไปจะถูกโอนไปที่</p>
-            <p className="font-mono text-base break-all">{draft.bankAccount || "(ยังไม่ได้กรอก)"}</p>
-            <p className="text-xs">{draft.paymentInfo || "(ยังไม่ได้กรอกข้อมูลการจ่ายเงิน)"}</p>
+            <p className="font-mono text-base break-all">{draft.paymentInfo || "(ยังไม่ได้กรอกเลขบัญชี)"}</p>
+            <p className="text-xs">{draft.bankAccount || "(ยังไม่ได้เลือกธนาคาร)"}</p>
+            <p className="text-xs">พร้อมเพย์: {draft.promptPay || "(ไม่ได้ระบุ)"}</p>
           </div>
 
           <InputField
