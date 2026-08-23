@@ -6,8 +6,17 @@ import {
   CreatePackageReq, 
   UpdatePackageReq 
 } from "@/types/course";
+import { uploadImage } from "@/utils/imageUpload";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// [POST] อัปโหลดรูปปกคอร์ส คืน URL ไปใส่ image_url ตอน create/update
+//
+// สองจังหวะ (อัปรูปก่อน → ค่อยบันทึกคอร์ส) เหมือนที่ประกาศข่าวทำ
+// เส้น create/update จึงยังรับ JSON ล้วน ไม่ต้องแปลงเป็น multipart
+export async function uploadCourseImage(file: File): Promise<string> {
+  return uploadImage(file, "course");
+}
 
 
 // [GET] ดึงคอร์สเรียนทั้งหมด (Public)

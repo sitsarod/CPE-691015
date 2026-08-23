@@ -111,6 +111,7 @@ func (ctrl *CourseController) CreateCourse(c *gin.Context) {
 		CourseName:  req.CourseName,
 		Description: req.Description,
 		Status:      status,
+		ImageURL:    req.ImageURL,
 		UserID:      userID,
 		LearningOutcomes: services.JoinLearningOutcomes(req.LearningOutcomes),
 	}

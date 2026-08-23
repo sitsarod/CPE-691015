@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Save, Clock, Calendar, Loader2, X } from "lucide-react";
 import { fetchCourseByIDAdmin, updateCourse, createPackage, updatePackage, deletePackage } from "@/services/courseAPI";
+import CourseImageField from "./CourseImageField";
 import { ScheduleFormInput, PackageFormInput, CoursePackageDTO, PackageScheduleInfoDTO } from "@/types/course";
 
 export default function EditCourseForm({ courseId, onSuccess, onCancel }: { courseId: number, onSuccess: () => void, onCancel: () => void }) {
@@ -13,6 +14,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
   const [learningOutcomes, setLearningOutcomes] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [status, setStatus] = useState("active");
   const [packages, setPackages] = useState<PackageFormInput[]>([]);
   const [initialPackageIds, setInitialPackageIds] = useState<string[]>([]);
@@ -25,6 +27,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         setCourseName(data.course_name);
         setDescription(data.description);
         setLearningOutcomes((data.learning_outcomes ?? []).join("\n"));
+        setImageUrl(data.image_url ?? "");
         setStatus(data.status);
         
         const loadedPackages = (data.packages || []).map((pkg: CoursePackageDTO) => ({
@@ -92,6 +95,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         course_name: courseName,
         description: description,
         status: status,
+        image_url: imageUrl,
         learning_outcomes: learningOutcomes
           .split("\n")
           .map((line) => line.trim())
@@ -195,6 +199,8 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
               placeholder={"การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง\nฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม"}
             />
           </div>
+
+          <CourseImageField value={imageUrl} onChange={setImageUrl} />
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">สถานะ</label>
             <select 

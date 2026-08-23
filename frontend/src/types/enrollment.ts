@@ -18,6 +18,7 @@ export interface ScheduleInfo {
 export interface EnrollmentCourseInfo {
   id: number;
   course_name: string;
+  image_url: string;
 }
 
 export interface EnrollmentPackageInfo {
@@ -74,6 +75,7 @@ export interface AdminEnrollmentCustomer {
 export interface AdminEnrollmentCourse {
   id: number;
   course_name: string;
+  image_url: string;
 }
 
 export interface AdminEnrollmentPackage {

@@ -28,6 +28,7 @@ import type { Enrollment, ScheduleInfo } from "@/types/enrollment";
 import type { BillingDTO } from "@/app/admin/payment/components/types";
 import type { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
 import type { Review } from "@/types/review";
+import CourseCover from "@/components/course/CourseCover";
 
 /* ------------------------------- helpers -------------------------------- */
 
@@ -572,8 +573,17 @@ export default function StudentOverview() {
                     return (
                       <li key={e.id}>
                         <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="truncate font-semibold text-gray-900">
-                            {e.package?.course?.course_name || "คอร์สเรียน"}
+                          <span className="flex min-w-0 items-center gap-2 font-semibold text-gray-900">
+                            <CourseCover
+                              src={e.package?.course?.image_url}
+                              alt={e.package?.course?.course_name ?? "คอร์ส"}
+                              width={64}
+                              height={64}
+                              className="h-7 w-7 shrink-0 rounded-md object-cover"
+                            />
+                            <span className="truncate">
+                              {e.package?.course?.course_name || "คอร์สเรียน"}
+                            </span>
                           </span>
                           <span className="shrink-0 tabular-nums text-gray-500">
                             {done}/{total} ครั้ง

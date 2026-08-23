@@ -8,6 +8,7 @@ import { fetchAllCourses } from "@/services/courseAPI";
 import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
 import { CourseDTO } from "@/types/course";
+import CourseCover from "@/components/course/CourseCover";
 import { PublicHome } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { BookOpen, Loader2, Star, UserRound, MapPin, Phone, Mail, Clock } from "lucide-react";
@@ -129,7 +130,14 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {courses.map((course) => (
                 <Link key={course.id} href={`/courses/${course.id}`}>
-                  <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+                    <CourseCover
+                      src={course.image_url}
+                      alt={course.course_name}
+                      className="aspect-[16/9] w-full shrink-0 bg-gray-50 object-cover"
+                    />
+
+                    <div className="p-8 flex flex-1 flex-col">
                     <div className="flex items-center gap-3 mb-4">
                       <BookOpen className="w-6 h-6 text-[#CC0000]" />
                       <span className="bg-red-100 text-[#CC0000] text-xs font-bold px-3 py-1 rounded-full uppercase">
@@ -146,6 +154,7 @@ export default function Home() {
                       <span className="text-[#CC0000] font-semibold text-sm hover:underline">
                         ดูรายละเอียดและแพ็กเกจทั้งหมด →
                       </span>
+                    </div>
                     </div>
                   </div>
                 </Link>

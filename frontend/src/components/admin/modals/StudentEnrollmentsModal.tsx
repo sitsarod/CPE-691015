@@ -9,6 +9,7 @@ import {
   expiryBadgeClass,
   formatThaiDate,
 } from "@/components/course/expiryUtils";
+import CourseCover from "@/components/course/CourseCover";
 import ExtendEnrollmentModal, {
   ExtendTarget,
 } from "@/app/admin/enrollments/components/ExtendEnrollmentModal";
@@ -124,7 +125,14 @@ export default function StudentEnrollmentsModal({
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                        <CourseCover
+                          src={e.package?.course?.image_url}
+                          alt={e.package?.course?.course_name ?? "คอร์ส"}
+                          width={128}
+                          height={128}
+                          className="h-11 w-14 shrink-0 rounded-lg object-cover"
+                        />
+                        <div className="min-w-0 flex-1">
                           <p className="font-bold text-gray-900">
                             {e.package?.course?.course_name ?? "ไม่ระบุคอร์ส"}
                           </p>

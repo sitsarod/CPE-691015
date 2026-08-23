@@ -470,6 +470,7 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 				pkgDTO.Course = &dto.CustomerEnrollmentCourseDTO{
 					ID:         pkg.Course.ID,
 					CourseName: pkg.Course.CourseName,
+					ImageURL:   pkg.Course.ImageURL,
 				}
 			}
 

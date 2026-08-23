@@ -4,6 +4,7 @@ import { X, FileClock, GraduationCap, Inbox } from "lucide-react";
 import type { Enrollment } from "@/types/enrollment";
 import { ENROLLMENT_STATUS_LABEL } from "@/types/enrollment";
 import { formatThaiDate } from "@/components/course/expiryUtils";
+import CourseCover from "@/components/course/CourseCover";
 
 // สถานะที่ถือว่า "เคยเรียนจริงและจบไปแล้ว" — ต้องเคยมี started_at ด้วย
 // ใบที่ถูกปฏิเสธหรือยกเลิกก่อนเริ่มไม่นับว่าเคยเรียน
@@ -102,9 +103,18 @@ export default function EnrollmentHistoryModal({ enrollments, onClose }: Props) 
                       className="rounded-xl border border-gray-200 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <p className="font-semibold text-gray-900">
-                          {e.package?.course?.course_name ?? "ไม่ทราบคอร์ส"}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <CourseCover
+                            src={e.package?.course?.image_url}
+                            alt={e.package?.course?.course_name ?? "คอร์ส"}
+                            width={128}
+                            height={128}
+                            className="h-10 w-12 shrink-0 rounded-lg object-cover"
+                          />
+                          <p className="truncate font-semibold text-gray-900">
+                            {e.package?.course?.course_name ?? "ไม่ทราบคอร์ส"}
+                          </p>
+                        </div>
                         <StatusTag status={e.status} />
                       </div>
 
@@ -156,7 +166,14 @@ export default function EnrollmentHistoryModal({ enrollments, onClose }: Props) 
                     className="rounded-xl border border-gray-200 p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <CourseCover
+                        src={e.package?.course?.image_url}
+                        alt={e.package?.course?.course_name ?? "คอร์ส"}
+                        width={128}
+                        height={128}
+                        className="h-10 w-12 shrink-0 rounded-lg object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-gray-900">
                           {e.package?.course?.course_name ?? "ไม่ทราบคอร์ส"}
                         </p>

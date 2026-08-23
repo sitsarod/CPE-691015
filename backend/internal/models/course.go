@@ -21,6 +21,9 @@ type Course struct {
 
 	LearningOutcomes string `json:"-" gorm:"type:text"`
 
+	// รูปปกคอร์ส — text ไม่ใช่ varchar(255) เพราะ URL ของ Cloudinary ที่มี transform ยาวเกินได้
+	ImageURL string `json:"image_url" gorm:"type:text"`
+
 	UserID        uint           `json:"user_id" valid:"required~userID is required"`
 	User          *User          `json:"user" gorm:"foreignKey:UserID"`
 	

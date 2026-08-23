@@ -34,6 +34,8 @@ export interface CourseDTO {
   course_name: string;
   description: string;
   status: string;
+  /** รูปปกคอร์ส — "" เมื่อยังไม่ได้ตั้ง */
+  image_url: string;
   /** สิ่งที่จะได้เรียนรู้ — backend คืนเป็น [] เสมอ ไม่เคยเป็น null */
   learning_outcomes: string[];
   user?: CourseUserDTO;
@@ -46,6 +48,8 @@ export interface CreateCourseReq {
   course_name: string;
   description: string;
   status: string;
+  /** URL จาก uploadCourseImage ไม่ใช่ไฟล์ */
+  image_url?: string;
   learning_outcomes?: string[];
   // เจ้าของคอร์สถูกกำหนดจาก JWT ที่ backend (C2) — ไม่ส่ง user_id จาก client อีกต่อไป
 }
@@ -54,6 +58,8 @@ export interface UpdateCourseReq {
   course_name?: string;
   description?: string;
   status?: string;
+  /** ส่ง "" = ลบรูปปกทิ้ง · ไม่ส่งฟิลด์นี้ = ไม่แตะรูปเดิม */
+  image_url?: string;
   learning_outcomes?: string[];
 }
 
