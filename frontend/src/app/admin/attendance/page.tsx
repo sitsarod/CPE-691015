@@ -14,10 +14,12 @@ import {
   KeyRound,
   Camera,
   CameraOff,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
   fetchOpenablePackages,
+  fetchOpenSessions,
   openSession,
   fetchSession,
   lookupByQR,
@@ -28,6 +30,7 @@ import {
 } from "@/services/attendanceAPI";
 import type {
   OpenablePackage,
+  OpenSessionSummary,
   AttendanceSession,
   ScanResult,
   RosterItem,
@@ -43,10 +46,17 @@ import EditStatusModal from "./components/EditStatusModal";
 
 const SCAN_COOLDOWN_SECONDS = 3;
 
+// session_date มาเป็น date ล้วน (UTC midnight ของวันตามเวลาสนาม)
+function formatSessionDate(iso: string) {
+  return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+}
+
 export default function AdminAttendancePage() {
   const [openable, setOpenable] = useState<OpenablePackage[]>([]);
+  const [openSessions, setOpenSessions] = useState<OpenSessionSummary[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [enteringSessionId, setEnteringSessionId] = useState<number | null>(null);
 
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [busyPackageId, setBusyPackageId] = useState<number | null>(null);
@@ -95,9 +105,15 @@ export default function AdminAttendancePage() {
 
     (async () => {
       try {
-        const data = await fetchOpenablePackages();
+        // ต้องได้ทั้งคู่ — รายการรอบที่เปิดค้างคือตาข่ายกันลืมปิดรอบ
+        // ถ้าปล่อยให้มันพังเงียบ ๆ ก็เท่ากับไม่มีตั้งแต่แรก
+        const [packages, sessions] = await Promise.all([
+          fetchOpenablePackages(),
+          fetchOpenSessions(),
+        ]);
         if (cancelled) return;
-        setOpenable(data);
+        setOpenable(packages);
+        setOpenSessions(sessions);
         setListError(null);
       } catch (err: unknown) {
         if (cancelled) return;
@@ -133,6 +149,18 @@ export default function AdminAttendancePage() {
       loadOpenable();
     } finally {
       setBusyPackageId(null);
+    }
+  };
+
+  const handleEnterSession = async (sessionId: number) => {
+    setEnteringSessionId(sessionId);
+    try {
+      setSession(await fetchSession(sessionId));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถเข้าสู่รอบเช็คชื่อได้");
+      loadOpenable();
+    } finally {
+      setEnteringSessionId(null);
     }
   };
 
@@ -290,6 +318,15 @@ export default function AdminAttendancePage() {
 
   // ─── จอเลือกแพ็กเกจ ────────────────────────────────────────────────────────
 
+  // รอบที่เปิดค้างและไม่มีทางเข้าถึงจากรายการแพ็กเกจอีกแล้ว จึงยกมาแสดงแยก
+  // ตัวที่ยังกดเข้าได้จากรายการปกติไม่ต้องเอามาซ้ำ
+  const reachableSessionIds = new Set(
+    openable
+      .map((pkg) => pkg.existing_session_id)
+      .filter((id): id is number => id !== null)
+  );
+  const staleSessions = openSessions.filter((row) => !reachableSessionIds.has(row.id));
+
   if (!session) {
     return (
       <div className="mx-auto max-w-7xl">
@@ -322,6 +359,63 @@ export default function AdminAttendancePage() {
 
         {listError && (
           <div className="mt-6 rounded-xl bg-red-50 p-4 text-red-700">{listError}</div>
+        )}
+
+        {staleSessions.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-900">รอบที่เปิดค้างไว้ ยังไม่ได้ปิด</p>
+                <p className="mt-0.5 text-sm text-amber-800">
+                  คนที่ไม่ได้เช็คชื่อจะยังไม่ถูกมาร์คขาดเรียนจนกว่าจะปิดรอบ —
+                  ระบบจะปิดให้อัตโนมัติหลังเลยเวลาคาบ แต่เข้าไปตรวจและปิดเองก่อนได้
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {staleSessions.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-4"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {row.course_name || "ไม่ทราบคอร์ส"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {formatSessionDate(row.session_date)} · {row.schedule_start_time} –{" "}
+                        {row.schedule_end_time}
+                      </span>
+                      <span
+                        className={
+                          row.pending_count > 0 ? "font-medium text-amber-700" : undefined
+                        }
+                      >
+                        ยังไม่เช็ค {row.pending_count} / {row.total_count} คน
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleEnterSession(row.id)}
+                    disabled={enteringSessionId !== null}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {enteringSessionId === row.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Lock className="h-5 w-5" />
+                    )}
+                    เข้าไปปิดรอบ
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {isLoadingList ? (
@@ -405,10 +499,13 @@ export default function AdminAttendancePage() {
 
   const isOpen = session.status === "open";
 
+  // เปิดอยู่ ≠ สแกนได้ — รอบที่เลยเวลาแล้วยังต้องเข้ามาดูรายชื่อและกด "ปิดรอบ" ได้
+  // แต่ backend ปฏิเสธการสแกนทุกครั้ง (ErrAttendanceExpired) โชว์กล้องต่อ = หลอกให้กดเปล่า
+  const canScan = isOpen && session.can_scan;
+
   // กล้องโชว์อยู่จริงหรือไม่ — ตัวตัดสินว่าผลการเช็คชื่อจะไปขึ้นที่ไหน
-  // ต้องเช็ค isOpen ด้วย เพราะปิดรอบแล้วทั้งบล็อกกล้องจะหายไป
-  // ถ้าดูแค่ useCamera ผลจะไม่โผล่ที่ไหนเลยหลังกดปิดรอบ
-  const showResultOnCamera = isOpen && useCamera;
+  // ถ้าดูแค่ useCamera ผลจะไม่โผล่ที่ไหนเลยตอนบล็อกกล้องไม่ถูกเรนเดอร์
+  const showResultOnCamera = canScan && useCamera;
 
   return (
     // สองคอลัมน์บนจอ lg ขึ้นไป (iPad วางนอนเข้าเกณฑ์) — กล้องซ้าย รายชื่อขวา
@@ -436,10 +533,12 @@ export default function AdminAttendancePage() {
           </h1>
           <p className="text-gray-500">
             คาบ {session.schedule_start_time} – {session.schedule_end_time} ·{" "}
-            {isOpen ? (
+            {!isOpen ? (
+              <span className="font-medium text-gray-600">ปิดรอบแล้ว</span>
+            ) : canScan ? (
               <span className="font-medium text-green-600">รอบเปิดอยู่</span>
             ) : (
-              <span className="font-medium text-gray-600">ปิดรอบแล้ว</span>
+              <span className="font-medium text-amber-600">เปิดค้างอยู่ · เลยเวลาแล้ว</span>
             )}
           </p>
         </div>
@@ -489,15 +588,29 @@ export default function AdminAttendancePage() {
         </div>
       </div>
 
+      {isOpen && !canScan && (
+        <div className="flex shrink-0 items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="font-semibold text-amber-900">เลยเวลาคาบแล้ว — สแกนเพิ่มไม่ได้</p>
+            <p className="mt-0.5 text-sm text-amber-800">
+              {session.pending_count > 0
+                ? `กด "ปิดรอบ" เพื่อบันทึกคนที่ยังไม่เช็คชื่อ ${session.pending_count} คนเป็นขาดเรียน (หักโควตาคนละ 1 ครั้ง) — ถ้ามีคนแจ้งลาไว้ ให้แก้สถานะเป็น "ลา" ทีหลังเพื่อคืนโควตา`
+                : 'เช็คชื่อครบทุกคนแล้ว กด "ปิดรอบ" เพื่อปิดงานของคาบนี้ได้เลย'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ปิดรอบแล้วคอลัมน์ซ้ายหายไป ต้องสลับเป็นคอลัมน์เดียวด้วย
           ไม่งั้นรายชื่อจะไปนั่งในช่องซ้ายที่กว้างแค่ 380px แล้วตารางแน่นจนอ่านยาก */}
       <div
         className={`grid min-h-0 flex-1 gap-4 ${
-          isOpen ? "lg:grid-cols-[minmax(340px,440px)_minmax(0,1fr)]" : "lg:grid-cols-1"
+          canScan ? "lg:grid-cols-[minmax(340px,440px)_minmax(0,1fr)]" : "lg:grid-cols-1"
         }`}
       >
         {/* ── ซ้าย: รับการเช็คชื่อ ── */}
-        {isOpen && (
+        {canScan && (
           <div className="flex min-h-0 flex-col gap-3">
             {useCamera ? (
               <QRScanner

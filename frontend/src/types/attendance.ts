@@ -55,12 +55,35 @@ export interface AttendanceSession {
   schedule_start_time: string;
   schedule_end_time: string;
 
+  // รับการเช็คชื่อได้จริงไหม — รอบที่ "เปิดอยู่แต่เลยเวลาแล้ว" ยังดูรายชื่อและปิดรอบได้
+  // แต่สแกนไม่ได้ อย่าดูแค่ status
+  can_scan: boolean;
+
   roster: RosterItem[];
 
   present_count: number;
   absent_count: number;
   leave_count: number;
   pending_count: number;
+}
+
+// รอบที่ยังเปิดค้างอยู่ — ทางกลับเข้าไปปิดรอบที่หลุดจาก OpenablePackage ไปแล้ว
+export interface OpenSessionSummary {
+  id: number;
+  package_id: number;
+  course_name: string;
+  session_date: string;
+
+  schedule_start_time: string;
+  schedule_end_time: string;
+  opened_at: string;
+
+  // จำนวนคนที่จะถูกมาร์คขาดเรียนถ้าปิดรอบตอนนี้
+  pending_count: number;
+  total_count: number;
+
+  // false = เลยเวลาคาบแล้ว เหลือแค่เข้าไปดูรายชื่อและปิดรอบ
+  can_scan: boolean;
 }
 
 // ─── สแกน ────────────────────────────────────────────────────────────────────

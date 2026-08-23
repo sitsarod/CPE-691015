@@ -63,12 +63,37 @@ type AttendanceSessionDTO struct {
 	ScheduleStartTime string `json:"schedule_start_time"`
 	ScheduleEndTime   string `json:"schedule_end_time"`
 
+	// CanScan = รับการเช็คชื่อได้จริงไหมตอนนี้ (เปิดอยู่ + ยังไม่เลยเวลาคาบ)
+	//
+	// ต้องแยกจาก Status เพราะรอบที่ "เปิดอยู่แต่เลยเวลาแล้ว" ยังดูรายชื่อและกดปิดรอบได้
+	// แต่สแกนไม่ได้ ถ้าหน้าเว็บดูแค่ Status จะโชว์กล้องให้ยิงแล้วเจอ error ทุกครั้ง
+	CanScan bool `json:"can_scan"`
+
 	Roster []RosterItemDTO `json:"roster"`
 
 	PresentCount int `json:"present_count"`
 	AbsentCount  int `json:"absent_count"`
 	LeaveCount   int `json:"leave_count"`
 	PendingCount int `json:"pending_count"`
+}
+
+// OpenSessionSummaryDTO คือรอบที่ยัง status='open' อยู่ (ดู GetOpenSessions)
+type OpenSessionSummaryDTO struct {
+	ID          uint      `json:"id"`
+	PackageID   uint      `json:"package_id"`
+	CourseName  string    `json:"course_name"`
+	SessionDate time.Time `json:"session_date"`
+
+	ScheduleStartTime string    `json:"schedule_start_time"`
+	ScheduleEndTime   string    `json:"schedule_end_time"`
+	OpenedAt          time.Time `json:"opened_at"`
+
+	// จำนวนคนในรอบที่ยังไม่มีบันทึกใด ๆ = จำนวนคนที่จะถูกมาร์คขาดเรียนถ้าปิดรอบตอนนี้
+	PendingCount int `json:"pending_count"`
+	TotalCount   int `json:"total_count"`
+
+	// false = เลยเวลาคาบแล้ว สแกนต่อไม่ได้ เหลือแค่เข้าไปดูรายชื่อและปิดรอบ
+	CanScan bool `json:"can_scan"`
 }
 
 // ─── สแกน ────────────────────────────────────────────────────────────────────

@@ -59,7 +59,16 @@ Babminton/
 | `cmd/reissueqr` | เครื่องมือออก QR ประจำตัวใหม่ให้สมาชิก |
 
 ### Background job
-`serve/main.go` มี goroutine ที่รันทุก 24 ชั่วโมง (เริ่มทันทีตอน start) เพื่อ sync สถานะลูกค้า active/inactive อัตโนมัติ (`UserService.SyncCustomerStatuses`)
+`serve/main.go` เริ่ม goroutine ไว้ 4 ตัว ทุกตัวรันครั้งแรกทันทีตอน start แล้วทำซ้ำตามรอบของตัวเอง
+
+| งาน | รอบ | ทำอะไร |
+|---|---|---|
+| `startCustomerStatusJob` | 24 ชม. | sync สถานะลูกค้า active/inactive (`UserService.SyncCustomerStatuses`) |
+| `startAnnouncementCleanupJob` | 1 ชม. | ลบประกาศที่พ้นวันสิ้นสุดแล้ว |
+| `startChatCleanupJob` | 6 ชม. | ลบห้องแชทที่ปิดไปแล้วเกิน 7 วัน |
+| `startAttendanceAutoCloseJob` | 15 นาที | ปิดรอบเช็คชื่อที่เลยเวลาคาบแล้วแต่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน (`AttendanceService.AutoCloseStaleSessions`) |
+
+> ⚠️ งานปิดรอบอัตโนมัติ **หักโควตาคนที่ไม่มา** โดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้นเวลาผ่อนผัน 30 นาทีหลังจบคาบเสมอ (`sessionScanDeadline`) เพื่อให้แอดมินมีช่วงเข้าไปจัดการเองก่อน รอบที่ระบบปิดเองจะมี `closed_by_user_id` เป็น `NULL`
 
 ### ความปลอดภัยที่ implement ไว้ (เห็นจากคอมเมนต์ในโค้ด)
 - `SetTrustedProxies(nil)` กัน IP spoofing ผ่าน `X-Forwarded-For` เพื่อให้ rate limit ตาม IP ใช้งานได้จริง
@@ -108,7 +117,7 @@ Babminton/
 | `/courts/*` | จัดการสนามแบดมินตัน |
 | `/courses/*`, `/packages/*` | คอร์สเรียนและแพ็กเกจราคา (public ดูได้, แอดมิน CRUD) |
 | `/enrollments/*` | ลูกค้าลงทะเบียนคอร์ส, แอดมินอนุมัติ/ขยายเวลา/จัดการ |
-| `/attendance/*` | ระบบเช็คชื่อด้วย QR — เปิด session ที่สนาม, สแกน 2 จังหวะ (lookup → check-in), เช็คชื่อมือ, ปิด session, ดูประวัติ |
+| `/attendance/*` | ระบบเช็คชื่อด้วย QR — เปิด session ที่สนาม, ดูรอบที่เปิดค้างอยู่ (`GET /sessions`), สแกน 2 จังหวะ (lookup → check-in), เช็คชื่อมือ, ปิด session, ดูประวัติ |
 | `/payments/*`, `/billings/*` | สร้าง invoice, อัปโหลดสลิปโอนเงิน (ตรวจผ่าน SlipOK), แอดมินยืนยัน/ปฏิเสธ/ยกเลิก, บิล/แบ่งบิล |
 | `/bank-accounts/*` | บัญชีธนาคารสำหรับรับเงิน |
 | `/expenses/*`, `/upload` | บันทึกรายจ่าย พร้อมอัปโหลดไฟล์แนบ |

@@ -38,7 +38,9 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
   const [search, setSearch] = useState("");
   const [pendingOnly, setPendingOnly] = useState(false);
 
-  const isOpen = session.status === "open";
+  // ต้องผูกกับ can_scan ไม่ใช่แค่ status — ManualCheckIn โดน checkSessionWindow
+  // ปฏิเสธเหมือนการสแกน ปุ่มที่กดแล้ว error ทุกครั้งไม่ควรมีให้กด
+  const canCheckIn = session.status === "open" && session.can_scan;
   const pendingCount = session.roster.filter((r) => !r.attendance_id).length;
 
   const rows = useMemo(() => {
@@ -159,7 +161,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
                 <td className="px-3 py-3 text-right">
                   {/* ปุ่มสูง 44px ขึ้นไปตามขนาดนิ้วมือ — จอนี้ใช้นิ้วกดบน iPad ไม่ใช่เมาส์
                       ปุ่มเล็กกว่านั้นจะกดพลาดไปโดนแถวข้างเคียงตอนรีบ */}
-                  {!item.attendance_id && isOpen && (
+                  {!item.attendance_id && canCheckIn && (
                     <button
                       onClick={() => handleManual(item.enrollment_id)}
                       disabled={busyId !== null}

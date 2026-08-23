@@ -61,6 +61,24 @@ func startChatCleanupJob() {
 	}()
 }
 
+// startAttendanceAutoCloseJob ปิดรอบเช็คชื่อที่ลืมกดปิด (ดู AutoCloseStaleSessions)
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 15 นาที
+//
+// ถี่กว่างานอื่นเพราะ markAbsentees อ่านรายชื่อ ณ ตอนปิด ยิ่งทิ้งไว้นานรายชื่อยิ่งเพี้ยน
+func startAttendanceAutoCloseJob() {
+	attendanceService := services.NewAttendanceService(config.DB)
+	go func() {
+		for {
+			if n, err := attendanceService.AutoCloseStaleSessions(); err != nil {
+				log.Printf("ปิดรอบเช็คชื่อที่ค้างอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ปิดรอบเช็คชื่อที่เลยเวลาแล้วอัตโนมัติ %d รอบ", n)
+			}
+			time.Sleep(15 * time.Minute)
+		}
+	}()
+}
+
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
 	_ = godotenv.Load("../../../.env")
@@ -102,6 +120,9 @@ func main() {
 	// 3.2 ลบประกาศที่หมดอายุ + ลบห้องแชทที่ปิดเกิน 7 วัน อัตโนมัติ
 	startAnnouncementCleanupJob()
 	startChatCleanupJob()
+
+	// 3.3 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน
+	startAttendanceAutoCloseJob()
 
 	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
 	port := os.Getenv("PORT")
