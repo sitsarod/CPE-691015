@@ -34,6 +34,7 @@ func toCoachResponse(coach *models.Coach) dto.CoachResponse {
 		Phone:          coach.Phone,
 		LineID:         coach.LineID,
 		Facebook:       coach.Facebook,
+		Status:         coach.Status,
 	}
 
 	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service เช็ค nil ก่อนเสมอกันกรณี preload ไม่เจอ user จริง

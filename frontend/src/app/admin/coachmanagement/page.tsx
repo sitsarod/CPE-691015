@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, AlertCircle, Dumbbell, Award, Phone, UserRound } from "lucide-react";
+import { RefreshCw, AlertCircle, Dumbbell, CircleCheck, CircleSlash } from "lucide-react";
 import {
   getAllCoachesAPI,
   getCoachDetailAPI,
@@ -111,7 +111,7 @@ export default function CoachManagementPage() {
 
     const required: [keyof EditCoachForm, string][] = [
       ["nickname", "ชื่อเล่น"], ["phone", "เบอร์โทรศัพท์"], ["address", "ที่อยู่"],
-      ["bank_account", "ธนาคาร"], ["payment_info", "เลขบัญชี"],
+      ["bank_account", "ธนาคาร"], ["payment_info", "เลขบัญชี"], ["prompt_pay", "พร้อมเพย์"],
       ["specialization", "ระดับฝีมือ"], ["coach_license", "ใบรับรองผู้ฝึกสอน"],
     ];
     for (const [key, label] of required) {
@@ -178,6 +178,19 @@ export default function CoachManagementPage() {
     }
   };
 
+  // สลับสถานะเปิด/ปิดใช้งานของโค้ช (ยิงผ่าน endpoint แอดมินแก้สมาชิก)
+  const handleToggleStatus = async (item: CoachListItem) => {
+    const nextStatus = item.status === "inactive" ? "active" : "inactive";
+    const verb = nextStatus === "inactive" ? "ปิดใช้งาน (พักงาน)" : "เปิดใช้งาน";
+    if (!confirm(`ต้องการ${verb}โค้ช "${item.firstName} ${item.lastName}" ใช่หรือไม่?`)) return;
+    try {
+      await adminUpdateUserAPI(item.user_id, { coach: { status: nextStatus } });
+      await loadCoaches();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถเปลี่ยนสถานะได้");
+    }
+  };
+
   const filteredCoaches = coaches.filter((c) => {
     const term = searchTerm.toLowerCase();
     return (
@@ -192,29 +205,49 @@ export default function CoachManagementPage() {
     );
   });
 
+  // โค้ชที่ status = "inactive" ถือว่าพักงาน ที่เหลือ (รวมค่าว่าง/undefined) ถือว่า active
+  const inactiveCount = coaches.filter((c) => c.status === "inactive").length;
   const stats = {
     total: coaches.length,
-    specializations: new Set(coaches.map((c) => c.specialization?.trim()).filter(Boolean)).size,
-    withPhone: coaches.filter((c) => !!c.phone).length,
-    withNickname: coaches.filter((c) => !!c.nickname).length,
+    active: coaches.length - inactiveCount,
+    inactive: inactiveCount,
   };
 
   const coachColumns: Column<CoachListItem>[] = [
     {
       header: "โค้ช",
       render: (item) => (
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-gray-900">
-              {item.firstName} {item.lastName}
+        <div className="flex items-center gap-3 min-w-0">
+          {item.profile_picture ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.profile_picture}
+              alt=""
+              className="h-10 w-10 rounded-full object-cover ring-1 ring-gray-200 shrink-0"
+            />
+          ) : (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#E63946] to-[#CC0000] text-sm font-bold text-white">
+              {(item.firstName?.[0] || item.nickname?.[0] || "C").toUpperCase()}
             </span>
-            {item.nickname && (
-              <span className="text-xs text-gray-400">({item.nickname})</span>
+          )}
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-gray-900">
+                {item.firstName} {item.lastName}
+              </span>
+              {item.nickname && (
+                <span className="text-xs text-gray-400">({item.nickname})</span>
+              )}
+              {item.status === "inactive" && (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 ring-1 ring-inset ring-gray-300">
+                  พักงาน
+                </span>
+              )}
+            </div>
+            {item.email && (
+              <span className="text-xs text-gray-500 mt-0.5 truncate">{item.email}</span>
             )}
           </div>
-          {item.email && (
-            <span className="text-xs text-gray-500 mt-0.5 truncate">{item.email}</span>
-          )}
         </div>
       ),
     },
@@ -245,7 +278,13 @@ export default function CoachManagementPage() {
       className: "text-right w-20",
       render: (item) => (
         <div className="flex justify-end">
-          <RowActionMenu onView={() => openView(item)} onSchedule={() => openSchedule(item)} onDelete={() => handleDelete(item)} />
+          <RowActionMenu
+            onView={() => openView(item)}
+            onSchedule={() => openSchedule(item)}
+            onToggleStatus={() => handleToggleStatus(item)}
+            isActive={item.status !== "inactive"}
+            onDelete={() => handleDelete(item)}
+          />
         </div>
       ),
     },
@@ -268,11 +307,10 @@ export default function CoachManagementPage() {
       </div>
 
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="โค้ชทั้งหมด" value={stats.total} icon={Dumbbell} tint="bg-sky-100 text-sky-700" />
-        <SummaryCard label="ความเชี่ยวชาญ (ประเภท)" value={stats.specializations} icon={Award} tint="bg-violet-100 text-violet-700" />
-        <SummaryCard label="ระบุเบอร์ติดต่อ" value={stats.withPhone} icon={Phone} tint="bg-emerald-100 text-emerald-700" />
-        <SummaryCard label="ระบุชื่อเล่น" value={stats.withNickname} icon={UserRound} tint="bg-rose-100 text-rose-700" />
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <SummaryCard label="โค้ชปัจจุบันทั้งหมด" value={stats.total} icon={Dumbbell} tint="bg-sky-100 text-sky-700" />
+        <SummaryCard label="กำลังใช้งาน (active)" value={stats.active} icon={CircleCheck} tint="bg-emerald-100 text-emerald-700" />
+        <SummaryCard label="พักงาน (inactive)" value={stats.inactive} icon={CircleSlash} tint="bg-gray-100 text-gray-600" />
       </div>
 
       {error && (

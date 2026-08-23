@@ -205,6 +205,7 @@ export interface AdminUpdateCoachProfile {
   prompt_pay?: string;
   payment_type?: string;
   pay_rate?: number;
+  status?: string; // "active" | "inactive"
 }
 
 /** ข้อมูลโปรไฟล์ผู้เรียนที่แอดมินแก้ได้ (ตรงกับ dto.AdminUpdateCustomerProfile) */

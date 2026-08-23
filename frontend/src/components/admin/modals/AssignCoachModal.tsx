@@ -1,9 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Trash2, Plus, UserCheck, CalendarClock, AlertTriangle } from "lucide-react";
+import { Trash2, Plus, UserCheck, Search, Check, MapPin } from "lucide-react";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
-import InputField from "@/components/InputField";
-import SelectField from "@/components/SelectField";
 import { FormError } from "@/components/admin/ManagementUI";
 import { CoachListItem } from "@/services/coachAPI";
 import { Court } from "@/services/courtAPI";
@@ -33,8 +31,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
   const [court, setCourt] = useState("");
   const [description, setDescription] = useState("");
   const [emergency, setEmergency] = useState(false); // โหมดฉุกเฉิน: ข้ามเช็คเวลาว่าง
-  const [levelFilter, setLevelFilter] = useState(""); // กรองตามระดับฝีมือ
-  const [licenseFilter, setLicenseFilter] = useState(""); // กรองตามใบรับรอง
+  const [search, setSearch] = useState(""); // ค้นหาชื่อโค้ช
   const [formError, setFormError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -45,8 +42,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
     setCourt("");
     setDescription("");
     setEmergency(false);
-    setLevelFilter("");
-    setLicenseFilter("");
+    setSearch("");
     setFormError(null);
   }, [isOpen]);
 
@@ -55,30 +51,32 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
     [session]
   );
 
+  // โค้ชที่พักงาน (inactive) มอบหมายไม่ได้ กรองออกก่อนเสมอ (backend ก็บล็อกซ้ำอีกชั้น)
+  const activeCoaches = useMemo(() => coaches.filter((c) => c.status !== "inactive"), [coaches]);
+
   // โค้ชที่ "ว่าง" ตรงเวลาคาบนี้ และยังไม่ถูก assign
   const availableCoaches = useMemo(() => {
     if (!session) return [];
     const start = toMin(session.start_time);
     const end = toMin(session.end_time);
-    return coaches.filter((c) => {
+    return activeCoaches.filter((c) => {
       if (assignedIds.has(c.id)) return false;
       const windows = availByCoach.get(c.id)?.get(session.day_of_week) ?? [];
       return windows.some((w) => toMin(w.start_time) <= start && toMin(w.end_time) >= end);
     });
-  }, [session, coaches, assignedIds, availByCoach]);
+  }, [session, activeCoaches, assignedIds, availByCoach]);
 
-  // โหมดฉุกเฉิน: แสดงโค้ชทุกคนที่ยังไม่ถูก assign (ไม่สนเวลาว่าง)
-  const baseCoaches = emergency ? coaches.filter((c) => !assignedIds.has(c.id)) : availableCoaches;
+  // โหมดฉุกเฉิน: แสดงโค้ชทุกคน (ที่ยัง active) ที่ยังไม่ถูก assign — ไม่สนเวลาว่าง
+  const baseCoaches = emergency ? activeCoaches.filter((c) => !assignedIds.has(c.id)) : availableCoaches;
 
-  // กรองตามระดับฝีมือ + ใบรับรอง
-  const shownCoaches = baseCoaches.filter(
-    (c) => (!levelFilter || c.specialization === levelFilter) && (!licenseFilter || c.coach_license === licenseFilter)
-  );
-
-  const coachOptions = shownCoaches.map((c) => ({
-    label: `${c.firstName} ${c.lastName}${c.nickname ? ` (${c.nickname})` : ""}${c.specialization ? ` · ${c.specialization}` : ""}`,
-    value: String(c.id),
-  }));
+  // กรองด้วยชื่อ (ค้นหา)
+  const shownCoaches = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return baseCoaches;
+    return baseCoaches.filter((c) =>
+      `${c.firstName} ${c.lastName} ${c.nickname ?? ""}`.toLowerCase().includes(term)
+    );
+  }, [baseCoaches, search]);
 
   const handleAdd = async () => {
     if (!session) return;
@@ -176,77 +174,123 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
               คาบสอนนี้ผ่านไปแล้ว — มอบหมายเพิ่มไม่ได้
             </p>
           ) : (
-            <div className="rounded-2xl border border-slate-200 p-5 space-y-4">
-              <p className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-[#CD0D13]" /> เพิ่มโค้ช {emergency ? "(กรณีฉุกเฉิน: แสดงโค้ชทุกคน)" : "(แสดงเฉพาะโค้ชที่ว่างเวลานี้)"}
-              </p>
+            <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-[#CD0D13]" /> เพิ่มโค้ช
+                </p>
+                <span className="text-xs text-slate-400">{emergency ? "แสดงทุกคน" : "เฉพาะที่ว่างเวลานี้"}</span>
+              </div>
 
-              {/* toggle โหมดฉุกเฉิน */}
-              <label className="flex items-start gap-2.5 cursor-pointer rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              {/* ค้นหาชื่อโค้ช */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="ค้นหาชื่อโค้ช..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-slate-300"
+                />
+              </div>
+
+              {/* รายชื่อโค้ช — คลิกเพื่อเลือก */}
+              {shownCoaches.length === 0 ? (
+                <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700">
+                  {search
+                    ? "ไม่พบโค้ชตามคำค้น"
+                    : emergency
+                    ? "ไม่มีโค้ชที่มอบหมายได้"
+                    : "ไม่มีโค้ชว่างตรงเวลานี้ — เปิด “กรณีฉุกเฉิน” ด้านล่างเพื่อแสดงทุกคน"}
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                  {shownCoaches.map((c) => {
+                    const active = selectedCoach === String(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setSelectedCoach(active ? "" : String(c.id))}
+                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                          active ? "border-[#E63946] bg-rose-50 ring-1 ring-[#E63946]" : "border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {c.profile_picture ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.profile_picture} alt="" className="h-9 w-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#E63946] to-[#CC0000] text-xs font-bold text-white">
+                            {(c.firstName?.[0] || c.nickname?.[0] || "C").toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-800 truncate">
+                            {c.firstName} {c.lastName}
+                            {c.nickname && <span className="text-xs font-normal text-slate-400"> ({c.nickname})</span>}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {c.specialization && (
+                              <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">{c.specialization}</span>
+                            )}
+                            {c.coach_license && (
+                              <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">{c.coach_license}</span>
+                            )}
+                          </div>
+                        </div>
+                        {active && <Check className="h-5 w-5 shrink-0 text-[#E63946]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* สนาม + รายละเอียด (ไม่บังคับ) */}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="relative">
+                  <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={court}
+                    onChange={(e) => setCourt(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-slate-300 cursor-pointer"
+                  >
+                    <option value="">— ไม่ระบุสนาม —</option>
+                    {courtOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="รายละเอียด (ไม่บังคับ)"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-3 text-sm outline-none focus:border-slate-300"
+                />
+              </div>
+
+              {/* โหมดฉุกเฉิน — เล็ก อยู่ล่าง */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-500">
                 <input
                   type="checkbox"
                   checked={emergency}
                   onChange={(e) => { setEmergency(e.target.checked); setSelectedCoach(""); }}
-                  className="mt-0.5 w-4 h-4 accent-[#CD0D13] cursor-pointer"
+                  className="w-4 h-4 accent-[#CD0D13] cursor-pointer"
                 />
-                <span className="text-sm text-amber-700 leading-snug">
-                  <span className="font-bold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> กรณีฉุกเฉิน</span>
-                  <span className="text-xs">ข้ามการเช็คเวลาว่าง — มอบหมายได้แม้โค้ชไม่ว่าง (ใช้เมื่อไม่มีใครว่างตรงเวลานี้)</span>
-                </span>
+                กรณีฉุกเฉิน: แสดงโค้ชทุกคน (มอบหมายได้แม้ไม่ว่าง)
               </label>
 
-              {/* ตัวกรองโค้ช: ระดับฝีมือ + ใบรับรอง (ค่าเริ่มต้น = ทั้งหมด) */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col space-y-1.5">
-                  <label className="text-sm font-semibold text-gray-700">กรองระดับฝีมือ</label>
-                  <select
-                    value={levelFilter}
-                    onChange={(e) => { setLevelFilter(e.target.value); setSelectedCoach(""); }}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base bg-white text-gray-900 focus:outline-none focus:border-orange-primary cursor-pointer"
-                  >
-                    <option value="">ทุกระดับ</option>
-                    {COACH_LEVEL_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col space-y-1.5">
-                  <label className="text-sm font-semibold text-gray-700">กรองใบรับรอง</label>
-                  <select
-                    value={licenseFilter}
-                    onChange={(e) => { setLicenseFilter(e.target.value); setSelectedCoach(""); }}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base bg-white text-gray-900 focus:outline-none focus:border-orange-primary cursor-pointer"
-                  >
-                    <option value="">ทั้งหมด</option>
-                    {COACH_LICENSE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {coachOptions.length === 0 ? (
-                <p className="text-sm text-amber-600 flex items-center gap-2 py-2">
-                  <CalendarClock className="w-4 h-4 shrink-0" />
-                  {levelFilter || licenseFilter
-                    ? "ไม่มีโค้ชตรงตามตัวกรอง — ลองปรับตัวกรอง"
-                    : "ไม่มีโค้ชที่ว่างตรงเวลานี้ — เปิดโหมดฉุกเฉินด้านบนเพื่อมอบหมายได้"}
-                </p>
-              ) : (
-                <>
-                  <SelectField label="โค้ช" options={coachOptions} value={selectedCoach} onChange={(e) => setSelectedCoach(e.target.value)} />
-                  <SelectField label="สนาม (ไม่บังคับ)" options={courtOptions} value={court} onChange={(e) => setCourt(e.target.value)} />
-                  <InputField label="รายละเอียด (ไม่บังคับ)" value={description} onChange={(e) => setDescription(e.target.value)} />
-                  <Button variant="primary" onClick={handleAdd} disabled={isBusy} className="w-full bg-[#E63946] hover:bg-[#d62839] py-3.5 text-base">
-                    {isBusy ? "กำลังบันทึก..." : "มอบหมายโค้ชคนนี้"}
-                  </Button>
-                </>
-              )}
+              <Button
+                variant="primary"
+                onClick={handleAdd}
+                disabled={isBusy || !selectedCoach}
+                className="w-full bg-[#E63946] hover:bg-[#d62839] py-3 text-base disabled:opacity-50"
+              >
+                {isBusy ? "กำลังบันทึก..." : "มอบหมายโค้ชคนนี้"}
+              </Button>
             </div>
           )}
 
           <p className="text-xs text-slate-400 text-center">
-            ระบบตรวจเวลาชนคาบอื่นและสนามซ้ำเสมอ (แม้โหมดฉุกเฉิน) — 1 คาบมอบหมายได้หลายโค้ช
+            ระบบตรวจเวลาชนและสนามซ้ำเสมอ (แม้โหมดฉุกเฉิน) — 1 คาบมอบหมายได้หลายโค้ช
           </p>
         </div>
       )}

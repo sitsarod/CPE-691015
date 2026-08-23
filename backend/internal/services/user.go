@@ -190,6 +190,10 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
         if input.Facebook != nil {
             customerUpdate["facebook"] = *input.Facebook
         }
+        // รูปโปรไฟล์ (อัปโหลดขึ้น Cloudinary แล้วส่ง URL มาบันทึก)
+        if input.ProfilePicture != nil {
+            customerUpdate["profile_picture"] = *input.ProfilePicture
+        }
 
         if len(customerUpdate) > 0 {
             if err := s.db.Model(user.Customer).Updates(customerUpdate).Error; err != nil {

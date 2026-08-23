@@ -3,8 +3,8 @@ import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
 import Button from "@/components/Button";
 import { AdminUpdateUserInput } from "@/services/userAPI";
-import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS } from "@/types/coach";
-import { FormError } from "@/components/admin/ManagementUI";
+import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, BANK_OPTIONS } from "@/types/coach";
+import { FormError, DetailItem } from "@/components/admin/ManagementUI";
 
 /**
  * ฟอร์มให้แอดมินแก้ข้อมูลสมาชิก
@@ -27,10 +27,12 @@ interface Props {
   formError: string | null;
   isSubmitting: boolean;
   onSave: () => void;
+  /** รหัสประจำตัว (แสดงอย่างเดียว) — ส่งมาจากข้อมูลสมาชิกที่โหลดไว้ */
+  memberCode?: string;
 }
 
 export function EditMemberModal({
-  isOpen, onClose, role, editForm, setEditForm, formError, isSubmitting, onSave,
+  isOpen, onClose, role, editForm, setEditForm, formError, isSubmitting, onSave, memberCode,
 }: Props) {
   const customer = editForm.customer ?? {};
   const coach = editForm.coach ?? {};
@@ -122,6 +124,13 @@ export function EditMemberModal({
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
             <p className="text-xs font-bold text-gray-500">ข้อมูลโค้ช</p>
 
+            {/* รหัสประจำตัว — แสดงอย่างเดียว แก้ไม่ได้ */}
+            {memberCode && (
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 w-fit">
+                <DetailItem label="รหัสประจำตัว" value={memberCode} />
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <InputField label="ชื่อเล่น" value={coach.nickname ?? ""} onChange={(e) => setCoach({ nickname: e.target.value })} />
               <InputField
@@ -148,9 +157,10 @@ export function EditMemberModal({
               <SelectField label="ใบรับรองผู้ฝึกสอน" options={COACH_LICENSE_OPTIONS} value={coach.coach_license ?? ""} onChange={(e) => setCoach({ coach_license: e.target.value })} />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField label="เลขบัญชีธนาคาร" value={coach.bank_account ?? ""} onChange={(e) => setCoach({ bank_account: e.target.value })} />
-              <InputField label="ข้อมูลการจ่ายเงิน" value={coach.payment_info ?? ""} onChange={(e) => setCoach({ payment_info: e.target.value })} />
+              <SelectField label="ธนาคาร" options={BANK_OPTIONS} value={coach.bank_account ?? ""} onChange={(e) => setCoach({ bank_account: e.target.value })} />
+              <InputField label="เลขบัญชี" inputMode="numeric" value={coach.payment_info ?? ""} onChange={(e) => setCoach({ payment_info: e.target.value.replace(/[^\d]/g, "") })} />
             </div>
+            <InputField label="พร้อมเพย์" inputMode="numeric" value={coach.prompt_pay ?? ""} onChange={(e) => setCoach({ prompt_pay: e.target.value.replace(/[^\d]/g, "") })} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <SelectField label="ประเภทการจ่ายเงิน" options={COACH_PAYMENT_TYPE_OPTIONS} value={coach.payment_type ?? ""} onChange={(e) => setCoach({ payment_type: e.target.value })} />
               <InputField
@@ -160,7 +170,6 @@ export function EditMemberModal({
                 onChange={(e) => setCoach({ pay_rate: Number(e.target.value) })}
               />
             </div>
-            <InputField label="รูปโปรไฟล์ (URL)" value={coach.profile_picture ?? ""} onChange={(e) => setCoach({ profile_picture: e.target.value })} />
           </div>
         )}
 

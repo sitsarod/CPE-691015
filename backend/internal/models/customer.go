@@ -30,6 +30,8 @@ type Customer struct {
     // LineID / Facebook เป็นช่องทางติดต่อเสริม ไม่บังคับกรอก
     LineID              string          `json:"lineId" gorm:"type:varchar(100)"`
     Facebook            string          `json:"facebook" gorm:"type:varchar(255)"`
+    // ProfilePicture = URL รูปโปรไฟล์ (อัปโหลดขึ้น Cloudinary) — ไม่บังคับ
+    ProfilePicture      string          `json:"profile_picture" gorm:"type:varchar(255)"`
     ParentEmail       string          `json:"parentEmail" valid:"email~Invalid parent email format,optional"`
     ParentPhoneNumber string          `json:"parentPhoneNumber" valid:"numeric~Parent phone number must contain only numbers,optional"`
     PersonalQRCode    string          `json:"personalQR" gorm:"unique" valid:"required~Personal QR Code is required"`

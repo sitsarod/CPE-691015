@@ -72,6 +72,15 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 		return fmt.Errorf("%w: start_time ต้องน้อยกว่า end_time", ErrScheduleInvalid)
 	}
 
+	// 0) โค้ชที่ถูกพักงาน (status = inactive) มอบหมายงานไม่ได้ (บล็อกแม้โหมดฉุกเฉิน)
+	var coach models.Coach
+	if err := tx.Select("status").First(&coach, req.CoachID).Error; err != nil {
+		return err
+	}
+	if coach.Status == "inactive" {
+		return fmt.Errorf("%w: โค้ชคนนี้ถูกพักงาน (inactive) จึงมอบหมายงานไม่ได้", ErrScheduleConflict)
+	}
+
 	// 1) ต้องอยู่ในช่วงเวลาว่างของโค้ชในวันนั้น
 	// ยกเว้นกรณีฉุกเฉิน (IgnoreAvailability = true) ที่แอดมินยืนยันจะ assign แม้โค้ชไม่ว่าง
 	// แต่ยังคงเช็คเวลาชน/สนามซ้อนด้านล่างเสมอ (ห้ามข้าม เพราะ double-booking เป็น error จริง)
@@ -113,8 +122,9 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 		}
 	}
 
-	// 3) สนาม (optional): ถ้าระบุสนามมา ต้องไม่ถูกใช้โดย "คาบอื่น" ที่ต่างคาบกันในเวลาชนกัน
-	//    แต่อนุญาตให้สนามซ้ำได้ถ้าเป็น "คาบเดียวกัน" (โค้ชหลายคน co-teach คาบเดียวกัน package_schedule_id ตรงกัน)
+	// 3) สนาม (optional): ถ้าระบุสนามมา ต้องไม่ถูกใช้โดย "คลาสอื่น" ที่ต่างคลาสกันในเวลาชนกัน
+	//    แต่อนุญาตให้สนามซ้ำได้ถ้าเป็น "คลาสเดียวกัน" (โค้ชหลายคน co-teach คลาสเดียวกัน)
+	//    นิยาม "คลาสเดียวกัน" = course + วัน + เวลาเริ่ม-จบ ตรงกัน (package เป็นแค่โควตาจำนวนครั้ง ไม่ใช่ตัวแยกคลาส)
 	if strings.TrimSpace(req.CourtNumber) != "" {
 		var courtJobs []models.WorkSchedule
 		if err := tx.Where("court_number = ? AND date = ? AND id <> ?", req.CourtNumber, req.Date, excludeID).Find(&courtJobs).Error; err != nil {
@@ -124,12 +134,11 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 			ws, _ := timeToMinutesWS(w.StartTime)
 			we, _ := timeToMinutesWS(w.EndTime)
 			if reqStart < we && ws < reqEnd {
-				// เป็นคาบเดียวกัน (co-teach) ไหม? — package_schedule_id ตรงกันทั้งคู่และไม่ใช่ nil
-				sameSession := req.PackageScheduleID != nil && w.PackageScheduleID != nil && *req.PackageScheduleID == *w.PackageScheduleID
-				if sameSession {
-					continue // อนุญาต: โค้ชอีกคนสอนคาบเดียวกันบนสนามเดียวกัน
+				sameClass := w.CourseID == req.CourseID && w.StartTime == req.StartTime && w.EndTime == req.EndTime
+				if sameClass {
+					continue // อนุญาต: โค้ชอีกคนสอนคลาสเดียวกันบนสนามเดียวกัน
 				}
-				return fmt.Errorf("%w: สนาม %s ถูกใช้งานโดยคาบอื่นในช่วงเวลานี้แล้ว", ErrScheduleConflict, req.CourtNumber)
+				return fmt.Errorf("%w: สนาม %s ถูกใช้งานโดยคลาสอื่นในช่วงเวลานี้แล้ว", ErrScheduleConflict, req.CourtNumber)
 			}
 		}
 	}
@@ -301,7 +310,17 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 		return nil, err
 	}
 
-	sessions := make([]dto.WeekSessionResponse, 0)
+	// 3) รวมคาบเป็น "คลาส" ตาม course + วันที่ + เวลาเริ่ม-จบ
+	//    package เป็นแค่โควตาจำนวนครั้งที่นักเรียนมาเรียนได้ ไม่ใช่ตัวแยกคลาส
+	//    ดังนั้นหลาย package ของคอร์สเดียวกันที่เรียนวัน-เวลาเดียวกัน = คลาสเดียว การ์ดเดียว
+	type classKey struct {
+		courseID uint
+		date     string
+		start    string
+		end      string
+	}
+	classMap := make(map[classKey]*dto.WeekSessionResponse)
+
 	for _, pkg := range packages {
 		courseName := ""
 		courseID := pkg.CourseID
@@ -316,50 +335,64 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 				continue
 			}
 			dateStr := start.AddDate(0, 0, off).Format("2006-01-02")
-
-			// โค้ชที่ถูก assign ให้คาบนี้แล้ว (match ด้วย package_schedule_id + วันที่)
-			var ws []models.WorkSchedule
-			if err := s.db.Preload("Coach.User").
-				Where("package_schedule_id = ? AND date = ?", sch.ID, dateStr).
-				Find(&ws).Error; err != nil {
-				return nil, err
-			}
-			coaches := make([]dto.WeekSessionCoach, 0, len(ws))
-			for _, w := range ws {
-				name := ""
-				if w.Coach != nil {
-					name = w.Coach.Nickname
-					if name == "" && w.Coach.User != nil {
-						name = w.Coach.User.FirstName + " " + w.Coach.User.LastName
-					}
+			key := classKey{courseID: courseID, date: dateStr, start: sch.StartTime, end: sch.EndTime}
+			if _, exists := classMap[key]; !exists {
+				classMap[key] = &dto.WeekSessionResponse{
+					PackageID:         pkg.ID, // แค่ตัวแทน (มีหลาย package ในคลาสเดียว)
+					PackageScheduleID: sch.ID, // แค่ตัวแทน
+					CourseID:          courseID,
+					CourseName:        courseName,
+					Date:              dateStr,
+					DayOfWeek:         string(sch.DayOfWeek),
+					StartTime:         sch.StartTime,
+					EndTime:           sch.EndTime,
 				}
-				coaches = append(coaches, dto.WeekSessionCoach{
-					WorkScheduleID: w.ID,
-					CoachID:        w.CoachID,
-					CoachName:      name,
-					CourtNumber:    w.Courtnumber,
-				})
 			}
+		}
+	}
 
-			sessions = append(sessions, dto.WeekSessionResponse{
-				PackageID:         pkg.ID,
-				PackageScheduleID: sch.ID,
-				CourseID:          courseID,
-				CourseName:        courseName,
-				Date:              dateStr,
-				DayOfWeek:         string(sch.DayOfWeek),
-				StartTime:         sch.StartTime,
-				EndTime:           sch.EndTime,
-				AssignedCoaches:   coaches,
+	// 4) ดึงโค้ชที่ถูก assign ให้แต่ละคลาส (match ด้วย course + วันที่ + เวลา ไม่ใช่ package_schedule_id)
+	sessions := make([]dto.WeekSessionResponse, 0, len(classMap))
+	for _, sess := range classMap {
+		var ws []models.WorkSchedule
+		if err := s.db.Preload("Coach.User").
+			Where("course_id = ? AND date = ? AND start_time = ? AND end_time = ?", sess.CourseID, sess.Date, sess.StartTime, sess.EndTime).
+			Find(&ws).Error; err != nil {
+			return nil, err
+		}
+		coaches := make([]dto.WeekSessionCoach, 0, len(ws))
+		seen := make(map[uint]bool) // กันโค้ชซ้ำ (เผื่อข้อมูลเก่าที่ assign ต่อ package)
+		for _, w := range ws {
+			if seen[w.CoachID] {
+				continue
+			}
+			seen[w.CoachID] = true
+			name := ""
+			if w.Coach != nil {
+				name = w.Coach.Nickname
+				if name == "" && w.Coach.User != nil {
+					name = w.Coach.User.FirstName + " " + w.Coach.User.LastName
+				}
+			}
+			coaches = append(coaches, dto.WeekSessionCoach{
+				WorkScheduleID: w.ID,
+				CoachID:        w.CoachID,
+				CoachName:      name,
+				CourtNumber:    w.Courtnumber,
 			})
 		}
+		sess.AssignedCoaches = coaches
+		sessions = append(sessions, *sess)
 	}
 
 	sort.Slice(sessions, func(i, j int) bool {
 		if sessions[i].Date != sessions[j].Date {
 			return sessions[i].Date < sessions[j].Date
 		}
-		return sessions[i].StartTime < sessions[j].StartTime
+		if sessions[i].StartTime != sessions[j].StartTime {
+			return sessions[i].StartTime < sessions[j].StartTime
+		}
+		return sessions[i].CourseName < sessions[j].CourseName
 	})
 
 	return sessions, nil

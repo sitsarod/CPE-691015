@@ -86,7 +86,7 @@ export function EditCoachModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField label="ธนาคาร" required options={BANK_OPTIONS} value={editForm.bank_account} onChange={(e) => setEditForm({ ...editForm, bank_account: e.target.value })} />
           <InputField label="เลขบัญชี" required inputMode="numeric" value={editForm.payment_info} onChange={(e) => setEditForm({ ...editForm, payment_info: e.target.value.replace(/[^\d]/g, "") })} />
-          <InputField label="พร้อมเพย์ (ไม่บังคับ)" inputMode="numeric" value={editForm.prompt_pay} onChange={(e) => setEditForm({ ...editForm, prompt_pay: e.target.value })} />
+          <InputField label="พร้อมเพย์" required inputMode="numeric" value={editForm.prompt_pay} onChange={(e) => setEditForm({ ...editForm, prompt_pay: e.target.value.replace(/[^\d]/g, "") })} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField

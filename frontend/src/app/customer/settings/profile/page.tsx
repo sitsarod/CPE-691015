@@ -4,14 +4,16 @@ import React, { useEffect, useState } from 'react';
 import Button from '@/components/Button';
 import InputField from '@/components/InputField';
 import SelectField from '@/components/SelectField';
-import { 
-  getUserProfileAPI, 
-  updateUserProfileAPI, 
-  UserProfileResponseDTO 
+import AvatarUploader from '@/components/AvatarUploader';
+import {
+  getUserProfileAPI,
+  updateUserProfileAPI,
+  UserProfileResponseDTO
 } from '@/services/userAPI';
 
 export default function EditForm() {
   const [userId, setUserId] = useState<number | null>(null);
+  const [profilePicture, setProfilePicture] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -46,6 +48,7 @@ export default function EditForm() {
 
         const profile: UserProfileResponseDTO = await getUserProfileAPI(id);
 
+        setProfilePicture(profile.profile_picture || "");
         setFormData({
           firstName: profile.firstName || "",
           lastName: profile.lastName || "",
@@ -72,6 +75,17 @@ export default function EditForm() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // อัปโหลดรูปสำเร็จ → บันทึก URL ลงโปรไฟล์ทันที
+  const handleAvatarUploaded = async (url: string) => {
+    if (!userId) return;
+    try {
+      await updateUserProfileAPI(userId, { profile_picture: url });
+      setProfilePicture(url);
+    } catch (err: any) {
+      setErrorMsg(err.message || "บันทึกรูปโปรไฟล์ไม่สำเร็จ");
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -118,21 +132,21 @@ export default function EditForm() {
         </div>
       )}
 
-      {/* Profile Header */}
-      <div className="w-full bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex items-center justify-between mb-8 shadow-xs">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0">
-            <img src="/slide3.jpg" alt="Avatar" className="w-full h-full object-cover" />
-          </div>
+      {/* Profile Header — อัปโหลดรูปโปรไฟล์ขึ้น Cloudinary */}
+      <div className="w-full bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex items-center gap-5 mb-8 shadow-xs">
+        <AvatarUploader
+          currentUrl={profilePicture}
+          initials={(formData.firstName?.[0] || formData.nickname?.[0] || "?").toUpperCase()}
+          folder="profile"
+          disabled={userId === null}
+          onUploaded={handleAvatarUploaded}
+        />
+        <div className="min-w-0">
+          <p className="font-bold text-gray-900 truncate">
+            {[formData.firstName, formData.lastName].filter(Boolean).join(" ") || "ผู้เรียน"}
+          </p>
+          {formData.nickname && <p className="text-sm text-gray-500 truncate">({formData.nickname})</p>}
         </div>
-        <Button 
-          variant="primary" 
-          type="button" 
-          onClick={() => alert("ระบบอัปโหลดรูปภาพกำลังมาคัป")}
-          className="!w-fit flex-shrink-0 px-5 py-2 rounded-lg bg-[#CC0000] text-white font-bold hover:bg-red-700 transition-colors"
-        >
-          Change photo
-        </Button>
       </div>
 
       <form onSubmit={handleSave} className="flex flex-row flex-wrap w-full gap-y-5 text-left bg-white">
