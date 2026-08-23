@@ -5,6 +5,9 @@ type CreateCourseReq struct {
 	Description string `json:"description" binding:"required"`
 	Status      string `json:"status" binding:"omitempty,oneof=active inactive draft"`
 	LearningOutcomes []string `json:"learning_outcomes"`
+
+	// URL ที่อัปโหลดผ่าน POST /upload มาแล้ว ไม่ใช่ไฟล์
+	ImageURL string `json:"image_url"`
 }
 
 type UpdateCourseReq struct {
@@ -12,6 +15,9 @@ type UpdateCourseReq struct {
 	Description      *string   `json:"description"`
 	Status           *string   `json:"status"`
 	LearningOutcomes *[]string `json:"learning_outcomes"`
+
+	// ส่ง "" มา = ลบรูปปกทิ้ง ซึ่งต่างจากไม่ส่งฟิลด์นี้เลย (= ไม่แตะ)
+	ImageURL *string `json:"image_url"`
 }
 
 type CourseDTO struct {
@@ -19,6 +25,7 @@ type CourseDTO struct {
 	CourseName  string `json:"course_name"`
 	Description string `json:"description"`
 	Status      string `json:"status"`
+	ImageURL    string `json:"image_url"`
 	LearningOutcomes []string           `json:"learning_outcomes"`
 	User             *CourseUserDTO     `json:"user"`
 	Packages         []CoursePackageDTO `json:"packages"`

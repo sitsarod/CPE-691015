@@ -61,6 +61,7 @@ type UpdateEnrollmentReq struct {
 type CustomerEnrollmentCourseDTO struct {
     ID         uint   `json:"id"`
     CourseName string `json:"course_name"`
+    ImageURL   string `json:"image_url"`
 }
 
 // CustomerEnrollmentPackageDTO แพ็กเกจที่ผู้เรียนสมัครไว้ พร้อมตารางเรียน
@@ -180,6 +181,7 @@ type AdminEnrollmentCustomerDTO struct {
 type AdminEnrollmentCourseDTO struct {
     ID         uint   `json:"id"`
     CourseName string `json:"course_name"`
+    ImageURL   string `json:"image_url"`
 }
 
 // AdminEnrollmentPackageDTO ข้อมูลแพ็กเกจที่ผู้สมัครเลือก
@@ -247,6 +249,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
             pkg.Course = &AdminEnrollmentCourseDTO{
                 ID:         e.Package.Course.ID,
                 CourseName: e.Package.Course.CourseName,
+                ImageURL:   e.Package.Course.ImageURL,
             }
         }
         item.Package = pkg

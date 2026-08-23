@@ -146,6 +146,9 @@ func (s *CourseService) UpdateCourse(id uint, input dto.UpdateCourseReq) (*dto.C
 		// ส่ง [] มา = ลบรายการทั้งหมด ซึ่งต่างจากไม่ส่งฟิลด์นี้มาเลย (= ไม่แตะ)
 		updateData["learning_outcomes"] = JoinLearningOutcomes(*input.LearningOutcomes)
 	}
+	if input.ImageURL != nil {
+		updateData["image_url"] = *input.ImageURL
+	}
 
 	if len(updateData) > 0 {
 		if err := s.db.Model(&courseItem).Updates(updateData).Error; err != nil {

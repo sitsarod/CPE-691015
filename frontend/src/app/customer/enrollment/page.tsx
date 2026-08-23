@@ -28,6 +28,7 @@ import FaceConsentModal from "@/components/FaceConsentModal";
 import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
 import { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
 import EnrollmentHistoryModal from "./components/EnrollmentHistoryModal";
+import CourseCover from "@/components/course/CourseCover";
 import CourseDetail from "@/components/course/CourseDetail";
 import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 import {
@@ -328,7 +329,15 @@ export default function EnrollmentPage() {
                 )}
 
                 <div className={`flex justify-center items-center py-4 ${item.status === 'pending' || item.status === 'awaiting_payment' || item.status === 'expired' ? 'mt-4 opacity-50' : ''}`}>
-                  <FileEdit className="w-20 h-20 text-[#CC0000]" strokeWidth={1.2} />
+                  {item.package?.course?.image_url ? (
+                    <CourseCover
+                      src={item.package.course.image_url}
+                      alt={item.package.course.course_name}
+                      className="aspect-[16/9] w-full rounded-lg bg-gray-50 object-cover"
+                    />
+                  ) : (
+                    <FileEdit className="w-20 h-20 text-[#CC0000]" strokeWidth={1.2} />
+                  )}
                 </div>
 
                 <p className="text-gray-900 font-bold text-[18px] truncate">{item.package?.course?.course_name}</p>

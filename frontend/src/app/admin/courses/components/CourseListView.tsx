@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2 } from "lucide-react"; 
 import { fetchAllCoursesAdmin, deleteCourse } from "@/services/courseAPI";
 import { CourseDTO ,CoursePackageDTO , PackageScheduleInfoDTO} from "@/types/course";
+import CourseCover from "@/components/course/CourseCover";
 
 export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
   const [courses, setCourses] = useState<CourseDTO[]>([]);
@@ -53,11 +54,21 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
       {courses.map((course: CourseDTO) => (
         <div key={course.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <div className="bg-gray-50 p-4 border-b border-gray-200 flex items-center justify-between">
-            <div className="flex items-center">
-              <BookOpen className="w-6 h-6 text-[#CC0000] mr-3" />
-              <div>
+            <div className="flex items-center min-w-0">
+              {course.image_url ? (
+                <CourseCover
+                  src={course.image_url}
+                  alt={course.course_name}
+                  width={128}
+                  height={128}
+                  className="mr-3 h-12 w-16 shrink-0 rounded-lg object-cover"
+                />
+              ) : (
+                <BookOpen className="w-6 h-6 text-[#CC0000] mr-3 shrink-0" />
+              )}
+              <div className="min-w-0">
                 <h3 className="text-xl font-bold text-gray-900">{course.course_name}</h3>
-                <p className="text-sm text-gray-500">{course.description}</p>
+                <p className="text-sm text-gray-500 line-clamp-1">{course.description}</p>
               </div>
             </div>
               {onEdit && (

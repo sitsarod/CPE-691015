@@ -3,6 +3,7 @@
 import { GraduationCap, CircleCheck, Layers, Clock3, Users2 } from "lucide-react";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
 import PackageCard from "./PackageCard";
+import CourseCover from "./CourseCover";
 import { priceRange, seatsTotal } from "./courseUtils";
 
 interface CourseDetailProps {
@@ -40,6 +41,14 @@ export default function CourseDetail({
 
   return (
     <section className="w-full">
+      <CourseCover
+        src={course.image_url}
+        alt={course.course_name}
+        width={1280}
+        height={720}
+        className="mb-6 aspect-[16/9] w-full max-w-3xl rounded-2xl bg-gray-50 object-cover"
+      />
+
       {/* ── หัวคอร์ส ── */}
       <div className="mb-6">
         <Heading

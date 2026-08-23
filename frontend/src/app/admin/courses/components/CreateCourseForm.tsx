@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Save, Clock, Calendar, Loader2 } from "lucide-react";
 import { createCourse, createPackage } from "@/services/courseAPI";
+import CourseImageField from "./CourseImageField";
 import { ScheduleFormInput, PackageFormInput } from "@/types/course";
 
 export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void }) {
@@ -12,6 +13,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   const [courseName, setCourseName] = useState("");
   const [description, setDescription] = useState("");
   const [learningOutcomes, setLearningOutcomes] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [packages, setPackages] = useState<PackageFormInput[]>([
     { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }
   ]);
@@ -55,6 +57,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         course_name: courseName,
         description: description,
         status: "active",
+        image_url: imageUrl,
         learning_outcomes: learningOutcomes
           .split("\n")
           .map((line) => line.trim())
@@ -126,6 +129,8 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
               placeholder={"การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง\nฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม\nลูกตบ (Smash) และการรับลูกตบเบื้องต้น"}
             />
           </div>
+
+          <CourseImageField value={imageUrl} onChange={setImageUrl} />
         </div>
       </div>
 

@@ -44,6 +44,7 @@ func ToCourseDTO(courseItem *models.Course) dto.CourseDTO {
 		CourseName:       courseItem.CourseName,
 		Description:      courseItem.Description,
 		Status:           string(courseItem.Status),
+		ImageURL:         courseItem.ImageURL,
 		LearningOutcomes: SplitLearningOutcomes(courseItem.LearningOutcomes),
 		Packages:         packagesDTO,
 	}
