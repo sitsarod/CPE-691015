@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -24,6 +25,13 @@ var (
 	ErrEnrollmentNotPending    = errors.New("การลงทะเบียนนี้ไม่ได้อยู่ในสถานะรออนุมัติ")
 	ErrPackageSeatsFull        = errors.New("ไม่สามารถอนุมัติได้ เนื่องจากแพ็กเกจนี้ที่นั่งเต็มแล้ว กรุณาขยายจำนวนที่นั่งสูงสุดก่อน")
 	ErrEnrollmentBillingLocked = errors.New("ไม่สามารถยกเลิกได้ เนื่องจากบิลที่เกี่ยวข้องถูกชำระหรือกำลังตรวจสอบอยู่ กรุณาจัดการการชำระเงินก่อน")
+
+	ErrPackageNotFound = errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
+	ErrAlreadyEnrolled = errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
+
+	ErrEnrollmentRejectReason   = errors.New("กรุณาระบุเหตุผลในการปฏิเสธ (อย่างน้อย 3 ตัวอักษร)")
+	ErrEnrollmentForbidden      = errors.New("ไม่มีสิทธิ์ยกเลิกการลงทะเบียนของผู้อื่น")
+	ErrEnrollmentNotCancellable = errors.New("ยกเลิกเองได้เฉพาะใบที่ยังรออนุมัติ หากแอดมินอนุมัติไปแล้วกรุณาติดต่อแอดมิน")
 )
 
 
@@ -209,7 +217,7 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 	var pkg models.Package
 
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
+		return nil, ErrPackageNotFound
 	}
 
 	customerID, err := s.toCustomerID(userID)
@@ -237,7 +245,7 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 			return errors.New("ไม่สามารถตรวจสอบการลงทะเบียนเดิมได้")
 		}
 		if existingCount > 0 {
-			return errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
+			return ErrAlreadyEnrolled
 		}
 
 		studiedCourse, err := hasStudiedCourse(tx, customerID, pkg.CourseID)
@@ -429,6 +437,8 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
 			IsOverdue:         dto.IsBillingOverdue(e.Billing),
 			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions),
+			RejectedReason:    e.RejectedReason,
+			RejectedAt:        e.RejectedAt,
 		}
 
 		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
@@ -552,7 +562,112 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 	return &enrollment, nil
 }
 
-// [DELETE] ยกเลิกการลงทะเบียน
+// RejectEnrollment แอดมินปฏิเสธคำขอสมัครเรียนพร้อมเหตุผล
+//
+// เฉพาะใบ pending — อนุมัติไปแล้วมีบิลออกและอาจเริ่มเรียน ต้องใช้การยกเลิกที่จัดการเรื่องเงินแทน
+// ไม่ soft delete (ต่างจาก CancelEnrollment) และที่นั่งคืนเองเพราะ rejected
+// ไม่อยู่ใน enrollmentSeatStatuses
+func (s *EnrollmentService) RejectEnrollment(enrollmentID uint, adminUserID uint, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if len([]rune(reason)) < 3 {
+		return ErrEnrollmentRejectReason
+	}
+
+	var customerID uint
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var enrollment models.Enrollment
+		if err := tx.First(&enrollment, enrollmentID).Error; err != nil {
+			return ErrEnrollmentNotFound
+		}
+
+		if enrollment.Status != models.EnrollmentStatusPending {
+			return ErrEnrollmentNotPending
+		}
+
+		// ใบ pending ยังไม่มีบิล — เรียกไว้เป็นตาข่ายเผื่อ flow เปลี่ยน
+		if err := releaseLinkedBilling(tx, enrollment.BillingID); err != nil {
+			return err
+		}
+
+		now := time.Now()
+		if err := tx.Model(&models.Enrollment{}).
+			Where("id = ?", enrollment.ID).
+			Updates(map[string]interface{}{
+				"status":              models.EnrollmentStatusRejected,
+				"rejected_reason":     reason,
+				"rejected_by_user_id": adminUserID,
+				"rejected_at":         now,
+				"billing_id":          nil,
+			}).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกการปฏิเสธคำขอได้")
+		}
+
+		customerID = enrollment.CustomerID
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if targetUserID, rerr := ResolveUserID(s.db, customerID); rerr == nil {
+		CreateNotification(s.db, targetUserID,
+			"enrollment_rejected",
+			fmt.Sprintf("enrollment-%d-rejected", enrollmentID),
+			"คำขอสมัครเรียนไม่ผ่านการพิจารณา",
+			fmt.Sprintf("เหตุผล: %s", reason),
+			// พาไปหน้าประวัติโดยตรง — ใบที่ถูกปฏิเสธไม่โชว์ในกริดหลักแล้ว
+			"/customer/enrollment?history=1",
+			"warning",
+		)
+	}
+
+	return nil
+}
+
+// CancelMyEnrollment ให้นักเรียนยกเลิกใบสมัครของตัวเอง เฉพาะใบ pending
+//
+// ⚠️ ต้องเทียบเจ้าของก่อนเสมอ — :id เป็นเลขเรียงที่เดาต่อได้
+// ถ้าไม่เทียบ ใครก็ยกเลิกใบของคนอื่นได้ด้วยการเปลี่ยนเลขใน URL
+func (s *EnrollmentService) CancelMyEnrollment(userID uint, enrollmentID uint) error {
+	customerID, err := s.toCustomerID(userID)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var enrollment models.Enrollment
+		if err := tx.First(&enrollment, enrollmentID).Error; err != nil {
+			return ErrEnrollmentNotFound
+		}
+
+		if enrollment.CustomerID != customerID {
+			return ErrEnrollmentForbidden
+		}
+
+		if enrollment.Status != models.EnrollmentStatusPending {
+			return ErrEnrollmentNotCancellable
+		}
+
+		// ใบ pending ยังไม่มีบิล — เรียกไว้เป็นตาข่ายเผื่อ flow เปลี่ยน
+		if err := releaseLinkedBilling(tx, enrollment.BillingID); err != nil {
+			return err
+		}
+
+		enrollment.Status = models.EnrollmentStatusCancelled
+		if err := tx.Save(&enrollment).Error; err != nil {
+			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
+		}
+		// soft delete ตรงกับของแอดมิน — ใบที่ยกเลิกต้องหลุดจากทั้งรายการและการนับที่นั่ง
+		if err := tx.Delete(&enrollment).Error; err != nil {
+			return errors.New("ไม่สามารถยกเลิกการลงทะเบียนได้")
+		}
+		return nil
+	})
+}
+
+// [DELETE] ยกเลิกการลงทะเบียน (แอดมิน)
 
 func (s *EnrollmentService) CancelEnrollment(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {

@@ -328,12 +328,11 @@ func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.Attend
 		Order("check_in_time DESC")
 
 	if date != "" {
-		parsed, err := time.Parse("2006-01-02", date)
+		from, to, err := localDayRange(date)
 		if err != nil {
-			return nil, errors.New("รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)")
+			return nil, err
 		}
-		next := parsed.AddDate(0, 0, 1)
-		query = query.Where("check_in_time >= ? AND check_in_time < ?", parsed, next)
+		query = query.Where("check_in_time >= ? AND check_in_time < ?", from, to)
 	}
 
 	if courseID != 0 {

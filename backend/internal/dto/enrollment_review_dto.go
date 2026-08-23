@@ -27,6 +27,10 @@ type ReviewEnrollmentInfo struct {
 	DaysLeft  *int       `json:"days_left"`
 
 	GraceDaysLeft *int `json:"grace_days_left"`
+
+	// เหตุผลที่คำขอถูกปฏิเสธ (มีค่าเฉพาะสถานะ rejected)
+	RejectedReason string     `json:"rejected_reason,omitempty"`
+	RejectedAt     *time.Time `json:"rejected_at,omitempty"`
 }
 
 // ReviewCustomerInfo ข้อมูลส่วนตัวและการติดต่อของผู้สมัคร
