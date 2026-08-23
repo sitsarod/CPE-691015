@@ -41,6 +41,7 @@ func toUserProfileResponse(u *models.User) dto.UserProfileResponseDTO {
 		// โค้ชก็มีรหัสประจำตัวเหมือนกัน ใช้ชุดเลขเดียวกับผู้เรียน
 		res.MemberCode = u.Coach.MemberCode
 		res.Nickname = u.Coach.Nickname
+		res.ProfilePicture = u.Coach.ProfilePicture
 	}
 
 	if u.Customer != nil {
@@ -52,6 +53,7 @@ func toUserProfileResponse(u *models.User) dto.UserProfileResponseDTO {
 		res.Gender = strings.ToLower(string(u.Customer.Gender))
 		res.ParentEmail = u.Customer.ParentEmail
 		res.ParentPhoneNumber = u.Customer.ParentPhoneNumber
+		res.ProfilePicture = u.Customer.ProfilePicture
 		res.Status = string(u.Customer.Status)
 
 		if !u.Customer.BirthDate.IsZero() {

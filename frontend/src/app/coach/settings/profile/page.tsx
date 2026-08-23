@@ -1,24 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { IdCard, Phone, Landmark, CheckCircle2, AlertCircle } from "lucide-react";
 import Button from "@/components/Button";
 import InputField from "@/components/InputField";
 import { getMyCoachProfileAPI, updateCoachAPI } from "@/services/coachAPI";
 import { CoachProfile } from "@/types/coach";
 import CoachBankAccountCard from "@/components/settings/CoachBankAccountCard";
+import AvatarUploader from "@/components/AvatarUploader";
 
 /**
- * หน้าให้โค้ชแก้ข้อมูลของตัวเอง
+ * หน้าให้โค้ชแก้ข้อมูลของตัวเอง (จัด UI เป็นการ์ดเป็นสัดส่วน)
  *
  * ตามนโยบายของทีม เจ้าตัวแก้ได้เฉพาะ "ช่องทางติดต่อ" ที่เปลี่ยนบ่อยและความเสี่ยงต่ำ
- * (เบอร์โทร Line Facebook ที่อยู่) ส่วนข้อมูลตัวตนต้องส่งหลักฐาน
- * ให้แอดมินตรวจแล้วแก้ให้ผ่านหน้าจัดการสมาชิก
- *
- * ข้อยกเว้นคือบัญชีรับเงิน — โค้ชแก้เองได้ แต่ต้องยืนยันรหัสผ่านก่อน
- * จึงแยกไปอยู่ใน CoachBankAccountCard ที่มีปุ่มบันทึกของตัวเอง
- *
- * ช่องที่ล็อกไว้ยังแสดงอยู่ (ไม่ซ่อน) เพื่อให้โค้ชเห็นว่าระบบเก็บอะไรของตัวเองไว้บ้าง
- * และรู้ว่าถ้าผิดต้องไปแจ้งใคร — ตรงกับชุดฟิลด์ใน UpdateCoachRequest ฝั่ง backend
+ * ส่วนข้อมูลตัวตนต้องส่งหลักฐานให้แอดมินแก้ให้ และบัญชีรับเงินต้องยืนยันรหัสผ่านก่อน
  */
 export default function CoachEditProfilePage() {
   const [coachId, setCoachId] = useState<number | null>(null);
@@ -27,7 +22,8 @@ export default function CoachEditProfilePage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // ค่าที่แก้ไม่ได้ เก็บแยกไว้อ่านอย่างเดียว จะได้ไม่หลุดไปอยู่ใน payload ตอนบันทึก
+  const [profilePicture, setProfilePicture] = useState("");
+
   const [readOnlyData, setReadOnlyData] = useState({
     firstName: "",
     lastName: "",
@@ -39,8 +35,6 @@ export default function CoachEditProfilePage() {
     coachLicense: "",
   });
 
-  // แยกจาก readOnlyData เพราะสองช่องนี้แก้เองได้ แต่ต้องยืนยันรหัสผ่านก่อน
-  // จึงมีการ์ดของตัวเองอยู่ท้ายหน้า ไม่ปนกับฟอร์มช่องทางติดต่อ
   const [bank, setBank] = useState({ account: "", info: "", promptPay: "" });
 
   const [formData, setFormData] = useState({
@@ -54,6 +48,7 @@ export default function CoachEditProfilePage() {
     getMyCoachProfileAPI()
       .then((profile: CoachProfile) => {
         setCoachId(profile.id);
+        setProfilePicture(profile.profile_picture || "");
         setReadOnlyData({
           firstName: profile.first_name || "",
           lastName: profile.last_name || "",
@@ -85,6 +80,20 @@ export default function CoachEditProfilePage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // อัปโหลดรูปสำเร็จ → บันทึก URL ลงโปรไฟล์ทันที แล้วอัปเดต avatar
+  const handleAvatarUploaded = async (url: string) => {
+    if (!coachId) return;
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      await updateCoachAPI(coachId, { profile_picture: url });
+      setProfilePicture(url);
+      setSuccessMsg("เปลี่ยนรูปโปรไฟล์เรียบร้อยแล้ว");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "บันทึกรูปโปรไฟล์ไม่สำเร็จ");
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -123,132 +132,157 @@ export default function CoachEditProfilePage() {
     );
   }
 
-  // ตัว wrapper หน้า (sidebar + padding) มาจาก layout ของ /coach/settings แล้ว
-  // ที่นี่จึงเรนเดอร์แค่เนื้อหา เหมือนหน้าตั้งค่าฝั่งผู้เรียน
+  const fullName = `${readOnlyData.firstName} ${readOnlyData.lastName}`.trim();
+  const initials = (readOnlyData.firstName?.[0] || readOnlyData.nickname?.[0] || "C").toUpperCase();
+
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-black mb-2">แก้ไขโปรไฟล์</h1>
-        <p className="text-sm text-gray-500 mb-8">
+        <h1 className="text-2xl font-black text-gray-900">แก้ไขโปรไฟล์</h1>
+        <p className="text-sm text-gray-500 mt-1">
           แก้ได้เองเฉพาะช่องทางติดต่อและบัญชีรับเงิน ส่วนข้อมูลตัวตนต้องส่งหลักฐานให้แอดมินแก้ให้
         </p>
+      </div>
 
-        {errorMsg && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium">
-            {errorMsg}
+      {errorMsg && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {errorMsg}
+        </div>
+      )}
+      {successMsg && (
+        <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-medium flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" /> {successMsg}
+        </div>
+      )}
+
+      {/* ── การ์ดโปรไฟล์ (avatar + อัปโหลดรูป) ── */}
+      <div className="rounded-2xl border border-gray-200 p-6 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+        <AvatarUploader
+          currentUrl={profilePicture}
+          initials={initials}
+          folder="profile"
+          disabled={coachId === null}
+          onUploaded={handleAvatarUploaded}
+        />
+
+        <div className="flex-1 min-w-0 text-center sm:text-left">
+          <h2 className="text-lg font-bold text-gray-900 truncate">{fullName || "โค้ช"}</h2>
+          {readOnlyData.nickname && (
+            <p className="text-sm text-gray-500">({readOnlyData.nickname})</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
+            {readOnlyData.specialization && (
+              <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-600/20">
+                ระดับ {readOnlyData.specialization}
+              </span>
+            )}
+            {readOnlyData.coachLicense && (
+              <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-inset ring-violet-600/20">
+                {readOnlyData.coachLicense}
+              </span>
+            )}
           </div>
-        )}
+        </div>
+      </div>
 
-        {successMsg && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-medium">
-            {successMsg}
+      {/* ── ข้อมูลระบุตัวตน (อ่านอย่างเดียว) ── */}
+      <div className="rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-xl bg-gray-100 shrink-0">
+              <IdCard className="w-6 h-6 text-gray-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-gray-900">ข้อมูลระบุตัวตน</h2>
+              <p className="text-sm text-gray-500 mt-1">แก้เองไม่ได้ ถ้าข้อมูลไม่ถูกต้องกรุณาส่งหลักฐานให้แอดมินแก้ให้</p>
+
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ReadItem label="ชื่อ - นามสกุล" value={fullName} />
+                <ReadItem label="อีเมล (ใช้ล็อกอิน)" value={readOnlyData.email} />
+                <ReadItem label="ชื่อเล่น" value={readOnlyData.nickname} />
+                <ReadItem label="วันเกิด" value={readOnlyData.birthDate} />
+                <ReadItem label="เลขบัตรประชาชน" value={readOnlyData.uid} />
+                <ReadItem label="ระดับฝีมือ" value={readOnlyData.specialization} />
+                <ReadItem label="ใบรับรองผู้ฝึกสอน" value={readOnlyData.coachLicense} />
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        <form onSubmit={handleSave} noValidate className="flex flex-row flex-wrap w-full gap-y-5 text-left">
+      {/* ── ช่องทางติดต่อ (แก้เองได้) ── */}
+      <form onSubmit={handleSave} noValidate>
+        <div className="rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-xl bg-red-50 shrink-0">
+                <Phone className="w-6 h-6 text-[#CC0000]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-bold text-gray-900">ช่องทางติดต่อ</h2>
+                <p className="text-sm text-gray-500 mt-1">ส่วนนี้แก้ไขได้เองทันที ไม่ต้องแจ้งแอดมิน</p>
 
-          {/* ── ข้อมูลที่แก้เองไม่ได้ ── */}
-          <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            ช่องที่เป็นสีเทาแก้เองไม่ได้ ถ้าข้อมูลไม่ถูกต้อง กรุณาส่งหลักฐานให้แอดมินแก้ให้
+                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <InputField
+                    label="หมายเลขโทรศัพท์ (10 หลัก)" name="phone" inputMode="numeric" maxLength={10} required
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
+                    }
+                    placeholder="ระบุหมายเลขโทรศัพท์"
+                  />
+                  <InputField
+                    label="Line ID (ถ้ามี)" name="lineId" value={formData.lineId}
+                    onChange={handleChange} placeholder="ระบุ Line ID"
+                  />
+                  <InputField
+                    label="Facebook (ถ้ามี)" name="facebook" value={formData.facebook}
+                    onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
+                  />
+                  <InputField
+                    label="ที่อยู่" name="address" value={formData.address}
+                    onChange={handleChange} placeholder="ระบุที่อยู่"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <InputField
-            label="ชื่อ" name="firstName" value={readOnlyData.firstName} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
-          />
-          <InputField
-            label="นามสกุล" name="lastName" value={readOnlyData.lastName} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
-          />
-          <InputField
-            label="ชื่อเล่น" name="nickname" value={readOnlyData.nickname} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
-          />
-          <InputField
-            label="วันเกิด" name="birthDate" type="date" value={readOnlyData.birthDate} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
-          />
-          <InputField
-            label="เลขบัตรประชาชน" name="uid" value={readOnlyData.uid} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
-          />
-          {/*
-            อีเมลแก้เองไม่ได้ เพราะเป็นชื่อผู้ใช้ที่ใช้ล็อกอินและเป็นปลายทางกู้รหัสผ่าน
-            ถ้าเปลี่ยนเองได้ ใครที่ยึด session ไปได้จะยึดบัญชีถาวรทันที
-          */}
-          <InputField
-            label="อีเมล (ใช้ล็อกอิน)" name="email" type="email" value={readOnlyData.email} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
-          />
-          <InputField
-            label="ระดับฝีมือ" name="specialization" value={readOnlyData.specialization} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
-          />
-          <InputField
-            label="ใบรับรองผู้ฝึกสอน" name="coachLicense" value={readOnlyData.coachLicense} readOnly disabled
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
-          />
-          {/* ── ช่องทางติดต่อ (แก้เองได้) ── */}
-          <div className="w-full pt-4 mt-2 border-t border-gray-200">
-            <h2 className="text-sm font-bold text-gray-900">ช่องทางติดต่อ</h2>
-            <p className="text-xs text-gray-500 mt-1">ส่วนนี้แก้ไขได้เองทันที ไม่ต้องแจ้งแอดมิน</p>
-          </div>
-
-          <InputField
-            label="หมายเลขโทรศัพท์ (10 หลัก)" name="phone" inputMode="numeric" maxLength={10} required
-            value={formData.phone}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
-            }
-            placeholder="ระบุหมายเลขโทรศัพท์"
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto"
-          />
-          <InputField
-            label="Line ID (ถ้ามี)" name="lineId" value={formData.lineId}
-            onChange={handleChange} placeholder="ระบุ Line ID"
-            containerClassName="w-full sm:w-[calc(50%-0.75rem)]"
-          />
-          <InputField
-            label="Facebook (ถ้ามี)" name="facebook" value={formData.facebook}
-            onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
-          />
-          <InputField
-            label="ที่อยู่" name="address" value={formData.address}
-            onChange={handleChange} placeholder="ระบุที่อยู่"
-          />
-
-          <div className="flex flex-row gap-3 pt-6 border-t border-gray-200 justify-end w-full mt-4">
-            <Button
-              variant="outline" type="button" onClick={() => window.history.back()} disabled={isSaving}
-            >
+          <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-end gap-3">
+            <Button variant="outline" type="button" onClick={() => window.history.back()} disabled={isSaving}>
               ยกเลิก
             </Button>
-            <Button
-              variant="primary" type="submit" disabled={isSaving}
-              className="bg-[#E63946] hover:bg-[#d62839]"
-            >
+            <Button variant="primary" type="submit" disabled={isSaving} className="bg-[#E63946] hover:bg-[#d62839]">
               {isSaving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
             </Button>
           </div>
+        </div>
+      </form>
 
-        </form>
+      {/* ── บัญชีรับเงิน ── */}
+      {coachId !== null && (
+        <div className="flex items-center gap-2 text-xs text-gray-400 pt-2">
+          <Landmark className="w-3.5 h-3.5" /> ข้อมูลการเงิน
+        </div>
+      )}
+      {coachId !== null && (
+        <CoachBankAccountCard
+          coachId={coachId}
+          initialBankAccount={bank.account}
+          initialPaymentInfo={bank.info}
+          initialPromptPay={bank.promptPay}
+        />
+      )}
+    </div>
+  );
+}
 
-        {/*
-          บัญชีรับเงินอยู่นอกฟอร์มด้านบนโดยตั้งใจ และมีปุ่มบันทึกของตัวเอง
-          เพราะต้องยืนยันรหัสผ่านก่อนบันทึก ถ้าเอาไปรวมในฟอร์มเดียวกัน
-          การแก้เบอร์โทรเฉย ๆ ก็จะต้องกรอกรหัสผ่านตามไปด้วยทุกครั้ง
-        */}
-        {coachId !== null && (
-          <div className="mt-10">
-            <CoachBankAccountCard
-              coachId={coachId}
-              initialBankAccount={bank.account}
-              initialPaymentInfo={bank.info}
-              initialPromptPay={bank.promptPay}
-            />
-          </div>
-        )}
-      </div>
+// ช่องแสดงข้อมูลแบบอ่านอย่างเดียว (ไม่ใช้ input disabled เพื่อให้ดูสะอาดขึ้น)
+function ReadItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-2.5">
+      <dt className="text-xs font-medium text-gray-400">{label}</dt>
+      <dd className="text-sm font-semibold text-gray-800 mt-0.5 break-words">{value || "-"}</dd>
     </div>
   );
 }

@@ -130,6 +130,7 @@ type AdminUpdateCoachProfile struct {
 	BankAccount    *string  `json:"bank_account"`
 	PaymentInfo    *string  `json:"payment_info"`
 	PromptPay      *string  `json:"prompt_pay"`
+	Status         *string  `json:"status" binding:"omitempty,oneof=active inactive"`
 	PaymentType    *string  `json:"payment_type" binding:"omitempty,oneof=per_session monthly"`
 	PayRate        *float64 `json:"pay_rate" binding:"omitempty,gt=0"`
 }

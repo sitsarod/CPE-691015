@@ -23,6 +23,7 @@ export interface UserProfileResponseDTO {
   parentEmail?: string;
   parentPhoneNumber?: string;
   status?: string;
+  profile_picture?: string;
 }
 
 export interface StudentListResponseDTO {
@@ -49,4 +50,5 @@ export interface UpdateProfileInput {
   parentPhoneNumber?: string;
   lineId?: string;
   facebook?: string;
+  profile_picture?: string;
 }

@@ -99,8 +99,15 @@ export default function ProfileView({
 
           <div className="flex flex-row items-center gap-8 md:gap-14">
             <div className="relative flex-shrink-0">
-              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-gray-100 overflow-hidden bg-gray-100 shadow-xs">
-                <img src="/slide3.jpg" alt="User Avatar" className="w-full h-full object-cover" />
+              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-gray-100 overflow-hidden bg-gray-100 shadow-xs grid place-items-center">
+                {profile?.profile_picture ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.profile_picture} alt="รูปโปรไฟล์" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl md:text-5xl font-black text-white bg-gradient-to-br from-[#E63946] to-[#CC0000] w-full h-full grid place-items-center">
+                    {(profile?.firstName?.[0] || profile?.nickname?.[0] || "?").toUpperCase()}
+                  </span>
+                )}
               </div>
             </div>
 

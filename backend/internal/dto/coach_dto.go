@@ -85,6 +85,7 @@ type CoachResponse struct {
 	Phone          string `json:"phone"`
 	LineID         string `json:"lineId"`
 	Facebook       string `json:"facebook"`
+	Status         string `json:"status"`
 }
 
 type CoachDetailResponse struct {

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, Pencil, Trash2, MoreVertical, AlertCircle, CalendarClock } from "lucide-react";
+import { Eye, Pencil, Trash2, MoreVertical, AlertCircle, CalendarClock, Power } from "lucide-react";
 
 export const BRAND = "#E63946";
 
@@ -96,12 +96,16 @@ export function RowActionMenu({
   onEdit,
   onDelete,
   onSchedule,
+  onToggleStatus,
+  isActive,
 }: {
   onView: () => void;
   /** ไม่ส่งมา = ไม่แสดงเมนูแก้ไข (บางหน้ายังไม่มีฟอร์มแก้ไข) */
   onEdit?: () => void;
   onDelete: () => void;
   onSchedule?: () => void; // optional: แสดงเมนู "ดูตารางเวลาว่าง" เฉพาะเมื่อส่ง handler มา (ใช้กับหน้าจัดการโค้ช)
+  onToggleStatus?: () => void; // optional: แสดงเมนู เปิด/ปิดใช้งาน
+  isActive?: boolean; // สถานะปัจจุบัน (ใช้กำหนดข้อความเมนู)
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -167,6 +171,13 @@ export function RowActionMenu({
           {onEdit && <MenuItem icon={Pencil} label="แก้ไข" onClick={() => run(onEdit)} />}
           {onSchedule && (
             <MenuItem icon={CalendarClock} label="ดูตารางเวลาว่าง" onClick={() => run(onSchedule)} />
+          )}
+          {onToggleStatus && (
+            <MenuItem
+              icon={Power}
+              label={isActive ? "ปิดใช้งาน (พักงาน)" : "เปิดใช้งาน"}
+              onClick={() => run(onToggleStatus)}
+            />
           )}
           <MenuItem icon={Trash2} label="ลบ" danger onClick={() => run(onDelete)} />
         </div>

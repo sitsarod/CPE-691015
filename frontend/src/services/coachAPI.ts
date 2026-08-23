@@ -26,6 +26,7 @@ export interface CoachListItem {
   phone: string;
   lineId?: string;
   facebook?: string;
+  status?: string; // "active" | "inactive"
 }
 
 // ข้อมูลสำหรับสร้างโค้ชใหม่ (ตรงกับ dto.CreateCoachRequest — แอดมินกรอกทั้งหมด)

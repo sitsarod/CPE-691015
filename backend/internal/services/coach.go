@@ -330,11 +330,43 @@ func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*m
 	return &coach, nil
 }
 
-// Delete removes a coach from the database (soft delete เพราะ gorm.Model มี DeletedAt)
+// Delete ลบโค้ชแบบถาวร (hard delete) พร้อมกวาดข้อมูลที่ผูกกันทิ้งให้หมด กันข้อมูลค้าง
+//
+// เหตุที่ต้องลบเองทีละตาราง (ไม่พึ่ง soft delete ของ gorm.Model):
+//   - soft delete แค่ตั้ง deleted_at ไม่ trigger FK ON DELETE CASCADE จริง
+//     ทำให้เวลาว่าง/คาบสอนของโค้ชที่ลบแล้วยังค้างอยู่ในตาราง
+//   - ทำใน transaction เดียว ถ้าพลาดกลางทางจะ rollback ทั้งหมด ไม่เหลือสภาพครึ่ง ๆ กลาง ๆ
 func (s *CoachService) Delete(id uint) error {
-	var coach models.Coach
-	if err := s.db.First(&coach, id).Error; err != nil {
-		return err
-	}
-	return s.db.Delete(&coach).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var coach models.Coach
+		if err := tx.First(&coach, id).Error; err != nil {
+			return err
+		}
+
+		// 1) ลบข้อมูลที่ผูกกับโค้ช (Unscoped = ลบจริง ไม่ใช่ soft delete)
+		related := []interface{}{
+			&models.CoachAvailability{},
+			&models.WorkSchedule{},
+			&models.Photo{},
+			&models.CoachAttendance{},
+		}
+		for _, m := range related {
+			if err := tx.Unscoped().Where("coach_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+
+		// 2) ลบโปรไฟล์โค้ชแบบถาวร
+		if err := tx.Unscoped().Delete(&models.Coach{}, id).Error; err != nil {
+			return err
+		}
+
+		// 3) ลบบัญชีผู้ใช้ที่ผูกกับโค้ชด้วย กัน user กำพร้า (login ได้แต่ไม่มีโปรไฟล์)
+		if coach.UserID != 0 {
+			if err := tx.Unscoped().Delete(&models.User{}, coach.UserID).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

@@ -24,6 +24,8 @@ type Coach struct {
 	PaymentInfo    string `json:"payment_info" gorm:"type:varchar(255)" valid:"required~paymentInfo is required"`
 	// PromptPay = พร้อมเพย์ของโค้ช (เบอร์มือถือหรือเลขบัตรประชาชน) — ไม่บังคับกรอก
 	PromptPay      string `json:"prompt_pay" gorm:"type:varchar(50)"`
+	// Status = สถานะการใช้งานของโค้ช "active" (ใช้งานอยู่) หรือ "inactive" (พักงาน)
+	Status         string `json:"status" gorm:"type:varchar(20);default:'active'"`
 	// PaymentType กำหนดวิธีจ่ายค่าจ้างของโค้ชคนนี้: "per_session" (รายครั้ง) หรือ "monthly" (รายเดือน)
 	// มีค่าเดียวต่อโค้ชหนึ่งคน — ไม่ให้กรอกอัตราทั้งสองแบบพร้อมกันเพื่อกันข้อมูลขัดแย้งกัน
 	PaymentType string  `json:"payment_type" gorm:"type:varchar(20);default:'per_session'" valid:"required~paymentType is required"`

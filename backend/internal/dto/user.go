@@ -70,6 +70,7 @@ type UserProfileResponseDTO struct {
 	ParentEmail       string     `json:"parentEmail,omitempty"`
 	ParentPhoneNumber string     `json:"parentPhoneNumber,omitempty"`
 	Status            string     `json:"status,omitempty"`
+	ProfilePicture    string     `json:"profile_picture,omitempty"` // URL รูปโปรไฟล์ (ปัจจุบันมีเฉพาะโค้ช)
 }
 
 
@@ -107,6 +108,8 @@ type UpdateProfileInput struct {
 	// LineID / Facebook ไม่บังคับ ใช้ pointer เพื่อแยก "ไม่ได้ส่งมา" ออกจาก "ส่งค่าว่างมาเพื่อลบ"
 	LineID   *string `json:"lineId"`
 	Facebook *string `json:"facebook"`
+	// ProfilePicture = URL รูปโปรไฟล์ (หลังอัปโหลดขึ้น Cloudinary) — ไม่บังคับ
+	ProfilePicture *string `json:"profile_picture"`
 }
 
 

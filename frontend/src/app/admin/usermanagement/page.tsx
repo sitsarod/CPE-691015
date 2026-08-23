@@ -383,6 +383,7 @@ export default function AdminMembersPage() {
         formError={formError}
         isSubmitting={isSubmitting || isLoadingDetail}
         onSave={handleUpdate}
+        memberCode={detail?.coach?.memberCode}
       />
     </div>
   );
