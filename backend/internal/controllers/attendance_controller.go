@@ -89,6 +89,16 @@ func (ctrl *AttendanceController) OpenSession(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "เปิดรอบเช็คชื่อเรียบร้อยแล้ว", "data": session})
 }
 
+// GetOpenSessions [GET] /api/attendance/sessions — รอบที่ยังเปิดค้างอยู่
+func (ctrl *AttendanceController) GetOpenSessions(c *gin.Context) {
+	items, err := ctrl.service.GetOpenSessions()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
 // GetSession [GET] /api/attendance/sessions/:id
 func (ctrl *AttendanceController) GetSession(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")

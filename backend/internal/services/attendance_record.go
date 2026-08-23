@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -17,28 +18,7 @@ var (
 
 func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto.AttendanceSessionDTO, error) {
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var session models.AttendanceSession
-		if err := tx.First(&session, sessionID).Error; err != nil {
-			return ErrSessionNotFound
-		}
-
-		now := nowLocal()
-
-		res := tx.Model(&models.AttendanceSession{}).
-			Where("id = ? AND status = ?", sessionID, models.AttendanceSessionOpen).
-			Updates(map[string]interface{}{
-				"status":            models.AttendanceSessionClosed,
-				"closed_at":         now,
-				"closed_by_user_id": adminUserID,
-			})
-		if res.Error != nil {
-			return errors.New("ไม่สามารถปิดรอบเช็คชื่อได้")
-		}
-		if res.RowsAffected == 0 {
-			return ErrSessionClosed
-		}
-
-		return s.markAbsentees(tx, &session, adminUserID, now)
+		return s.closeSessionTx(tx, sessionID, &adminUserID, nowLocal())
 	})
 
 	if err != nil {
@@ -47,11 +27,150 @@ func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto
 	return s.GetSession(sessionID)
 }
 
+// closeSessionTx คือเนื้อของการปิดรอบ ใช้ร่วมกันทั้งแอดมินกดเองและงานปิดอัตโนมัติ
+//
+// closedBy = nil แปลว่าระบบเป็นคนปิด เก็บเป็น NULL ไว้ตอบตอนมีคนทักท้วงย้อนหลัง
+// ว่าการหักโควตาครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
+func (s *AttendanceService) closeSessionTx(
+	tx *gorm.DB,
+	sessionID uint,
+	closedBy *uint,
+	now time.Time,
+) error {
+	var session models.AttendanceSession
+	if err := tx.First(&session, sessionID).Error; err != nil {
+		return ErrSessionNotFound
+	}
+
+	// status ใน WHERE คือด่านกันปิดซ้ำ — แอดมินกับงานอัตโนมัติชนกันได้จริง
+	// ตัวที่มาทีหลังได้ RowsAffected = 0 แล้วถอย ไม่ใช่มาร์คขาดเรียนซ้ำรอบสอง
+	res := tx.Model(&models.AttendanceSession{}).
+		Where("id = ? AND status = ?", sessionID, models.AttendanceSessionOpen).
+		Updates(map[string]interface{}{
+			"status":            models.AttendanceSessionClosed,
+			"closed_at":         now,
+			"closed_by_user_id": closedBy,
+		})
+	if res.Error != nil {
+		return errors.New("ไม่สามารถปิดรอบเช็คชื่อได้")
+	}
+	if res.RowsAffected == 0 {
+		return ErrSessionClosed
+	}
+
+	return s.markAbsentees(tx, &session, closedBy, now)
+}
+
+// GetOpenSessions คืนรอบที่ยังเปิดค้างอยู่ทั้งหมด เรียงรอบล่าสุดขึ้นก่อน
+//
+// จำเป็นเพราะ GetOpenablePackages คืนเฉพาะแพ็กเกจที่อยู่ในคาบตอนนี้ พอเลยเวลา
+// รอบที่ลืมปิดจะหลุดจากจอและไม่มีทางกดเข้าไปปิดได้อีก ทั้งที่คนไม่มายังไม่ถูกมาร์คขาด
+func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, error) {
+	expireStaleEnrollments(s.db)
+
+	var sessions []models.AttendanceSession
+	if err := s.db.
+		Preload("Package").
+		Preload("Package.Course").
+		Where("status = ?", models.AttendanceSessionOpen).
+		Order("session_date DESC, opened_at DESC").
+		Find(&sessions).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายการรอบที่เปิดค้างอยู่ได้")
+	}
+
+	now := nowLocal()
+	items := make([]dto.OpenSessionSummaryDTO, 0, len(sessions))
+
+	for i := range sessions {
+		session := &sessions[i]
+
+		item := dto.OpenSessionSummaryDTO{
+			ID:                session.ID,
+			PackageID:         session.PackageID,
+			SessionDate:       session.SessionDate,
+			ScheduleStartTime: session.ScheduleStartTime,
+			ScheduleEndTime:   session.ScheduleEndTime,
+			OpenedAt:          session.OpenedAt,
+			CanScan:           canScanNow(session, now),
+		}
+		if session.Package != nil && session.Package.Course != nil {
+			item.CourseName = session.Package.Course.CourseName
+		}
+
+		var total, checked int64
+		s.db.Model(&models.Enrollment{}).
+			Where("package_id = ? AND status = ?", session.PackageID, models.EnrollmentStatusActive).
+			Count(&total)
+		s.db.Model(&models.StudentAttendance{}).
+			Where("attendance_session_id = ?", session.ID).
+			Count(&checked)
+
+		item.TotalCount = int(total)
+
+		// ติดลบได้ถ้าคนที่เช็คชื่อไปแล้วสิทธิ์หมดอายุทีหลัง (หลุดจาก total แต่ยังอยู่ใน checked)
+		if pending := int(total - checked); pending > 0 {
+			item.PendingCount = pending
+		}
+
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+// AutoCloseStaleSessions ปิดรอบที่เลยเวลาคาบแล้วแต่ไม่มีใครกดปิด คืนจำนวนที่ปิดไป
+//
+// ⚠️ หักโควตาคนที่ไม่มาโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
+// (ตัวเดียวกับที่กันการสแกน) เพื่อให้แอดมินมีช่วงเข้ามาจัดการเองก่อนทุกครั้ง
+func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
+	var sessions []models.AttendanceSession
+	if err := s.db.Where("status = ?", models.AttendanceSessionOpen).
+		Find(&sessions).Error; err != nil {
+		return 0, errors.New("ไม่สามารถดึงรายการรอบที่เปิดค้างอยู่ได้")
+	}
+
+	now := nowLocal()
+	closed := 0
+
+	for i := range sessions {
+		session := &sessions[i]
+		if !isStaleSession(session, now) {
+			continue
+		}
+
+		// แยก transaction ต่อรอบ — รอบที่พังไม่ควรลากรอบอื่นล้มไปด้วย
+		sessionID := session.ID
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			return s.closeSessionTx(tx, sessionID, nil, now)
+		})
+		if err != nil {
+			// แอดมินชิงกดปิดไปก่อน = ผลลัพธ์ที่ต้องการอยู่แล้ว ไม่ใช่ข้อผิดพลาด
+			if !errors.Is(err, ErrSessionClosed) {
+				log.Printf("[attendance] ปิดรอบ %d อัตโนมัติไม่สำเร็จ: %v", sessionID, err)
+			}
+			continue
+		}
+		closed++
+	}
+
+	return closed, nil
+}
+
+// isStaleSession บอกว่ารอบนี้เลยเวลาจนควรถูกปิดอัตโนมัติแล้วหรือยัง
+func isStaleSession(session *models.AttendanceSession, now time.Time) bool {
+	if deadline, ok := sessionScanDeadline(session); ok {
+		return now.After(deadline)
+	}
+
+	// ไม่มีสแนปช็อตเวลาคาบ (ข้อมูลเก่า) — รอขึ้นวันใหม่ก่อน จะได้ไม่เผลอปิดรอบที่ยังเรียนอยู่
+	return !sameDay(now, session.SessionDate)
+}
+
 // markAbsentees สร้างแถว absent ให้ทุกคนใน roster ที่ไม่มีบันทึกในรอบนี้
 func (s *AttendanceService) markAbsentees(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
-	adminUserID uint,
+	recordedBy *uint,
 	now time.Time,
 ) error {
 
@@ -90,7 +209,7 @@ func (s *AttendanceService) markAbsentees(
 			EnrollmentID:        e.ID,
 			UserID:              studentUserID,
 			AttendanceSessionID: &sessionID,
-			RecordedByUserID:    &adminUserID,
+			RecordedByUserID:    recordedBy,
 		}
 		if err := tx.Create(&record).Error; err != nil {
 

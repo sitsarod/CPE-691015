@@ -172,6 +172,7 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		ClosedAt:          session.ClosedAt,
 		ScheduleStartTime: session.ScheduleStartTime,
 		ScheduleEndTime:   session.ScheduleEndTime,
+		CanScan:           canScanNow(&session, nowLocal()),
 		Roster:            roster,
 	}
 	if session.Package != nil && session.Package.Course != nil {
@@ -304,6 +305,42 @@ func checkSessionWindow(session *models.AttendanceSession, now time.Time) error 
 	return nil
 }
 
+
+// canScanNow บอกว่ารอบนี้ยังรับการเช็คชื่อได้จริงไหม ณ เวลานี้
+//
+// ⚠️ ต้องใช้ checkSessionWindow ตัวเดียวกับที่ loadOpenSession ใช้ตอนสแกนจริง
+// แยกเป็นสองตรรกะเมื่อไหร่ หน้าเว็บจะโชว์กล้องให้สแกนแล้วโดนปฏิเสธทุกครั้ง
+func canScanNow(session *models.AttendanceSession, now time.Time) bool {
+	if session.Status != models.AttendanceSessionOpen {
+		return false
+	}
+	return checkSessionWindow(session, now) == nil
+}
+
+// sessionScanDeadline คืนเวลาที่รอบนี้หมดสิทธิ์รับการเช็คชื่อ (ปลายคาบ + ผ่อนผัน)
+//
+// ⚠️ นับจาก SessionDate + ScheduleEndTime ไม่ใช่ OpenedAt — OpenedAt คือตอนที่แอดมิน
+// กดปุ่ม ซึ่งเร็วกว่าคาบเริ่มได้ถึง 30 นาที ถ้านับจากตรงนั้นงานปิดอัตโนมัติจะปิดตั้งแต่ยังเรียนอยู่
+//
+// ok=false เมื่ออ่านเวลาคาบที่เก็บไว้ไม่ออก (ข้อมูลเก่าไม่มีสแนปช็อต) — ผู้เรียกตัดสินเอง
+func sessionScanDeadline(session *models.AttendanceSession) (time.Time, bool) {
+	start, errStart := timeToMinutesWS(session.ScheduleStartTime)
+	end, errEnd := timeToMinutesWS(session.ScheduleEndTime)
+	if errStart != nil || errEnd != nil {
+		return time.Time{}, false
+	}
+
+	// คาบข้ามเที่ยงคืน (เช่น 23:00–01:00) ปลายคาบตกอยู่ของวันถัดไป
+	if end < start {
+		end += 24 * 60
+	}
+
+	// SessionDate เก็บเป็น date (UTC midnight ของวันตามเวลาสนาม) ดู sessionDateValue
+	y, m, d := session.SessionDate.UTC().Date()
+	midnight := time.Date(y, m, d, 0, 0, 0, 0, appLocation())
+
+	return midnight.Add(time.Duration(end+attendanceGraceMinutes) * time.Minute), true
+}
 
 type scanContext struct {
 	Session    models.AttendanceSession

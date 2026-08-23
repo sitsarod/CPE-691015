@@ -317,6 +317,7 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
 
 			attendanceGroup.POST("/sessions", attendanceController.OpenSession)
+			attendanceGroup.GET("/sessions", attendanceController.GetOpenSessions)
 			attendanceGroup.GET("/sessions/:id", attendanceController.GetSession)
 			// สแกนสองจังหวะ: lookup ไม่เขียนอะไร · check-in บันทึกและหักโควตา
 			attendanceGroup.POST("/sessions/:id/lookup", attendanceController.Lookup)

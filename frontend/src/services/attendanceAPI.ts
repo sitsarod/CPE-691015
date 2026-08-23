@@ -1,6 +1,7 @@
 import { apiFetch } from "./apiClient";
 import type {
   OpenablePackage,
+  OpenSessionSummary,
   AttendanceSession,
   ScanResult,
   CheckInResult,
@@ -29,6 +30,14 @@ export async function openSession(packageId: number): Promise<AttendanceSession>
     body: JSON.stringify({ package_id: packageId }),
   });
   return res.data;
+}
+
+// [GET] รอบที่ยังเปิดค้างอยู่ทั้งหมด
+//
+// ต้องเรียกคู่กับ fetchOpenablePackages บนหน้าเลือกแพ็กเกจ ไม่งั้นรอบที่ลืมปิดจะหาไม่เจอ
+export async function fetchOpenSessions(): Promise<OpenSessionSummary[]> {
+  const res = await apiFetch<Envelope<OpenSessionSummary[]>>("/attendance/sessions");
+  return res.data ?? [];
 }
 
 // [GET] รอบพร้อมรายชื่อและตัวเลขสรุป
