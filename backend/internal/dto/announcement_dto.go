@@ -35,20 +35,24 @@ type CreateAnnouncementReq struct {
 	Title      string    `json:"title" binding:"required"`
 	Content    string    `json:"content"`
 	ImageURL   string    `json:"image_url"`
-	UserID     uint      `json:"user_id" binding:"required"`
+	// user_id ไม่รับจาก client อีกต่อไป — controller จะดึงจาก JWT ของแอดมินที่ล็อกอินอยู่
+	// เพื่อกันการปลอมเจ้าของประกาศ (attribution) และให้ตรงกับตัวตนจริงเสมอ
 	CategoryID uint      `json:"category_id" binding:"required"`
 	StartDate  time.Time `json:"start_date" binding:"required"`
 	EndDate    time.Time `json:"end_date" binding:"required"`
 }
 
+// UpdateAnnouncementReq ใช้ pointer ทุก field เพื่อแยก "ไม่ได้ส่งมา" (nil) ออกจาก
+// "ส่งค่าว่างมาเพื่อล้างค่า" ("") — ทำให้ลบรูป/ล้างเนื้อหาได้จริง
+//
+// จงใจไม่มี UserID: การแก้ไขประกาศต้องไม่เปลี่ยนเจ้าของ (author) เดิม
 type UpdateAnnouncementReq struct {
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	ImageURL   string    `json:"image_url"`
-	UserID     uint      `json:"user_id"`
-	CategoryID uint      `json:"category_id"`
-	StartDate  time.Time `json:"start_date"`
-	EndDate    time.Time `json:"end_date"`
+	Title      *string    `json:"title"`
+	Content    *string    `json:"content"`
+	ImageURL   *string    `json:"image_url"`
+	CategoryID *uint      `json:"category_id"`
+	StartDate  *time.Time `json:"start_date"`
+	EndDate    *time.Time `json:"end_date"`
 }
 
 type CreateCategoryReq struct {

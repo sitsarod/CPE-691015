@@ -29,6 +29,38 @@ func startCustomerStatusJob() {
 	}()
 }
 
+// startAnnouncementCleanupJob ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 1 ชั่วโมง (เบา ไม่หนัก DB)
+func startAnnouncementCleanupJob() {
+	announcementService := services.NewAnnouncementService(config.DB)
+	go func() {
+		for {
+			if n, err := announcementService.DeleteExpiredAnnouncements(); err != nil {
+				log.Printf("ลบประกาศที่หมดอายุอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ลบประกาศที่หมดอายุอัตโนมัติ %d รายการ", n)
+			}
+			time.Sleep(1 * time.Hour)
+		}
+	}()
+}
+
+// startChatCleanupJob ลบห้องแชทที่ปิดไปแล้วเกิน 7 วันอัตโนมัติ (พร้อม log ข้อความ)
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง
+func startChatCleanupJob() {
+	autoQAService := services.NewAutoQAService(config.DB)
+	go func() {
+		for {
+			if n, err := autoQAService.DeleteStaleClosedSessions(7 * 24 * time.Hour); err != nil {
+				log.Printf("ลบแชทที่ปิดเกิน 7 วันอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ลบแชทที่ปิดเกิน 7 วันอัตโนมัติ %d ห้อง", n)
+			}
+			time.Sleep(6 * time.Hour)
+		}
+	}()
+}
+
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
 	_ = godotenv.Load("../../../.env")
@@ -66,6 +98,10 @@ func main() {
 
 	// 3.1 เริ่ม background job ปรับสถานะลูกค้า active/inactive อัตโนมัติ (รายวัน)
 	startCustomerStatusJob()
+
+	// 3.2 ลบประกาศที่หมดอายุ + ลบห้องแชทที่ปิดเกิน 7 วัน อัตโนมัติ
+	startAnnouncementCleanupJob()
+	startChatCleanupJob()
 
 	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
 	port := os.Getenv("PORT")

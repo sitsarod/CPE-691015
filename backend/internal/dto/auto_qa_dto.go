@@ -13,6 +13,14 @@ type AutoQADTO struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// PublicAutoQADTO เป็นรูปแบบย่อสำหรับส่งออกสาธารณะ (quick replies บนหน้าเว็บ)
+// จงใจไม่มี similar_question และ mode เพื่อไม่เปิดเผยคีย์เวิร์ด/กลไกจับคู่หลังบ้าน
+type PublicAutoQADTO struct {
+	ID       uint   `json:"id"`
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
 type CreateAutoQAReq struct {
 	Mode            string `json:"mode" binding:"required,oneof=keyword_match ai_predict"`
 	Question        string `json:"question" binding:"required"`

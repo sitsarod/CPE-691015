@@ -53,9 +53,13 @@ export default function CustomerTopbar() {
         
         <NotificationBell viewAllHref="/admin/notifications" />
 
-        <button className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]">
+        {/* ปุ่ม "สอบถาม" เปิดหน้าจัดการแชท (Chat Sessions) — ย้ายมาจากเมนู sidebar เดิม */}
+        <button
+          onClick={() => router.push("/admin/chat-sessions")}
+          className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]"
+        >
           <MessageSquareText className="w-7 h-7 text-[#CC0000]" />
-          <span className="hidden md:inline">สอบถาม</span>
+          <span className="hidden md:inline">จัดการแชท</span>
         </button>
 
         <div className="relative" ref={dropdownRef}>

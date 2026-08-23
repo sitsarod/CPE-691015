@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,7 @@ import (
 	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type AnnouncementController struct {
@@ -18,6 +20,23 @@ func NewAnnouncementController(s services.AnnouncementService) *AnnouncementCont
 	return &AnnouncementController{service: s}
 }
 
+// announcementErrorStatus map error จาก service เป็น HTTP status code ที่ถูกต้อง
+// แทนการเหมาเป็น 500 ทั้งหมด เพื่อให้หน้าเว็บแยกแยะสาเหตุได้
+func announcementErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, services.ErrInvalidDateRange),
+		errors.Is(err, services.ErrUserNotFound),
+		errors.Is(err, services.ErrCategoryNotFound):
+		return http.StatusBadRequest
+	case errors.Is(err, services.ErrCategoryInUse):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
 func (ctrl *AnnouncementController) CreateAnnouncement(c *gin.Context) {
 	var req dto.CreateAnnouncementReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -25,9 +44,16 @@ func (ctrl *AnnouncementController) CreateAnnouncement(c *gin.Context) {
 		return
 	}
 
-	res, err := ctrl.service.CreateAnnouncement(&req)
+	// เจ้าของประกาศมาจาก JWT ของแอดมินที่ล็อกอินอยู่ ไม่รับจาก body
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return
+	}
+
+	res, err := ctrl.service.CreateAnnouncement(userID, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -51,8 +77,20 @@ func (ctrl *AnnouncementController) GetAnnouncementByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+// GetAllAnnouncements คืนประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) — สำหรับแอดมิน
 func (ctrl *AnnouncementController) GetAllAnnouncements(c *gin.Context) {
 	res, err := ctrl.service.GetAllAnnouncements()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// GetActiveAnnouncements คืนเฉพาะประกาศที่กำลังแสดงผล — สำหรับหน้าเว็บสาธารณะ
+func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
+	res, err := ctrl.service.GetActiveAnnouncements()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -77,7 +115,7 @@ func (ctrl *AnnouncementController) UpdateAnnouncement(c *gin.Context) {
 
 	res, err := ctrl.service.UpdateAnnouncement(uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -94,7 +132,7 @@ func (ctrl *AnnouncementController) DeleteAnnouncement(c *gin.Context) {
 
 	err = ctrl.service.DeleteAnnouncement(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -150,7 +188,7 @@ func (ctrl *AnnouncementController) UpdateCategory(c *gin.Context) {
 
 	res, err := ctrl.service.UpdateCategory(uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -167,7 +205,7 @@ func (ctrl *AnnouncementController) DeleteCategory(c *gin.Context) {
 
 	err = ctrl.service.DeleteCategory(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 

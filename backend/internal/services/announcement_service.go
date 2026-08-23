@@ -4,17 +4,33 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"errors"
+	"time"
+
 	"gorm.io/gorm"
 )
 
+// Sentinel errors — ให้ controller map เป็น HTTP status code ที่ถูกต้อง
+// (400/404/409) แทนที่จะเหมารวมเป็น 500 ทั้งหมด
+var (
+	ErrInvalidDateRange = errors.New("start date cannot be after end date")
+	ErrUserNotFound     = errors.New("user not found")
+	ErrCategoryNotFound = errors.New("category not found")
+	ErrCategoryInUse    = errors.New("cannot delete category that is currently in use by announcements")
+)
+
 type AnnouncementService interface {
-	CreateAnnouncement(req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error)
+	// userID มาจาก JWT ของแอดมินที่ล็อกอิน ไม่ใช่จาก body ของ client
+	CreateAnnouncement(userID uint, req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error)
 	GetAnnouncementByID(id uint) (*dto.AnnouncementDTO, error)
 	GetAllAnnouncements() ([]dto.AnnouncementDTO, error)
+	// GetActiveAnnouncements คืนเฉพาะประกาศที่อยู่ในช่วงเวลาแสดงผล (สำหรับหน้าเว็บสาธารณะ)
+	GetActiveAnnouncements() ([]dto.AnnouncementDTO, error)
 	UpdateAnnouncement(id uint, req *dto.UpdateAnnouncementReq) (*dto.AnnouncementDTO, error)
 	DeleteAnnouncement(id uint) error
+	// DeleteExpiredAnnouncements ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ (คืนจำนวนที่ลบ)
+	DeleteExpiredAnnouncements() (int64, error)
 	IncrementViewCount(id uint) error
-	
+
 	CreateCategory(req *dto.CreateCategoryReq) (*dto.CategoryDTO, error)
 	UpdateCategory(id uint, req *dto.UpdateCategoryReq) (*dto.CategoryDTO, error)
 	DeleteCategory(id uint) error
@@ -29,31 +45,43 @@ func NewAnnouncementService(db *gorm.DB) AnnouncementService {
 	return &announcementService{db: db}
 }
 
-func (s *announcementService) CreateAnnouncement(req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error) {
+// startOfDay / endOfDay ปรับ "วันที่" ที่ผู้ใช้เลือกให้ครอบคลุมทั้งวัน
+// เพื่อให้ประกาศแสดงตลอดวันที่เลือกเป็นวันสิ้นสุด แล้วค่อยหมดอายุ/ถูกลบ "เมื่อสิ้นสุดวัน"
+func startOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+func endOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 23, 59, 59, 0, t.Location())
+}
+
+func (s *announcementService) CreateAnnouncement(userID uint, req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error) {
 	if req.StartDate.After(req.EndDate) {
-		return nil, errors.New("start date cannot be after end date")
+		return nil, ErrInvalidDateRange
 	}
 
-	// Validate user existence
+	// Validate user existence (userID มาจาก JWT ของแอดมินที่ล็อกอิน)
 	var user models.User
-	if err := s.db.First(&user, req.UserID).Error; err != nil {
-		return nil, errors.New("user not found")
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, ErrUserNotFound
 	}
 
 	// Validate category existence
 	var category models.Category
 	if err := s.db.First(&category, req.CategoryID).Error; err != nil {
-		return nil, errors.New("category not found")
+		return nil, ErrCategoryNotFound
 	}
 
 	announcement := models.Announcement{
 		Title:      req.Title,
 		Content:    req.Content,
 		ImageURL:   req.ImageURL,
-		UserID:     req.UserID,
+		UserID:     userID,
 		CategoryID: req.CategoryID,
-		StartDate:  req.StartDate,
-		EndDate:    req.EndDate,
+		StartDate:  startOfDay(req.StartDate),
+		EndDate:    endOfDay(req.EndDate), // ครอบคลุมถึงสิ้นวันที่เลือกเป็นวันสิ้นสุด
 		ViewCount:  0,
 	}
 
@@ -88,44 +116,59 @@ func (s *announcementService) GetAllAnnouncements() ([]dto.AnnouncementDTO, erro
 	return dtos, nil
 }
 
+// GetActiveAnnouncements คืนเฉพาะประกาศที่ "กำลังแสดงผล" ณ ตอนนี้
+// (start_date <= now <= end_date) สำหรับหน้าเว็บสาธารณะ ไม่โชว์ประกาศที่หมดอายุ
+// หรือที่ยังไม่ถึงกำหนดเริ่ม
+func (s *announcementService) GetActiveAnnouncements() ([]dto.AnnouncementDTO, error) {
+	var announcements []models.Announcement
+	now := time.Now()
+	err := s.db.Preload("User").Preload("Category").
+		Where("start_date <= ? AND end_date >= ?", now, now).
+		Order("created_at DESC").
+		Find(&announcements).Error
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]dto.AnnouncementDTO, 0, len(announcements))
+	for _, a := range announcements {
+		dtos = append(dtos, mapToAnnouncementDTO(&a))
+	}
+	return dtos, nil
+}
+
 func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnouncementReq) (*dto.AnnouncementDTO, error) {
 	var announcement models.Announcement
 	if err := s.db.First(&announcement, id).Error; err != nil {
 		return nil, err
 	}
 
-	if req.Title != "" {
-		announcement.Title = req.Title
+	// pointer != nil = client ส่ง field นี้มาจริง (รวมค่าว่างเพื่อล้างค่า)
+	if req.Title != nil {
+		announcement.Title = *req.Title
 	}
-	if req.Content != "" {
-		announcement.Content = req.Content
+	if req.Content != nil {
+		announcement.Content = *req.Content
 	}
-	if req.ImageURL != "" {
-		announcement.ImageURL = req.ImageURL
+	if req.ImageURL != nil {
+		announcement.ImageURL = *req.ImageURL
 	}
-	if req.UserID != 0 {
-		var user models.User
-		if err := s.db.First(&user, req.UserID).Error; err != nil {
-			return nil, errors.New("user not found")
-		}
-		announcement.UserID = req.UserID
-	}
-	if req.CategoryID != 0 {
+	if req.CategoryID != nil {
 		var category models.Category
-		if err := s.db.First(&category, req.CategoryID).Error; err != nil {
-			return nil, errors.New("category not found")
+		if err := s.db.First(&category, *req.CategoryID).Error; err != nil {
+			return nil, ErrCategoryNotFound
 		}
-		announcement.CategoryID = req.CategoryID
+		announcement.CategoryID = *req.CategoryID
 	}
-	if !req.StartDate.IsZero() {
-		announcement.StartDate = req.StartDate
+	if req.StartDate != nil {
+		announcement.StartDate = startOfDay(*req.StartDate)
 	}
-	if !req.EndDate.IsZero() {
-		announcement.EndDate = req.EndDate
+	if req.EndDate != nil {
+		announcement.EndDate = endOfDay(*req.EndDate) // ครอบคลุมถึงสิ้นวันที่เลือก
 	}
 
 	if announcement.StartDate.After(announcement.EndDate) {
-		return nil, errors.New("start date cannot be after end date")
+		return nil, ErrInvalidDateRange
 	}
 
 	if err := s.db.Save(&announcement).Error; err != nil {
@@ -133,6 +176,13 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 	}
 
 	return s.GetAnnouncementByID(id)
+}
+
+// DeleteExpiredAnnouncements ลบประกาศที่พ้นวันสิ้นสุดแล้ว (end_date < now) แบบ soft delete
+// เรียกจาก background job เป็นระยะ เพื่อให้ประกาศหายไปเองเมื่อสิ้นสุดวันที่กำหนด
+func (s *announcementService) DeleteExpiredAnnouncements() (int64, error) {
+	res := s.db.Where("end_date < ?", time.Now()).Delete(&models.Announcement{})
+	return res.RowsAffected, res.Error
 }
 
 func (s *announcementService) DeleteAnnouncement(id uint) error {
@@ -165,7 +215,7 @@ func (s *announcementService) CreateCategory(req *dto.CreateCategoryReq) (*dto.C
 func (s *announcementService) UpdateCategory(id uint, req *dto.UpdateCategoryReq) (*dto.CategoryDTO, error) {
 	var category models.Category
 	if err := s.db.First(&category, id).Error; err != nil {
-		return nil, errors.New("category not found")
+		return nil, ErrCategoryNotFound
 	}
 
 	if req.Name != "" {
@@ -183,13 +233,13 @@ func (s *announcementService) UpdateCategory(id uint, req *dto.UpdateCategoryReq
 func (s *announcementService) DeleteCategory(id uint) error {
 	var category models.Category
 	if err := s.db.First(&category, id).Error; err != nil {
-		return errors.New("category not found")
+		return ErrCategoryNotFound
 	}
 	// Check if categories are in use by announcements
 	var count int64
 	s.db.Model(&models.Announcement{}).Where("category_id = ?", id).Count(&count)
 	if count > 0 {
-		return errors.New("cannot delete category that is currently in use by announcements")
+		return ErrCategoryInUse
 	}
 
 	return s.db.Delete(&category).Error
