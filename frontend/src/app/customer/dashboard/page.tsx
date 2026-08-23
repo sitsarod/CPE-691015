@@ -37,7 +37,9 @@ export default function CustomerDashboardPage() {
     try {
       setLoading(true);
       const [annData, catData] = await Promise.all([
-        announcementAPI.getAllAnnouncements(),
+        // ฝั่งลูกค้าใช้ endpoint สาธารณะ (เห็นเฉพาะประกาศที่กำลังแสดงผล)
+        // ไม่ใช่ /admin/announcements ที่จำกัดเฉพาะแอดมิน (จะได้ 403)
+        announcementAPI.getPublicAnnouncements(),
         announcementAPI.getAllCategories(),
       ]);
       setAnnouncements(annData || []);

@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type AutoQAController struct {
@@ -15,6 +17,30 @@ type AutoQAController struct {
 
 func NewAutoQAController(s services.AutoQAService) *AutoQAController {
 	return &AutoQAController{service: s}
+}
+
+// autoQAErrorStatus map error จาก service เป็น HTTP status code ที่ถูกต้อง
+func autoQAErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, services.ErrChatSessionNotFound), errors.Is(err, gorm.ErrRecordNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, services.ErrChatSessionClosed):
+		return http.StatusConflict
+	case errors.Is(err, services.ErrUserNotFoundForChat):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+// GetPublicAutoQAs — endpoint สาธารณะ คืนรูปแบบย่อ (ไม่มีคีย์เวิร์ด/mode)
+func (ctrl *AutoQAController) GetPublicAutoQAs(c *gin.Context) {
+	res, err := ctrl.service.GetPublicAutoQAs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
 // === Knowledge Base Handlers ===
@@ -113,7 +139,7 @@ func (ctrl *AutoQAController) CreateChatSession(c *gin.Context) {
 
 	res, err := ctrl.service.CreateChatSession(&req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -163,7 +189,7 @@ func (ctrl *AutoQAController) UpdateChatSession(c *gin.Context) {
 
 	res, err := ctrl.service.UpdateChatSession(uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -205,7 +231,7 @@ func (ctrl *AutoQAController) AskQuestion(c *gin.Context) {
 
 	res, err := ctrl.service.AskQuestion(uint(sessionID), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -228,7 +254,7 @@ func (ctrl *AutoQAController) AdminReply(c *gin.Context) {
 
 	res, err := ctrl.service.AdminReply(uint(sessionID), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 

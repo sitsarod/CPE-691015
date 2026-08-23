@@ -83,22 +83,19 @@ export default function AdminAnnouncementsPage() {
   const handleSaveAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Basic fallback to admin 1 if user context is missing
-      const userIdStr = localStorage.getItem('userId');
-      const userId = userIdStr ? Number(userIdStr) : 1; 
-
       const categoryId = Number(formData.category_id);
       if (!categoryId) {
         alert("กรุณาเลือกหมวดหมู่ (Please select a category)");
         return;
       }
 
+      // ไม่ส่ง user_id แล้ว — backend ดึงเจ้าของประกาศจาก JWT ของแอดมินที่ล็อกอินเอง
+      // (กันการปลอมเจ้าของ และการแก้ไขประกาศจะไม่เปลี่ยนผู้เขียนเดิม)
       const payload = {
         title: formData.title,
         content: formData.content,
         image_url: formData.image_url,
         category_id: categoryId,
-        user_id: userId,
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
       };

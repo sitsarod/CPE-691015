@@ -27,11 +27,11 @@ export interface Announcement {
   updated_at: string;
 }
 
+// user_id ไม่ต้องส่งแล้ว — backend ดึงจาก JWT ของแอดมินที่ล็อกอินอยู่เอง
 export interface CreateAnnouncementReq {
   title: string;
   content: string;
   image_url: string;
-  user_id: number;
   category_id: number;
   start_date: string;
   end_date: string;
@@ -41,7 +41,6 @@ export interface UpdateAnnouncementReq {
   title?: string;
   content?: string;
   image_url?: string;
-  user_id?: number;
   category_id?: number;
   start_date?: string;
   end_date?: string;

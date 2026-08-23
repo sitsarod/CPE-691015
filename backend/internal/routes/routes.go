@@ -433,16 +433,22 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		// Announcement endpoints
-		api.GET("/announcements", announcementController.GetAllAnnouncements)
+		// สาธารณะ: คืนเฉพาะประกาศที่กำลังแสดงผล (active) เท่านั้น ไม่โชว์ที่หมดอายุ/ยังไม่เริ่ม
+		api.GET("/announcements", announcementController.GetActiveAnnouncements)
 		api.GET("/announcements/:id", announcementController.GetAnnouncementByID)
 		api.POST("/announcements/:id/view", announcementController.IncrementViewCount)
 		api.GET("/announcements/categories", announcementController.GetAllCategories)
 
+		// แอดมิน: ดูประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) สำหรับหน้าจัดการ
+		adminOnly.GET("/admin/announcements", announcementController.GetAllAnnouncements)
+
 		// Automated Q&A Chat Session public endpoints
-		api.GET("/auto-qas/public", autoQAController.GetAllAutoQAs)
-		api.POST("/chat-sessions", autoQAController.CreateChatSession)
+		// /auto-qas/public ส่งรูปแบบย่อ (ไม่มีคีย์เวิร์ด/mode) กันเปิดเผยกลไกหลังบ้าน
+		api.GET("/auto-qas/public", autoQAController.GetPublicAutoQAs)
+		// สร้าง session และถามคำถามเป็น endpoint สาธารณะที่เขียน DB — ใส่ rate limit กันสแปม
+		api.POST("/chat-sessions", middlewares.PublicChatRateLimit(), autoQAController.CreateChatSession)
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
-		api.POST("/chat-sessions/:id/ask", autoQAController.AskQuestion)
+		api.POST("/chat-sessions/:id/ask", middlewares.PublicChatRateLimit(), autoQAController.AskQuestion)
 
 		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
 		api.GET("/consents/face/policy", consentController.GetPolicy)

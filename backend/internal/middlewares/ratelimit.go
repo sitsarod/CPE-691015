@@ -147,6 +147,7 @@ func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
 const (
 	defaultLoginLimit     = 60
 	defaultSensitiveLimit = 10
+	defaultChatLimit      = 60
 	defaultWindowMinutes  = 15
 )
 
@@ -161,6 +162,13 @@ func LoginRateLimit() gin.HandlerFunc {
 // ถ้ามีใครยิงถี่กว่านี้แปลว่าไม่ใช่การใช้งานปกติแน่นอน
 func SensitiveRateLimit() gin.HandlerFunc {
 	return RateLimit(envInt("RATE_LIMIT_SENSITIVE", defaultSensitiveLimit), rateWindow())
+}
+
+// PublicChatRateLimit ใช้กับ endpoint แชทสาธารณะ (สร้าง session / ถามคำถาม)
+// ที่เปิดให้ผู้ไม่ล็อกอินเรียกและเขียนลงฐานข้อมูล — กันการยิงสแปมสร้างข้อมูลขยะ/PII
+// ท่วมฐานข้อมูล ตั้งเพดานให้หลวมพอที่การสนทนาปกติ (ถามหลายข้อความต่อ session) จะไม่โดนบล็อก
+func PublicChatRateLimit() gin.HandlerFunc {
+	return RateLimit(envInt("RATE_LIMIT_CHAT", defaultChatLimit), rateWindow())
 }
 
 func rateWindow() time.Duration {

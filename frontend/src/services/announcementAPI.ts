@@ -15,9 +15,15 @@ interface ApiResponse<T> {
 }
 
 export const announcementAPI = {
-  // Public Endpoints
-  getAllAnnouncements: async (): Promise<Announcement[]> => {
+  // Public: คืนเฉพาะประกาศที่กำลังแสดงผล (active) — ใช้กับหน้าเว็บสาธารณะ
+  getPublicAnnouncements: async (): Promise<Announcement[]> => {
     const res = await apiFetch<ApiResponse<Announcement[]>>('/announcements');
+    return res.data;
+  },
+
+  // Admin: คืนประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) — ใช้กับหน้าจัดการของแอดมิน
+  getAllAnnouncements: async (): Promise<Announcement[]> => {
+    const res = await apiFetch<ApiResponse<Announcement[]>>('/admin/announcements');
     return res.data;
   },
 

@@ -2,15 +2,41 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, X, Send, User } from 'lucide-react';
+import { MessageCircle, X, Send } from 'lucide-react';
 import { autoQaAPI } from '../services/autoQaAPI';
+import { getUserProfileAPI } from '../services/userAPI';
 import { AutoQA, ChatSession } from '../types/autoQa';
 
 interface ChatMessage {
   id: string;
-  sender: 'user' | 'bot';
+  sender: 'user' | 'bot' | 'admin';
   text: string;
   timestamp: Date;
+}
+
+// ให้ปุ่ม "สอบถาม" บน Topbar เปิดกล่องแชทนี้ได้ผ่าน event กลาง (ไม่ต้อง prop drilling ข้าม layout)
+export const OPEN_CHAT_EVENT = 'koyama:open-chat';
+
+// แปลง log แชท (AutoQA) เป็นข้อความในกล่องแชท — แยก "แอดมินตอบเอง" ออกจาก "บอทตอบ"
+function mapAutoQAsToMessages(qas: AutoQA[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  qas.forEach((qa) => {
+    if (qa.question) {
+      out.push({
+        id: `user-${qa.id}`,
+        sender: 'user',
+        text: qa.question,
+        timestamp: new Date(qa.created_at),
+      });
+    }
+    out.push({
+      id: `bot-${qa.id}`,
+      sender: qa.mode === 'admin_reply' ? 'admin' : 'bot',
+      text: qa.answer,
+      timestamp: new Date(qa.created_at),
+    });
+  });
+  return out;
 }
 
 export default function ChatWidget() {
@@ -29,12 +55,63 @@ export default function ChatWidget() {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
+  // ลูกค้าที่ล็อกอินแล้ว — ดึงชื่อ/อีเมล/เบอร์จากโปรไฟล์อัตโนมัติ ไม่ต้องกรอกซ้ำ
+  const [loggedInCustomer, setLoggedInCustomer] = useState(false);
+  const [customerUserId, setCustomerUserId] = useState<number | null>(null);
+  const [identityReady, setIdentityReady] = useState(false); // โหลดโปรไฟล์เสร็จแล้ว
+  const [autoStarting, setAutoStarting] = useState(false);   // กำลังเปิดห้องแชทอัตโนมัติ
+  const [autoStartFailed, setAutoStartFailed] = useState(false);
+  const autoStartTriedRef = useRef(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const pathname = usePathname();
+  // ในโซนลูกค้า (/customer) ปุ่ม "สอบถาม" บน Topbar เป็นตัวเปิดแชทแทน
+  // จึงไม่ต้องแสดงปุ่มลอยมุมขวาล่างให้ซ้ำซ้อน (หน้าสาธารณะยังใช้ปุ่มลอยตามเดิม)
+  const isCustomerArea = pathname?.startsWith('/customer') ?? false;
 
   // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // เปิดกล่องแชทเมื่อปุ่ม "สอบถาม" บน Topbar ส่ง event มา
+  useEffect(() => {
+    const openHandler = () => setIsOpen(true);
+    window.addEventListener(OPEN_CHAT_EVENT, openHandler);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, openHandler);
+  }, []);
+
+  // ลูกค้าที่ล็อกอินแล้ว: ดึงชื่อ/อีเมล/เบอร์จากโปรไฟล์อัตโนมัติ จะได้ไม่ต้องกรอกซ้ำ
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    const uid = localStorage.getItem('user_id');
+    if (!token || role !== 'customer' || !uid) {
+      return; // ผู้เยี่ยมชมทั่วไป (ไม่ล็อกอิน) — ใช้ฟอร์มกรอกเองตามเดิม
+    }
+
+    setLoggedInCustomer(true);
+    setCustomerUserId(Number(uid));
+
+    // เติมชื่อ/อีเมลจาก localStorage ทันที (เผื่อ API ช้า) แล้วเสริมเบอร์โทรจากโปรไฟล์
+    const fn = localStorage.getItem('firstName') || '';
+    const ln = localStorage.getItem('lastName') || '';
+    const em = localStorage.getItem('email') || '';
+    const localName = `${fn} ${ln}`.trim();
+    if (localName) setName(localName);
+    if (em) setEmail(em);
+
+    getUserProfileAPI(Number(uid))
+      .then((p) => {
+        const full = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+        if (full) setName(full);
+        if (p.email) setEmail(p.email);
+        if (p.phoneNumber) setPhone(p.phoneNumber);
+      })
+      .catch((err) => console.error('โหลดโปรไฟล์ลูกค้าไม่สำเร็จ:', err))
+      .finally(() => setIdentityReady(true));
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -52,24 +129,7 @@ export default function ChatWidget() {
             setSession(fetchedSession);
             // Load message history from auto_qas
             if (fetchedSession.auto_qas) {
-              const loadedMessages: ChatMessage[] = [];
-              fetchedSession.auto_qas.forEach(qa => {
-                if (qa.question) {
-                  loadedMessages.push({
-                    id: `user-${qa.id}`,
-                    sender: 'user',
-                    text: qa.question,
-                    timestamp: new Date(qa.created_at)
-                  });
-                }
-                loadedMessages.push({
-                  id: `bot-${qa.id}`,
-                  sender: 'bot',
-                  text: qa.answer,
-                  timestamp: new Date(qa.created_at)
-                });
-              });
-              setMessages(loadedMessages);
+              setMessages(mapAutoQAsToMessages(fetchedSession.auto_qas));
             }
           } else {
             // Session closed or invalid, clear it
@@ -92,23 +152,7 @@ export default function ChatWidget() {
         const fetchedSession = await autoQaAPI.getChatSessionById(session.id);
         if (fetchedSession && fetchedSession.status === 'active') {
           if (fetchedSession.auto_qas) {
-            const loadedMessages: ChatMessage[] = [];
-            fetchedSession.auto_qas.forEach(qa => {
-              if (qa.question) {
-                loadedMessages.push({
-                  id: `user-${qa.id}`,
-                  sender: 'user',
-                  text: qa.question,
-                  timestamp: new Date(qa.created_at)
-                });
-              }
-              loadedMessages.push({
-                id: `bot-${qa.id}`,
-                sender: 'bot',
-                text: qa.answer,
-                timestamp: new Date(qa.created_at)
-              });
-            });
+            const loadedMessages = mapAutoQAsToMessages(fetchedSession.auto_qas);
             // Update messages only if there is a change in length (simple check)
             // Assuming greeting is length 1, so loadedMessages + greeting is the total
             setMessages(prev => {
@@ -134,36 +178,67 @@ export default function ChatWidget() {
     return () => clearInterval(interval);
   }, [isOpen, session]);
 
-  const handleStartChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !email || !phone) return;
-
+  // สร้างห้องแชทหนึ่งครั้ง — ใช้ร่วมกันทั้งการกรอกฟอร์มเองและการเปิดอัตโนมัติของลูกค้าที่ล็อกอิน
+  const startSession = async (
+    nm: string,
+    em: string,
+    ph: string,
+    userId?: number,
+    isAuto = false,
+  ): Promise<boolean> => {
     try {
+      setAutoStarting(isAuto);
       setIsSubmitting(true);
       const newSession = await autoQaAPI.createChatSession({
-        guest_name: name,
-        guest_email: email,
-        guest_phone: phone,
+        guest_name: nm,
+        guest_email: em,
+        guest_phone: ph,
+        user_id: userId, // ผูกห้องแชทกับบัญชีลูกค้า (ถ้าล็อกอิน) เพื่อใช้อ้างอิงภายหลัง
       });
       setSession(newSession);
       localStorage.setItem('auto_qa_session_id', String(newSession.id));
-      
+
       // Add initial greeting
       setMessages([
         {
           id: 'greeting',
           sender: 'bot',
-          text: `สวัสดีค่ะคุณ ${name}, มีอะไรให้เราช่วยไหมคะ?`,
-          timestamp: new Date()
-        }
+          text: `สวัสดีค่ะคุณ ${nm}, มีอะไรให้เราช่วยไหมคะ?`,
+          timestamp: new Date(),
+        },
       ]);
+      return true;
     } catch (err) {
       console.error('Failed to create session:', err);
-      alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+      if (isAuto) {
+        // เปิดอัตโนมัติไม่สำเร็จ → กลับไปแสดงฟอร์ม (เติมค่าไว้ให้แล้ว) ให้กดเริ่มเอง
+        setAutoStartFailed(true);
+      } else {
+        alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+      }
+      return false;
     } finally {
       setIsSubmitting(false);
+      setAutoStarting(false);
     }
   };
+
+  const handleStartChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !phone) return;
+    await startSession(name, email, phone, customerUserId ?? undefined, false);
+  };
+
+  // ลูกค้าที่ล็อกอิน + ข้อมูลครบ: เปิดห้องแชทอัตโนมัติเมื่อกดเปิดกล่องแชท (ข้ามฟอร์ม)
+  useEffect(() => {
+    if (!isOpen || session || autoStartFailed) return;
+    if (!loggedInCustomer || !identityReady) return;
+    if (autoStartTriedRef.current) return;
+    if (!name || !email || !phone) return; // ข้อมูลไม่ครบ → ใช้ฟอร์ม fallback
+    autoStartTriedRef.current = true;
+    startSession(name, email, phone, customerUserId ?? undefined, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, session, loggedInCustomer, identityReady, autoStartFailed, name, email, phone]);
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || !session || isSending) return;
@@ -204,15 +279,26 @@ export default function ChatWidget() {
     }
   };
 
-  const pathname = usePathname();
+  // ล้าง session เดิม (เช่น เมื่อแชทถูกปิด) เพื่อกลับไปหน้าเริ่มการสนทนาใหม่
+  const handleResetSession = () => {
+    localStorage.removeItem('auto_qa_session_id');
+    setSession(null);
+    setMessages([]);
+    setInputText('');
+    // เปิดโอกาสให้ลูกค้าที่ล็อกอินเริ่มห้องใหม่แบบอัตโนมัติได้อีกครั้ง
+    autoStartTriedRef.current = false;
+    setAutoStartFailed(false);
+  };
 
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/coach')) {
     return null;
   }
 
   if (!isOpen) {
+    // โซนลูกค้าเปิดแชทจากปุ่ม "สอบถาม" บน Topbar จึงไม่แสดงปุ่มลอย
+    if (isCustomerArea) return null;
     return (
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 transition-colors z-50 animate-bounce"
         aria-label="Open chat"
@@ -221,6 +307,12 @@ export default function ChatWidget() {
       </button>
     );
   }
+
+  // ลูกค้าล็อกอินและกำลังเปิดห้องแชทอัตโนมัติ (หรือรอโหลดโปรไฟล์) → แสดงสถานะกำลังโหลดแทนฟอร์ม
+  const showAutoLoading =
+    loggedInCustomer &&
+    !autoStartFailed &&
+    (autoStarting || !identityReady || (identityReady && !!name && !!email && !!phone));
 
   return (
     <div className="fixed bottom-6 right-6 w-80 sm:w-96 h-[500px] max-h-[80vh] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-gray-200">
@@ -244,6 +336,12 @@ export default function ChatWidget() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
         {!session ? (
+          showAutoLoading ? (
+            <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
+              <p className="text-sm">กำลังเริ่มการสนทนา...</p>
+            </div>
+          ) : (
           <div className="flex flex-col h-full items-center justify-center">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 w-full">
               <h4 className="text-center font-semibold text-gray-800 mb-2">ยินดีต้อนรับ!</h4>
@@ -293,18 +391,24 @@ export default function ChatWidget() {
               </form>
             </div>
           </div>
+          )
         ) : (
           <div className="flex flex-col space-y-4">
             {messages.map((msg) => (
-              <div 
-                key={msg.id} 
+              <div
+                key={msg.id}
                 className={`flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'}`}
               >
-                <div 
+                {msg.sender === 'admin' && (
+                  <span className="text-[10px] font-semibold text-blue-600 mb-1 ml-1">เจ้าหน้าที่</span>
+                )}
+                <div
                   className={`px-4 py-2 rounded-2xl ${
-                    msg.sender === 'user' 
-                      ? 'bg-red-600 text-white rounded-br-none' 
-                      : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
+                    msg.sender === 'user'
+                      ? 'bg-red-600 text-white rounded-br-none'
+                      : msg.sender === 'admin'
+                        ? 'bg-blue-50 text-blue-900 border border-blue-200 rounded-bl-none shadow-sm'
+                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
@@ -330,39 +434,54 @@ export default function ChatWidget() {
       {/* Input Area */}
       {session && (
         <div className="bg-white border-t border-gray-200 p-3 flex flex-col gap-2">
-          {/* Quick Replies */}
-          {(quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && (
-            <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar">
-              {quickReplies.map((qr) => (
-                <button
-                  key={qr.id}
-                  onClick={() => handleSendMessage(qr.question)}
-                  className="whitespace-nowrap bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-full text-xs hover:bg-red-100 transition-colors"
-                >
-                  {qr.question}
-                </button>
-              ))}
+          {session.status === 'closed' ? (
+            /* แชทถูกปิดแล้ว — ปิดช่องพิมพ์ และให้เริ่มการสนทนาใหม่ได้ */
+            <div className="flex flex-col items-center gap-2 py-2 text-center">
+              <p className="text-xs text-gray-500">การสนทนานี้ถูกปิดแล้ว</p>
+              <button
+                onClick={handleResetSession}
+                className="text-xs font-medium bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
+              >
+                เริ่มการสนทนาใหม่
+              </button>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Quick Replies */}
+              {(quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && (
+                <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar">
+                  {quickReplies.map((qr) => (
+                    <button
+                      key={qr.id}
+                      onClick={() => handleSendMessage(qr.question)}
+                      className="whitespace-nowrap bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-full text-xs hover:bg-red-100 transition-colors"
+                    >
+                      {qr.question}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputText)}
-              placeholder="พิมพ์ข้อความ..."
-              className="flex-1 text-black bg-gray-100 border-none rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              disabled={isSending}
-            />
-            <button
-              onClick={() => handleSendMessage(inputText)}
-              disabled={!inputText.trim() || isSending}
-              className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:bg-gray-300 transition-colors"
-            >
-              <Send size={18} className="ml-1" />
-            </button>
-          </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputText)}
+                  placeholder="พิมพ์ข้อความ..."
+                  className="flex-1 text-black bg-gray-100 border-none rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  disabled={isSending}
+                />
+                <button
+                  onClick={() => handleSendMessage(inputText)}
+                  disabled={!inputText.trim() || isSending}
+                  className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:bg-gray-300 transition-colors"
+                >
+                  <Send size={18} className="ml-1" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

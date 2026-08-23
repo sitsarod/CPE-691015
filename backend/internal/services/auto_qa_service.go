@@ -5,8 +5,16 @@ import (
 	"CPE-691015/internal/models"
 	"errors"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
+)
+
+// Sentinel errors — ให้ controller map เป็น HTTP status code ที่ถูกต้อง
+var (
+	ErrChatSessionNotFound = errors.New("chat session not found")
+	ErrChatSessionClosed   = errors.New("cannot send messages to a closed session")
+	ErrUserNotFoundForChat = errors.New("user not found")
 )
 
 type AutoQAService interface {
@@ -14,6 +22,8 @@ type AutoQAService interface {
 	CreateAutoQA(req *dto.CreateAutoQAReq) (*dto.AutoQADTO, error)
 	GetAutoQAByID(id uint) (*dto.AutoQADTO, error)
 	GetAllAutoQAs() ([]dto.AutoQADTO, error)
+	// GetPublicAutoQAs คืนรูปแบบย่อ (ไม่มีคีย์เวิร์ด/mode) สำหรับหน้าเว็บสาธารณะ
+	GetPublicAutoQAs() ([]dto.PublicAutoQADTO, error)
 	UpdateAutoQA(id uint, req *dto.UpdateAutoQAReq) (*dto.AutoQADTO, error)
 	DeleteAutoQA(id uint) error
 
@@ -23,6 +33,8 @@ type AutoQAService interface {
 	GetAllChatSessions() ([]dto.ChatSessionDTO, error)
 	UpdateChatSession(id uint, req *dto.UpdateChatSessionReq) (*dto.ChatSessionDTO, error)
 	DeleteChatSession(id uint) error
+	// DeleteStaleClosedSessions ลบห้องแชทที่ปิดไปแล้วนานเกิน olderThan (พร้อม log ข้อความ)
+	DeleteStaleClosedSessions(olderThan time.Duration) (int64, error)
 
 	// Q&A logic
 	AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*dto.AskQuestionResponse, error)
@@ -79,6 +91,24 @@ func (s *autoQAService) GetAllAutoQAs() ([]dto.AutoQADTO, error) {
 	return dtos, nil
 }
 
+func (s *autoQAService) GetPublicAutoQAs() ([]dto.PublicAutoQADTO, error) {
+	var qas []models.AutoQA
+	// เฉพาะ template ในคลังความรู้ (session_id IS NULL) เท่านั้น
+	if err := s.db.Where("session_id IS NULL").Order("id ASC").Find(&qas).Error; err != nil {
+		return nil, err
+	}
+
+	dtos := make([]dto.PublicAutoQADTO, 0, len(qas))
+	for _, q := range qas {
+		dtos = append(dtos, dto.PublicAutoQADTO{
+			ID:       q.ID,
+			Question: q.Question,
+			Answer:   q.Answer,
+		})
+	}
+	return dtos, nil
+}
+
 func (s *autoQAService) UpdateAutoQA(id uint, req *dto.UpdateAutoQAReq) (*dto.AutoQADTO, error) {
 	var qa models.AutoQA
 	if err := s.db.First(&qa, id).Error; err != nil {
@@ -121,7 +151,7 @@ func (s *autoQAService) CreateChatSession(req *dto.CreateChatSessionReq) (*dto.C
 	if req.UserID != nil {
 		var user models.User
 		if err := s.db.First(&user, *req.UserID).Error; err != nil {
-			return nil, errors.New("user not found")
+			return nil, ErrUserNotFoundForChat
 		}
 	}
 
@@ -192,17 +222,43 @@ func (s *autoQAService) DeleteChatSession(id uint) error {
 	return s.db.Delete(&models.ChatSession{}, id).Error
 }
 
+// DeleteStaleClosedSessions ลบห้องแชทที่ "ปิดแล้ว" และปิดมานานเกิน olderThan
+// ใช้ updated_at เป็นตัวแทนเวลาที่ปิด (สถานะเปลี่ยนเป็น closed ผ่าน UpdateChatSession เท่านั้น)
+// ลบ log ข้อความ (AutoQA) ของห้องเหล่านั้นก่อน แล้วค่อยลบตัวห้อง — เรียกจาก background job
+func (s *autoQAService) DeleteStaleClosedSessions(olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+
+	var sessions []models.ChatSession
+	if err := s.db.Where("status = ? AND updated_at < ?", models.ChatSessionStatusClosed, cutoff).
+		Find(&sessions).Error; err != nil {
+		return 0, err
+	}
+	if len(sessions) == 0 {
+		return 0, nil
+	}
+
+	ids := make([]uint, 0, len(sessions))
+	for _, sess := range sessions {
+		ids = append(ids, sess.ID)
+	}
+
+	// ลบ log ข้อความของห้องเหล่านี้ก่อน (cascade) แล้วค่อยลบตัวห้อง
+	s.db.Where("session_id IN ?", ids).Delete(&models.AutoQA{})
+	res := s.db.Where("id IN ?", ids).Delete(&models.ChatSession{})
+	return res.RowsAffected, res.Error
+}
+
 // === Q&A Matching Logic ===
 
 func (s *autoQAService) AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*dto.AskQuestionResponse, error) {
 	// Verify session exists and is active
 	var session models.ChatSession
 	if err := s.db.First(&session, sessionID).Error; err != nil {
-		return nil, errors.New("chat session not found")
+		return nil, ErrChatSessionNotFound
 	}
 
 	if session.Status == models.ChatSessionStatusClosed {
-		return nil, errors.New("cannot send messages to a closed session")
+		return nil, ErrChatSessionClosed
 	}
 
 	// Retrieve all template Q&A pairs (knowledge base)
@@ -261,16 +317,16 @@ func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto
 	// Verify session exists and is active
 	var session models.ChatSession
 	if err := s.db.First(&session, sessionID).Error; err != nil {
-		return nil, errors.New("chat session not found")
+		return nil, ErrChatSessionNotFound
 	}
 
 	if session.Status == models.ChatSessionStatusClosed {
-		return nil, errors.New("cannot send messages to a closed session")
+		return nil, ErrChatSessionClosed
 	}
 
 	// Create and persist the interaction log as an admin reply
 	interactionLog := models.AutoQA{
-		Mode:      "admin_reply",
+		Mode:      models.AutoQAModeAdminReply,
 		Question:  "", // Admin replies don't have a user question part
 		Answer:    req.Answer,
 		SessionID: &sessionID,

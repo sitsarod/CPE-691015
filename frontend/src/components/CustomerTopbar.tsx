@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MessageCircleMore, Settings, User, LogOut } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+import { OPEN_CHAT_EVENT } from "@/components/ChatWidget";
 
 export default function CustomerTopbar() {
   const router = useRouter();
@@ -53,7 +54,11 @@ export default function CustomerTopbar() {
         
         <NotificationBell viewAllHref="/customer/notifications" />
 
-        <button className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]">
+        {/* ปุ่ม "สอบถาม" เปิดกล่องแชทของลูกค้า (ChatWidget) ผ่าน event กลาง */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT))}
+          className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]"
+        >
           <MessageCircleMore className="w-7 h-7 text-[#CC0000]" />
           <span className="hidden md:inline">สอบถาม</span>
         </button>

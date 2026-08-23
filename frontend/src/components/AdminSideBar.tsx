@@ -17,7 +17,7 @@ const navItems = [
   { href: "/admin/coachschedule", icon: <CalendarClock />, label: "จัดตารางสอน" },
   { href: "/admin/usermanagement", icon: <BookUser />, label: "จัดการข้อมูลผู้ใช้งาน" },
   { href: "/admin/enrollments", icon: <Book />, label: "การลงทะเบียนเรียน" },
-  { href: "/admin/chat-sessions", icon: <MessageSquareMore />, label: "จัดการแชท (Chat Sessions)" },
+  // "จัดการแชท (Chat Sessions)" ย้ายไปเปิดจากปุ่ม "สอบถาม" มุมขวาบนของ AdminTopBar แล้ว
   { href: "/admin/auto-qa", icon: <ListChecks />, label: "จัดการ Q&A (Knowledge Base)" },
 ];
 
