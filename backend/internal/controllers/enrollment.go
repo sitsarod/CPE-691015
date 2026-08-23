@@ -19,6 +19,36 @@ func NewEnrollmentController(service *services.EnrollmentService) *EnrollmentCon
     return &EnrollmentController{service: service}
 }
 
+// mapEnrollmentError แปลง error จาก service เป็น HTTP status ที่ตรงความหมาย
+//
+// เดิม EnrollCourse ตอบ 500 กับทุก error รวมถึงกรณีปกติอย่าง "สมัครไปแล้ว"
+// ทำให้ระบบมอนิเตอร์มองว่าเซิร์ฟเวอร์พังทั้งที่เป็น flow ที่ออกแบบไว้
+func mapEnrollmentError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrEnrollmentNotFound),
+		errors.Is(err, services.ErrPackageNotFound),
+		errors.Is(err, services.ErrCustomerProfileNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+
+	case errors.Is(err, services.ErrEnrollmentRejectReason):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+	case errors.Is(err, services.ErrEnrollmentForbidden):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+
+	// สถานะไม่เอื้อให้ทำตอนนี้ — ยิงซ้ำก็ไม่ช่วย
+	case errors.Is(err, services.ErrAlreadyEnrolled),
+		errors.Is(err, services.ErrPackageSeatsFull),
+		errors.Is(err, services.ErrEnrollmentNotPending),
+		errors.Is(err, services.ErrEnrollmentNotCancellable),
+		errors.Is(err, services.ErrEnrollmentBillingLocked):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+}
+
 // GetAvailableCourses
 func (ctrl *EnrollmentController) GetAvailableCourses(c *gin.Context) {
     courses, err := ctrl.service.GetAvailableCourses()
@@ -47,7 +77,7 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
 
     enrollment, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        mapEnrollmentError(c, err)
         return
     }
 
@@ -58,6 +88,58 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
             BillingID:    enrollment.BillingID,
         },
     })
+}
+
+// CancelMyEnrollment [PATCH] /api/enrollments/:id/cancel — นักเรียนถอนใบสมัครของตัวเอง
+func (ctrl *EnrollmentController) CancelMyEnrollment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	if err := ctrl.service.CancelMyEnrollment(userID, uint(id)); err != nil {
+		mapEnrollmentError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกใบสมัครเรียบร้อยแล้ว"})
+}
+
+// RejectEnrollment [PATCH] /api/admin/enrollments/:id/reject — ปฏิเสธคำขอพร้อมเหตุผล (adminOnly)
+//
+// ตัวตนแอดมินดึงจาก JWT ไม่ใช่ body — ไม่งั้นปลอมได้ว่าใครเป็นคนปฏิเสธ
+func (ctrl *EnrollmentController) RejectEnrollment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
+		return
+	}
+
+	var req dto.RejectEnrollmentReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
+		return
+	}
+
+	if err := ctrl.service.RejectEnrollment(uint(id), adminID, req.Reason); err != nil {
+		mapEnrollmentError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ปฏิเสธคำขอเรียบร้อยแล้ว แจ้งเตือนไปหานักเรียนแล้ว"})
 }
 
 // ApproveEnrollment

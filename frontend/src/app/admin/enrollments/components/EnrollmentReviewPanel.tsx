@@ -16,8 +16,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Armchair,
+  XCircle,
 } from "lucide-react";
 import { EnrollmentReview, EnrollmentExtension } from "@/types/enrollment";
+import { ENROLLMENT_STATUS_LABEL } from "@/types/enrollment";
 import {
   fetchEnrollmentReview,
   fetchEnrollmentExtensions,
@@ -34,7 +36,9 @@ interface EnrollmentReviewPanelProps {
   enrollmentId: number | null;
   onClose: () => void;
   onApprove: (id: number) => Promise<void>;
+  onReject: (id: number, reason: string) => Promise<void>;
   isApproving: boolean;
+  isRejecting: boolean;
 }
 
 /**
@@ -47,9 +51,17 @@ export default function EnrollmentReviewPanel({
   enrollmentId,
   onClose,
   onApprove,
+  onReject,
   isApproving,
+  isRejecting,
 }: EnrollmentReviewPanelProps) {
   const [data, setData] = useState<EnrollmentReview | null>(null);
+
+  // ฟอร์มอยู่ใน footer ไม่ใช่ modal ซ้อน modal — แอดมินต้องอ่านข้อมูลผู้สมัครประกอบ
+  // ล้างค่าด้วย key={enrollmentId} ฝั่งผู้เรียก (ไม่ใช่ setState ใน effect)
+  // เปลี่ยนใบ = remount ข้อความของคนก่อนหน้าจึงไม่ค้างมาส่งผิดคน
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const [extensions, setExtensions] = useState<EnrollmentExtension[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -376,7 +388,7 @@ export default function EnrollmentReviewPanel({
           ) : null}
         </div>
 
-        {/* ปุ่มอนุมัติ */}
+        {/* ปุ่มตัดสินใจ */}
         <footer className="border-t border-gray-200 bg-gray-50 px-6 py-4">
           {data && !isPending ? (
             <div className="text-center text-sm text-gray-500">
@@ -388,6 +400,64 @@ export default function EnrollmentReviewPanel({
                   เมื่อยืนยันการชำระเงินที่หน้าตรวจสอบสลิป
                 </p>
               )}
+              {data.enrollment.rejected_reason && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-left">
+                  <p className="text-xs font-bold text-red-700">เหตุผลที่ปฏิเสธ</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-red-800">
+                    {data.enrollment.rejected_reason}
+                  </p>
+                  {data.enrollment.rejected_at && (
+                    <p className="mt-1.5 text-xs text-red-500">
+                      เมื่อ {new Date(data.enrollment.rejected_at).toLocaleString("th-TH")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : showRejectForm ? (
+            <div>
+              <label className="block text-sm font-bold text-gray-900">
+                เหตุผลที่ไม่รับคำขอ
+              </label>
+              <p className="mt-0.5 text-xs text-gray-500">
+                นักเรียนจะได้รับข้อความนี้ในการแจ้งเตือน เขียนให้เขารู้ว่าต้องแก้อะไร
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+                maxLength={500}
+                autoFocus
+                placeholder="เช่น เบอร์ติดต่อใช้ไม่ได้ กรุณาแก้ไขข้อมูลในโปรไฟล์แล้วสมัครใหม่"
+                className="mt-2 w-full rounded-xl border border-gray-300 p-3 text-sm text-gray-900 outline-none focus:border-[#CC0000]"
+              />
+
+              <div className="mt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRejectForm(false);
+                    setRejectReason("");
+                  }}
+                  disabled={isRejecting}
+                  className="flex-1 rounded-xl border border-gray-300 bg-white py-3 font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                >
+                  ย้อนกลับ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReject(enrollmentId, rejectReason)}
+                  disabled={isRejecting || rejectReason.trim().length < 3}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gray-800 py-3 font-bold text-white transition-colors hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRejecting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <XCircle className="h-5 w-5" />
+                  )}
+                  ยืนยันปฏิเสธ
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex gap-3">
@@ -395,9 +465,19 @@ export default function EnrollmentReviewPanel({
                 type="button"
                 onClick={onClose}
                 disabled={isApproving}
-                className="flex-1 rounded-xl border border-gray-300 bg-white py-3 font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                className="rounded-xl border border-gray-300 bg-white px-5 py-3 font-bold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
               >
                 ปิด
+              </button>
+              {/* ไม่ disable ตอนที่นั่งเต็มเหมือนปุ่มอนุมัติ — ตอนนั้นคือตอนที่ต้องปฏิเสธที่สุด */}
+              <button
+                type="button"
+                onClick={() => setShowRejectForm(true)}
+                disabled={isApproving || isLoading || !!error}
+                className="flex items-center justify-center gap-2 rounded-xl border border-gray-400 bg-white px-5 py-3 font-bold text-gray-700 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <XCircle className="h-5 w-5" />
+                ปฏิเสธ
               </button>
               <button
                 type="button"
@@ -565,8 +645,12 @@ function StatusPill({ status }: { status: string }) {
     active: { label: "กำลังเรียน", className: "bg-green-100 text-green-800" },
     completed: { label: "จบแล้ว", className: "bg-blue-100 text-blue-800" },
     cancelled: { label: "ยกเลิก", className: "bg-gray-100 text-gray-600" },
+    rejected: { label: "ปฏิเสธแล้ว", className: "bg-red-100 text-red-700" },
   };
-  const item = map[status] ?? { label: status, className: "bg-gray-100 text-gray-600" };
+  const item = map[status] ?? {
+    label: ENROLLMENT_STATUS_LABEL[status] ?? status,
+    className: "bg-gray-100 text-gray-600",
+  };
 
   return (
     <span

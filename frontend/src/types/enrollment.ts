@@ -29,6 +29,18 @@ export interface EnrollmentPackageInfo {
   course: EnrollmentCourseInfo | null;
 }
 
+// ป้ายภาษาไทยของสถานะการลงทะเบียน — ใช้ร่วมกันทุกหน้า
+// กันไม่ให้หน้าไหนหลุดไปโชว์ค่าดิบเป็นภาษาอังกฤษอย่าง "rejected"
+export const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
+  pending: "รอดำเนินการ",
+  awaiting_payment: "รอชำระเงิน",
+  active: "กำลังเรียน",
+  completed: "เรียนจบแล้ว",
+  cancelled: "ยกเลิกแล้ว",
+  expired: "หมดอายุ",
+  rejected: "ปฏิเสธแล้ว",
+};
+
 export interface Enrollment {
   id: number;
   enrollment_date: string;
@@ -44,6 +56,10 @@ export interface Enrollment {
   days_left: number | null;
   is_overdue: boolean;
   grace_days_left: number | null;
+
+  /** มีค่าเฉพาะสถานะ rejected — เหตุผลที่แอดมินไม่รับคำขอ */
+  rejected_reason?: string;
+  rejected_at?: string | null;
 }
 
 
@@ -81,6 +97,9 @@ export interface AdminEnrollment {
   grace_days_left: number | null;
   customer: AdminEnrollmentCustomer | null;
   package: AdminEnrollmentPackage | null;
+
+  rejected_reason?: string;
+  rejected_at?: string | null;
 }
 
 
@@ -98,6 +117,9 @@ export interface ReviewEnrollmentInfo {
   expires_at: string | null;
   days_left: number | null;
   grace_days_left: number | null;
+
+  rejected_reason?: string;
+  rejected_at?: string | null;
 }
 
 export interface ReviewCustomerInfo {

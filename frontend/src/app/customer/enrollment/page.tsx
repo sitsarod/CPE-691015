@@ -13,6 +13,8 @@ import {
   Wallet,
   CalendarX,
   AlertTriangle,
+  XCircle,
+  History,
 } from "lucide-react";
 import { Enrollment } from "@/types/enrollment";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
@@ -20,10 +22,12 @@ import {
   fetchCustomerEnrollments,
   fetchAvailableCourses,
   enrollCourse,
+  cancelMyEnrollment,
 } from "@/services/enrollmentAPI";
 import FaceConsentModal from "@/components/FaceConsentModal";
 import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
 import { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
+import EnrollmentHistoryModal from "./components/EnrollmentHistoryModal";
 import CourseDetail from "@/components/course/CourseDetail";
 import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 import {
@@ -55,6 +59,8 @@ export default function EnrollmentPage() {
   // สำหรับ Modal สมัครเรียน
   const [selected, setSelected] = useState<SelectedPackage | null>(null);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // สำหรับความยินยอมเก็บข้อมูลใบหน้า (PDPA)
@@ -80,6 +86,17 @@ export default function EnrollmentPage() {
 
       setEnrollments(enrollmentsData);
       setCourses(coursesData);
+
+      // มาจากลิงก์แจ้งเตือน "คำขอไม่ผ่านการพิจารณา" → เปิดหน้าประวัติให้เลย
+      // เพราะใบที่ถูกปฏิเสธไม่โชว์ในกริดหลัก ถ้าไม่เปิดให้ผู้ใช้จะกดมาแล้วไม่เจออะไร
+      if (new URLSearchParams(window.location.search).get("history") === "1") {
+        setShowHistory(true);
+
+        // ล้าง query ทิ้งแบบเดียวกับ ?pkg= เพื่อไม่ให้เด้งซ้ำตอนกดปิดแล้วรีเฟรช
+        const url = new URL(window.location.href);
+        url.searchParams.delete("history");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
 
       // ดึงสถานะความยินยอมแยกต่างหาก และกลืน error ทิ้งโดยตั้งใจ
       // เพราะบัญชีที่ไม่มีโปรไฟล์ลูกค้า (เช่นแอดมินเปิดหน้านี้) จะได้ 404
@@ -172,6 +189,35 @@ export default function EnrollmentPage() {
     }
   };
 
+  // ถอนใบสมัครที่ยังรออนุมัติ — ถามยืนยันก่อนเพราะถอนแล้วใบหายเลย ไม่มีปุ่มเรียกคืน
+  const handleCancel = async (item: Enrollment) => {
+    const courseName = item.package?.course?.course_name ?? "คอร์สนี้";
+    if (
+      !window.confirm(
+        `ยกเลิกใบสมัคร "${courseName}" ใช่หรือไม่?\n\nใบสมัครจะถูกถอนออกจากคิวอนุมัติ ถ้าเปลี่ยนใจต้องสมัครใหม่และรออนุมัติอีกครั้ง`
+      )
+    ) {
+      return;
+    }
+
+    setCancellingId(item.id);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
+        return;
+      }
+
+      await cancelMyEnrollment(item.id, token);
+      setSuccessMessage("ยกเลิกใบสมัครเรียบร้อยแล้ว");
+      loadData(); // รีเฟรชทั้งรายการของฉันและที่นั่งคงเหลือของคอร์ส
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถยกเลิกใบสมัครได้");
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   // บันทึกการตัดสินใจ แล้วสมัครต่อให้เลย ผู้ใช้จะได้ไม่ต้องกดยืนยันซ้ำสองรอบ
   const handleConsentDecision = async (action: FaceConsentDecision) => {
     setIsSavingConsent(true);
@@ -186,6 +232,10 @@ export default function EnrollmentPage() {
       setIsSavingConsent(false);
     }
   };
+
+  // ใบที่ถูกปฏิเสธไปอยู่ในหน้าประวัติอย่างเดียว ไม่ปะปนกับคอร์สที่ใช้งานอยู่
+  const visibleEnrollments = enrollments.filter((e) => e.status !== "rejected");
+  const hiddenRejectedCount = enrollments.length - visibleEnrollments.length;
 
   const displayCourses = courses;
 
@@ -208,14 +258,35 @@ export default function EnrollmentPage() {
     <div className="mx-auto max-w-7xl">
       {/* ---------------- ส่วนที่ 1: คอร์สของฉัน ---------------- */}
       <div className="mb-14">
-        <h1 className="mb-8 text-[22px] font-bold text-gray-900">คอร์สของฉัน</h1>
-        {enrollments.length === 0 ? (
-          <p className="text-[16px] text-gray-500">
-            คุณยังไม่มีข้อมูลการลงทะเบียนคอร์สเรียนในขณะนี้
-          </p>
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <h1 className="text-[22px] font-bold text-gray-900">คอร์สของฉัน</h1>
+
+          <button
+            onClick={() => setShowHistory(true)}
+            title="ประวัติการเรียน"
+            aria-label="ประวัติการเรียน"
+            className="rounded-xl border border-gray-300 p-2.5 text-gray-600 transition-colors hover:border-[#CC0000] hover:bg-red-50 hover:text-[#CC0000]"
+          >
+            <History className="h-5 w-5" />
+          </button>
+        </div>
+        {visibleEnrollments.length === 0 ? (
+          <div className="text-[16px] text-gray-500">
+            <p>คุณยังไม่มีข้อมูลการลงทะเบียนคอร์สเรียนในขณะนี้</p>
+
+            {/* กันงงกรณีเคยสมัครแล้วถูกปฏิเสธ — ไม่งั้นจะเห็นหน้าว่างทั้งที่เพิ่งสมัครไป */}
+            {hiddenRejectedCount > 0 && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="mt-2 text-sm font-semibold text-[#CC0000] underline underline-offset-2"
+              >
+                มีใบสมัคร {hiddenRejectedCount} ใบที่ไม่ผ่านการพิจารณา · ดูประวัติ
+              </button>
+            )}
+          </div>
         ) : (
           <div className="flex flex-wrap gap-10">
-            {enrollments.map((item) => {
+            {visibleEnrollments.map((item) => {
               // คำนวณครั้งเดียว ของเดิมเรียกฟังก์ชันซ้ำสองรอบใน JSX
               const schedules = sortSchedulesByDay(item.package?.schedules);
               const expiry = describeExpiry(
@@ -363,6 +434,22 @@ export default function EnrollmentPage() {
                       </span>
                     )}
                   </p>
+
+                  {/* เฉพาะ pending — อนุมัติแล้วต้องผ่านแอดมิน (backend บังคับกติกาเดียวกัน) */}
+                  {item.status === 'pending' && (
+                    <button
+                      onClick={() => handleCancel(item)}
+                      disabled={cancellingId !== null}
+                      className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md border border-gray-300 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      {cancellingId === item.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5" />
+                      )}
+                      ยกเลิกใบสมัคร
+                    </button>
+                  )}
                 </div>
               </div>
               );
@@ -514,6 +601,13 @@ export default function EnrollmentPage() {
         onDecision={handleConsentDecision}
         onDismiss={() => setIsConsentOpen(false)}
       />
+
+      {showHistory && (
+        <EnrollmentHistoryModal
+          enrollments={enrollments}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
 
       {/* ---------------- Toast แจ้งเตือนสำเร็จ ---------------- */}
       {successMessage && (

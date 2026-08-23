@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet, CalendarX, AlertTriangle } from "lucide-react";
-import { fetchAllEnrollments, approveEnrollment } from "@/services/enrollmentAPI";
+import { Loader2, CheckCircle, Clock, AlertCircle, Search, FileSearch, Wallet, CalendarX, AlertTriangle, XCircle } from "lucide-react";
+import {
+  fetchAllEnrollments,
+  approveEnrollment,
+  rejectEnrollment,
+} from "@/services/enrollmentAPI";
 import type { AdminEnrollment } from "@/types/enrollment";
+import { ENROLLMENT_STATUS_LABEL } from "@/types/enrollment";
 import {
   describeExpiry,
   expiryTextClass,
@@ -18,6 +23,7 @@ export default function AdminEnrollmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const loadData = async () => {
@@ -53,6 +59,22 @@ export default function AdminEnrollmentsPage() {
       alert(err instanceof Error ? err.message : "ไม่สามารถอนุมัติได้");
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (id: number, reason: string) => {
+    setRejectingId(id);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      await rejectEnrollment(id, reason, token);
+      setReviewingId(null);
+      alert("ปฏิเสธคำขอเรียบร้อย ระบบแจ้งเตือนนักเรียนพร้อมเหตุผลแล้ว");
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถปฏิเสธคำขอได้");
+    } finally {
+      setRejectingId(null);
     }
   };
 
@@ -158,9 +180,13 @@ export default function AdminEnrollmentsPage() {
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
                       <CalendarX className="w-3 h-3 mr-1" /> หมดอายุ
                     </span>
+                  ) : item.status === 'rejected' ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                      <XCircle className="w-3 h-3 mr-1" /> ปฏิเสธแล้ว
+                    </span>
                   ) : (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
-                      {item.status}
+                      {ENROLLMENT_STATUS_LABEL[item.status] ?? item.status}
                     </span>
                   )}
                 </td>
@@ -193,9 +219,13 @@ export default function AdminEnrollmentsPage() {
       </div>
 
       <EnrollmentReviewPanel
+        // remount ทุกครั้งที่เปลี่ยนใบ เพื่อล้างฟอร์มเหตุผลที่ค้างอยู่ในแผง
+        key={reviewingId ?? "none"}
         enrollmentId={reviewingId}
         onClose={() => setReviewingId(null)}
         onApprove={handleApprove}
+        onReject={handleReject}
+        isRejecting={rejectingId !== null}
         isApproving={processingId != null}
       />
 

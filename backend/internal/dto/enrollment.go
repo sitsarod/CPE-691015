@@ -29,6 +29,14 @@ type CreateEnrollmentData struct {
 }
 
 // UpdateEnrollmentReq รับข้อมูลตอนแอดมินต้องการแก้ไขสถานะหรือโควตา
+// RejectEnrollmentReq เหตุผลที่แอดมินไม่รับคำขอ
+//
+// บังคับกรอกเพราะข้อความนี้ถูกส่งไปหานักเรียนตรง ๆ ผ่านการแจ้งเตือน
+// ปฏิเสธแบบเงียบ ๆ = นักเรียนสมัครซ้ำแบบเดิมเข้ามาอีก
+type RejectEnrollmentReq struct {
+    Reason string `json:"reason" binding:"required,min=3,max=500"`
+}
+
 type UpdateEnrollmentReq struct {
     Status             *string  `json:"status" binding:"omitempty,oneof=awaiting_payment active completed cancelled expired"`
     RemainingSessions  *float64 `json:"remaining_sessions" binding:"omitempty,min=0"`
@@ -124,6 +132,10 @@ type CustomerEnrollmentDTO struct {
     IsOverdue bool `json:"is_overdue"`
 
     GraceDaysLeft *int `json:"grace_days_left"`
+
+    // เหตุผลที่คำขอถูกปฏิเสธ (มีค่าเฉพาะสถานะ rejected)
+    RejectedReason string     `json:"rejected_reason,omitempty"`
+    RejectedAt     *time.Time `json:"rejected_at,omitempty"`
 
     // AttendedSessions = TotalSessions - RemainingSessions
     //

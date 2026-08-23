@@ -24,6 +24,14 @@ const (
 	EnrollmentStatusCompleted EnrollmentStatus = "completed"
 	EnrollmentStatusCancelled EnrollmentStatus = "cancelled"
 	EnrollmentStatusExpired EnrollmentStatus = "expired"
+
+	// EnrollmentStatusRejected = แอดมินพิจารณาแล้วไม่รับคำขอนี้
+	//
+	// แยกจาก cancelled เพื่อให้ตอบย้อนหลังได้ว่าเป็นอันไหนใน 3 อย่าง:
+	// นักเรียนถอนเอง / แอดมินปฏิเสธคำขอ / แอดมินยกเลิกใบที่เรียนอยู่แล้ว
+	//
+	// ⚠️ ห้ามใส่ใน enrollmentSeatStatuses — ใบที่ถูกปฏิเสธต้องคืนที่นั่ง
+	EnrollmentStatusRejected EnrollmentStatus = "rejected"
 )
 
 type Enrollment struct {
@@ -35,6 +43,12 @@ type Enrollment struct {
 	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`
 	StartedAt *time.Time `json:"started_at"`
 	ExpiresAt *time.Time `json:"expires_at" gorm:"index"`
+
+	// ใบที่ถูกปฏิเสธไม่ถูก soft delete ต่างจาก cancelled — ต้องตรวจสอบย้อนหลังได้
+	// ว่าเคยปฏิเสธใครด้วยเหตุผลอะไร ถ้าลบทิ้งก็เท่ากับไม่ได้บันทึกการตัดสินใจนั้นเลย
+	RejectedReason   string     `json:"rejected_reason" gorm:"type:text"`
+	RejectedByUserID *uint      `json:"rejected_by_user_id"`
+	RejectedAt       *time.Time `json:"rejected_at"`
 
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`

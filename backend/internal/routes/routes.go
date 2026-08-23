@@ -305,6 +305,8 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
+			// แยก path จาก DELETE /:id ของแอดมิน เพราะคนละสิทธิ์และคนละกติกา
+			enrollmentGroup.PATCH("/:id/cancel", enrollmentController.CancelMyEnrollment)
 		}
 
 		// --- เช็คชื่อเข้าเรียน ---
@@ -331,6 +333,7 @@ func SetupRoutes(r *gin.Engine) {
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
 		{
 			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
+			adminEnrollmentReviewGroup.PATCH("/:id/reject", enrollmentController.RejectEnrollment)
 			adminEnrollmentReviewGroup.POST("/:id/extend", enrollmentController.ExtendEnrollment)
 			adminEnrollmentReviewGroup.GET("/:id/extensions", enrollmentController.GetEnrollmentExtensions)
 		}
