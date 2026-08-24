@@ -83,16 +83,26 @@ export default function CustomerSidebar() {
       </aside>
 
       {/* Mobile (< md): icon-only horizontal bottom bar */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-40 items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
+      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-[60] items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
         {primaryItems.map((item) => (
-          <BottomBarItem key={item.href} href={item.href} icon={item.icon} label={item.label} active={pathname === item.href} />
+          <BottomBarItem
+            key={item.href}
+            href={item.href}
+            icon={item.icon}
+            label={item.label}
+            active={pathname === item.href}
+            // กดเมนูที่อยู่หน้าเดิมอยู่แล้ว pathname ไม่เปลี่ยน effect ที่ปิดเมนูจึงไม่ทำงาน
+            onNavigate={() => setMenuOpen(false)}
+          />
         ))}
 
         <button
           type="button"
           aria-label="เพิ่มเติม"
           aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(true)}
+          // ต้อง toggle ไม่ใช่ set true — ตั้งแต่แถบล่างไม่ถูกบังแล้ว ปุ่มนี้มองเห็นได้
+          // ตอนเมนูเปิดอยู่ ผู้ใช้ย่อมคาดว่ากดซ้ำแล้วจะปิด
+          onClick={() => setMenuOpen((v) => !v)}
           className={`flex flex-1 min-w-0 items-center justify-center py-3.5 transition-colors ${
             menuOpen || moreActive ? "text-[#CC0000]" : "text-gray-600"
           }`}
@@ -120,7 +130,7 @@ export default function CustomerSidebar() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24">
               <div className="grid grid-cols-3 gap-3">
                 {navItems.map((item) => {
                   const active = pathname === item.href;
@@ -185,11 +195,12 @@ function SidebarItem({ icon, label, href, active }: { icon: React.ReactNode; lab
   );
 }
 
-function BottomBarItem({ icon, label, href, active }: { icon: React.ReactNode; label: string; href: string; active: boolean }) {
+function BottomBarItem({ icon, label, href, active, onNavigate }: { icon: React.ReactNode; label: string; href: string; active: boolean; onNavigate?: () => void }) {
   return (
     <Link
       href={href}
       aria-label={label}
+      onClick={onNavigate}
       className={`flex flex-1 min-w-0 items-center justify-center py-3.5 transition-colors ${
         active ? "text-[#CC0000]" : "text-gray-600"
       }`}

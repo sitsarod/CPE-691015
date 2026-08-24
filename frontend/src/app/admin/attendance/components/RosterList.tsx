@@ -11,26 +11,46 @@ interface Props {
   onEditStatus: (item: RosterItem) => void;
 }
 
-function statusPill(item: RosterItem) {
+const STATUS_TONE: Record<NonNullable<RosterItem["status"]>, string> = {
+  present: "bg-green-100 text-green-700",
+  absent: "bg-red-100 text-red-700",
+  leave: "bg-amber-100 text-amber-700",
+};
+
+function StatusPill({ item }: { item: RosterItem }) {
   if (!item.status) {
     return (
-      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-sm text-gray-500">
+      <span className="inline-flex whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-sm text-gray-500">
         ยังไม่เช็ค
       </span>
     );
   }
 
-  const tone = {
-    present: "bg-green-100 text-green-700",
-    absent: "bg-red-100 text-red-700",
-    leave: "bg-amber-100 text-amber-700",
-  }[item.status];
-
   return (
-    <span className={`rounded-full px-2.5 py-1 text-sm font-medium ${tone}`}>
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${STATUS_TONE[item.status]}`}
+    >
       {STATUS_LABEL[item.status]}
     </span>
   );
+}
+
+function SubLine({ item }: { item: RosterItem }) {
+  const parts = [
+    item.nickname,
+    item.check_in_method && METHOD_LABEL[item.check_in_method],
+    item.check_in_time &&
+      new Date(item.check_in_time).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+  ].filter(Boolean);
+
+  if (parts.length === 0) return null;
+
+  // บรรทัดเดียวที่ truncate ได้ — ของเดิมเป็น flex ซึ่งอยู่ในช่องตารางความกว้างคงที่
+  // ไม่ได้ ข้อความจะทะลุออกนอกช่องแทนที่จะตัดด้วย …
+  return <p className="truncate text-sm text-gray-400">{parts.join(" · ")}</p>;
 }
 
 export default function RosterList({ session, onManualCheckIn, onEditStatus }: Props) {
@@ -72,17 +92,56 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
     }
   };
 
+  // ปุ่มสูง 44px ขึ้นไปตามขนาดนิ้วมือ — จอนี้ใช้นิ้วกดบน iPad ไม่ใช่เมาส์
+  // ปุ่มเล็กกว่านั้นจะกดพลาดไปโดนแถวข้างเคียงตอนรีบ
+  const ActionButton = ({ item, block }: { item: RosterItem; block?: boolean }) => {
+    const width = block ? "w-full" : "";
+
+    if (!item.attendance_id) {
+      if (!canCheckIn) return null;
+      return (
+        <button
+          onClick={() => handleManual(item.enrollment_id)}
+          disabled={busyId !== null}
+          className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#CC0000] px-4 py-2.5 font-medium text-white transition hover:bg-[#A30A0E] disabled:opacity-50 ${width}`}
+        >
+          {busyId === item.enrollment_id ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <UserPlus className="h-5 w-5" />
+          )}
+          เช็คให้
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={() => onEditStatus(item)}
+        className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-gray-300 px-4 py-2.5 font-medium text-gray-700 transition hover:bg-gray-100 ${width}`}
+      >
+        <Pencil className="h-4 w-4" />
+        แก้
+      </button>
+    );
+  };
+
+  const emptyMessage =
+    session.roster.length === 0
+      ? "ไม่มีผู้เรียนที่ยังใช้สิทธิ์อยู่ในแพ็กเกจนี้"
+      : "ไม่พบชื่อที่ค้นหา";
+
   return (
-    <div className="flex min-h-0 flex-col rounded-2xl border border-gray-200">
+    <div className="flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
       {/* แถบค้นหา — อยู่นอกส่วนที่เลื่อน จะได้ไม่หลุดจากจอตอนเลื่อนหารายชื่อ */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 p-3">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 basis-full sm:basis-0">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ค้นหาชื่อหรือชื่อเล่น"
-            className="w-full rounded-xl border border-gray-300 py-2.5 pl-9 pr-9 text-gray-900 outline-none focus:border-blue-500"
+            className="w-full rounded-xl border border-gray-300 py-2.5 pl-9 pr-9 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
           />
           {search && (
             <button
@@ -97,9 +156,9 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
 
         <button
           onClick={() => setPendingOnly((v) => !v)}
-          className={`shrink-0 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+          className={`min-h-11 w-full shrink-0 rounded-xl border px-3 py-2.5 text-sm font-medium transition sm:w-auto ${
             pendingOnly
-              ? "border-blue-500 bg-blue-50 text-blue-700"
+              ? "border-[#CC0000] bg-[#FFF0F0] text-[#CC0000]"
               : "border-gray-300 text-gray-700 hover:bg-gray-50"
           }`}
         >
@@ -107,84 +166,65 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
         </button>
       </div>
 
-
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <table className="w-full text-left">
-          <thead className="sticky top-0 z-10 bg-gray-50 text-sm text-gray-500">
+        {rows.length === 0 && (
+          <p className="px-4 py-10 text-center text-gray-400">{emptyMessage}</p>
+        )}
+
+        {/* ── มือถือ: การ์ดต่อคน — ตารางสี่คอลัมน์ไม่ลงจอกว้าง 375px ── */}
+        <ul className="divide-y divide-gray-100 md:hidden">
+          {rows.map((item) => (
+            <li key={item.enrollment_id} className="p-4">
+              <p className="font-medium text-gray-900">
+                {item.full_name.trim() || "ไม่ทราบชื่อ"}
+              </p>
+              <SubLine item={item} />
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <StatusPill item={item} />
+                <span className="whitespace-nowrap text-sm text-gray-500">
+                  คงเหลือ {item.remaining_sessions} / {item.total_sessions}
+                </span>
+              </div>
+
+              <div className="mt-3 empty:mt-0">
+                <ActionButton item={item} block />
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* ── แท็บเล็ต/เดสก์ท็อป: ตาราง ── */}
+        <table className="hidden w-full table-fixed text-left md:table">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-sm font-semibold text-gray-600">
             <tr>
-              <th className="px-4 py-3 font-medium">ชื่อ</th>
-              <th className="px-3 py-3 font-medium">คงเหลือ</th>
-              <th className="px-3 py-3 font-medium">สถานะ</th>
-              <th className="px-3 py-3" />
+              <th className="px-4 py-3">ชื่อ</th>
+              <th className="w-24 px-3 py-3">คงเหลือ</th>
+              <th className="w-32 px-3 py-3">สถานะ</th>
+              <th className="w-36 px-3 py-3" />
             </tr>
           </thead>
 
           <tbody className="divide-y divide-gray-100">
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-gray-400">
-                  {session.roster.length === 0
-                    ? "ไม่มีผู้เรียนที่ยังใช้สิทธิ์อยู่ในแพ็กเกจนี้"
-                    : "ไม่พบชื่อที่ค้นหา"}
-                </td>
-              </tr>
-            )}
-
             {rows.map((item) => (
               <tr key={item.enrollment_id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
-                  <p className="font-medium text-gray-900">
+                  <p className="truncate font-medium text-gray-900">
                     {item.full_name.trim() || "ไม่ทราบชื่อ"}
                   </p>
-                  <div className="flex flex-wrap items-center gap-x-2 text-sm text-gray-400">
-                    {item.nickname && <span>{item.nickname}</span>}
-                    {item.check_in_method && (
-                      <span>{METHOD_LABEL[item.check_in_method]}</span>
-                    )}
-                    {item.check_in_time && (
-                      <span>
-                        {new Date(item.check_in_time).toLocaleTimeString("th-TH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                  </div>
+                  <SubLine item={item} />
                 </td>
 
                 <td className="whitespace-nowrap px-3 py-3 text-gray-700">
                   {item.remaining_sessions} / {item.total_sessions}
                 </td>
 
-                <td className="px-3 py-3">{statusPill(item)}</td>
+                <td className="px-3 py-3">
+                  <StatusPill item={item} />
+                </td>
 
                 <td className="px-3 py-3 text-right">
-                  {/* ปุ่มสูง 44px ขึ้นไปตามขนาดนิ้วมือ — จอนี้ใช้นิ้วกดบน iPad ไม่ใช่เมาส์
-                      ปุ่มเล็กกว่านั้นจะกดพลาดไปโดนแถวข้างเคียงตอนรีบ */}
-                  {!item.attendance_id && canCheckIn && (
-                    <button
-                      onClick={() => handleManual(item.enrollment_id)}
-                      disabled={busyId !== null}
-                      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {busyId === item.enrollment_id ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <UserPlus className="h-5 w-5" />
-                      )}
-                      เช็คให้
-                    </button>
-                  )}
-
-                  {item.attendance_id && (
-                    <button
-                      onClick={() => onEditStatus(item)}
-                      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-gray-300 px-4 py-2.5 font-medium text-gray-700 transition hover:bg-gray-100"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      แก้
-                    </button>
-                  )}
+                  <ActionButton item={item} />
                 </td>
               </tr>
             ))}
