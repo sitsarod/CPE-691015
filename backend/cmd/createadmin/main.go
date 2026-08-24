@@ -39,7 +39,6 @@ import (
 	"CPE-691015/internal/services"
 
 	"github.com/joho/godotenv"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -150,24 +149,15 @@ func resetPassword(db *gorm.DB, reader *bufio.Reader, email string) {
 
 	password := askPassword(reader)
 
-	// ตรวจความยาวด้วยกติกาเดียวกับที่ใช้ตอนสมัคร
-	if err := services.ValidatePasswordStrength(password); err != nil {
-		log.Fatalf("รหัสผ่านไม่ผ่านเกณฑ์: %v", err)
-	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Fatalf("เข้ารหัสผ่านไม่สำเร็จ: %v", err)
-	}
-
-	if err := db.Model(&user).Update("password", string(hashed)).Error; err != nil {
-		log.Fatalf("บันทึกรหัสผ่านใหม่ไม่สำเร็จ: %v", err)
+	// ใช้ทางเดียวกับที่หน้าเว็บใช้ — ตรวจความยาว เข้ารหัส และเดินเลขรุ่น token
+	// ให้ครบในคำสั่งเดียว จะได้ไม่มีทางลืมขั้นตอนใดขั้นตอนหนึ่ง
+	if err := services.SetPassword(db, &user, password); err != nil {
+		log.Fatalf("ตั้งรหัสผ่านใหม่ไม่สำเร็จ: %v", err)
 	}
 
 	fmt.Printf("\nตั้งรหัสผ่านใหม่เรียบร้อยแล้ว\n")
-	fmt.Printf("\n⚠️ token เดิมที่ออกไปก่อนหน้านี้ยังใช้ได้จนกว่าจะหมดอายุ\n")
-	fmt.Printf("   ถ้าเปลี่ยนรหัสเพราะสงสัยว่าบัญชีถูกผู้อื่นเข้าถึง การเปลี่ยนรหัสอย่างเดียวยังไม่พอ\n")
-	fmt.Printf("   ต้องมีระบบยกเลิก token ที่ออกไปแล้วด้วย (token_version) ซึ่งยังไม่ได้ทำ\n")
+	fmt.Printf("\ntoken เดิมของบัญชีนี้ถูกยกเลิกทั้งหมดแล้ว\n")
+	fmt.Printf("   ใครที่ล็อกอินค้างอยู่จะถูกเตะออกจากระบบทันทีเมื่อเรียก API ครั้งถัดไป\n")
 }
 
 // ask ถามคำถามหนึ่งข้อแล้วคืนคำตอบที่ตัดช่องว่างหัวท้ายแล้ว

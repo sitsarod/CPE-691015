@@ -358,11 +358,94 @@ func TestNewOTPIsRandom(t *testing.T) {
 	}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// เลขรุ่น token — ยกเลิก session เก่าตอนเปลี่ยนรหัสผ่าน
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ⚠️ เทสสำคัญ: ตั้งรหัสผ่านใหม่แล้วเลขรุ่นต้องเดินขึ้น
+//
+// ถ้าไม่เดิน token ที่คนร้ายถืออยู่จะยังใช้ได้ต่อ การเปลี่ยนรหัสผ่านจะกลายเป็น
+// การปลอบใจเจ้าของบัญชีเฉย ๆ ไม่ได้ไล่ใครออกจากระบบจริง
+func TestResetPasswordBumpsTokenVersion(t *testing.T) {
+	svc, mailer, db, user := newResetTest(t)
+	svc.RequestOTP(user.Email, "1.1.1.1")
+	resetToken, _ := svc.VerifyOTP(user.Email, mailer.otp(t))
+
+	if err := svc.ResetPassword(resetToken, "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+		t.Fatalf("ควรตั้งรหัสใหม่ได้ แต่ได้: %v", err)
+	}
+
+	var updated models.User
+	db.First(&updated, user.ID)
+	if updated.TokenVersion != user.TokenVersion+1 {
+		t.Fatalf("เลขรุ่นควรเดินจาก %d เป็น %d แต่ได้ %d",
+			user.TokenVersion, user.TokenVersion+1, updated.TokenVersion)
+	}
+}
+
+// เปลี่ยนรหัสผ่านตอนล็อกอินอยู่ก็ต้องเดินเลขรุ่นเหมือนกัน
+func TestChangePasswordBumpsTokenVersion(t *testing.T) {
+	svc, _, db, user := newResetTest(t)
+
+	if err := svc.ChangePassword(user.ID, "รหัสเดิมของฉัน", "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+		t.Fatalf("ควรเปลี่ยนได้ แต่ได้: %v", err)
+	}
+
+	var updated models.User
+	db.First(&updated, user.ID)
+	if updated.TokenVersion != user.TokenVersion+1 {
+		t.Fatalf("เลขรุ่นควรเดินขึ้นหนึ่ง แต่ได้ %d", updated.TokenVersion)
+	}
+}
+
+// กรอกรหัสเดิมผิดต้องไม่เดินเลขรุ่น
+//
+// ถ้าเดิน คนที่รู้แค่อีเมลของเหยื่อจะยิงคำขอเปลี่ยนรหัสผ่านด้วยรหัสเดิมมั่ว ๆ
+// เพื่อเตะเหยื่อออกจากระบบซ้ำ ๆ ได้ ทั้งที่ไม่รู้รหัสผ่านเลย
+func TestChangePasswordWithWrongCurrentDoesNotBumpVersion(t *testing.T) {
+	svc, _, db, user := newResetTest(t)
+
+	if err := svc.ChangePassword(user.ID, "รหัสผิด", "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+		t.Fatal("รหัสเดิมผิดต้องไม่ผ่าน")
+	}
+
+	var updated models.User
+	db.First(&updated, user.ID)
+	if updated.TokenVersion != user.TokenVersion {
+		t.Fatalf("รหัสเดิมผิดต้องไม่เดินเลขรุ่น แต่เดินจาก %d เป็น %d",
+			user.TokenVersion, updated.TokenVersion)
+	}
+}
+
+// ⚠️ เทสกันหายนะ: ส่งผู้ใช้ที่ไม่มี ID เข้ามาต้องไม่เขียนทับใครเลย
+//
+// db.Model(user) ใช้ user.ID เป็นเงื่อนไข WHERE ถ้า ID เป็น 0
+// GORM จะมองว่าไม่มีเงื่อนไขแล้วอัปเดตทุกแถวในตาราง
+// ผลคือรหัสผ่านของทุกคนถูกเขียนทับพร้อมกันและกู้คืนไม่ได้
+func TestSetPasswordRefusesUserWithoutID(t *testing.T) {
+	_, _, db, user := newResetTest(t)
+
+	// ผู้ใช้เปล่าที่ยังไม่มี ID
+	if err := SetPassword(db, &models.User{}, "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+		t.Fatal("ผู้ใช้ที่ไม่มี ID ต้องถูกปฏิเสธ")
+	}
+	if err := SetPassword(db, nil, "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+		t.Fatal("ผู้ใช้ที่เป็น nil ต้องถูกปฏิเสธ")
+	}
+
+	// รหัสผ่านของผู้ใช้จริงต้องไม่ถูกแตะ
+	var untouched models.User
+	db.First(&untouched, user.ID)
+	if untouched.Password != user.Password {
+		t.Fatal("รหัสผ่านของผู้ใช้คนอื่นถูกเขียนทับ — คำสั่งอัปเดตหลุดเงื่อนไข WHERE")
+	}
+}
+
 // mustAccessToken ออก access token ปกติไว้ใช้ทดสอบว่าเอามาใช้แทน reset token ไม่ได้
 func mustAccessToken(t *testing.T, userID uint, role string) string {
 	t.Helper()
 
-	tok, err := token.GenerateAccessToken(userID, role)
+	tok, err := token.GenerateAccessToken(userID, role, 0)
 	if err != nil {
 		t.Fatalf("ออก access token ไม่สำเร็จ: %v", err)
 	}

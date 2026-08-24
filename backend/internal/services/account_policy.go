@@ -16,6 +16,9 @@ import (
 	"unicode/utf8"
 
 	"CPE-691015/internal/models"
+
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +175,48 @@ var (
 	ErrPasswordTooShort = errors.New("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
 	ErrPasswordTooLong  = errors.New("รหัสผ่านยาวเกินไป (ภาษาอังกฤษไม่เกิน 72 ตัว หรือภาษาไทยไม่เกิน 24 ตัว)")
 )
+
+// SetPassword คือ "ทางเดียว" ที่ควรใช้เปลี่ยนรหัสผ่านของผู้ใช้
+//
+// รวมสามอย่างที่ต้องทำคู่กันเสมอไว้ในที่เดียว:
+//
+//	1. ตรวจความยาวตามกติกา
+//	2. เข้ารหัสด้วย bcrypt
+//	3. เดินเลขรุ่น token ขึ้นหนึ่ง เพื่อยกเลิก session เก่าทั้งหมด
+//
+// ⚠️ ข้อ 3 คือเหตุผลหลักที่ต้องมีฟังก์ชันนี้
+//
+// การเปลี่ยนรหัสผ่านโดยไม่ยกเลิก token เก่า เท่ากับบอกผู้ใช้ว่า "ปลอดภัยแล้ว"
+// ทั้งที่คนที่ขโมยบัญชีไปยังอยู่ในระบบต่อได้จนกว่า token จะหมดอายุ
+// ซึ่งอันตรายกว่าไม่มีปุ่มให้เปลี่ยนเสียอีก เพราะผู้ใช้จะเลิกระวังตัว
+//
+// รับรหัสผ่าน "ตัวจริง" ไม่ใช่ค่าที่ hash แล้ว โดยตั้งใจ — เพื่อไม่ให้มีใคร
+// เผลอส่งรหัสผ่านดิบเข้าฐานเพราะคิดว่าอีกฝั่ง hash ให้แล้ว
+func SetPassword(db *gorm.DB, user *models.User, plainPassword string) error {
+	// ⚠️ ด่านนี้กันหายนะ ห้ามเอาออก
+	//
+	// db.Model(user) ใช้ค่า user.ID เป็นเงื่อนไข WHERE
+	// ถ้า ID เป็น 0 (เช่นผู้เรียกเผลอส่ง struct เปล่ามา) GORM จะมองว่า
+	// "ไม่มีเงื่อนไข" แล้วเขียนทับรหัสผ่านของผู้ใช้ "ทุกคน" ในระบบ
+	// ทุกคนจะล็อกอินไม่ได้พร้อมกัน และกู้คืนไม่ได้เพราะ hash เดิมหายไปแล้ว
+	if user == nil || user.ID == 0 {
+		return errors.New("ไม่พบบัญชีผู้ใช้ที่จะตั้งรหัสผ่าน")
+	}
+
+	if err := ValidatePasswordStrength(plainPassword); err != nil {
+		return err
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("ไม่สามารถเข้ารหัสผ่านได้")
+	}
+
+	return db.Model(user).Updates(map[string]any{
+		"password":      string(hashed),
+		"token_version": gorm.Expr("token_version + 1"),
+	}).Error
+}
 
 // ValidatePasswordStrength ตรวจความยาวรหัสผ่านก่อนนำไป hash
 func ValidatePasswordStrength(password string) error {
