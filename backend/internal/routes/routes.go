@@ -449,6 +449,9 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/chat-sessions", middlewares.PublicChatRateLimit(), autoQAController.CreateChatSession)
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
 		api.POST("/chat-sessions/:id/ask", middlewares.PublicChatRateLimit(), autoQAController.AskQuestion)
+		// ลูกค้าแก้ไข/ลบข้อความของตัวเองในห้องแชท (สาธารณะ + rate limit)
+		api.PATCH("/chat-sessions/:id/messages/:msgId", middlewares.PublicChatRateLimit(), autoQAController.EditMessage)
+		api.DELETE("/chat-sessions/:id/messages/:msgId", middlewares.PublicChatRateLimit(), autoQAController.DeleteMessage)
 		// อัปโหลดไฟล์แนบในแชท (รูป/PDF) — สาธารณะ + rate limit เพราะ guest ก็ต้องแนบได้
 		api.POST("/chat-uploads", middlewares.PublicChatRateLimit(), autoQAController.UploadChatAttachment)
 

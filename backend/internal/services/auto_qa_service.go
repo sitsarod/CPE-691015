@@ -16,6 +16,8 @@ var (
 	ErrChatSessionClosed   = errors.New("cannot send messages to a closed session")
 	ErrUserNotFoundForChat = errors.New("user not found")
 	ErrEmptyMessage        = errors.New("message must contain text or an attachment")
+	ErrMessageNotFound     = errors.New("message not found")
+	ErrCannotModifyMessage = errors.New("this message cannot be edited or deleted")
 )
 
 type AutoQAService interface {
@@ -40,6 +42,10 @@ type AutoQAService interface {
 	// Q&A logic
 	AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*dto.AskQuestionResponse, error)
 	AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto.AutoQADTO, error)
+
+	// แก้ไข/ลบข้อความของลูกค้าในห้องแชท (เฉพาะข้อความของลูกค้าเอง ไม่ใช่ของแอดมิน)
+	EditUserMessage(sessionID, msgID uint, req *dto.EditMessageReq) (*dto.AutoQADTO, error)
+	DeleteUserMessage(sessionID, msgID uint) error
 }
 
 type autoQAService struct {
@@ -363,6 +369,46 @@ func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto
 
 	dtoRes := mapToAutoQADTO(&interactionLog)
 	return &dtoRes, nil
+}
+
+// loadOwnUserMessage โหลดข้อความในห้องแชทและตรวจว่าเป็น "ข้อความของลูกค้าเอง" ที่แก้/ลบได้
+// เงื่อนไข: ต้องอยู่ในห้องนี้จริง และไม่ใช่ข้อความของแอดมิน (mode=admin_reply)
+func (s *autoQAService) loadOwnUserMessage(sessionID, msgID uint) (*models.AutoQA, error) {
+	var qa models.AutoQA
+	if err := s.db.First(&qa, msgID).Error; err != nil {
+		return nil, ErrMessageNotFound
+	}
+	if qa.SessionID == nil || *qa.SessionID != sessionID {
+		return nil, ErrMessageNotFound
+	}
+	if qa.Mode == models.AutoQAModeAdminReply {
+		return nil, ErrCannotModifyMessage
+	}
+	return &qa, nil
+}
+
+func (s *autoQAService) EditUserMessage(sessionID, msgID uint, req *dto.EditMessageReq) (*dto.AutoQADTO, error) {
+	qa, err := s.loadOwnUserMessage(sessionID, msgID)
+	if err != nil {
+		return nil, err
+	}
+	// ต้องเหลือข้อความหรือไฟล์แนบอย่างน้อยอย่างหนึ่ง
+	if strings.TrimSpace(req.Question) == "" && qa.AttachmentURL == "" {
+		return nil, ErrEmptyMessage
+	}
+	qa.Question = req.Question
+	if err := s.db.Save(qa).Error; err != nil {
+		return nil, err
+	}
+	d := mapToAutoQADTO(qa)
+	return &d, nil
+}
+
+func (s *autoQAService) DeleteUserMessage(sessionID, msgID uint) error {
+	if _, err := s.loadOwnUserMessage(sessionID, msgID); err != nil {
+		return err
+	}
+	return s.db.Delete(&models.AutoQA{}, msgID).Error
 }
 
 // === Helper Functions ===
