@@ -1,6 +1,6 @@
 // frontend/src/services/authAPI.ts
 import { apiFetch } from "@/services/apiClient";
-import { AuthResponseDTO, LoginReq, RefreshResponseDTO, RegisterCustomerReq, UserResponseDTO, VerifyOTPReq, VerifyOTPResponseDTO } from "@/types/auth";
+import { AuthResponseDTO, LoginReq, RefreshResponseDTO, RegisterCustomerReq, UserResponseDTO } from "@/types/auth";
 
 
 // [POST] เข้าสู่ระบบ
@@ -36,18 +36,7 @@ export async function findAccountAPI(identifier: string): Promise<UserResponseDT
   return res.user;
 }
 
-// [POST] ส่งรหัส OTP
-export async function sendOTPAPI(email: string): Promise<{ message: string }> {
-  return await apiFetch<{ message: string }>("/auth/send-otp", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-}
-
-// [POST] ยืนยันรหัส OTP
-export async function verifyOTPAPI(data: VerifyOTPReq): Promise<VerifyOTPResponseDTO> {
-  return await apiFetch<VerifyOTPResponseDTO>("/auth/verify-otp", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
+// ⚠️ sendOTPAPI / verifyOTPAPI ถูกลบออกแล้ว อย่าเพิ่มกลับมา
+//
+// เส้นเดิม (/auth/send-otp, /auth/verify-otp) ยอมให้ผ่านด้วยเลข 123456 ตายตัว
+// ตอนนี้ย้ายไปที่ services/passwordAPI.ts ซึ่งใช้ OTP จริงที่ส่งทางอีเมล

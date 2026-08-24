@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"CPE-691015/internal/models"
 )
@@ -141,36 +142,46 @@ func ValidateEmailForRole(email string, role models.UserRole) error {
 // หรือ endpoint ใหม่ที่ลืมใส่ binding — รหัสผ่านที่ไม่ผ่านเกณฑ์จะหลุดเข้าฐานได้เลย
 //
 // การเช็คซ้ำที่นี่ทำให้ "ทุกทางที่สร้างผู้ใช้" ผ่านด่านเดียวกันเสมอ
+// ⚠️ สองเพดานนี้ "นับคนละหน่วย" โดยตั้งใจ อย่าทำให้เหมือนกัน
+//
+//	ขั้นต่ำ  นับเป็นตัวอักษร (rune) — เพราะเป็นกติกาที่สื่อกับผู้ใช้
+//	เพดาน   นับเป็นไบต์ (byte)    — เพราะเป็นข้อจำกัดจริงของ bcrypt
+//
+// เคยเขียนผิดมาแล้ว: ใช้ len() ซึ่งนับไบต์กับ "ทั้งสองด้าน" ทำให้รหัสผ่าน
+// ภาษาไทย 3 ตัวอักษร (กขค = 9 ไบต์) ผ่านด่าน "อย่างน้อย 8 ตัวอักษร" ไปได้
+// ทั้งที่สั้นกว่าที่ประกาศไว้กับผู้ใช้มาก
 const (
-	// PasswordMinLength ความยาวขั้นต่ำ
+	// PasswordMinLength ความยาวขั้นต่ำ นับเป็น "ตัวอักษร"
+	//
+	// นับแบบเดียวกับที่ผู้ใช้เห็นบนหน้าจอ ไม่งั้นข้อความ "อย่างน้อย 8 ตัวอักษร"
+	// จะไม่ตรงกับสิ่งที่ระบบบังคับจริง
 	PasswordMinLength = 8
 
-	// PasswordMaxLength เพดานของ bcrypt
+	// PasswordMaxLengthBytes เพดานของ bcrypt นับเป็น "ไบต์"
 	//
 	// bcrypt ตัดข้อมูลส่วนที่เกิน 72 ไบต์ทิ้งเงียบ ๆ ถ้าไม่กันไว้
 	// รหัสผ่านที่ยาวกว่านี้จะถูกตัดโดยที่ผู้ใช้ไม่รู้ตัว และสองรหัสผ่านที่ต่างกัน
 	// แต่ 72 ไบต์แรกเหมือนกันจะกลายเป็นรหัสเดียวกัน
 	//
-	// นับเป็น "ไบต์" ไม่ใช่ "ตัวอักษร" — ภาษาไทย 1 ตัว = 3 ไบต์
-	// จึงเท่ากับรหัสผ่านภาษาไทยได้ประมาณ 24 ตัวอักษร
-	PasswordMaxLength = 72
+	// ภาษาไทย 1 ตัว = 3 ไบต์ จึงเท่ากับประมาณ 24 ตัวอักษร
+	// ภาษาอังกฤษ 1 ตัว = 1 ไบต์ จึงเท่ากับ 72 ตัวอักษร
+	PasswordMaxLengthBytes = 72
 )
 
 var (
 	ErrPasswordTooShort = errors.New("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
-	ErrPasswordTooLong  = errors.New("รหัสผ่านต้องไม่เกิน 72 ตัวอักษร")
+	ErrPasswordTooLong  = errors.New("รหัสผ่านยาวเกินไป (ภาษาอังกฤษไม่เกิน 72 ตัว หรือภาษาไทยไม่เกิน 24 ตัว)")
 )
 
 // ValidatePasswordStrength ตรวจความยาวรหัสผ่านก่อนนำไป hash
-//
-// ใช้ len() ซึ่งนับเป็นไบต์โดยตั้งใจ เพราะเพดาน 72 ของ bcrypt เป็นไบต์
-// ถ้านับเป็นตัวอักษร (rune) รหัสผ่านภาษาไทย 30 ตัวจะผ่านด่านนี้
-// แล้วไปโดน bcrypt ตัดทิ้งอยู่ดี
 func ValidatePasswordStrength(password string) error {
-	if len(password) < PasswordMinLength {
+	// ขั้นต่ำ — นับเป็นตัวอักษร ให้ตรงกับที่บอกผู้ใช้
+	if utf8.RuneCountInString(password) < PasswordMinLength {
 		return ErrPasswordTooShort
 	}
-	if len(password) > PasswordMaxLength {
+
+	// เพดาน — นับเป็นไบต์ ตามข้อจำกัดจริงของ bcrypt
+	if len(password) > PasswordMaxLengthBytes {
 		return ErrPasswordTooLong
 	}
 	return nil

@@ -69,6 +69,7 @@ func main() {
 		&models.WorkSchedule{},
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
+		&models.PasswordResetOTP{},
 		&models.Court{},
 		&models.Notification{},
 	); err != nil {

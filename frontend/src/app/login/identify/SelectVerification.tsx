@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { requestPasswordOTPAPI } from "@/services/passwordAPI";
 import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
 
 interface SelectVerificationProps {
@@ -18,23 +19,17 @@ export default function SelectVerification({ userData, onNext, onBack }: SelectV
     setIsLoading(true);
     setErrorMsg("");
 
+    if (!userData.identifier) {
+      setErrorMsg("ไม่พบข้อมูลบัญชี กรุณาเริ่มขั้นตอนใหม่");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      // ⚠️ เส้นนี้ตอบสำเร็จเสมอ แม้ไม่มีบัญชีนั้นในระบบ (เป็นพฤติกรรมที่ตั้งใจ)
+      // หน้าเว็บจึงเดินหน้าต่อได้เลย ไม่ต้องเช็คว่าเจอบัญชีไหม
+      await requestPasswordOTPAPI(userData.identifier);
 
-      // 🌟 ยิง API ไปสั่งให้ Backend ส่ง OTP เข้าอีเมล
-      const response = await fetch(`${baseUrl}/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: userData?.identifier }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "ไม่สามารถส่ง OTP ได้ กรุณาลองใหม่อีกครั้ง");
-      }
-
-      // ส่ง OTP สำเร็จ! เดินหน้าไปหน้ากรอก OTP (พร้อมส่งข้อมูล user ต่อไป)
       onNext(userData);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
