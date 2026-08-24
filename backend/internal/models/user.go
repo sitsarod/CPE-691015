@@ -24,6 +24,22 @@ type User struct {
 	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,email~รูปแบบอีเมลไม่ถูกต้อง"`
 	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
+	// TokenVersion ใช้ยกเลิก token เก่าทั้งหมดของผู้ใช้คนนี้พร้อมกัน
+	//
+	// JWT ตรวจสอบด้วยลายเซ็นอย่างเดียว เซิร์ฟเวอร์จึงไม่มีทางรู้ว่า token
+	// ใบไหนถูกออกไปแล้วบ้าง และ "ยกเลิก" ใบใดใบหนึ่งไม่ได้ ผลคือถ้าใครถูกขโมย
+	// บัญชีไป การเปลี่ยนรหัสผ่านก็ไม่ได้ไล่คนร้ายออกจากระบบ เขายังใช้ token
+	// ที่ถืออยู่ต่อได้จนหมดอายุ
+	//
+	// วิธีแก้คือใส่เลขรุ่นนี้ลงไปใน token ตอนออก แล้วเทียบกับค่าในฐานทุกครั้ง
+	// ที่มีคนเรียก API พอเปลี่ยนรหัสผ่านก็บวกเลขนี้ขึ้นหนึ่ง token ทุกใบที่ออก
+	// ไปก่อนหน้าจะมีเลขไม่ตรงและใช้ไม่ได้ทันที
+	//
+	// ⚠️ เริ่มที่ 0 โดยตั้งใจ — token เก่าที่ออกก่อนมีฟีเจอร์นี้ไม่มีเลขรุ่นติดมา
+	// ระบบจะอ่านได้เป็น 0 ซึ่งตรงกับค่าเริ่มต้น คนที่ล็อกอินค้างอยู่จึงไม่ถูก
+	// เตะออกจากระบบตอนอัปเดตโค้ด
+	TokenVersion int `json:"-" gorm:"not null;default:0"`
+
 	Customer          *Customer          `json:"customer" gorm:"foreignKey:UserID"`
 	Coach     		  *Coach             `json:"coach" gorm:"foreignKey:UserID"`
 	Courses            []Course           `json:"courses" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`

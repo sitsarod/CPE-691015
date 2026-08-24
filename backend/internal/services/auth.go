@@ -75,6 +75,15 @@ func (s *authService) Refresh(refreshToken string) (string, string, error) {
 		return "", "", errors.New("ไม่พบบัญชีผู้ใช้")
 	}
 
+	// ⚠️ ต้องเทียบเลขรุ่นที่นี่ด้วย ไม่ใช่เฉพาะใน AuthMiddleware
+	//
+	// refresh token อายุ 7 วัน ยาวกว่า access token มาก ถ้าไม่ตรวจตรงนี้
+	// คนที่ขโมย refresh token ไปจะแลก access token ใบใหม่ได้เรื่อย ๆ
+	// แม้เจ้าของจะเปลี่ยนรหัสผ่านไปแล้ว ซึ่งทำให้ทั้งกลไกนี้ไร้ความหมาย
+	if token.Version(claims) != user.TokenVersion {
+		return "", "", errors.New("รหัสผ่านถูกเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่")
+	}
+
 	accessToken, newRefreshToken, err := issueTokens(&user)
 	if err != nil {
 		return "", "", err
@@ -83,12 +92,15 @@ func (s *authService) Refresh(refreshToken string) (string, string, error) {
 }
 
 // issueTokens ออก access + refresh token ให้ผู้ใช้ที่ระบุ
+//
+// เลขรุ่น (TokenVersion) ต้องติดไปกับ token ทั้งสองใบเสมอ ถ้าลืมใส่ใบใดใบหนึ่ง
+// ใบนั้นจะกลายเป็นรุ่น 0 แล้วใช้ไม่ได้ทันทีที่ผู้ใช้เคยเปลี่ยนรหัสผ่านมาก่อน
 func issueTokens(user *models.User) (string, string, error) {
-	accessToken, err := token.GenerateAccessToken(user.ID, string(user.Role))
+	accessToken, err := token.GenerateAccessToken(user.ID, string(user.Role), user.TokenVersion)
 	if err != nil {
 		return "", "", errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
 	}
-	refreshToken, err := token.GenerateRefreshToken(user.ID)
+	refreshToken, err := token.GenerateRefreshToken(user.ID, user.TokenVersion)
 	if err != nil {
 		return "", "", errors.New("เกิดข้อผิดพลาดในการสร้างโทเค็น")
 	}

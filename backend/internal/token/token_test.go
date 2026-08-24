@@ -34,7 +34,7 @@ func TestSecretRequiredFromEnv(t *testing.T) {
 		t.Fatalf("ไม่ตั้ง JWT_SECRET ต้องได้ ErrMissingSecret แต่ได้: %v", err)
 	}
 
-	if _, err := GenerateAccessToken(1, "admin"); err == nil {
+	if _, err := GenerateAccessToken(1, "admin", 0); err == nil {
 		t.Fatal("ไม่ควรออก token ได้เมื่อยังไม่มี secret")
 	}
 }
@@ -46,7 +46,7 @@ func TestSecretRequiredFromEnv(t *testing.T) {
 func TestAccessTokenRoundTrip(t *testing.T) {
 	withSecret(t)
 
-	tok, err := GenerateAccessToken(42, "coach")
+	tok, err := GenerateAccessToken(42, "coach", 0)
 	if err != nil {
 		t.Fatalf("ออก token ไม่สำเร็จ: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestAccessTokenRoundTrip(t *testing.T) {
 func TestRefreshTokenCarriesNoRole(t *testing.T) {
 	withSecret(t)
 
-	tok, err := GenerateRefreshToken(7)
+	tok, err := GenerateRefreshToken(7, 0)
 	if err != nil {
 		t.Fatalf("ออก token ไม่สำเร็จ: %v", err)
 	}

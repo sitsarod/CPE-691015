@@ -176,10 +176,10 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		protected := api.Group("")
-		protected.Use(middlewares.AuthMiddleware())
+		protected.Use(middlewares.AuthMiddleware(db))
 
 		adminOnly := api.Group("")
-		adminOnly.Use(middlewares.AuthMiddleware(), middlewares.RequireRole("admin"))
+		adminOnly.Use(middlewares.AuthMiddleware(db), middlewares.RequireRole("admin"))
 
 		// --- Coach ---
 		// การดูรายละเอียด/เวลาว่าง/ตารางของ coach 1 คน อยู่ใต้ protected แต่ handler ตรวจสิทธิ์เอง

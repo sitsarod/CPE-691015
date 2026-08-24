@@ -46,22 +46,24 @@ func Validate() error {
 	return err
 }
 
-// GenerateAccessToken สร้าง access token ที่บรรจุ user_id และ role
-func GenerateAccessToken(userID uint, role string) (string, error) {
+// GenerateAccessToken สร้าง access token ที่บรรจุ user_id, role และเลขรุ่น token
+func GenerateAccessToken(userID uint, role string, tokenVersion int) (string, error) {
 	return generate(jwt.MapClaims{
 		"user_id": userID,
 		"role":    role,
 		"type":    TypeAccess,
+		"tv":      tokenVersion,
 		"exp":     time.Now().Add(AccessTokenTTL).Unix(),
 	})
 }
 
-// GenerateRefreshToken สร้าง refresh token ที่บรรจุแค่ user_id (ไม่ใส่ role
-// เพราะจะไปดึง role ล่าสุดจาก DB ตอน refresh เผื่อสิทธิ์ถูกเปลี่ยน)
-func GenerateRefreshToken(userID uint) (string, error) {
+// GenerateRefreshToken สร้าง refresh token ที่บรรจุ user_id และเลขรุ่น token
+// (ไม่ใส่ role เพราะจะไปดึง role ล่าสุดจาก DB ตอน refresh เผื่อสิทธิ์ถูกเปลี่ยน)
+func GenerateRefreshToken(userID uint, tokenVersion int) (string, error) {
 	return generate(jwt.MapClaims{
 		"user_id": userID,
 		"type":    TypeRefresh,
+		"tv":      tokenVersion,
 		"exp":     time.Now().Add(RefreshTokenTTL).Unix(),
 	})
 }
@@ -124,4 +126,26 @@ func UserID(claims jwt.MapClaims) (uint, error) {
 		return 0, errors.New("invalid user_id in token")
 	}
 	return uint(f), nil
+}
+
+// Version ดึงเลขรุ่น token (claim "tv") ออกจาก claims
+//
+// ⚠️ token ที่ไม่มี claim นี้ให้ถือว่าเป็นรุ่น 0 ไม่ใช่ error
+//
+// เป็นการจงใจเพื่อรองรับ token ที่ออกไปก่อนจะมีฟีเจอร์นี้ ซึ่งตรงกับค่าเริ่มต้น
+// ของคอลัมน์ token_version ในฐาน ผู้ใช้ที่ล็อกอินค้างอยู่ตอนอัปเดตโค้ดจึงไม่ถูก
+// เตะออกจากระบบ
+//
+// ความเสี่ยงที่ยอมรับ: ถ้าวันหนึ่งต้องการบังคับให้ทุกคนล็อกอินใหม่พร้อมกัน
+// ต้องสั่ง UPDATE users SET token_version = token_version + 1 เอง
+func Version(claims jwt.MapClaims) int {
+	raw, ok := claims["tv"]
+	if !ok {
+		return 0
+	}
+	f, ok := raw.(float64)
+	if !ok {
+		return 0
+	}
+	return int(f)
 }

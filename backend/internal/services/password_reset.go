@@ -240,12 +240,8 @@ func (s *PasswordResetService) ResetPassword(resetToken, newPassword string) err
 		return ErrResetTokenInvalid
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return errors.New("ไม่สามารถเข้ารหัสผ่านได้")
-	}
-
-	return s.db.Model(&user).Update("password", string(hash)).Error
+	// SetPassword เดินเลขรุ่น token ให้ด้วย — session เก่าทุกอันถูกยกเลิกทันที
+	return SetPassword(s.db, &user, newPassword)
 }
 
 // ChangePassword ให้ผู้ที่ล็อกอินอยู่เปลี่ยนรหัสผ่านของตัวเอง
@@ -274,12 +270,11 @@ func (s *PasswordResetService) ChangePassword(userID uint, currentPassword, newP
 		return errors.New("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return errors.New("ไม่สามารถเข้ารหัสผ่านได้")
-	}
-
-	return s.db.Model(&user).Update("password", string(hash)).Error
+	// ⚠️ ผู้ใช้จะถูกเตะออกจากระบบทุกเครื่องรวมถึงเครื่องที่กำลังใช้อยู่
+	//
+	// เป็นพฤติกรรมที่ตั้งใจ เพราะเราแยกไม่ออกว่าเครื่องไหนเป็นของเจ้าของตัวจริง
+	// หน้าเว็บต้องพาไปหน้าเข้าสู่ระบบพร้อมบอกว่าเปลี่ยนรหัสสำเร็จแล้ว
+	return SetPassword(s.db, &user, newPassword)
 }
 
 // findUser ค้นบัญชีจากอีเมลหรือเบอร์โทรศัพท์
