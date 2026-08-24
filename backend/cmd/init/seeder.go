@@ -508,6 +508,68 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }
 }
 
+// seedHomeContent เติมเนื้อหาหน้าแรกสาธารณะ (singleton) ให้ครบทุกช่องเป็นข้อมูลตัวอย่าง
+// เว้นรูปสไลด์ (HeroSlide) และรูป/แผนที่ที่ต้องใช้ไฟล์จริงไว้ ให้แอดมินอัปเองผ่าน /admin/settings
+func seedHomeContent(db *gorm.DB) {
+	var count int64
+	if err := db.Model(&models.HomeContent{}).Count(&count).Error; err != nil {
+		log.Printf("ไม่สามารถเช็คจำนวนข้อมูล HomeContent ได้: %v", err)
+		return
+	}
+	if count > 0 {
+		fmt.Println("ข้ามขั้นตอนการ Seed HomeContent เนื่องจากมีข้อมูลอยู่แล้ว")
+		return
+	}
+
+	content := models.HomeContent{
+		// เกี่ยวกับเรา
+		AboutTitle: "เกี่ยวกับเรา",
+		AboutContent: "Koyama Badminton School โรงเรียนสอนแบดมินตันที่มุ่งพัฒนาผู้เรียนทุกระดับ " +
+			"ตั้งแต่ผู้เริ่มต้นจนถึงนักกีฬาที่ต้องการลงแข่งขันจริงจัง ด้วยทีมโค้ชผู้มีประสบการณ์ " +
+			"หลักสูตรที่ออกแบบอย่างเป็นระบบ และบรรยากาศการเรียนที่เป็นกันเอง",
+
+		// หัวข้อ/คำโปรยของแต่ละส่วน
+		CoachesTitle:    "ทีมโค้ชของเรา",
+		CoachesSubtitle: "โค้ชผู้เชี่ยวชาญพร้อมดูแลผู้เรียนอย่างใกล้ชิด",
+		CoursesTitle:    "คอร์สเรียน",
+		CoursesSubtitle: "เลือกคอร์สที่เหมาะกับระดับและเป้าหมายของคุณ",
+
+		// รีวิว featured
+		ShowFeaturedReviews: true,
+		ReviewsTitle:        "เสียงจากผู้เรียน",
+		ReviewsSubtitle:     "ความประทับใจจากนักเรียนของเรา",
+
+		// ลิงก์โซเชียลมีเดีย (ข้อมูลตัวอย่าง)
+		FacebookURL:  "https://facebook.com/koyamabadminton",
+		InstagramURL: "https://instagram.com/koyamabadminton",
+		TiktokURL:    "https://tiktok.com/@koyamabadminton",
+		YoutubeURL:   "https://youtube.com/@koyamabadminton",
+		LineURL:      "https://line.me/ti/p/~koyamabadminton",
+
+		// ข้อมูลติดต่อ (footer)
+		SchoolName:     "Koyama Badminton School",
+		ContactAddress: "123/45 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110",
+		ContactPhone:   "02-123-4567",
+		ContactEmail:   "info@koyamabadminton.com",
+		OpeningHours:   "จันทร์–ศุกร์ 10:00–20:00\nเสาร์–อาทิตย์ 09:00–18:00",
+
+		// เอกสารทางกฎหมาย (ข้อความตัวอย่าง ควรให้แอดมิน/ทนายปรับให้เหมาะกับธุรกิจจริง)
+		PrivacyPolicy: "โรงเรียนเก็บรวบรวมข้อมูลส่วนบุคคลของผู้เรียนและผู้ปกครองเท่าที่จำเป็น " +
+			"เพื่อการลงทะเบียนเรียน การติดต่อสื่อสาร และการให้บริการ โดยจะเก็บรักษาข้อมูลอย่างปลอดภัย " +
+			"ไม่เปิดเผยต่อบุคคลภายนอกโดยไม่ได้รับความยินยอม ผู้เป็นเจ้าของข้อมูลมีสิทธิ์ขอเข้าถึง แก้ไข " +
+			"หรือลบข้อมูลของตนได้ โดยติดต่อผ่านช่องทางของโรงเรียน",
+		TermsOfService: "การใช้บริการของ Koyama Badminton School ถือว่าผู้เรียนยอมรับเงื่อนไขการเรียน " +
+			"การชำระเงิน และนโยบายการยกเลิก/เลื่อนคาบเรียนตามที่โรงเรียนกำหนด " +
+			"โรงเรียนขอสงวนสิทธิ์ในการปรับเปลี่ยนตารางเรียนหรือเงื่อนไขการให้บริการโดยจะแจ้งให้ทราบล่วงหน้า",
+	}
+
+	if err := db.Create(&content).Error; err != nil {
+		log.Printf("การทำ Seed HomeContent ล้มเหลว: %v", err)
+		return
+	}
+	fmt.Println("Seed HomeContent สำเร็จเรียบร้อย!")
+}
+
 func seedBankAccounts(db *gorm.DB) {
     accounts := []models.BankAccount{
         {

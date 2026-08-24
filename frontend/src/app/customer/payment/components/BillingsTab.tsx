@@ -30,6 +30,22 @@ const STATUS_META: Record<string, { label: string; bar: string; chip: string; do
   paid:      { label: "ชำระเงินสำเร็จ",   bar: "bg-emerald-400",  chip: "border-emerald-200 bg-emerald-50 text-emerald-700", dot: "bg-emerald-400" }
 };
 
+// เลยวันครบกำหนดหรือยัง — เทียบระดับ "วัน" (เริ่มต้นวันนี้) บิลจะเกินกำหนดในวันถัดจากวันครบกำหนด
+// backend ไม่มี job เลื่อนสถานะ unfunded → overdue จึงต้องคำนวณฝั่งหน้าเว็บ
+const isPastDue = (dateStr: string): boolean => {
+  if (!dateStr) return false;
+  const due = new Date(dateStr);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due.getTime() < today.getTime();
+};
+
+// สถานะจริงสำหรับแสดงผล/กรอง/เรียง: บิลค้างชำระที่เลยวันครบกำหนดแล้ว = "overdue"
+// แม้ DB จะยังเป็น unfunded (backend ไม่มี job เลื่อนสถานะ) ใช้ที่เดียวให้สอดคล้องกันทั้งหน้า
+const effectiveStatus = (b: BillingDTO): BillingDTO["billingstatus"] =>
+  b.billingstatus === "unfunded" && isPastDue(b.billingdue_date) ? "overdue" : b.billingstatus;
+
 // ข้อความสถานะว่างตามประเภทรายการที่เลือก
 const EMPTY_BY_STATUS: Record<StatusFilter, { title: string; desc: string }> = {
   all:       { title: "ยังไม่มีบิลเรียกเก็บเงิน", desc: "ขณะนี้ยังไม่มีรายการบิลในบัญชีของคุณ" },
@@ -71,14 +87,14 @@ export default function BillingsTab({
       );
     }
 
-    // 2. Status Filter (ประเภทรายการ)
+    // 2. Status Filter (ประเภทรายการ) — ใช้สถานะจริงที่คิดวันครบกำหนดแล้ว
     if (statusFilter !== "all") {
-      result = result.filter(b => b.billingstatus === statusFilter);
+      result = result.filter(b => effectiveStatus(b) === statusFilter);
     }
 
     // 3. เรียงลำดับตามสถานะเสมอ: เกินกำหนด > ค้างชำระ > รอตรวจสอบ > ชำระแล้ว
     const order = { overdue: 0, unfunded: 1, waitcheck: 2, paid: 3 };
-    result.sort((a, b) => (order[a.billingstatus] ?? 4) - (order[b.billingstatus] ?? 4));
+    result.sort((a, b) => (order[effectiveStatus(a)] ?? 4) - (order[effectiveStatus(b)] ?? 4));
 
     return result;
   }, [billings, searchQuery, statusFilter]);
@@ -175,8 +191,10 @@ export default function BillingsTab({
           {processedBillings.map((b) => {
             const isSelected = selectedBillingIds.includes(b.id);
             const isUnpaid = b.billingstatus === "unfunded" || b.billingstatus === "overdue";
-            const isOverdue = b.billingstatus === "overdue";
-            const meta = STATUS_META[b.billingstatus] ?? STATUS_META.unfunded;
+            // บิลค้างชำระที่เลยวันครบกำหนดแล้ว แสดงเป็น "เกินกำหนด" (แดง) แม้ DB ยังเป็น unfunded
+            const status = effectiveStatus(b);
+            const isOverdue = status === "overdue";
+            const meta = STATUS_META[status] ?? STATUS_META.unfunded;
 
             return (
               <div

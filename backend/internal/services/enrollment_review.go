@@ -187,9 +187,9 @@ func (s *EnrollmentService) summarizeBillings(userID uint) (*dto.ReviewFinanceIn
 			info.UnpaidCount++
 			info.UnpaidAmount += b.Amount
 
-			// เช็คเกินกำหนดจาก due_date จริง ไม่ใช้คอลัมน์ status
-			// เพราะระบบยังไม่มีงานที่คอยเลื่อน unfunded → overdue เมื่อเลยกำหนด
-			if !b.DueDate.IsZero() && b.DueDate.Before(now) {
+			// นับเกินกำหนดจาก due_date จริงด้วยเกณฑ์วันเดียวกับ MarkOverdueBillings
+			// (ต้นวันวันนี้) ทำให้ตัวเลขตรงกันไม่ว่า background job จะทันรอบหรือยัง
+			if !b.DueDate.IsZero() && b.DueDate.Before(overdueCutoff(now)) {
 				info.OverdueCount++
 				info.OverdueAmount += b.Amount
 			}
