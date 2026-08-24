@@ -84,21 +84,16 @@ type LoginInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// FindAccountInput รับข้อมูลสำหรับค้นหาบัญชี (อีเมลหรือเบอร์โทร)
-type FindAccountInput struct {
-	Identifier string `json:"identifier" binding:"required"`
-}
-
-// SendOTPInput รับอีเมลเพื่อสั่งส่ง OTP
-type SendOTPInput struct {
-	Email string `json:"email" binding:"required,email"`
-}
-
-// VerifyOTPInput รับอีเมลและรหัส OTP เพื่อตรวจสอบ
-type VerifyOTPInput struct {
-	Email string `json:"email" binding:"required,email"`
-	OTP   string `json:"otp" binding:"required,len=6"`
-}
+// ⚠️ FindAccountInput / SendOTPInput / VerifyOTPInput ถูกลบออกแล้ว อย่าเพิ่มกลับมา
+//
+// สามตัวนี้เป็นของระบบ OTP ชุดเก่าที่ยอมให้ผ่านด้วยเลข 123456 ตายตัว
+// handler กับ service ถูกลบไปแล้ว เหลือแต่ DTO ค้างอยู่โดยไม่มีใครเรียก
+//
+// เก็บไว้แล้วอันตราย เพราะคนที่มาเห็นทีหลังจะเข้าใจว่าเป็นโครงที่ยังใช้อยู่
+// แล้วต่อ endpoint กลับเข้าไปใหม่ ช่องโหว่ยึดบัญชีจะกลับมาทันที
+//
+// ของที่ใช้จริงตอนนี้อยู่ที่ dto/password_reset.go ซึ่งรับเป็น identifier
+// (อีเมลหรือเบอร์โทรก็ได้) ไม่ใช่ email อย่างเดียวแบบของเดิม
 
 // UserResponseDTO โครงสร้างข้อมูล User ที่ส่งกลับไปหน้าบ้าน
 type UserResponseDTO struct {

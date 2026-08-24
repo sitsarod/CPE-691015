@@ -41,8 +41,14 @@ export default function FindAccount({ onNext }: FindAccountProps) {
         throw new Error(data.message || "ไม่พบบัญชีผู้ใช้นี้ในระบบ");
       }
 
-      // 🌟 ค้นหาเจอ! ส่งข้อมูลผู้ใช้ (userData) ต่อไปยังหน้าถัดไป
-      onNext(data.user);
+      // ค้นหาเจอแล้ว ส่งต่อไปหน้ายืนยันบัญชี
+      //
+      // ⚠️ ต้องแนบ identifier ที่ผู้ใช้พิมพ์เองไปด้วยเสมอ
+      //
+      // data.user มีแต่ค่าที่ปิดบังแล้ว (k*******v@gmail.com) ซึ่งเอาไประบุตัวตน
+      // กับ backend ไม่ได้ ขั้นตอนขอ OTP และยืนยัน OTP ต้องใช้ค่าเต็มที่พิมพ์มา
+      // ถ้าลืมบรรทัดนี้ หน้าถัดไปจะขึ้นว่า "ไม่พบข้อมูลบัญชี" ทั้งที่ค้นหาเจอแล้ว
+      onNext({ ...data.user, identifier: identifier.trim() });
 
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");

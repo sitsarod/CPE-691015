@@ -14,9 +14,13 @@ import (
 type AuthController interface {
 	Login(c *gin.Context)
 	Register(c *gin.Context)
-	Refresh(c *gin.Context)    // ขอ access token ใหม่ด้วย refresh token
-	SendOTP(c *gin.Context)    // 👈 เพิ่มใหม่
-	VerifyOTP(c *gin.Context)  // 👈 เพิ่มใหม่
+	Refresh(c *gin.Context) // ขอ access token ใหม่ด้วย refresh token
+
+	// ⚠️ SendOTP / VerifyOTP ถูกลบออกแล้ว อย่าเพิ่มกลับมา
+	//
+	// ของเดิมยอมให้ผ่านด้วยเลข 123456 ตายตัว ใครที่รู้อีเมลของคนอื่น
+	// จึงยึดบัญชีได้ทันที ตอนนี้ย้ายไปที่ PasswordResetController ซึ่งออก OTP
+	// แบบสุ่มจริง เก็บเป็น hash และจำกัดจำนวนครั้งที่เดาได้
 }
 
 type authController struct {
@@ -179,41 +183,5 @@ func (ctrl *authController) Refresh(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token":        token,
 		"refreshToken": refreshToken,
-	})
-}
-
-// 🌟 Handler สำหรับยิงสั่งส่ง OTP
-func (ctrl *authController) SendOTP(c *gin.Context) {
-	var input dto.SendOTPInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "กรุณาระบุอีเมลให้ถูกต้อง"})
-		return
-	}
-
-	if err := ctrl.authService.SendOTP(input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "ส่งรหัส OTP เรียบร้อยแล้ว"})
-}
-
-// 🌟 Handler สำหรับตรวจ OTP
-func (ctrl *authController) VerifyOTP(c *gin.Context) {
-	var input dto.VerifyOTPInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "กรุณากรอกรหัส OTP ให้ครบ 6 หลัก"})
-		return
-	}
-
-	resetToken, err := ctrl.authService.VerifyOTP(input)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "ยืนยัน OTP สำเร็จ",
-		"resetToken": resetToken,
 	})
 }

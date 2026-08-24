@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { verifyPasswordOTPAPI } from "@/services/passwordAPI";
 import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
 
 interface VerifyOtpProps {
@@ -17,8 +18,14 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length < 4) {
-      setErrorMsg("กรุณากรอกรหัส OTP ให้ถูกต้อง");
+    // ต้องครบ 6 หลักพอดี ให้ตรงกับที่ backend ออกให้ (dto มี binding:"len=6")
+    if (!/^\d{6}$/.test(otp)) {
+      setErrorMsg("กรุณากรอกรหัสยืนยัน 6 หลัก");
+      return;
+    }
+
+    if (!userData.identifier) {
+      setErrorMsg("ไม่พบข้อมูลบัญชี กรุณาเริ่มขั้นตอนใหม่");
       return;
     }
 
@@ -26,27 +33,11 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
     setIsLoading(true);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      // ส่ง identifier ที่ผู้ใช้พิมพ์เอง ไม่ใช่ค่า masked ที่ได้จาก /users/find
+      // เพราะค่า masked ถูกปิดบังไปแล้ว ใช้ระบุตัวตนไม่ได้
+      const resetToken = await verifyPasswordOTPAPI(userData.identifier, otp);
 
-      // 🌟 ยิง API ตรวจสอบรหัส OTP
-      const response = await fetch(`${baseUrl}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identifier: userData?.identifier,
-          otp: otp,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "รหัส OTP ไม่ถูกต้องหรือหมดอายุ");
-      }
-
-      // OTP ถูกต้อง! ผ่านไปยังขั้นตอนตั้งรหัสผ่านใหม่ (Reset Password)
-      onNext({ ...userData, resetToken: data.resetToken });
-
+      onNext({ ...userData, resetToken });
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
