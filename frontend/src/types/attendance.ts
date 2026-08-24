@@ -136,6 +136,10 @@ export interface AttendanceHistoryItem {
   session_id: number | null;
   session_date: string;
 
+  // สแนปช็อตเวลาคาบของรอบ — ว่างเมื่อ session_id เป็น null
+  schedule_start_time?: string;
+  schedule_end_time?: string;
+
   enrollment_id: number;
   full_name: string;
   nickname: string;

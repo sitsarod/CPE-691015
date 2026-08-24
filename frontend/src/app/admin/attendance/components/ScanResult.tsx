@@ -58,13 +58,14 @@ export default function ScanResultBanner({
   const Icon = outcome.ok ? CheckCircle2 : XCircle;
 
   if (variant === "overlay") {
+    // ลอยทับภาพจากกล้อง จึงกว้างเท่าข้อความและใช้ตัวเล็ก ให้บังหน้าคนที่ยื่น QR น้อยที่สุด
     return (
       <button
         onClick={onDismiss}
         aria-live="assertive"
-        className={`flex max-w-full items-center gap-2.5 rounded-xl px-4 py-2.5 text-left text-white shadow-lg transition ${tone}`}
+        className={`flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-white shadow-lg transition ${tone}`}
       >
-        <Icon className="h-6 w-6 shrink-0" strokeWidth={2.5} />
+        <Icon className="h-5 w-5 shrink-0" strokeWidth={2.5} />
 
         <div className="min-w-0">
           <p className="truncate text-sm font-bold leading-snug">{outcome.title}</p>
@@ -80,16 +81,16 @@ export default function ScanResultBanner({
     <button
       onClick={onDismiss}
       aria-live="assertive"
-      className={`flex w-full items-center gap-4 rounded-2xl border-b-4 p-6 text-left text-white transition ${tone} ${
+      className={`flex w-full items-center gap-3 rounded-2xl border-b-4 p-4 text-left text-white transition sm:gap-4 sm:p-6 ${tone} ${
         outcome.ok ? "border-green-700" : "border-red-700"
       }`}
     >
-      <Icon className="h-12 w-12 shrink-0" />
+      <Icon className="h-10 w-10 shrink-0 sm:h-12 sm:w-12" />
 
       <div className="min-w-0">
-        <p className="truncate text-3xl font-bold leading-tight">{outcome.title}</p>
+        <p className="truncate text-xl font-bold leading-tight sm:text-3xl">{outcome.title}</p>
         {outcome.detail && (
-          <p className="mt-1 text-lg text-white/90">{outcome.detail}</p>
+          <p className="mt-1 text-base text-white/90 sm:text-lg">{outcome.detail}</p>
         )}
       </div>
     </button>

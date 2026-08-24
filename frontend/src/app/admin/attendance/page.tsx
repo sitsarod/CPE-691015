@@ -11,7 +11,6 @@ import {
   Clock,
   Users,
   History,
-  KeyRound,
   Camera,
   CameraOff,
   AlertTriangle,
@@ -22,7 +21,6 @@ import {
   fetchOpenSessions,
   openSession,
   fetchSession,
-  lookupByQR,
   checkInByQR,
   manualCheckIn,
   closeSession,
@@ -32,13 +30,11 @@ import type {
   OpenablePackage,
   OpenSessionSummary,
   AttendanceSession,
-  ScanResult,
   RosterItem,
   AttendanceStatus,
 } from "@/types/attendance";
 
 import QRScanner from "./components/QRScanner";
-import ConfirmIdentityDialog from "./components/ConfirmIdentityDialog";
 import ScanResultBanner, { type ScanOutcome } from "./components/ScanResult";
 import RosterList from "./components/RosterList";
 import EditStatusModal from "./components/EditStatusModal";
@@ -61,11 +57,7 @@ export default function AdminAttendancePage() {
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [busyPackageId, setBusyPackageId] = useState<number | null>(null);
 
-  const [manualCode, setManualCode] = useState("");
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [pendingScan, setPendingScan] = useState<ScanResult | null>(null);
-  const [pendingCode, setPendingCode] = useState("");
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
 
   // เปิดกล้องไว้ตั้งแต่แรก — เครื่องที่สนามตั้งไว้เพื่อรับสแกนอย่างเดียว
@@ -78,11 +70,8 @@ export default function AdminAttendancePage() {
 
   // ─── ช่วงพักกล้องหลังจบคนหนึ่งคน ───────────────────────────────────────────
   //
-  // หลังกดยืนยันหรือกดไม่ใช่ กล้องจะหยุดอ่าน 3 วินาทีก่อนเริ่มอ่านคนถัดไป
-  //
-  // ที่ต้องมีเพราะ QR ของคนเดิมยังอยู่ในกรอบกล้อง ถ้าเริ่มอ่านทันที
-  // มันจะอ่านใบเดิมซ้ำก่อนที่เจ้าตัวจะเดินออกไป แล้วขึ้นกล่องยืนยันของคนเดิมอีกรอบ
-  // (ครั้งที่สองจะถูกด่านกันซ้ำปฏิเสธ แต่แอดมินเห็นข้อความแดงทั้งที่เพิ่งสำเร็จ = สับสน)
+  // QR ใบเดิมยังอยู่ในกรอบหลังบันทึกเสร็จ ถ้าอ่านต่อทันทีจะอ่านซ้ำแล้วโดนด่านกันซ้ำ
+  // ปฏิเสธ — แถบแดงจะขึ้นทับแถบเขียวที่เพิ่งสำเร็จไป
   //
   // สามวินาทีพอให้เดินออกจากกรอบ และพอให้อ่านผลบนแถบสีทันก่อนจอเปลี่ยน
   const [cooldown, setCooldown] = useState(0);
@@ -173,74 +162,44 @@ export default function AdminAttendancePage() {
     }
   }, [session]);
 
-  // ─── จังหวะ 1: lookup ──────────────────────────────────────────────────────
-
-  const runLookup = useCallback(
+  // ─── สแกนแล้วบันทึกทันที ───────────────────────────────────────────────────
+  //
+  // ไม่มีขั้นให้กดยืนยัน เพราะ PersonalQRCode เป็นค่าสุ่ม 128 บิตที่เดาไม่ได้
+  // การอ่านใบนั้นได้จึงเป็นหลักฐานตัวตนในตัวเอง
+  //
+  // ⚠️ จริงเฉพาะกับ PersonalQRCode — ทางเช็คชื่อด้วยรหัสที่เดาต่อได้
+  // (เช่น MemberCode ดู services/member_code.go) ต้องมีขั้นยืนยันของตัวเอง
+  const runScan = useCallback(
     async (rawCode: string) => {
       const code = rawCode.trim();
       if (!code || !session) return;
 
-      setIsLookingUp(true);
+      setIsCheckingIn(true);
       setOutcome(null);
       try {
-        const result = await lookupByQR(session.id, code);
-        setPendingScan(result);
-        setPendingCode(code);
+        const result = await checkInByQR(session.id, code);
+        setOutcome({
+          ok: true,
+          title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
+          detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
+        });
       } catch (err: unknown) {
         setOutcome({
           ok: false,
-          title: "สแกนไม่สำเร็จ",
+          title: "เช็คชื่อไม่สำเร็จ",
           detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
         });
-
-        startCooldown();
       } finally {
-        setIsLookingUp(false);
-        setManualCode("");
+        setIsCheckingIn(false);
+        // พักกล้องทั้งกรณีสำเร็จและล้มเหลว — ทั้งสองกรณี QR ใบเดิมยังอยู่ในกรอบ
+        startCooldown();
       }
+
+      // รีเฟรชแม้ตอนล้มเหลว เพราะบางกรณีบันทึกลงแล้วแต่คำตอบกลับมาไม่ถึง
+      await refreshSession();
     },
-    [session, startCooldown]
+    [session, startCooldown, refreshSession]
   );
-
-  // ─── จังหวะ 2: ยืนยันแล้วบันทึก ────────────────────────────────────────────
-
-  const handleConfirm = async () => {
-    if (!session || !pendingCode) return;
-
-    setIsConfirming(true);
-    try {
-      const result = await checkInByQR(session.id, pendingCode);
-      setOutcome({
-        ok: true,
-        title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
-        detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
-      });
-      setPendingScan(null);
-      setPendingCode("");
-      await refreshSession();
-    } catch (err: unknown) {
-      setOutcome({
-        ok: false,
-        title: "เช็คชื่อไม่สำเร็จ",
-        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
-      });
-      setPendingScan(null);
-      setPendingCode("");
-      // ยังต้องรีเฟรช เพราะบางกรณีบันทึกสำเร็จแล้วแต่ตอบกลับไม่ถึง
-      await refreshSession();
-    } finally {
-      setIsConfirming(false);
-      // พักกล้องทั้งกรณีสำเร็จและล้มเหลว — ทั้งสองกรณี QR ใบเดิมยังอยู่ในกรอบ
-      startCooldown();
-    }
-  };
-
-  // ใช้ทั้งตอนกด "ไม่ใช่" และตอนกล่องยืนยันหมดเวลายกเลิกเอง
-  const handleReject = useCallback(() => {
-    setPendingScan(null);
-    setPendingCode("");
-    startCooldown();
-  }, [startCooldown]);
 
   // ─── เช็คชื่อให้ (manual) ───────────────────────────────────────────────────
 
@@ -330,18 +289,20 @@ export default function AdminAttendancePage() {
   if (!session) {
     return (
       <div className="mx-auto max-w-7xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">เช็คชื่อเข้าเรียน</h1>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          {/* จอมือถือสูงจำกัด หัวข้อกับคำอธิบายกินไปเกือบ 80px โดยไม่ได้บอกอะไร
+              ที่เมนูด้านล่างไม่ได้บอกอยู่แล้ว — ดันรายการแพ็กเกจตกจอไปเปล่า ๆ */}
+          <div className="hidden sm:block">
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">เช็คชื่อเข้าเรียน</h1>
             <p className="mt-1 text-gray-500">
               เลือกแพ็กเกจที่กำลังอยู่ในคาบเรียน แล้วเปิดรอบเช็คชื่อ
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Link
               href="/admin/attendance/history"
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 sm:flex-none"
             >
               <History className="h-4 w-4" />
               ประวัติ
@@ -349,7 +310,7 @@ export default function AdminAttendancePage() {
             <button
               onClick={loadOpenable}
               disabled={isLoadingList}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:flex-none"
             >
               <RefreshCw className={`h-4 w-4 ${isLoadingList ? "animate-spin" : ""}`} />
               รีเฟรช
@@ -403,7 +364,7 @@ export default function AdminAttendancePage() {
                   <button
                     onClick={() => handleEnterSession(row.id)}
                     disabled={enteringSessionId !== null}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                   >
                     {enteringSessionId === row.id ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
@@ -439,7 +400,7 @@ export default function AdminAttendancePage() {
               return (
                 <div
                   key={pkg.package_id}
-                  className="flex items-center justify-between rounded-2xl border border-gray-200 p-5"
+                  className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="text-lg font-semibold text-gray-900">{pkg.course_name}</p>
@@ -457,7 +418,7 @@ export default function AdminAttendancePage() {
                   </div>
 
                   {isClosed ? (
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
                         <Lock className="h-4 w-4" />
                         ปิดรอบแล้ววันนี้
@@ -465,7 +426,7 @@ export default function AdminAttendancePage() {
                       <button
                         onClick={() => handleOpen(pkg)}
                         disabled={busyPackageId !== null}
-                        className="rounded-xl border border-gray-300 px-4 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-xl border border-gray-300 px-4 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:flex-none"
                       >
                         ดูรายชื่อ
                       </button>
@@ -474,7 +435,7 @@ export default function AdminAttendancePage() {
                     <button
                       onClick={() => handleOpen(pkg)}
                       disabled={busyPackageId !== null}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                      className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-3 font-semibold text-white transition hover:bg-[#A30A0E] disabled:opacity-60 sm:w-auto"
                     >
                       {busyPackageId === pkg.package_id ? (
                         <Loader2 className="h-5 w-5 animate-spin" />
@@ -503,6 +464,11 @@ export default function AdminAttendancePage() {
   // แต่ backend ปฏิเสธการสแกนทุกครั้ง (ErrAttendanceExpired) โชว์กล้องต่อ = หลอกให้กดเปล่า
   const canScan = isOpen && session.can_scan;
 
+  // ฝั่ง backend นับทุกตัวจาก roster (present + absent + leave + pending)
+  // จำนวนแถวในรายชื่อจึงเท่ากับ "ทั้งหมด" เสมอ
+  const totalCount = session.roster.length;
+  const checkedCount = totalCount - session.pending_count;
+
   // กล้องโชว์อยู่จริงหรือไม่ — ตัวตัดสินว่าผลการเช็คชื่อจะไปขึ้นที่ไหน
   // ถ้าดูแค่ useCamera ผลจะไม่โผล่ที่ไหนเลยตอนบล็อกกล้องไม่ถูกเรนเดอร์
   const showResultOnCamera = canScan && useCamera;
@@ -528,7 +494,7 @@ export default function AdminAttendancePage() {
           >
             ← กลับไปเลือกแพ็กเกจ
           </button>
-          <h1 className="truncate text-2xl font-bold text-gray-900">
+          <h1 className="truncate text-2xl font-bold text-gray-900 sm:text-3xl">
             {session.course_name}
           </h1>
           <p className="text-gray-500">
@@ -543,26 +509,17 @@ export default function AdminAttendancePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* ตัวเลขสรุปย่อเป็นแถวเดียว — เดิมเป็นการ์ด 4 ใบสูงเกือบ 100px
-              ซึ่งกินที่แนวตั้งไปเปล่า ๆ แล้วดันกล้องหลุดจอบน iPad */}
-          <div className="flex gap-4">
-            {[
-              { label: "มา", value: session.present_count, tone: "text-green-600" },
-              { label: "ขาด", value: session.absent_count, tone: "text-red-600" },
-              { label: "ลา", value: session.leave_count, tone: "text-amber-600" },
-              { label: "ค้าง", value: session.pending_count, tone: "text-gray-900" },
-            ].map((box) => (
-              <div key={box.label} className="text-center">
-                <p className={`text-2xl font-bold leading-none ${box.tone}`}>
-                  {box.value}
-                </p>
-                <p className="mt-0.5 text-xs text-gray-500">{box.label}</p>
-              </div>
-            ))}
+        <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/ลา ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          <div className="flex items-baseline gap-2 whitespace-nowrap">
+            <span className="text-sm text-gray-500">เช็คแล้ว</span>
+            <span className="text-2xl font-bold leading-none text-gray-900">
+              {checkedCount}
+            </span>
+            <span className="text-gray-400">/ {totalCount}</span>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <button
               onClick={refreshSession}
               aria-label="รีเฟรช"
@@ -614,12 +571,12 @@ export default function AdminAttendancePage() {
           <div className="flex min-h-0 flex-col gap-3">
             {useCamera ? (
               <QRScanner
-                onScan={runLookup}
-                paused={pendingScan !== null || isConfirming || cooldown > 0}
+                onScan={runScan}
+                paused={isCheckingIn || cooldown > 0}
                 pausedReason={
                   cooldown > 0
                     ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที`
-                    : "หยุดอ่านชั่วคราว — รอยืนยันตัวตน"
+                    : "กำลังบันทึก..."
                 }
                 overlay={
                   outcome && (
@@ -641,7 +598,7 @@ export default function AdminAttendancePage() {
                 {/* บรรทัดสถานะให้อยู่ตำแหน่งเดียวกับของ QRScanner */}
                 <p className="flex items-center gap-2 text-gray-500">
                   <CameraOff className="h-4 w-4" />
-                  ปิดกล้องไว้ — รับเฉพาะรหัสที่พิมพ์เอง
+                  ปิดกล้องไว้ — เช็คชื่อจากรายชื่อด้านขวาแทน
                 </p>
               </div>
             )}
@@ -653,38 +610,9 @@ export default function AdminAttendancePage() {
               <ScanResultBanner outcome={outcome} onDismiss={() => setOutcome(null)} />
             )}
 
-            {/* ช่องพิมพ์รหัสด้วยมือ — ต้องมีเสมอ ไม่ใช่ของสำรอง
-                กล้องเว็บใช้ได้เฉพาะบน https หรือ localhost เปิดจาก LAN ด้วย IP
-                จะถูกบล็อกเงียบ ๆ ช่องนี้ยิง endpoint เดียวกันทุกอย่าง */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                runLookup(manualCode);
-              }}
-              className="flex shrink-0 gap-2"
-            >
-              <div className="relative min-w-0 flex-1">
-                <KeyRound className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  placeholder="พิมพ์รหัส QR"
-                  className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-3 text-gray-900 outline-none focus:border-blue-500"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isLookingUp || !manualCode.trim()}
-                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isLookingUp && <Loader2 className="h-5 w-5 animate-spin" />}
-                ตรวจ
-              </button>
-            </form>
-
             <button
               onClick={() => setUseCamera((v) => !v)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
               {useCamera ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
               {useCamera ? "ปิดกล้อง" : "เปิดกล้องสแกน"}
@@ -701,15 +629,6 @@ export default function AdminAttendancePage() {
           />
         </div>
       </div>
-
-      {pendingScan && (
-        <ConfirmIdentityDialog
-          scan={pendingScan}
-          isSubmitting={isConfirming}
-          onConfirm={handleConfirm}
-          onReject={handleReject}
-        />
-      )}
 
       {editing?.attendance_id && (
         <EditStatusModal
