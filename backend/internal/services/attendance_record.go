@@ -362,6 +362,8 @@ func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.Attend
 		}
 		if r.AttendanceSession != nil {
 			item.SessionDate = r.AttendanceSession.SessionDate
+			item.ScheduleStartTime = r.AttendanceSession.ScheduleStartTime
+			item.ScheduleEndTime = r.AttendanceSession.ScheduleEndTime
 		}
 		if r.Enrollment != nil {
 			if c := r.Enrollment.Customer; c != nil {

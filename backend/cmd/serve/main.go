@@ -62,6 +62,40 @@ func startChatCleanupJob() {
 	}()
 }
 
+// startAttendanceAutoCloseJob ปิดรอบเช็คชื่อที่ลืมกดปิด (ดู AutoCloseStaleSessions)
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 15 นาที
+//
+// ถี่กว่างานอื่นเพราะ markAbsentees อ่านรายชื่อ ณ ตอนปิด ยิ่งทิ้งไว้นานรายชื่อยิ่งเพี้ยน
+func startAttendanceAutoCloseJob() {
+	attendanceService := services.NewAttendanceService(config.DB)
+	go func() {
+		for {
+			if n, err := attendanceService.AutoCloseStaleSessions(); err != nil {
+				log.Printf("ปิดรอบเช็คชื่อที่ค้างอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ปิดรอบเช็คชื่อที่เลยเวลาแล้วอัตโนมัติ %d รอบ", n)
+			}
+			time.Sleep(15 * time.Minute)
+		}
+	}()
+}
+
+// startBillingOverdueJob เลื่อนสถานะบิล unfunded ที่เลยวันครบกำหนดเป็น overdue อัตโนมัติ
+// (และเลื่อนกลับถ้า due_date ถูกแก้เป็นอนาคต) รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 1 ชั่วโมง
+func startBillingOverdueJob() {
+	billingService := services.NewBillingService(config.DB)
+	go func() {
+		for {
+			if n, err := billingService.MarkOverdueBillings(); err != nil {
+				log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติ %d รายการ", n)
+			}
+			time.Sleep(1 * time.Hour)
+		}
+	}()
+}
+
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
 	_ = godotenv.Load("../../../.env")
@@ -103,6 +137,12 @@ func main() {
 	// 3.2 ลบประกาศที่หมดอายุ + ลบห้องแชทที่ปิดเกิน 7 วัน อัตโนมัติ
 	startAnnouncementCleanupJob()
 	startChatCleanupJob()
+
+	// 3.3 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน
+	startAttendanceAutoCloseJob()
+
+	// 3.4 เลื่อนสถานะบิลค้างชำระที่เลยวันครบกำหนดเป็นเกินกำหนด (overdue) อัตโนมัติ
+	startBillingOverdueJob()
 
 	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
 	port := os.Getenv("PORT")

@@ -67,8 +67,8 @@ export function RevenueChart({ chart }: { chart: ChartPoint[] }) {
           const revH = (d.revenue / chartMax) * 100;
           const expH = (d.expense / chartMax) * 100;
           return (
-            <div key={d.label} className="group flex flex-1 flex-col items-center gap-3">
-              <div className="relative flex h-full w-full items-end justify-center">
+            <div key={d.label} className="group flex h-full flex-1 flex-col items-center gap-3">
+              <div className="relative flex w-full flex-1 items-end justify-center">
                 <div
                   className="w-full max-w-[46px] rounded-t-lg bg-blue-200/70 transition-all group-hover:bg-blue-300/70"
                   style={{ height: `${revH}%` }}
@@ -99,16 +99,12 @@ export function TopCourses({ courses }: { courses: CourseRow[] }) {
       {courses.length === 0 ? (
         <p className="mt-8 text-center text-sm text-gray-400">ยังไม่มีข้อมูลการลงทะเบียน</p>
       ) : (
-        <ul className="mt-5 space-y-2">
-          {courses.map((c, i) => (
+        <ul className="mt-5 space-y-1">
+          {courses.map((c) => (
             <li
               key={c.name}
-              className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-gray-50"
+              className="flex items-center gap-4 rounded-xl px-2 py-2 transition hover:bg-gray-50"
             >
-              {/* ไอคอนอันดับ: แสดงเลขลำดับความขายดี (1 = ขายดีสุด) คงสีพื้นตาม tint เดิม */}
-              <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base font-black tabular-nums ${c.tint}`}>
-                {i + 1}
-              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
                 <p className="truncate text-xs text-gray-500">

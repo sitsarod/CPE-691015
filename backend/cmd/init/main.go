@@ -89,6 +89,7 @@ func main() {
 	seedCustomers(db)
 	seedCoursesAndPackages(db)
 	seedBankAccounts(db)
+	seedHomeContent(db)
 }
 
 

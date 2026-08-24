@@ -3,7 +3,6 @@ import type {
   OpenablePackage,
   OpenSessionSummary,
   AttendanceSession,
-  ScanResult,
   CheckInResult,
   UpdateAttendanceResult,
   AttendanceHistoryItem,
@@ -46,20 +45,14 @@ export async function fetchSession(sessionId: number): Promise<AttendanceSession
   return res.data;
 }
 
-// [POST] จังหวะที่ 1 — ถามว่า QR นี้เป็นใคร ยังไม่บันทึกอะไร
-export async function lookupByQR(sessionId: number, qrCode: string): Promise<ScanResult> {
-  const res = await apiFetch<Envelope<ScanResult>>(`/attendance/sessions/${sessionId}/lookup`, {
-    method: "POST",
-    body: JSON.stringify({ qr_code: qrCode }),
-  });
-  return res.data;
-}
-
-// [POST] จังหวะที่ 2 — ยืนยันแล้วบันทึกจริง โควตาถูกหักที่นี่
+// [POST] สแกนแล้วบันทึกจริงในครั้งเดียว โควตาถูกหักที่นี่
 //
-// ⚠️ ต้องส่ง qr_code เดิมกลับไป ห้ามส่ง enrollment_id ที่ได้จาก lookup
-// backend ไม่อ่าน enrollment_id จาก body เลยในเส้นนี้ ถ้าใครแก้ค่าใน devtools
-// ก็ไม่มีผล เพราะตัวตนถูกหาใหม่จาก QR ทุกครั้ง
+// ⚠️ ส่ง qr_code เท่านั้น ห้ามเพิ่ม enrollment_id เข้ามาใน body
+// backend หาตัวตนใหม่จาก QR ทุกครั้งและไม่อ่าน enrollment_id เลยในเส้นนี้
+// คนที่แก้ค่าใน devtools จึงเช็คชื่อให้คนอื่นไม่ได้
+//
+// หมายเหตุ: endpoint /lookup (ถามว่า QR นี้เป็นใครโดยไม่บันทึก) ยังอยู่ฝั่ง backend
+// แต่หน้าเว็บเลิกเรียกแล้วตั้งแต่ตัดขั้นให้แอดมินกดยืนยันตัวตนออก
 export async function checkInByQR(sessionId: number, qrCode: string): Promise<CheckInResult> {
   const res = await apiFetch<Envelope<CheckInResult>>(`/attendance/sessions/${sessionId}/check-in`, {
     method: "POST",

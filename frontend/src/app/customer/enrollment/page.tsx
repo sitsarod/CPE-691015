@@ -258,9 +258,9 @@ export default function EnrollmentPage() {
   return (
     <div className="mx-auto max-w-7xl">
       {/* ---------------- ส่วนที่ 1: คอร์สของฉัน ---------------- */}
-      <div className="mb-14">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <h1 className="text-[22px] font-bold text-gray-900">คอร์สของฉัน</h1>
+      <div className="mb-10">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <h1 className="text-xl font-bold text-gray-900">คอร์สของฉัน</h1>
 
           <button
             onClick={() => setShowHistory(true)}
@@ -286,7 +286,7 @@ export default function EnrollmentPage() {
             )}
           </div>
         ) : (
-          <div className="flex flex-wrap gap-10">
+          <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:gap-4 sm:px-0">
             {visibleEnrollments.map((item) => {
               // คำนวณครั้งเดียว ของเดิมเรียกฟังก์ชันซ้ำสองรอบใน JSX
               const schedules = sortSchedulesByDay(item.package?.schedules);
@@ -301,7 +301,7 @@ export default function EnrollmentPage() {
               return (
               <div
                 key={`enroll-${item.id}`}
-                className="w-[240px] min-h-[340px] border border-gray-400 rounded-lg p-6 flex flex-col shadow-sm hover:border-[#CC0000] transition-all bg-white relative overflow-hidden"
+                className="w-[160px] shrink-0 snap-start p-3 sm:w-[240px] sm:min-h-[300px] sm:p-4 border border-gray-400 rounded-lg flex flex-col shadow-sm hover:border-[#CC0000] transition-all bg-white relative overflow-hidden"
               >
                 {item.status === 'pending' && (
                   <div className="absolute top-0 left-0 right-0 bg-yellow-100 text-yellow-700 text-xs font-bold py-1.5 text-center flex justify-center items-center">
@@ -328,7 +328,7 @@ export default function EnrollmentPage() {
                   </div>
                 )}
 
-                <div className={`flex justify-center items-center py-4 ${item.status === 'pending' || item.status === 'awaiting_payment' || item.status === 'expired' ? 'mt-4 opacity-50' : ''}`}>
+                <div className={`flex justify-center items-center py-3 ${item.status === 'pending' || item.status === 'awaiting_payment' || item.status === 'expired' ? 'mt-5 sm:mt-4 opacity-50' : ''}`}>
                   {item.package?.course?.image_url ? (
                     <CourseCover
                       src={item.package.course.image_url}
@@ -336,11 +336,11 @@ export default function EnrollmentPage() {
                       className="aspect-[16/9] w-full rounded-lg bg-gray-50 object-cover"
                     />
                   ) : (
-                    <FileEdit className="w-20 h-20 text-[#CC0000]" strokeWidth={1.2} />
+                    <FileEdit className="w-14 h-14 text-[#CC0000]" strokeWidth={1.2} />
                   )}
                 </div>
 
-                <p className="text-gray-900 font-bold text-[18px] truncate">{item.package?.course?.course_name}</p>
+                <p className="text-gray-900 font-bold text-[14px] sm:text-[16px] truncate">{item.package?.course?.course_name}</p>
 
                 {/* รายละเอียด: แพ็กเกจ / จำนวนชั่วโมง / วันเวลาเรียน / ราคา */}
                 <dl className="mt-3 space-y-1.5 border-t border-gray-100 pt-3 text-xs">
@@ -418,22 +418,22 @@ export default function EnrollmentPage() {
 
                   <p>
                     {item.status === 'pending' ? (
-                      <span className="text-sm text-yellow-600">แอดมินกำลังตรวจสอบข้อมูล</span>
+                      <span className="text-xs sm:text-sm text-yellow-600">แอดมินกำลังตรวจสอบข้อมูล</span>
                     ) : item.status === 'awaiting_payment' ? (
-                      <span className="text-sm text-orange-600">
+                      <span className="text-xs sm:text-sm text-orange-600">
                         ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
                       </span>
                     ) : inGrace ? (
-                      <span className="text-sm font-semibold text-red-600">
+                      <span className="text-xs sm:text-sm font-semibold text-red-600">
                         เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
                         ติดต่อแอดมินภายใน {item.grace_days_left} วันเพื่อขอขยายสิทธิ์
                       </span>
                     ) : item.status === 'expired' ? (
-                      <span className="text-sm text-slate-500">
+                      <span className="text-xs sm:text-sm text-slate-500">
                         ครบกำหนดแล้ว สมัครแพ็กเกจใหม่เพื่อเรียนต่อได้เลย
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-500">
+                      <span className="text-xs sm:text-sm text-gray-500">
                         เหลือ {item.remaining_sessions} ครั้ง
                         {expiry.highlight && (
                           <span className={`ml-1 font-bold ${expiryTextClass(expiry.tone)}`}>
@@ -467,7 +467,7 @@ export default function EnrollmentPage() {
         )}
       </div>
 
-      <hr className="my-10 border-gray-300" />
+      <hr className="my-8 border-gray-300" />
 
       {/* ---------------- ส่วนที่ 2: คอร์ส ---------------- */}
       {/*
@@ -478,7 +478,7 @@ export default function EnrollmentPage() {
         <div className="mb-10 w-full">
           <button
             onClick={() => setOpenCourseId(null)}
-            className="mb-8 flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900"
+            className="mb-5 flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900"
           >
             <ArrowLeft className="h-4 w-4" />
             กลับไปดูคอร์สทั้งหมด
@@ -495,9 +495,9 @@ export default function EnrollmentPage() {
         </div>
       ) : (
         <div className="mb-10 w-full">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">คอร์สทั้งหมด</h2>
+              <h2 className="text-xl font-bold text-gray-900">คอร์สทั้งหมด</h2>
               <span className="mt-1 flex items-center gap-2 text-sm text-gray-500">
                 <LayoutGrid className="h-5 w-5 text-[#CC0000]" />
                 เลือกคอร์สเพื่อดูรายละเอียดและแพ็กเกจ
@@ -510,7 +510,7 @@ export default function EnrollmentPage() {
               ไม่มีคอร์สแนะนำในขณะนี้
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {displayCourses.map((course) => (
                 <CourseSummaryCard
                   key={`course-${course.id}`}

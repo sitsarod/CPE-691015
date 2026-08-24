@@ -6,23 +6,14 @@ import { homeContentAPI } from '@/services/homeContentAPI';
 import { HomeContent, HeroSlide, PublicCoach } from '@/types/homeContent';
 import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
 import {
-  Images,
-  Info,
-  Heading,
   Users,
-  Star,
   Plus,
   Trash2,
   ArrowUp,
   ArrowDown,
   MapPin,
   Loader2,
-  Save,
-  ExternalLink,
   Check,
-  Share2,
-  Phone,
-  FileText,
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -203,29 +194,15 @@ export default function AdminSettingsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-[#CC0000]">
-            <span className="h-px w-7 bg-[#CC0000]" />
-            <span className="text-xs font-black uppercase tracking-[0.25em]">ตั้งค่าเว็บไซต์</span>
-          </div>
-          <h1 className="mt-2.5 text-3xl font-black tracking-tight text-gray-900">จัดการหน้าแรก</h1>
-          <p className="mt-2 text-sm text-gray-500">
-            แก้ไขเนื้อหาที่แสดงบนหน้าแรกสาธารณะ (หน้าที่ผู้เข้าชมเห็นก่อนเข้าสู่ระบบ)
-          </p>
-        </div>
-        <Link
-          href="/"
-          target="_blank"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
-        >
-          <ExternalLink size={16} />
-          ดูหน้าแรก
-        </Link>
+      <div>
+        <h1 className="text-3xl font-black tracking-tight text-gray-900">จัดการหน้าแรก</h1>
+        <p className="mt-2 text-sm text-gray-500">
+          แก้ไขเนื้อหาที่แสดงบนหน้าแรกสาธารณะ (หน้าที่ผู้เข้าชมเห็นก่อนเข้าสู่ระบบ)
+        </p>
       </div>
 
       {/* ===== รูปสไลด์ ===== */}
-      <SectionCard icon={<Images className="h-5 w-5 text-[#CC0000]" />} title="รูปสไลด์ (Hero Slider)"
+      <SectionCard title="รูปสไลด์ (Hero Slider)"
         desc={`รูปภาพขนาดใหญ่ที่เลื่อนสลับด้านบนสุดของหน้าแรก — แสดงเป็นแบนเนอร์สัดส่วน 16:9 ควรอัปแนวนอน 1920×1080 พิกเซล (16:9) เพื่อให้พอดีแบนเนอร์และเห็นรูปเต็มทั้งภาพทุกขนาดจอ ขนาดไฟล์ไม่เกิน ${MAX_UPLOAD_MB} MB ต่อรูป`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {slides.map((slide, index) => (
@@ -297,7 +274,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== เกี่ยวกับเรา ===== */}
-      <SectionCard icon={<Info className="h-5 w-5 text-[#CC0000]" />} title="เกี่ยวกับเรา (About)"
+      <SectionCard title="เกี่ยวกับเรา (About)"
         desc="ข้อมูลแนะนำโรงเรียน/ธุรกิจของคุณ">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-4">
@@ -340,7 +317,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== ลิงก์โซเชียลมีเดีย ===== */}
-      <SectionCard icon={<Share2 className="h-5 w-5 text-[#CC0000]" />} title="ลิงก์โซเชียลมีเดีย"
+      <SectionCard title="ลิงก์โซเชียลมีเดีย"
         desc="ใส่ลิงก์ช่องทางโซเชียลของคุณ — เว้นว่างช่องไหน ระบบจะไม่แสดงไอคอนช่องนั้นบนหน้าแรก (แสดงทั้งส่วนเกี่ยวกับเราและท้ายหน้า)">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Field label="Facebook">
@@ -377,7 +354,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== ข้อมูลติดต่อ (footer) ===== */}
-      <SectionCard icon={<Phone className="h-5 w-5 text-[#CC0000]" />} title="ข้อมูลติดต่อ (ท้ายหน้า)"
+      <SectionCard title="ข้อมูลติดต่อ (ท้ายหน้า)"
         desc="ข้อมูลที่แสดงในส่วนท้ายหน้า (footer) ของหน้าแรก — เว้นว่างช่องไหน จะไม่แสดงบรรทัดนั้น">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Field label="ชื่อโรงเรียน / ธุรกิจ">
@@ -416,7 +393,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== เอกสารทางกฎหมาย ===== */}
-      <SectionCard icon={<FileText className="h-5 w-5 text-[#CC0000]" />} title="เอกสารทางกฎหมาย"
+      <SectionCard title="เอกสารทางกฎหมาย"
         desc="เนื้อหานโยบายความเป็นส่วนตัวและข้อกำหนดการใช้งาน — แสดงเป็นหน้าแยก (/privacy, /terms) และมีลิงก์ท้ายหน้า เว้นว่างไว้ = ไม่แสดงลิงก์นั้น">
         <div className="space-y-6">
           <Field label="นโยบายความเป็นส่วนตัว (PDPA)">
@@ -439,7 +416,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== หัวข้อส่วนต่างๆ ===== */}
-      <SectionCard icon={<Heading className="h-5 w-5 text-[#CC0000]" />} title="หัวข้อของแต่ละส่วน"
+      <SectionCard title="หัวข้อของแต่ละส่วน"
         desc="ข้อความหัวข้อและคำโปรยของส่วนบุคลากรและคอร์สเรียนบนหน้าแรก">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
@@ -472,7 +449,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== บุคลากร ===== */}
-      <SectionCard icon={<Users className="h-5 w-5 text-[#CC0000]" />} title="เลือกบุคลากรที่แสดงหน้าแรก"
+      <SectionCard title="เลือกบุคลากรที่แสดงหน้าแรก"
         desc="ติ๊กเลือกโค้ชที่ต้องการโชว์ในส่วนบุคลากร (ดึงข้อมูลจริงจากระบบ)">
         {coaches.length === 0 ? (
           <p className="text-sm text-gray-400">ยังไม่มีข้อมูลโค้ชในระบบ</p>
@@ -510,7 +487,7 @@ export default function AdminSettingsPage() {
       </SectionCard>
 
       {/* ===== รีวิว featured ===== */}
-      <SectionCard icon={<Star className="h-5 w-5 text-[#CC0000]" />} title="เสียงจากผู้เรียน (รีวิว)"
+      <SectionCard title="เสียงจากผู้เรียน (รีวิว)"
         desc="แสดงรีวิวที่คุณเลือกไว้ให้ขึ้นหน้าแรก">
         <label className="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" checked={content.show_featured_reviews}
@@ -538,13 +515,24 @@ export default function AdminSettingsPage() {
         </p>
       </SectionCard>
 
-      {/* Save bar */}
-      <div className="sticky bottom-4 flex justify-end">
-        <button onClick={handleSaveContent} disabled={savingContent}
-          className="flex items-center gap-2 rounded-xl bg-[#CC0000] px-6 py-3 font-bold text-white shadow-lg shadow-[#CC0000]/25 hover:bg-[#990000] transition-colors disabled:opacity-50">
-          {savingContent ? <Loader2 size={18} className="animate-spin" /> : savedFlash ? <Check size={18} /> : <Save size={18} />}
-          {savingContent ? 'กำลังบันทึก...' : savedFlash ? 'บันทึกแล้ว' : 'บันทึกการเปลี่ยนแปลง'}
-        </button>
+      {/* แถบปุ่มลอย: ดูหน้าแรก + บันทึก */}
+      <div className="sticky bottom-6 z-10 flex justify-end">
+        <div className="flex items-center gap-1.5 rounded-2xl border border-gray-200/80 bg-white/80 p-1.5 shadow-xl shadow-black/10 backdrop-blur-md">
+          <Link
+            href="/"
+            target="_blank"
+            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          >
+            ดูหน้าแรก
+          </Link>
+          <button
+            onClick={handleSaveContent}
+            disabled={savingContent}
+            className="min-w-[180px] rounded-xl bg-[#CC0000] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-[#CC0000]/30 transition-all hover:bg-[#990000] hover:shadow-lg hover:shadow-[#CC0000]/30 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+          >
+            {savingContent ? 'กำลังบันทึก...' : savedFlash ? 'บันทึกแล้ว' : 'บันทึกการเปลี่ยนแปลง'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -552,18 +540,15 @@ export default function AdminSettingsPage() {
 
 // ---------- helpers ----------
 function SectionCard({
-  icon, title, desc, children,
+  title, desc, children,
 }: {
-  icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode;
+  title: string; desc?: string; children: React.ReactNode;
 }) {
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-5 flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF0F0]">{icon}</div>
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          {desc && <p className="text-sm text-gray-500 mt-0.5">{desc}</p>}
-        </div>
+      <div className="mb-5">
+        <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+        {desc && <p className="text-sm text-gray-500 mt-0.5">{desc}</p>}
       </div>
       {children}
     </section>

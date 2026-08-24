@@ -439,7 +439,11 @@ func (s *AttendanceService) checkQuotaAndDuplicate(tx *gorm.DB, ctx *scanContext
 	err := tx.Where("enrollment_id = ? AND attendance_session_id = ?",
 		ctx.Enrollment.ID, ctx.Session.ID).First(&existing).Error
 	if err == nil {
-		return fmt.Errorf("%w (เมื่อ %s)", ErrAlreadyCheckedIn, existing.CheckInTime.Format("15:04"))
+		// ⚠️ ค่านี้อ่านมาจาก DB ไม่ใช่จาก nowLocal() — คอลัมน์เป็น timestamptz และ
+		// DATABASE_URL ไม่ได้ตั้ง TimeZone Postgres จึงคืนตามโซนของ session (UTC)
+		// Format ตรง ๆ จะได้เวลาช้าไป 7 ชั่วโมง ต้องแปลงโซนก่อนเสมอ
+		return fmt.Errorf("%w (เมื่อ %s)", ErrAlreadyCheckedIn,
+			existing.CheckInTime.In(appLocation()).Format("15:04"))
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return errors.New("ไม่สามารถตรวจสอบการเช็คชื่อซ้ำได้")

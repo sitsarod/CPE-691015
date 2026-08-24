@@ -9,6 +9,7 @@ import { fetchAllEnrollments } from "@/services/enrollmentAPI";
 import { buildDashboard } from "./components/buildDashboard";
 import type { DashboardData } from "./components/types";
 import DashboardSkeleton from "./components/DashboardSkeleton";
+import DashboardNotifications from "./components/DashboardNotifications";
 import {
   KpiCards,
   RevenueChart,
@@ -143,9 +144,11 @@ export default function AdminDashboardPage() {
             <div className="hidden md:block">
               <RealtimeInsights insights={data.insights} />
             </div>
-            {/* มือถือ: ดันการแจ้งเตือนขึ้นก่อนกิจกรรม (จอใหญ่คงลำดับเดิม) */}
-            <div className="order-first md:order-none lg:order-last">
+            {/* มือถือ: ดันการแจ้งเตือนขึ้นก่อนกิจกรรม (จอใหญ่คงลำดับเดิม)
+                การ์ดฟีดแจ้งเตือนจริง (SSE) อยู่เหนือสรุปการแจ้งเตือนที่สำคัญ */}
+            <div className="order-first space-y-6 md:order-none lg:order-last">
               <ImportantAlerts alerts={data.alerts} />
+              <DashboardNotifications />
             </div>
             <RecentActivity activities={data.activities} />
           </div>

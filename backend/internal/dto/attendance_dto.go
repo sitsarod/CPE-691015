@@ -166,6 +166,10 @@ type AttendanceHistoryItemDTO struct {
 	SessionID    *uint     `json:"session_id"`
 	SessionDate  time.Time `json:"session_date"`
 
+	// สแนปช็อตเวลาคาบที่รอบเก็บไว้ตอนเปิด — ว่างเมื่อ session_id เป็น null
+	ScheduleStartTime string `json:"schedule_start_time,omitempty"`
+	ScheduleEndTime   string `json:"schedule_end_time,omitempty"`
+
 	EnrollmentID uint   `json:"enrollment_id"`
 	FullName     string `json:"full_name"`
 	Nickname     string `json:"nickname"`

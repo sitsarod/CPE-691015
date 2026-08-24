@@ -39,7 +39,7 @@ export default function EditStatusModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-bold text-gray-900">แก้สถานะการเข้าเรียน</h3>
@@ -56,7 +56,7 @@ export default function EditStatusModal({
               key={opt}
               className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition ${
                 status === opt
-                  ? "border-blue-500 bg-blue-50"
+                  ? "border-[#CC0000] bg-[#FFF0F0]"
                   : "border-gray-200 hover:bg-gray-50"
               }`}
             >
@@ -87,7 +87,7 @@ export default function EditStatusModal({
             rows={3}
             maxLength={500}
             placeholder="เช่น ผู้ปกครองโทรแจ้งลาเมื่อ 10:30 วันเดียวกัน"
-            className="mt-1 w-full rounded-xl border border-gray-300 p-3 text-gray-900 outline-none focus:border-blue-500"
+            className="mt-1 w-full rounded-xl border border-gray-300 p-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
           />
         </div>
 
@@ -95,14 +95,14 @@ export default function EditStatusModal({
           <button
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 rounded-xl border border-gray-300 py-3 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-gray-300 py-3 font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
           >
             ยกเลิก
           </button>
           <button
             onClick={() => onSubmit(status, remarks)}
             disabled={isSubmitting}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#CC0000] py-3 font-semibold text-white transition hover:bg-[#A30A0E] disabled:opacity-60"
           >
             {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
             บันทึก

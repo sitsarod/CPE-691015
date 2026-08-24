@@ -248,7 +248,7 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
           <span>
             {errorMessage}
             <span className="block text-sm text-amber-600">
-              ใช้ช่องพิมพ์รหัสด้านล่างแทนได้เลย ผลลัพธ์เหมือนกันทุกอย่าง
+              เช็คชื่อจากรายชื่อได้เลย — กด &quot;เช็คให้&quot; ท้ายชื่อนักเรียน
             </span>
           </span>
         </p>
