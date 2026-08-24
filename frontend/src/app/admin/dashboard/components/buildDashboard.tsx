@@ -19,7 +19,8 @@ import type { ActivityRow, AlertRow, CourseRow, DashboardData, Insights, Kpi } f
 
 export const fmtBaht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
 export const fmtPct = (n: number, digits = 1) =>
-  `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
+  // โตจากศูนย์ (Infinity จาก pctChange) คำนวณ % ไม่ได้ → แสดง "ใหม่" แทนตัวเลขปลอม
+  Number.isFinite(n) ? `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%` : "ใหม่";
 
 const THAI_MONTHS = [
   "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
@@ -45,17 +46,13 @@ const timeAgo = (iso?: string): string => {
 };
 
 const pctChange = (cur: number, prev: number) => {
-  if (prev <= 0) return cur > 0 ? 100 : 0;
-  return ((cur - prev) / prev) * 100;
+  // เดือนก่อนเป็น 0: โตจากศูนย์คำนวณ % ไม่ได้ (เป็นอนันต์) → คืน Infinity/-Infinity ให้ fmtPct แสดง "ใหม่"
+  // ถ้าเดือนนี้ก็ 0 ด้วย = ไม่มีการเปลี่ยนแปลง → 0%
+  if (prev === 0) return cur === 0 ? 0 : cur > 0 ? Infinity : -Infinity;
+  // หารด้วย |prev| เพื่อให้ทิศทางถูกต้องเมื่อ prev ติดลบได้ (เช่น กำไรสุทธิที่ขาดทุน)
+  // รายได้/ค่าใช้จ่ายเป็นบวกเสมอ ผลลัพธ์จึงเท่าเดิม
+  return ((cur - prev) / Math.abs(prev)) * 100;
 };
-
-// สีพื้นหลังของกล่องเลขอันดับหลักสูตรขายดี (วนซ้ำตามอันดับ 1-4)
-const COURSE_TINTS: string[] = [
-  "bg-blue-100 text-blue-600",
-  "bg-emerald-100 text-emerald-600",
-  "bg-amber-100 text-amber-600",
-  "bg-violet-100 text-violet-600",
-];
 
 export interface RawDashboard {
   users: UserProfileResponseDTO[];
@@ -119,6 +116,8 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   const monthExpense = last.expense;
   const monthNetProfit = monthRevenue - monthExpense;
   const monthMargin = monthRevenue > 0 ? (monthNetProfit / monthRevenue) * 100 : 0;
+  const prevNetProfit = (prev.revenue || 0) - (prev.expense || 0);
+  const netProfitChange = pctChange(monthNetProfit, prevNetProfit);
 
   // ---- KPI ----
   const kpis: Kpi[] = [
@@ -142,9 +141,10 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
       accent: monthNetProfit >= 0 ? "#0D9488" : "#E63946",
       icon: BadgeCheck,
       trend: {
-        up: monthNetProfit >= 0,
-        text: monthNetProfit >= 0 ? "ดี" : "ขาดทุน",
-        note: `มาร์จิ้น ${monthMargin.toFixed(0)}%`,
+        // % เทียบเดือนก่อน (ขึ้น = ดีขึ้น) + margin ของเดือนนี้เป็นบริบท
+        up: netProfitChange >= 0,
+        text: fmtPct(netProfitChange),
+        note: `เทียบเดือนก่อน · มาร์จิ้น ${monthMargin.toFixed(0)}%`,
       },
     },
     {
@@ -186,11 +186,10 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   const courseRows: CourseRow[] = [...courseAgg.entries()]
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 4)
-    .map(([name, v], i) => ({
+    .map(([name, v]) => ({
       name,
       students: v.students.size,
       revenue: `+${fmtBaht(v.revenue)}`,
-      tint: COURSE_TINTS[i % COURSE_TINTS.length],
     }));
 
   // ---- กิจกรรมล่าสุด ----

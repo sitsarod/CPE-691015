@@ -151,7 +151,7 @@ export default function NotificationBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-4 w-[340px] max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+        <div className="fixed inset-x-4 top-16 w-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-4 sm:w-[340px] sm:max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <span className="font-bold text-gray-900">การแจ้งเตือน</span>
             <div className="flex items-center gap-1">

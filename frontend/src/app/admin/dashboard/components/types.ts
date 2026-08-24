@@ -18,7 +18,6 @@ export interface CourseRow {
   name: string;
   students: number;
   revenue: string;
-  tint: string;
 }
 
 export interface ActivityRow {

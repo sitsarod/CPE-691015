@@ -130,9 +130,6 @@ export default function NotificationsHistory() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#FFF0F0] text-[#CC0000]">
-            <Bell className="h-5 w-5" />
-          </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900">การแจ้งเตือน</h1>
             <p className="mt-0.5 text-sm text-gray-500">

@@ -3,11 +3,18 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
 )
+
+// overdueCutoff คืนต้นวันของวันนี้ (เขตเวลาเครื่อง) — บิลที่ครบกำหนด "ก่อน" เวลานี้ถือว่าเกินกำหนด
+// ผลคือบิลกลายเป็นเกินกำหนดในวันถัดจากวันครบกำหนด ให้ตรงกับการแสดงผลฝั่งหน้าเว็บ (isPastDue)
+func overdueCutoff(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+}
 
 // notifyBillIssued แจ้งลูกค้าเมื่อมีบิลใหม่รอชำระ (best-effort)
 // customerUserID = users.id (คอลัมน์ billings.customer_id อ้าง users.id)
@@ -22,12 +29,74 @@ func notifyBillIssued(db *gorm.DB, customerUserID, billingID uint, amount float6
 	)
 }
 
+// notifyBillOverdue แจ้งลูกค้าเมื่อบิลเลยกำหนดชำระ (best-effort)
+// กันซ้ำด้วย (type, signature) = แจ้งครั้งเดียวต่อบิล แม้ sweep จะรันซ้ำหลายรอบ
+func notifyBillOverdue(db *gorm.DB, customerUserID, billingID uint, amount float64, desc string) {
+	CreateNotification(db, customerUserID,
+		"bill_overdue",
+		fmt.Sprintf("bill-%d", billingID),
+		"บิลเกินกำหนดชำระ",
+		fmt.Sprintf("%s • ยอด ฿%.2f เลยกำหนดชำระแล้ว กรุณาชำระโดยเร็ว", desc, amount),
+		"/customer/payment?tab=billings",
+		"danger",
+	)
+}
+
 type BillingService struct {
 	db *gorm.DB
 }
 
 func NewBillingService(db *gorm.DB) *BillingService {
 	return &BillingService{db: db}
+}
+
+// MarkOverdueBillings ปรับสถานะบิลให้ตรงกับวันครบกำหนดจริงแบบสองทาง:
+//   - unfunded → overdue  เมื่อเลยวันครบกำหนดแล้ว
+//   - overdue  → unfunded  เมื่อวันครบกำหนดถูกเลื่อนออกไปเป็นอนาคต (แอดมินแก้ due_date)
+//
+// ไม่แตะบิลที่ paid/waitcheck (สถานะการจ่ายเงิน) คืนจำนวนแถวที่อัปเดตทั้งหมด
+// ใช้ทั้งใน background job และ lazy sweep ตอนอ่านรายการบิล
+func (s *BillingService) MarkOverdueBillings() (int64, error) {
+	cutoff := overdueCutoff(time.Now())
+
+	// ดึงบิลที่กำลังจะกลายเป็นเกินกำหนดไว้ก่อนอัปเดต เพื่อส่งแจ้งเตือนหลังเปลี่ยนสถานะ
+	// (batch UPDATE ไม่คืนแถวที่แก้ จึงต้อง select ก่อน) บิลที่เคยเลื่อนแล้วจะเป็น overdue
+	// ไม่เข้าเงื่อนไข unfunded อีก จึงไม่ถูกหยิบมาแจ้งซ้ำ
+	var newlyOverdue []models.Billing
+	if err := s.db.
+		Where("status = ? AND due_date < ?", models.StatusUnfunded, cutoff).
+		Find(&newlyOverdue).Error; err != nil {
+		return 0, err
+	}
+
+	toOverdue := s.db.Model(&models.Billing{}).
+		Where("status = ? AND due_date < ?", models.StatusUnfunded, cutoff).
+		Update("status", models.StatusOverdue)
+	if toOverdue.Error != nil {
+		return 0, toOverdue.Error
+	}
+
+	toUnfunded := s.db.Model(&models.Billing{}).
+		Where("status = ? AND due_date >= ?", models.StatusOverdue, cutoff).
+		Update("status", models.StatusUnfunded)
+	if toUnfunded.Error != nil {
+		return toOverdue.RowsAffected, toUnfunded.Error
+	}
+
+	// แจ้งลูกค้าว่าบิลเกินกำหนด (best-effort, กันซ้ำต่อบิลด้วย type+signature)
+	for _, b := range newlyOverdue {
+		notifyBillOverdue(s.db, b.CustomerID, b.ID, b.Amount, b.Description)
+	}
+
+	return toOverdue.RowsAffected + toUnfunded.RowsAffected, nil
+}
+
+// sweepOverdue เรียก MarkOverdueBillings แบบ best-effort ก่อนอ่านรายการบิล
+// เพื่อให้สถานะที่ส่งออกไปตรงกับความจริงเสมอ แม้ background job ยังไม่ทันรอบ
+func (s *BillingService) sweepOverdue() {
+	if _, err := s.MarkOverdueBillings(); err != nil {
+		log.Printf("[billing] อัปเดตสถานะบิลเกินกำหนดไม่สำเร็จ: %v", err)
+	}
 }
 
 // CreateSingleBilling สร้างบิลเรียกเก็บเงินรายคน
@@ -207,6 +276,7 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 
 // GetAllBillings ดึงรายการบิลทั้งหมดในระบบ (สำหรับ Admin)
 func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
+	s.sweepOverdue()
 	var billings []models.Billing
 	err := s.db.Preload("BillingType").
 		Preload("Customer").
@@ -221,6 +291,7 @@ func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
 
 // GetBillingsByCustomerID ดึงรายการบิลทั้งหมดของลูกค้ารายเจาะจง (สำหรับ Customer)
 func (s *BillingService) GetBillingsByCustomerID(customerID uint) ([]models.Billing, error) {
+	s.sweepOverdue()
 	var billings []models.Billing
 	err := s.db.Preload("BillingType").
 		Preload("Customer").

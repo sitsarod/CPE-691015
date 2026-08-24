@@ -15,6 +15,15 @@ interface PaymentStatsProps {
 const fmtAmount = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// จอเล็กช่องแคบมาก: ตัดทศนิยมออก (สรุปยอด รายละเอียดเต็มอยู่ในลิสต์) เหลือบาทเต็มจำนวน
+const fmtAmountInt = (n: number) => Math.round(n).toLocaleString("th-TH");
+
+// เลือกขนาดฟอนต์ตามความยาวตัวเลข กันยอดเงินหลักล้านล้นขอบการ์ด
+const mobileAmountSize = (len: number) =>
+  len > 9 ? "text-sm" : len > 6 ? "text-base" : "text-lg";
+const cardAmountSize = (len: number) =>
+  len > 12 ? "text-xl" : len > 9 ? "text-2xl" : "text-2xl sm:text-[28px]";
+
 interface StatCard {
   key: string;
   label: string;
@@ -80,13 +89,15 @@ export default function PaymentStats({
     <>
       {/* จอเล็ก: ยุบเหลือการ์ดเดียว แบ่ง 3 ช่องแนวนอน ประหยัดพื้นที่ */}
       <div className="grid grid-cols-3 divide-x divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:hidden">
-        {cards.map((c) => (
-          <div key={c.key} className="flex flex-col items-center gap-1.5 px-1.5 py-4 text-center">
+        {cards.map((c) => {
+          const amt = fmtAmountInt(c.amount);
+          return (
+          <div key={c.key} className="flex min-w-0 flex-col items-center gap-1.5 px-1.5 py-4 text-center">
             <span className="text-[13px] font-bold leading-tight text-gray-600">{c.label}</span>
-            <div className="flex items-baseline gap-0.5">
+            <div className="flex min-w-0 items-baseline gap-0.5">
               <span className="text-xs font-bold text-gray-400">฿</span>
-              <span className={`text-lg font-black leading-none tabular-nums ${c.amountClass}`}>
-                {fmtAmount(c.amount)}
+              <span className={`font-black leading-none tabular-nums ${mobileAmountSize(amt.length)} ${c.amountClass}`}>
+                {amt}
               </span>
             </div>
             {c.badge ? (
@@ -97,7 +108,8 @@ export default function PaymentStats({
               <span className="text-[10px] leading-tight text-gray-400">{c.note}</span>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* จอ tablet ขึ้นไป: การ์ดแบบเต็มรายละเอียด */}
@@ -122,9 +134,9 @@ export default function PaymentStats({
             </div>
 
             {/* ยอดเงิน */}
-            <div className="mt-5 flex items-baseline gap-1">
+            <div className="mt-5 flex min-w-0 items-baseline gap-1">
               <span className="text-base font-bold text-gray-400">฿</span>
-              <span className={`text-2xl font-black leading-none tracking-tight sm:text-[28px] ${c.amountClass}`}>
+              <span className={`font-black leading-none tracking-tight ${cardAmountSize(fmtAmount(c.amount).length)} ${c.amountClass}`}>
                 {fmtAmount(c.amount)}
               </span>
             </div>
