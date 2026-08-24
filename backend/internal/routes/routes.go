@@ -87,9 +87,9 @@ func SetupRoutes(r *gin.Engine) {
 	homeContentService := services.NewHomeContentService(db)
 	homeContentController := controllers.NewHomeContentController(homeContentService)
 
-	// Automated Q&A system
+	// Automated Q&A system (ส่ง cloudinary เข้าไปด้วยสำหรับอัปโหลดไฟล์แนบในแชท)
 	autoQAService := services.NewAutoQAService(db)
-	autoQAController := controllers.NewAutoQAController(autoQAService)
+	autoQAController := controllers.NewAutoQAController(autoQAService, cloudinaryService)
 
 	// ความยินยอมเก็บข้อมูลใบหน้า (PDPA)
 	consentService := services.NewConsentService(db)
@@ -112,11 +112,6 @@ func SetupRoutes(r *gin.Engine) {
 	reviewController := controllers.NewReviewController(reviewService)
 
 	personalQRController := controllers.NewPersonalQRController(db)
-
-	// กู้และเปลี่ยนรหัสผ่าน — ส่ง OTP ทางอีเมล
-	// NewMailer อ่านค่า SMTP จาก .env ถ้ายังไม่ได้ตั้งจะพิมพ์อีเมลลง log แทน
-	passwordResetService := services.NewPasswordResetService(db, services.NewMailer())
-	passwordResetController := controllers.NewPasswordResetController(passwordResetService)
 
 	// ระบบแจ้งเตือน (per user) — หน้าเว็บ derive แล้ว sync ขึ้นมาเก็บ + จำสถานะอ่าน + ประวัติ
 	notificationService := services.NewNotificationService(db)
@@ -141,24 +136,10 @@ func SetupRoutes(r *gin.Engine) {
 			// และถ้าใส่แล้วโดนบล็อก SessionGuard จะตีความว่า session ตาย
 			// แล้วเด้งผู้ใช้ที่ยังล็อกอินอยู่ดี ๆ ออกจากระบบ
 			authGroup.POST("/refresh", authController.Refresh)
-			// ── กู้รหัสผ่าน ──
-			//
-			// ทั้งสามเส้นเปิดสาธารณะเพราะคนที่ลืมรหัสผ่านเข้าระบบไม่ได้อยู่แล้ว
-			// จึงต้องมี rate limit คุมแน่นเป็นพิเศษ
-			//
-			// OTP 6 หลัก = ความเป็นไปได้ 1 ล้านแบบ ถ้ายิงได้ไม่จำกัดคือเดาถูกแน่นอน
-			// (ด่านที่สองคือการจำกัดจำนวนครั้งต่อ OTP หนึ่งใบ ดู otpMaxAttempts)
-			passwordGroup := authGroup.Group("/password")
-			{
-				passwordGroup.POST("/request-otp", middlewares.SensitiveRateLimit(), passwordResetController.RequestOTP)
-				passwordGroup.POST("/verify-otp", middlewares.SensitiveRateLimit(), passwordResetController.VerifyOTP)
-				passwordGroup.POST("/reset", middlewares.SensitiveRateLimit(), passwordResetController.ResetPassword)
-			}
-
-			// ⚠️ OTP ชุดเก่าถูกถอดออกแล้ว — ของเดิมยอมให้ผ่านด้วยเลข 123456 ตายตัว
-			// ใครที่รู้อีเมลของคนอื่นจึงยึดบัญชีได้ทันที ห้ามเปิดกลับมาใช้
-			//authGroup.POST("/send-otp", authController.SendOTP)
-			//authGroup.POST("/verify-otp", authController.VerifyOTP)
+			// ⚠️ ตอนเปิด OTP กลับมาใช้ อย่าลืมใส่ SensitiveRateLimit() ด้วย
+			// เพราะ OTP 6 หลักเดาสุ่มถูกได้ใน 1 ล้านครั้ง ถ้ายิงได้ไม่จำกัดคือเดาได้แน่นอน
+			//authGroup.POST("/send-otp", middlewares.SensitiveRateLimit(), authController.SendOTP)
+			//authGroup.POST("/verify-otp", middlewares.SensitiveRateLimit(), authController.VerifyOTP)
 		}
 		publicUserGroup := api.Group("/users")
 		{
@@ -279,10 +260,6 @@ func SetupRoutes(r *gin.Engine) {
 		// ใช้ได้ทั้งนักเรียนและโค้ช (แอดมินจะได้ 404 เพราะไม่มี QR ประจำตัว)
 		protected.GET("/me/qr", personalQRController.GetMyQR)
 
-		// เปลี่ยนรหัสผ่านของตัวเอง — ต้องกรอกรหัสเดิมด้วย (step-up)
-		// จำกัดจำนวนครั้งเพราะเป็นเส้นที่รับรหัสผ่าน จึงเป็นเป้าของการเดา
-		protected.PATCH("/me/password", middlewares.SensitiveRateLimit(), passwordResetController.ChangePassword)
-
 		// --- ความยินยอมเก็บข้อมูลใบหน้า (PDPA) ---
 		// ทุกเส้นอ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param และไม่รับ customer_id จาก body
 		// จึงบันทึก/ถอนความยินยอมแทนคนอื่นไม่ได้ (ไม่ต้องใช้ CheckIDOR)
@@ -328,8 +305,6 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
-			// แยก path จาก DELETE /:id ของแอดมิน เพราะคนละสิทธิ์และคนละกติกา
-			enrollmentGroup.PATCH("/:id/cancel", enrollmentController.CancelMyEnrollment)
 		}
 
 		// --- เช็คชื่อเข้าเรียน ---
@@ -342,7 +317,6 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
 
 			attendanceGroup.POST("/sessions", attendanceController.OpenSession)
-			attendanceGroup.GET("/sessions", attendanceController.GetOpenSessions)
 			attendanceGroup.GET("/sessions/:id", attendanceController.GetSession)
 			// สแกนสองจังหวะ: lookup ไม่เขียนอะไร · check-in บันทึกและหักโควตา
 			attendanceGroup.POST("/sessions/:id/lookup", attendanceController.Lookup)
@@ -356,7 +330,6 @@ func SetupRoutes(r *gin.Engine) {
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
 		{
 			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
-			adminEnrollmentReviewGroup.PATCH("/:id/reject", enrollmentController.RejectEnrollment)
 			adminEnrollmentReviewGroup.POST("/:id/extend", enrollmentController.ExtendEnrollment)
 			adminEnrollmentReviewGroup.GET("/:id/extensions", enrollmentController.GetEnrollmentExtensions)
 		}
@@ -476,6 +449,8 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/chat-sessions", middlewares.PublicChatRateLimit(), autoQAController.CreateChatSession)
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
 		api.POST("/chat-sessions/:id/ask", middlewares.PublicChatRateLimit(), autoQAController.AskQuestion)
+		// อัปโหลดไฟล์แนบในแชท (รูป/PDF) — สาธารณะ + rate limit เพราะ guest ก็ต้องแนบได้
+		api.POST("/chat-uploads", middlewares.PublicChatRateLimit(), autoQAController.UploadChatAttachment)
 
 		// ประกาศการเก็บข้อมูลใบหน้า — public เพราะต้องอ่านได้ก่อนตัดสินใจยินยอม
 		api.GET("/consents/face/policy", consentController.GetPolicy)

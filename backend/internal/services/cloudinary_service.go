@@ -19,7 +19,7 @@ var allowedSubfolders = map[string]bool{
 	"slip":    true,
 	"news":    true,
 	"home":    true,
-	"course":  true,
+	"chat":    true,
 }
 
 // CloudinaryService ห่อ SDK ของ Cloudinary สำหรับอัปโหลดไฟล์ขึ้นคลาวด์
