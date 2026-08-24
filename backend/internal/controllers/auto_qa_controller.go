@@ -88,6 +88,10 @@ func autoQAErrorStatus(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, services.ErrChatSessionClosed):
 		return http.StatusConflict
+	case errors.Is(err, services.ErrMessageNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, services.ErrCannotModifyMessage):
+		return http.StatusForbidden
 	case errors.Is(err, services.ErrUserNotFoundForChat), errors.Is(err, services.ErrEmptyMessage):
 		return http.StatusBadRequest
 	default:
@@ -321,4 +325,51 @@ func (ctrl *AutoQAController) AdminReply(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// EditMessage — ลูกค้าแก้ไขข้อความของตัวเองในห้องแชท
+func (ctrl *AutoQAController) EditMessage(c *gin.Context) {
+	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		return
+	}
+
+	var req dto.EditMessageReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := ctrl.service.EditUserMessage(uint(sessionID), uint(msgID), &req)
+	if err != nil {
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// DeleteMessage — ลูกค้าลบข้อความของตัวเองในห้องแชท
+func (ctrl *AutoQAController) DeleteMessage(c *gin.Context) {
+	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		return
+	}
+
+	if err := ctrl.service.DeleteUserMessage(uint(sessionID), uint(msgID)); err != nil {
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ลบข้อความสำเร็จ"})
 }

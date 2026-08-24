@@ -46,6 +46,22 @@ export const autoQaAPI = {
     return res.data;
   },
 
+  // ลูกค้าแก้ไขข้อความของตัวเอง
+  editChatMessage: async (sessionId: number, msgId: number, question: string): Promise<AutoQA> => {
+    const res = await apiFetch<ApiResponse<AutoQA>>(`/chat-sessions/${sessionId}/messages/${msgId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ question }),
+    });
+    return res.data;
+  },
+
+  // ลูกค้าลบข้อความของตัวเอง
+  deleteChatMessage: async (sessionId: number, msgId: number): Promise<void> => {
+    await apiFetch<{ message: string }>(`/chat-sessions/${sessionId}/messages/${msgId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // --- Admin Endpoints ---
 
   getAllAutoQAs: async (): Promise<AutoQA[]> => {

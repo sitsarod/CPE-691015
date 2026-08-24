@@ -94,3 +94,8 @@ type ChatUploadResponse struct {
 	Name string `json:"name"`
 }
 
+// EditMessageReq สำหรับแก้ไขข้อความของลูกค้าในห้องแชท (แก้เฉพาะข้อความ)
+type EditMessageReq struct {
+	Question string `json:"question"`
+}
+
