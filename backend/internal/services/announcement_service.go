@@ -78,6 +78,7 @@ func (s *announcementService) CreateAnnouncement(userID uint, req *dto.CreateAnn
 		Title:      req.Title,
 		Content:    req.Content,
 		ImageURL:   req.ImageURL,
+		Link:       req.Link,
 		UserID:     userID,
 		CategoryID: req.CategoryID,
 		StartDate:  startOfDay(req.StartDate),
@@ -152,6 +153,9 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 	}
 	if req.ImageURL != nil {
 		announcement.ImageURL = *req.ImageURL
+	}
+	if req.Link != nil {
+		announcement.Link = *req.Link
 	}
 	if req.CategoryID != nil {
 		var category models.Category
@@ -265,6 +269,7 @@ func mapToAnnouncementDTO(m *models.Announcement) dto.AnnouncementDTO {
 		Title:       m.Title,
 		Content:     m.Content,
 		ImageURL:    m.ImageURL,
+		Link:        m.Link,
 		UserID:      m.UserID,
 		CategoryID:  m.CategoryID,
 		StartDate:   m.StartDate,

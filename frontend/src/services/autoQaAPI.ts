@@ -7,7 +7,9 @@ import {
   CreateChatSessionReq,
   UpdateChatSessionReq,
   AskQuestionReq,
-  AskQuestionResponse
+  AskQuestionResponse,
+  AdminReplyReq,
+  ChatUploadResponse,
 } from '../types/autoQa';
 
 interface ApiResponse<T> {
@@ -92,11 +94,38 @@ export const autoQaAPI = {
     });
   },
 
-  adminReplyChatSession: async (id: number, answer: string): Promise<AutoQA> => {
+  adminReplyChatSession: async (id: number, req: AdminReplyReq): Promise<AutoQA> => {
     const res = await apiFetch<ApiResponse<AutoQA>>(`/admin/chat-sessions/${id}/reply`, {
       method: 'POST',
-      body: JSON.stringify({ answer }),
+      body: JSON.stringify(req),
     });
     return res.data;
-  }
+  },
+
+  // อัปโหลดไฟล์แนบในแชท (รูป/PDF) — ใช้ได้ทั้ง guest และแอดมิน (endpoint สาธารณะ)
+  uploadChatAttachment: async (file: File): Promise<ChatUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: HeadersInit = {};
+    if (token) headers['Authorization'] = `Bearer ${token.trim().replace(/[\r\n]/g, '')}`;
+
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+    const response = await fetch(`${BASE_URL}/chat-uploads`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let msg = 'อัปโหลดไฟล์ไม่สำเร็จ';
+      try {
+        const p = await response.json();
+        if (p?.error) msg = p.error;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    return response.json();
+  },
 };

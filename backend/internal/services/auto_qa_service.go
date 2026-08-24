@@ -15,6 +15,7 @@ var (
 	ErrChatSessionNotFound = errors.New("chat session not found")
 	ErrChatSessionClosed   = errors.New("cannot send messages to a closed session")
 	ErrUserNotFoundForChat = errors.New("user not found")
+	ErrEmptyMessage        = errors.New("message must contain text or an attachment")
 )
 
 type AutoQAService interface {
@@ -33,8 +34,8 @@ type AutoQAService interface {
 	GetAllChatSessions() ([]dto.ChatSessionDTO, error)
 	UpdateChatSession(id uint, req *dto.UpdateChatSessionReq) (*dto.ChatSessionDTO, error)
 	DeleteChatSession(id uint) error
-	// DeleteStaleClosedSessions ลบห้องแชทที่ปิดไปแล้วนานเกิน olderThan (พร้อม log ข้อความ)
-	DeleteStaleClosedSessions(olderThan time.Duration) (int64, error)
+	// DeleteOldSessions ลบห้องแชทที่สร้างมานานเกิน olderThan (ทุกสถานะ) พร้อม log ข้อความ
+	DeleteOldSessions(olderThan time.Duration) (int64, error)
 
 	// Q&A logic
 	AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*dto.AskQuestionResponse, error)
@@ -155,8 +156,14 @@ func (s *autoQAService) CreateChatSession(req *dto.CreateChatSessionReq) (*dto.C
 		}
 	}
 
+	// ผู้ใช้ที่ไม่ได้ล็อกอิน = ไม่ระบุตัวตน ไม่มีชื่อ → ตั้งชื่อแสดงเป็น "ผู้เยี่ยมชม"
+	guestName := strings.TrimSpace(req.GuestName)
+	if guestName == "" {
+		guestName = "ผู้เยี่ยมชม"
+	}
+
 	session := models.ChatSession{
-		GuestName:  req.GuestName,
+		GuestName:  guestName,
 		GuestEmail: req.GuestEmail,
 		GuestPhone: req.GuestPhone,
 		Status:     models.ChatSessionStatusActive,
@@ -222,14 +229,14 @@ func (s *autoQAService) DeleteChatSession(id uint) error {
 	return s.db.Delete(&models.ChatSession{}, id).Error
 }
 
-// DeleteStaleClosedSessions ลบห้องแชทที่ "ปิดแล้ว" และปิดมานานเกิน olderThan
-// ใช้ updated_at เป็นตัวแทนเวลาที่ปิด (สถานะเปลี่ยนเป็น closed ผ่าน UpdateChatSession เท่านั้น)
+// DeleteOldSessions ลบห้องแชทที่สร้างมานานเกิน olderThan (ทุกสถานะ)
+// ตรงกับข้อความต้อนรับที่บอกว่า "แชทนี้จะยังคงอยู่ภายใน 3 วัน"
 // ลบ log ข้อความ (AutoQA) ของห้องเหล่านั้นก่อน แล้วค่อยลบตัวห้อง — เรียกจาก background job
-func (s *autoQAService) DeleteStaleClosedSessions(olderThan time.Duration) (int64, error) {
+func (s *autoQAService) DeleteOldSessions(olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
 
 	var sessions []models.ChatSession
-	if err := s.db.Where("status = ? AND updated_at < ?", models.ChatSessionStatusClosed, cutoff).
+	if err := s.db.Where("created_at < ?", cutoff).
 		Find(&sessions).Error; err != nil {
 		return 0, err
 	}
@@ -261,40 +268,50 @@ func (s *autoQAService) AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*d
 		return nil, ErrChatSessionClosed
 	}
 
-	// Retrieve all template Q&A pairs (knowledge base)
-	var templates []models.AutoQA
-	if err := s.db.Where("session_id IS NULL").Find(&templates).Error; err != nil {
-		return nil, err
-	}
-
-	var bestMatch *models.AutoQA
-	bestScore := 0
-
-	for i := range templates {
-		score := calculateMatchScore(req.Question, templates[i].Question, templates[i].SimilarQuestion)
-		if score > bestScore {
-			bestScore = score
-			bestMatch = &templates[i]
-		}
+	// ต้องมีอย่างน้อยข้อความหรือไฟล์แนบ
+	hasText := strings.TrimSpace(req.Question) != ""
+	if !hasText && req.AttachmentURL == "" {
+		return nil, ErrEmptyMessage
 	}
 
 	var botAnswer string
 	var matchMode models.AutoQAMode = models.AutoQAModeKeywordMatch
+	var bestMatch *models.AutoQA
 
-	if bestScore > 0 && bestMatch != nil {
-		botAnswer = bestMatch.Answer
-		matchMode = bestMatch.Mode
-	} else {
-		// Default fallback response
-		botAnswer = "ขออภัยด้วยค่ะ ระบบยังไม่มีข้อมูลคำถามนี้ในขณะนี้ เจ้าหน้าที่จะรีบมาตอบกลับคุณโดยเร็วที่สุดค่ะ"
+	// ตอบอัตโนมัติเฉพาะเมื่อมี "ข้อความ" ให้จับคู่ — ถ้าส่งมาเป็นไฟล์แนบล้วน ๆ ไม่ต้องมีบอทตอบ
+	if hasText {
+		var templates []models.AutoQA
+		if err := s.db.Where("session_id IS NULL").Find(&templates).Error; err != nil {
+			return nil, err
+		}
+
+		bestScore := 0
+		for i := range templates {
+			score := calculateMatchScore(req.Question, templates[i].Question, templates[i].SimilarQuestion)
+			if score > bestScore {
+				bestScore = score
+				bestMatch = &templates[i]
+			}
+		}
+
+		if bestScore > 0 && bestMatch != nil {
+			botAnswer = bestMatch.Answer
+			matchMode = bestMatch.Mode
+		} else {
+			// Default fallback response
+			botAnswer = "ขออภัยด้วยค่ะ ระบบยังไม่มีข้อมูลคำถามนี้ในขณะนี้ เจ้าหน้าที่จะรีบมาตอบกลับคุณโดยเร็วที่สุดค่ะ"
+		}
 	}
 
 	// Create and persist the interaction log linked to this chat session
 	interactionLog := models.AutoQA{
-		Mode:      matchMode,
-		Question:  req.Question,
-		Answer:    botAnswer,
-		SessionID: &sessionID,
+		Mode:           matchMode,
+		Question:       req.Question,
+		Answer:         botAnswer,
+		AttachmentURL:  req.AttachmentURL,
+		AttachmentType: req.AttachmentType,
+		AttachmentName: req.AttachmentName,
+		SessionID:      &sessionID,
 	}
 
 	if err := s.db.Create(&interactionLog).Error; err != nil {
@@ -324,12 +341,20 @@ func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto
 		return nil, ErrChatSessionClosed
 	}
 
+	// ต้องมีอย่างน้อยข้อความหรือไฟล์แนบ
+	if strings.TrimSpace(req.Answer) == "" && req.AttachmentURL == "" {
+		return nil, ErrEmptyMessage
+	}
+
 	// Create and persist the interaction log as an admin reply
 	interactionLog := models.AutoQA{
-		Mode:      models.AutoQAModeAdminReply,
-		Question:  "", // Admin replies don't have a user question part
-		Answer:    req.Answer,
-		SessionID: &sessionID,
+		Mode:           models.AutoQAModeAdminReply,
+		Question:       "", // Admin replies don't have a user question part
+		Answer:         req.Answer,
+		AttachmentURL:  req.AttachmentURL,
+		AttachmentType: req.AttachmentType,
+		AttachmentName: req.AttachmentName,
+		SessionID:      &sessionID,
 	}
 
 	if err := s.db.Create(&interactionLog).Error; err != nil {
@@ -393,6 +418,9 @@ func mapToAutoQADTO(m *models.AutoQA) dto.AutoQADTO {
 		Question:        m.Question,
 		SimilarQuestion: m.SimilarQuestion,
 		Answer:          m.Answer,
+		AttachmentURL:   m.AttachmentURL,
+		AttachmentType:  m.AttachmentType,
+		AttachmentName:  m.AttachmentName,
 		SessionID:       m.SessionID,
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,

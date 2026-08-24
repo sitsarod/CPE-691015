@@ -21,6 +21,7 @@ export default function AdminAnnouncementsPage() {
     title: '',
     content: '',
     image_url: '',
+    link: '',
     category_id: '',
     start_date: '',
     end_date: '',
@@ -62,6 +63,7 @@ export default function AdminAnnouncementsPage() {
         title: announcement.title,
         content: announcement.content,
         image_url: announcement.image_url || '',
+        link: announcement.link || '',
         category_id: announcement.category_id.toString(),
         start_date: announcement.start_date.split('T')[0], // Extract YYYY-MM-DD
         end_date: announcement.end_date.split('T')[0],
@@ -72,6 +74,7 @@ export default function AdminAnnouncementsPage() {
         title: '',
         content: '',
         image_url: '',
+        link: '',
         category_id: categories.length > 0 ? categories[0].id.toString() : '',
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -95,6 +98,7 @@ export default function AdminAnnouncementsPage() {
         title: formData.title,
         content: formData.content,
         image_url: formData.image_url,
+        link: formData.link.trim(),
         category_id: categoryId,
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
@@ -169,7 +173,7 @@ export default function AdminAnnouncementsPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-orange-500"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#CC0000]"></div>
       </div>
     );
   }
@@ -193,7 +197,7 @@ export default function AdminAnnouncementsPage() {
           </button>
           <button 
             onClick={() => handleOpenAnnouncementModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium shadow-md shadow-orange-500/20 transition-all hover:-translate-y-0.5"
+            className="flex items-center gap-2 px-4 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-all hover:-translate-y-0.5"
           >
             <Plus size={18} />
             สร้างประกาศ
@@ -349,7 +353,7 @@ export default function AdminAnnouncementsPage() {
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
                   placeholder="เช่น ปิดปรับปรุงระบบ"
                 />
               </div>
@@ -360,7 +364,7 @@ export default function AdminAnnouncementsPage() {
                   required
                   value={formData.category_id}
                   onChange={(e) => setFormData({...formData, category_id: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
                 >
                   <option value="" disabled>เลือกหมวดหมู่...</option>
                   {categories.map(cat => (
@@ -377,7 +381,7 @@ export default function AdminAnnouncementsPage() {
                     required
                     value={formData.start_date}
                     onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
                   />
                 </div>
                 <div>
@@ -387,7 +391,7 @@ export default function AdminAnnouncementsPage() {
                     required
                     value={formData.end_date}
                     onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
                   />
                 </div>
               </div>
@@ -399,8 +403,21 @@ export default function AdminAnnouncementsPage() {
                   rows={6}
                   value={formData.content}
                   onChange={(e) => setFormData({...formData, content: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all resize-none"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all resize-none"
                   placeholder="เขียนเนื้อหาประกาศทั้งหมดที่นี่..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ลิงก์ที่เกี่ยวข้อง <span className="font-normal text-gray-400">— ไม่บังคับ (เช่น ลิงก์สมัคร/รายละเอียดเพิ่มเติม)</span>
+                </label>
+                <input
+                  type="url"
+                  value={formData.link}
+                  onChange={(e) => setFormData({...formData, link: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
+                  placeholder="https://example.com/..."
                 />
               </div>
 
@@ -414,7 +431,7 @@ export default function AdminAnnouncementsPage() {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium shadow-md shadow-orange-500/20 transition-colors"
+                  className="px-5 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-colors"
                 >
                   บันทึกประกาศ
                 </button>
@@ -443,7 +460,7 @@ export default function AdminAnnouncementsPage() {
                 autoFocus
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all mb-6"
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all mb-6"
                 placeholder="เช่น โปรโมชั่น"
               />
               <div className="flex justify-end gap-3">
@@ -456,7 +473,7 @@ export default function AdminAnnouncementsPage() {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-900 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium transition-colors"
                 >
                   เพิ่มหมวดหมู่
                 </button>
