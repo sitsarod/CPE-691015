@@ -1,67 +1,66 @@
 // frontend/src/app/login/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation"; 
+import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/Button";
 import { loginAPI } from "@/services/authAPI";
+import { saveSession } from "@/services/session";
 
-interface LoginResponse {
-  token: string;
-  user: {
-    id: number;
-    role: string;
-    firstName: string;
-    email: string;
-  };
-  customer: {
-    nickname: string;
-    qrImage: string;
-  };
+// ⚠️ interface LoginResponse ถูกลบออกแล้ว
+//
+// ประกาศไว้ตั้งแต่ต้นไฟล์แต่ไม่มีบรรทัดไหนใช้เลย ชนิดจริงที่ loginAPI คืนคือ
+// AuthResponseDTO ใน types/auth.ts การมีอยู่สองชุดที่ไม่ตรงกันชวนให้เข้าใจผิด
+// ว่าเซิร์ฟเวอร์ส่งอะไรกลับมาบ้าง
+
+/**
+ * หน้าเข้าสู่ระบบ
+ *
+ * ห่อด้วย Suspense เพราะข้างในใช้ useSearchParams ซึ่ง Next.js บังคับให้ต้องมี
+ * ขอบเขต Suspense ครอบ ไม่งั้นจะเตือนตอน build
+ */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
 }
 
-export default function LoginPage() {
-  const router = useRouter(); 
+function LoginForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  
- 
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  // แจ้งเตือนเมื่อถูกเด้งมาหน้านี้เพราะเซสชันหมดอายุ (SessionGuard แนบ ?expired=1 มา)
-  const [sessionExpired, setSessionExpired] = useState(false);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("expired") === "1") {
-      setSessionExpired(true);
-    }
-  }, []);
+  /**
+   * แจ้งเตือนเมื่อถูกเด้งมาหน้านี้เพราะเซสชันหมดอายุ (SessionGuard แนบ ?expired=1 มา)
+   *
+   * อ่านค่าตอนเรนเดอร์ตรง ๆ ไม่ต้องเก็บเป็น state
+   *
+   * ⚠️ ของเดิมอ่าน window.location.search ใน useEffect ซึ่งมีปัญหาสองอย่าง:
+   * ต้องเรนเดอร์สองรอบทุกครั้งที่เข้าหน้า และรอบแรกข้อความเตือนจะยังไม่ขึ้น
+   * ทำให้เห็นหน้าล็อกอินเปล่า ๆ แวบหนึ่งก่อนข้อความจะโผล่
+   *
+   * useSearchParams ของ Next.js อ่านได้ตั้งแต่รอบแรกและทำงานถูกต้องกับ
+   * การเรนเดอร์ฝั่งเซิร์ฟเวอร์ด้วย
+   */
+  const searchParams = useSearchParams();
+  const sessionExpired = searchParams.get("expired") === "1";
 
- 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setIsLoading(true);
 
-try {
+    try {
       const data = await loginAPI({ email, password });
 
-      localStorage.setItem("token", data.token);
-      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
-      localStorage.setItem("role", data.user.role);
-      localStorage.setItem("firstName", data.user.firstName);
-      localStorage.setItem("lastName", data.user.lastName ?? "");
-      localStorage.setItem("email", data.user.email);
-      localStorage.setItem("user_id", data.user.id.toString());
-      if (data.customer?.qrImage) {
-    localStorage.setItem("qrImage", data.customer.qrImage);
-  } else {
-    
-    localStorage.setItem("qrImage", `data:image/png;base64,...`); 
-  }
+      saveSession(data);
 
       if (data.user.role === "admin") {
         router.push("/admin/dashboard");

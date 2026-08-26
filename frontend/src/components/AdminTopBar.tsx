@@ -1,5 +1,7 @@
 "use client";
 
+import { clearSession } from "@/services/session";
+
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -24,11 +26,15 @@ export default function CustomerTopbar() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("user_name");
-    localStorage.removeItem("user_email");
+    // ⚠️ ห้ามลบคีย์ทีละตัวตรงนี้ ให้เพิ่มที่ services/session.ts แทน
+    //
+    // เดิมสามหน้าลบกันคนละชุดและผิดกันทั้งสาม: สองหน้าลบ "user_name" กับ
+    // "user_email" ซึ่งเป็นคีย์ที่ระบบไม่เคยเขียนเลย (ของจริงคือ firstName /
+    // lastName / email) จึงเหลือชื่อกับอีเมลค้างในเครื่องหลังออกจากระบบ
+    //
+    // และไม่มีหน้าไหนลบ refresh_token เลยสักหน้า ซึ่งอันตรายที่สุด
+    // เพราะ token ตัวนั้นอายุ 7 วันและใช้ขอสิทธิ์เข้าระบบใหม่ได้
+    clearSession();
 
     router.push("/");
     
