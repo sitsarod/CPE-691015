@@ -1,0 +1,73 @@
+"use client";
+
+import { BookOpen, CalendarClock } from "lucide-react";
+import { StudentListResponseDTO } from "@/services/userAPI";
+import { Column } from "@/components/admin/DataTable";
+import { RowActionMenu } from "@/components/admin/ManagementUI";
+import { getId } from "./useStudentManagement";
+
+/**
+ * นิยามคอลัมน์ของตารางนักเรียน
+ *
+ * ⚠️ ใช้กับหน้าจอคอมพิวเตอร์เท่านั้น — ฝั่งมือถือต้องออกแบบเป็นการ์ดใหม่
+ */
+export function buildStudentColumns(actions: {
+  onView: (item: StudentListResponseDTO) => void;
+  onDelete: (item: StudentListResponseDTO) => void;
+  onOpenEnrollments: (item: StudentListResponseDTO) => void;
+}): Column<StudentListResponseDTO>[] {
+  return [
+    {
+      header: "นักเรียน",
+      render: (item) => (
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-gray-900">
+              {item.firstName} {item.lastName}
+            </span>
+            {item.nickname && <span className="text-xs text-gray-400">({item.nickname})</span>}
+          </div>
+          <span className="mt-0.5 text-xs text-gray-400">{item.email || `ID #${getId(item)}`}</span>
+        </div>
+      ),
+    },
+    {
+      header: "เบอร์โทรศัพท์",
+      render: (item) => <span className="text-gray-600">{item.phoneNumber || "-"}</span>,
+    },
+    {
+      header: "สิทธิ์เรียน",
+      render: (item) =>
+        (item.graceEnrollments ?? 0) > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
+            <CalendarClock className="h-3 w-3" />
+            รอขยายสิทธิ์ {item.graceEnrollments} คอร์ส
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">ปกติ</span>
+        ),
+    },
+    {
+      header: "การจัดการ",
+      className: "text-right w-44",
+      render: (item) => (
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => actions.onOpenEnrollments(item)}
+            title="ดูคอร์สและขยายสิทธิ์"
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
+              (item.graceEnrollments ?? 0) > 0
+                ? "border-[#CC0000] bg-red-50 text-[#CC0000] hover:bg-red-100"
+                : "border-gray-300 bg-white text-gray-600 hover:border-[#CC0000] hover:text-[#CC0000]"
+            }`}
+          >
+            <BookOpen className="h-4 w-4" />
+            คอร์สเรียน
+          </button>
+          <RowActionMenu onView={() => actions.onView(item)} onDelete={() => actions.onDelete(item)} />
+        </div>
+      ),
+    },
+  ];
+}
