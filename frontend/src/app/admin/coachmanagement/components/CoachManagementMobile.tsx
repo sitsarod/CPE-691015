@@ -1,6 +1,5 @@
 "use client";
-
-import { MobileNotReady } from "@/components/admin/shared/AdminPageShell";
+import { MobilePlaceholder } from "@/components/admin/shared/AdminPageShell";
 
 import type { CoachManagement } from "./useCoachManagement";
 
@@ -34,5 +33,5 @@ import type { CoachManagement } from "./useCoachManagement";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function CoachManagementMobile({ manager }: { manager: CoachManagement }) {
-  return <MobileNotReady />;
+  return <MobilePlaceholder />;
 }

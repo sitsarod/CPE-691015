@@ -1,6 +1,6 @@
 "use client";
+import { MobilePlaceholder } from "@/components/admin/shared/AdminPageShell";
 
-import { MobileNotReady } from "@/components/admin/shared/AdminPageShell";
 
 import type { MemberManagement } from "./useMemberManagement";
 
@@ -50,5 +50,5 @@ import type { MemberManagement } from "./useMemberManagement";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function MemberManagementMobile({ manager }: { manager: MemberManagement }) {
-  return <MobileNotReady />;
+  return <MobilePlaceholder />;
 }
