@@ -71,15 +71,11 @@ export function AdminErrorBanner({ message }: { message: string | null }) {
   );
 }
 
+
 /**
- * ข้อความแทนหน้าจอมือถือที่ยังไม่ได้ทำ
- *
- * ⚠️ ตัวนี้เป็นของชั่วคราว ตั้งใจให้ถูกลบทิ้ง
- *
- * เมื่อหน้าจอมือถือของหน้าไหนเขียนเสร็จ ให้เอาการเรียกตัวนี้ออกจากหน้านั้น
- * ถ้าวันหนึ่งไม่มีใครเรียกแล้ว ให้ลบไฟล์ส่วนนี้ทิ้งได้เลย
+ * โครงสร้างสำหรับหน้าจอมือถือ (โครงสร้างพื้นฐาน)
  */
-export function MobileNotReady() {
+export function MobilePlaceholder() {
   return (
     <div className="p-6 text-center text-sm text-gray-400">
       หน้าจอสำหรับมือถือยังอยู่ระหว่างการพัฒนา

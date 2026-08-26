@@ -1,6 +1,6 @@
 "use client";
+import { MobilePlaceholder } from "@/components/admin/shared/AdminPageShell";
 
-import { MobileNotReady } from "@/components/admin/shared/AdminPageShell";
 
 import type { StudentManagement } from "./useStudentManagement";
 
@@ -30,5 +30,5 @@ import type { StudentManagement } from "./useStudentManagement";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function StudentManagementMobile({ manager }: { manager: StudentManagement }) {
-  return <MobileNotReady />;
+  return <MobilePlaceholder />;
 }
