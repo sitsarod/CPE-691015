@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, TrendingUp, TrendingDown, Award } from "lucide-react";
+import { Bell, TrendingUp, TrendingDown } from "lucide-react";
 import { fmtBaht, fmtPct } from "./buildDashboard";
 import type {
   ActivityRow,
@@ -51,7 +51,8 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 }
 
 export function RevenueChart({ chart }: { chart: ChartPoint[] }) {
-  const chartMax = Math.max(1, ...chart.map((d) => d.revenue));
+  // scale เทียบกับค่ามากสุดของทั้งรายได้และค่าใช้จ่าย เพื่อให้ทั้งสองแท่งอยู่ในสเกลเดียวกัน
+  const chartMax = Math.max(1, ...chart.flatMap((d) => [d.revenue, d.expense]));
   return (
     <div className="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm lg:col-span-2">
       <div className="flex items-center justify-between">
@@ -62,24 +63,24 @@ export function RevenueChart({ chart }: { chart: ChartPoint[] }) {
         </div>
       </div>
 
-      <div className="mt-8 flex h-64 items-end justify-between gap-3 sm:gap-6">
+      {/* แท่งคู่ต่อเดือน: น้ำเงิน = รายได้ · แดง = ค่าใช้จ่าย (สีตรงกับ legend) */}
+      <div className="mt-8 flex h-64 items-end justify-between gap-2 sm:gap-4">
         {chart.map((d) => {
           const revH = (d.revenue / chartMax) * 100;
           const expH = (d.expense / chartMax) * 100;
           return (
             <div key={d.label} className="group flex h-full flex-1 flex-col items-center gap-3">
-              <div className="relative flex w-full flex-1 items-end justify-center">
+              <div className="flex w-full flex-1 items-end justify-center gap-1 sm:gap-1.5">
                 <div
-                  className="w-full max-w-[46px] rounded-t-lg bg-blue-200/70 transition-all group-hover:bg-blue-300/70"
+                  className="w-full max-w-[18px] rounded-t-md bg-[#2563EB] opacity-90 transition-opacity group-hover:opacity-100"
                   style={{ height: `${revH}%` }}
                   title={`รายได้ ${fmtBaht(d.revenue)}`}
-                >
-                  <div
-                    className="w-full rounded-t-lg bg-gray-200/80"
-                    style={{ height: `${revH > 0 ? (expH / revH) * 100 : 0}%` }}
-                    title={`ค่าใช้จ่าย ${fmtBaht(d.expense)}`}
-                  />
-                </div>
+                />
+                <div
+                  className="w-full max-w-[18px] rounded-t-md bg-[#E63946] opacity-90 transition-opacity group-hover:opacity-100"
+                  style={{ height: `${expH}%` }}
+                  title={`ค่าใช้จ่าย ${fmtBaht(d.expense)}`}
+                />
               </div>
               <span className="text-xs font-medium text-gray-400">{d.label}</span>
             </div>
@@ -163,30 +164,39 @@ export function RealtimeInsights({ insights }: { insights: Insights }) {
       </div>
 
       <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
-        <p className="mb-3 text-sm font-medium text-gray-500">
-          ทีมผู้สอน ({insights.coachCount} คน)
-        </p>
-        <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-100 text-sm font-bold text-rose-600">
-            {insights.topCoachName.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-bold text-gray-900">{insights.topCoachName}</p>
-              {insights.topCoachStudents > 0 && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                  <Award className="h-3 w-3" />
-                  โค้ชดีเด่น
-                </span>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-500">ทีมผู้สอน ({insights.coachCount} คน)</p>
+          <Link href="/admin/coachmanagement" className="text-xs font-semibold text-[#CC0000] hover:underline">
+            จัดการ
+          </Link>
+        </div>
+        {insights.coachCount === 0 ? (
+          <p className="text-sm text-gray-400">ยังไม่มีโค้ชในระบบ</p>
+        ) : (
+          <div className="flex items-center gap-3">
+            {/* avatar ตัวย่อซ้อนกัน แสดงไม่เกิน 4 คน ที่เหลือรวมเป็น +N */}
+            <div className="flex -space-x-2">
+              {insights.coachNames.slice(0, 4).map((name, i) => (
+                <div
+                  key={i}
+                  title={name}
+                  className="grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-rose-100 text-xs font-bold text-rose-600"
+                >
+                  {name.slice(0, 2).toUpperCase()}
+                </div>
+              ))}
+              {insights.coachCount > 4 && (
+                <div className="grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-gray-100 text-[11px] font-bold text-gray-500">
+                  +{insights.coachCount - 4}
+                </div>
               )}
             </div>
-            <p className="mt-0.5 truncate text-xs text-gray-500">
-              {insights.topCoachStudents > 0
-                ? `ดูแลนักเรียน ${insights.topCoachStudents} คน · สอนไปแล้ว ${insights.topCoachSessions} คาบ`
-                : "โค้ชในระบบ"}
+            <p className="min-w-0 flex-1 truncate text-xs text-gray-500">
+              {insights.coachNames.slice(0, 3).join(" · ")}
+              {insights.coachCount > 3 ? ` และอีก ${insights.coachCount - 3} คน` : ""}
             </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
