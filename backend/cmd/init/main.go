@@ -90,6 +90,7 @@ func main() {
 	seedCoursesAndPackages(db)
 	seedBankAccounts(db)
 	seedHomeContent(db)
+	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
 }
 
 

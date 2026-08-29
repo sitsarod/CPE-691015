@@ -341,62 +341,17 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   );
   const sessionUsage =
     totalSessions > 0 ? ((totalSessions - remainingSessions) / totalSessions) * 100 : 0;
-  // ---- โค้ชดีเด่น: จัดอันดับจากผลงานจริง ----
-  // โยงโค้ชกับคอร์สผ่านเจ้าของคอร์ส (course.user email) แล้วนับนักเรียน/คาบที่สอนไปแล้ว
-  // ต่อโค้ช จาก enrollment ที่กำลังเรียน/เรียนจบ (active/completed)
-  const coachByEmail = new Map<string, Coach>();
-  coaches.forEach((c) => {
-    const email = c.email?.toLowerCase().trim();
-    if (email) coachByEmail.set(email, c);
-  });
-  const coachEmailByCourseId = new Map<number, string>();
-  courses.forEach((c) => {
-    const email = c.user?.email?.toLowerCase().trim();
-    if (email && coachByEmail.has(email)) coachEmailByCourseId.set(c.id, email);
-  });
-  const statsByCoach = new Map<string, { students: Set<string>; sessions: number }>();
-  enrollments.forEach((e) => {
-    const st = e.status?.toLowerCase();
-    if (st !== "active" && st !== "completed") return;
-    const courseId = e.package?.course?.id;
-    if (courseId == null) return;
-    const email = coachEmailByCourseId.get(courseId);
-    if (!email) return;
-    let agg = statsByCoach.get(email);
-    if (!agg) {
-      agg = { students: new Set(), sessions: 0 };
-      statsByCoach.set(email, agg);
-    }
-    agg.students.add(e.customer?.email?.trim() || `enr:${e.id}`);
-    agg.sessions += Math.max(0, (e.total_sessions || 0) - (e.remaining_sessions || 0));
-  });
-
-  let topCoachEmail: string | null = null;
-  let topCoachStudents = 0;
-  let topCoachSessions = 0;
-  statsByCoach.forEach((agg, email) => {
-    const students = agg.students.size;
-    if (students > topCoachStudents || (students === topCoachStudents && agg.sessions > topCoachSessions)) {
-      topCoachStudents = students;
-      topCoachSessions = agg.sessions;
-      topCoachEmail = email;
-    }
-  });
-  // ถ้าไม่มีข้อมูลผลงานเลย ให้ fallback เป็นโค้ชคนแรก (สถิติ = 0 การ์ดจะไม่ติดป้ายดีเด่น)
-  const topCoach = topCoachEmail ? coachByEmail.get(topCoachEmail) : coaches[0];
+  // ---- ทีมผู้สอน: รายชื่อโค้ชในระบบ (สำหรับ roster บนแดชบอร์ด) ----
+  const coachNames = coaches.map(
+    (c) => c.nickname || `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "โค้ช"
+  );
 
   const insights: Insights = {
     newThisMonth,
     newDelta: pctChange(newThisMonth, newLastMonth),
     sessionUsage,
     coachCount: coaches.length,
-    topCoachName: topCoach
-      ? topCoach.nickname ||
-        `${topCoach.firstName ?? ""} ${topCoach.lastName ?? ""}`.trim() ||
-        "โค้ช"
-      : "—",
-    topCoachStudents,
-    topCoachSessions,
+    coachNames,
   };
 
   return { kpis, chart: buckets, courses: courseRows, activities, alerts, insights };

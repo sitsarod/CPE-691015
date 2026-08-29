@@ -13,6 +13,83 @@ const MONTH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.
 const COLOR_INCOME = '#059669';
 const COLOR_EXPENSE = '#f43f5e';
 
+// สีประเภท (categorical) ตามลำดับคงที่จาก dataviz reference palette — ผ่าน validator แล้ว
+// (worst adjacent CVD ΔE 9.1) สีผูกกับ "ประเภท" (entity) ไม่ใช่ตามขนาด และไม่วนซ้ำ
+const CATEGORICAL = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+
+// รายจ่าย: ผูกสี+ชื่อไทยตายตัวกับประเภท (สีเดิมเสมอไม่ว่าช่วงเวลาไหน)
+const EXPENSE_META: Record<string, { label: string; color: string }> = {
+  coach_wages:  { label: 'ค่าจ้างโค้ช',        color: CATEGORICAL[0] },
+  court_rental: { label: 'ค่าเช่าสนาม',        color: CATEGORICAL[1] },
+  equipment:    { label: 'ค่าอุปกรณ์',         color: CATEGORICAL[2] },
+  advertising:  { label: 'ค่าโฆษณา',           color: CATEGORICAL[3] },
+  other:        { label: 'อื่นๆ',              color: CATEGORICAL[4] },
+  coach_other:  { label: 'รายได้อื่น (โค้ช)',  color: CATEGORICAL[5] },
+};
+
+interface DonutSlice { label: string; value: number; color: string }
+
+// กราฟโดนัท + legend — ใช้ร่วมทั้งรายรับและรายจ่าย
+// legend โชว์ค่าเป๊ะ (relief rule: บาง slot contrast < 3:1 จึงต้องมี label กำกับ)
+function DonutBreakdown({ slices, total, centerValue }: { slices: DonutSlice[]; total: number; centerValue: string }) {
+  const size = 132;
+  const stroke = 18;
+  const r = (size - stroke) / 2;
+  const C = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-5">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+          {/* ราง (track) */}
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f0ec" strokeWidth={stroke} />
+          {slices.map((s, i) => {
+            const frac = total > 0 ? s.value / total : 0;
+            const len = Math.max(frac * C - 2, 0); // เว้นช่อง 2px ระหว่างชิ้น (surface gap)
+            const seg = (
+              <circle
+                key={i}
+                cx={size / 2}
+                cy={size / 2}
+                r={r}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={stroke}
+                strokeDasharray={`${len} ${C - len}`}
+                strokeDashoffset={-offset}
+              >
+                <title>{`${s.label}: ฿${s.value.toLocaleString()} (${total > 0 ? Math.round(frac * 100) : 0}%)`}</title>
+              </circle>
+            );
+            offset += frac * C;
+            return seg;
+          })}
+        </svg>
+        {/* ยอดรวมตรงกลาง */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[9px] font-semibold text-slate-400">รวม</span>
+          <span className="text-sm font-black text-slate-800">{centerValue}</span>
+        </div>
+      </div>
+
+      {/* legend — จุดสีบอกประเภท, ข้อความเป็นสีหมึก (ไม่ใช้สีซีรีส์กับตัวอักษร) */}
+      <ul className="flex-1 w-full space-y-2">
+        {slices.map((s, i) => {
+          const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+          return (
+            <li key={i} className="flex items-center gap-2 text-xs">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+              <span className="flex-1 truncate text-slate-700" title={s.label}>{s.label}</span>
+              <span className="shrink-0 font-bold text-slate-900 tabular-nums">฿{s.value.toLocaleString()}</span>
+              <span className="w-9 shrink-0 text-right text-slate-400 tabular-nums">{pct}%</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export interface FinancialSummaryTabProps {
   billings: BillingDTO[];
   expenses: Expense[];
@@ -107,13 +184,9 @@ export default function FinancialSummaryTab({
     }
 
     let totalExpenses = 0;
-    const expensesBreakdown: { [key: string]: number } = {
-      coach_wages: 0,
-      court_rental: 0,
-      equipment: 0,
-      advertising: 0,
-      other: 0
-    };
+    // เริ่มเป็นออบเจ็กต์ว่าง (เหมือนรายรับ) เติมเฉพาะประเภทที่มีรายจ่ายจริงในช่วงเวลานั้น
+    // ถ้าไม่ตั้งไว้แบบนี้ จะมี 5 คีย์ = 0 ตลอด ทำให้แสดงแท่ง 0% ตลอดและไม่เคยขึ้น empty-state
+    const expensesBreakdown: { [key: string]: number } = {};
     for (const e of expenses) {
       if (!isDateInTimeframe(e.expensedate)) continue;
       totalExpenses += e.expenseamount;
@@ -133,6 +206,32 @@ export default function FinancialSummaryTab({
       expensesBreakdown
     };
   }, [billings, expenses, isDateInTimeframe]);
+
+  // ชิ้นโดนัทรายจ่าย: สีตายตัวตามประเภท เรียงมาก→น้อย
+  const expenseSlices = useMemo<DonutSlice[]>(() =>
+    Object.entries(summaryStats.expensesBreakdown)
+      .filter(([, v]) => v > 0)
+      .map(([type, value]) => ({
+        label: EXPENSE_META[type]?.label || 'อื่นๆ',
+        value,
+        color: EXPENSE_META[type]?.color || CATEGORICAL[7],
+      }))
+      .sort((a, b) => b.value - a.value),
+    [summaryStats.expensesBreakdown]
+  );
+
+  // ชิ้นโดนัทรายรับ: ประเภทเป็นชื่อ dynamic → ไล่สลอตสีตามชื่อที่เรียงคงที่ (ประเภทเดิมได้สีเดิม)
+  const incomeSlices = useMemo<DonutSlice[]>(() => {
+    const entries = Object.entries(summaryStats.coursesBreakdown).filter(([, v]) => v > 0);
+    const order = new Map(entries.map(([n]) => n).sort().map((n, i) => [n, i]));
+    return entries
+      .map(([name, value]) => ({
+        label: name,
+        value,
+        color: CATEGORICAL[(order.get(name) ?? 7) % CATEGORICAL.length],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [summaryStats.coursesBreakdown]);
 
   // แนวโน้มรายรับ (บิลที่ชำระแล้ว) เทียบรายจ่าย ย้อนหลัง 6 เดือน — ไม่ผูกกับตัวกรองช่วงเวลาด้านบน
   const monthlyTrend = useMemo(() => {
@@ -491,34 +590,17 @@ export default function FinancialSummaryTab({
               <h3 className="text-md font-bold text-slate-800">รายรับแยกตามประเภท</h3>
             </div>
 
-            <div className="space-y-4">
-              {Object.entries(summaryStats.coursesBreakdown).length === 0 ? (
+            <div>
+              {incomeSlices.length === 0 ? (
                 <div className="py-10 text-center text-slate-400 text-xs">
                   ยังไม่มีสถิติยอดรายรับ
                 </div>
               ) : (
-                Object.entries(summaryStats.coursesBreakdown).map(([typeName, totalAmount]) => {
-                  const totalPaid = summaryStats.totalPaid || 1;
-                  const percentage = Math.round((totalAmount / totalPaid) * 100);
-                  return (
-                    <div key={typeName} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-700 truncate max-w-[120px]" title={typeName}>
-                          {typeName}
-                        </span>
-                        <span className="font-bold text-slate-900">
-                          ฿{totalAmount.toLocaleString()} ({percentage}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-[#CD0D13] h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
+                <DonutBreakdown
+                  slices={incomeSlices}
+                  total={summaryStats.totalPaid}
+                  centerValue={`฿${summaryStats.totalPaid.toLocaleString()}`}
+                />
               )}
             </div>
           </div>
@@ -531,42 +613,17 @@ export default function FinancialSummaryTab({
               <h3 className="text-md font-bold text-slate-800">รายจ่ายแยกตามประเภท</h3>
             </div>
 
-            <div className="space-y-4">
-              {Object.entries(summaryStats.expensesBreakdown).length === 0 ? (
+            <div>
+              {expenseSlices.length === 0 ? (
                 <div className="py-10 text-center text-slate-400 text-xs">
                   ยังไม่มีสถิติยอดรายจ่าย
                 </div>
               ) : (
-                Object.entries(summaryStats.expensesBreakdown).map(([typeName, totalAmount]) => {
-                  const totalExpenses = summaryStats.totalExpenses || 1;
-                  const percentage = Math.round((totalAmount / totalExpenses) * 100);
-
-                  let displayName = "อื่นๆ";
-                  if (typeName === "coach_wages") displayName = "ค่าจ้างโค้ช";
-                  else if (typeName === "court_rental") displayName = "ค่าเช่าสนาม";
-                  else if (typeName === "equipment") displayName = "ค่าอุปกรณ์";
-                  else if (typeName === "advertising") displayName = "ค่าโฆษณา";
-                  else if (typeName === "other") displayName = "อื่นๆ";
-
-                  return (
-                    <div key={typeName} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-700 truncate max-w-[120px]" title={displayName}>
-                          {displayName}
-                        </span>
-                        <span className="font-bold text-slate-900">
-                          ฿{totalAmount.toLocaleString()} ({percentage}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-rose-500 h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
+                <DonutBreakdown
+                  slices={expenseSlices}
+                  total={summaryStats.totalExpenses}
+                  centerValue={`฿${summaryStats.totalExpenses.toLocaleString()}`}
+                />
               )}
             </div>
           </div>

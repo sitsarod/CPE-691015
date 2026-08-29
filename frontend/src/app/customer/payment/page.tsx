@@ -253,6 +253,11 @@ export default function CustomerPaymentPage() {
   const paidBillings = billings.filter(b => b.billingstatus === "paid");
   const totalPaidAmount = paidBillings.reduce((sum, item) => sum + item.billingamount, 0);
 
+  // ใบแจ้งหนี้ที่ยังดำเนินการอยู่ (รอแนบสลิป/รอแอดมินตรวจ) — ใช้เป็น badge บน tab ประวัติ
+  const activeInvoicesCount = invoices.filter(
+    (inv) => inv.invoicestatus === "pending" || inv.invoicestatus === "waitcheck"
+  ).length;
+
   if (isLoading) {
     return <PaymentSkeleton />;
   }
@@ -309,7 +314,7 @@ export default function CustomerPaymentPage() {
               activeTab === "billings" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
             }`}
           >
-            {billings.length}
+            {unpaidBillings.length}
           </span>
         </button>
         <button
@@ -322,13 +327,15 @@ export default function CustomerPaymentPage() {
         >
           <span className="sm:hidden">ใบแจ้งหนี้</span>
           <span className="hidden sm:inline">ประวัติใบแจ้งหนี้</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
-              activeTab === "invoices" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            {invoices.length}
-          </span>
+          {activeInvoicesCount > 0 && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums transition-colors ${
+                activeTab === "invoices" ? "bg-[#FFF0F0] text-[#CC0000]" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {activeInvoicesCount}
+            </span>
+          )}
         </button>
       </div>
 

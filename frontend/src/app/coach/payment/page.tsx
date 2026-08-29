@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Modal from "@/components/Modal";
+import CoachBankAccountCard from "@/components/settings/CoachBankAccountCard";
 import {
   Loader2,
   AlertCircle,
@@ -11,8 +12,6 @@ import {
   TrendingUp,
   TrendingDown,
   ChevronDown,
-  ChevronUp,
-  ClipboardList,
   Gift,
   UserCircle,
   Pencil,
@@ -63,6 +62,12 @@ export default function CoachPaymentPage() {
   const [payRate, setPayRate] = useState(0);
   const [paymentType, setPaymentType] = useState<"per_session" | "monthly">("per_session");
   const [avatarUrl, setAvatarUrl] = useState("");
+  // ข้อมูลบัญชีรับเงิน (แก้ผ่าน modal ที่เปิดจากไอคอนดินสอ)
+  const [bankAccount, setBankAccount] = useState("");
+  const [paymentInfo, setPaymentInfo] = useState("");
+  const [promptPay, setPromptPay] = useState("");
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [bankModalKey, setBankModalKey] = useState(0); // บังคับ remount การ์ดให้ค่าเริ่มต้นใหม่ทุกครั้งที่เปิด
   const [wages, setWages] = useState<CoachWageEntry[]>([]);
   const [schedules, setSchedules] = useState<WorkScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,6 +133,9 @@ export default function CoachPaymentPage() {
         setPayRate(myProfile.pay_rate);
         setPaymentType(myProfile.payment_type);
         setAvatarUrl(myProfile.profile_picture || "");
+        setBankAccount(myProfile.bank_account || "");
+        setPaymentInfo(myProfile.payment_info || "");
+        setPromptPay(myProfile.prompt_pay || "");
       }
 
       const [wagesData, schedulesData] = await Promise.all([
@@ -145,6 +153,24 @@ export default function CoachPaymentPage() {
       isFetchingRef.current = false;
       lastFetchRef.current = Date.now();
     }
+  };
+
+  // เปิด modal แก้บัญชี — ดึงค่าบัญชีล่าสุดก่อนเปิด (กันค่าค้างเก่าหลังเพิ่งแก้) แล้ว remount การ์ด
+  const openBankEditor = async () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const p = await fetchMyCoachProfile(token);
+        setBankAccount(p.bank_account || "");
+        setPaymentInfo(p.payment_info || "");
+        setPromptPay(p.prompt_pay || "");
+        if (!coachId) setCoachId(p.id);
+      } catch {
+        /* ใช้ค่าที่มีอยู่ ถ้าดึงใหม่ไม่สำเร็จ */
+      }
+    }
+    setBankModalKey((k) => k + 1);
+    setIsBankModalOpen(true);
   };
 
   useEffect(() => {
@@ -276,7 +302,11 @@ export default function CoachPaymentPage() {
     const thisMonth = sumFor(now.getFullYear(), now.getMonth());
     const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonth = sumFor(prevDate.getFullYear(), prevDate.getMonth());
-    const delta = prevMonth > 0 ? ((thisMonth - prevMonth) / prevMonth) * 100 : null;
+    // prev > 0: คำนวณปกติ (ไม่มี cap — โตเกิน 100% ได้ และตกได้ถึง -100%)
+    // prev = 0 แต่เดือนนี้มีรายได้: โตจากศูนย์คำนวณ % ไม่ได้ → Infinity ให้แสดง "ใหม่"
+    // prev = 0 และเดือนนี้ก็ 0: ไม่มีอะไรเทียบ → null (ซ่อนบรรทัด)
+    const delta =
+      prevMonth > 0 ? ((thisMonth - prevMonth) / prevMonth) * 100 : thisMonth > 0 ? Infinity : null;
     return { currentMonthTotal: thisMonth, momDeltaPct: delta };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wageEntries]);
@@ -354,19 +384,14 @@ export default function CoachPaymentPage() {
   }, [currentYearGroup]);
 
   if (isLoading) {
-    return (
-      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center text-gray-500">
-        <Loader2 className="w-12 h-12 animate-spin text-[#CC0000] mb-4" />
-        <span className="text-sm font-semibold tracking-wide animate-pulse">กำลังโหลดข้อมูลการเงิน...</span>
-      </div>
-    );
+    return <CoachPaymentSkeleton />;
   }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 animate-fadeIn">
       {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
       {isRefreshing && (
-        <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
+        <div className="fixed left-1/2 top-[104px] z-30 -trangray-x-1/2 animate-fadeIn">
           <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-4 py-1.5 text-xs font-bold text-gray-600 shadow-md backdrop-blur">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[#CC0000]" />
             กำลังอัปเดตข้อมูล...
@@ -398,28 +423,29 @@ export default function CoachPaymentPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
-              <p className="text-[11px] text-slate-400 truncate">
+              <p className="text-sm font-bold text-gray-800 truncate">{userName}</p>
+              <p className="text-[11px] text-gray-400 truncate">
                 {paymentType === "monthly" ? "โค้ช · รายเดือน" : "โค้ช · รายคาบ"}
               </p>
             </div>
-            <Link
-              href="/coach/profile"
-              aria-label="แก้ไขข้อมูลบัญชี"
+            <button
+              type="button"
+              onClick={openBankEditor}
+              aria-label="แก้ไขบัญชีรับเงิน"
               className="p-2 rounded-full text-[#CC0000] hover:bg-[#FFF0F0] transition-colors flex-shrink-0"
             >
               <Pencil className="w-4 h-4" />
-            </Link>
+            </button>
           </div>
 
           <div className="mt-5 space-y-2">
             <div className="flex items-end justify-between gap-3">
-              <span className="text-xs text-slate-500">ยอดเงินที่ได้รับเดือนนี้</span>
+              <span className="text-xs text-gray-500">ยอดเงินที่ได้รับเดือนนี้</span>
               <span className="text-2xl font-black text-[#CC0000] tabular-nums">฿{receivedThisMonth.toLocaleString()}</span>
             </div>
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-              <span className="text-xs text-slate-500">ยอดเงินที่ได้รับปีนี้</span>
-              <span className="text-sm font-bold text-slate-700 tabular-nums">
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+              <span className="text-xs text-gray-500">ยอดเงินที่ได้รับปีนี้</span>
+              <span className="text-sm font-bold text-gray-700 tabular-nums">
                 ฿{receivedThisYear.toLocaleString()}
               </span>
             </div>
@@ -428,13 +454,13 @@ export default function CoachPaymentPage() {
 
         {/* เลือกเดือนรายการธุรกรรม */}
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">เลือกเดือนรายการธุรกรรม</label>
+          <label className="block text-xs font-semibold text-gray-500 mb-1.5">เลือกเดือนรายการธุรกรรม</label>
           <div className="relative">
             <select
               value={selectedTxMonth}
               onChange={(e) => setSelectedTxMonth(e.target.value)}
               disabled={availableTxMonths.length === 0}
-              className="w-full appearance-none bg-white border border-slate-200 rounded-xl shadow-sm pl-4 pr-10 py-3 text-sm font-bold text-slate-800 outline-none focus:border-[#CC0000] focus:ring-2 focus:ring-red-100 disabled:text-slate-400"
+              className="w-full appearance-none bg-white border border-gray-200 rounded-xl shadow-sm pl-4 pr-10 py-3 text-sm font-bold text-gray-800 outline-none focus:border-[#CC0000] focus:ring-2 focus:ring-red-100 disabled:text-gray-400"
             >
               {availableTxMonths.length === 0 ? (
                 <option value="">— ยังไม่มีรายการ —</option>
@@ -449,15 +475,15 @@ export default function CoachPaymentPage() {
                 })
               )}
             </select>
-            <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3.5 top-1/2 -trangray-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
         {/* รายการธุรกรรมของเดือนที่เลือก — จัดกลุ่มตามวัน (หัวข้อวันที่ + ยอดรวมของวัน) */}
         <div className="space-y-4">
           {groupedTransactions.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-12 text-center text-slate-400">
-              <Wallet className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-12 text-center text-gray-400">
+              <Wallet className="w-8 h-8 mx-auto mb-2 text-gray-300" />
               <p className="text-xs">ไม่มีรายการในเดือนนี้</p>
             </div>
           ) : (
@@ -465,7 +491,7 @@ export default function CoachPaymentPage() {
               <div key={group.key} className="space-y-2">
                 {/* หัวข้อวัน: วันที่มุมซ้าย + ยอดรวมของวันนั้นมุมขวา */}
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-slate-500">{group.label}</span>
+                  <span className="text-xs font-bold text-gray-500">{group.label}</span>
                   <span className="text-xs font-bold text-emerald-600 tabular-nums">
                     +฿{group.total.toLocaleString()}
                   </span>
@@ -479,13 +505,13 @@ export default function CoachPaymentPage() {
                       key={e.id}
                       onClick={() => setSelectedTx(e)}
                       aria-label="ดูรายละเอียดรายการ"
-                      className="w-full text-left bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-3.5 flex items-center justify-between gap-3 hover:border-[#CC0000]/40 hover:bg-slate-50/60 active:scale-[0.99] transition-all"
+                      className="w-full text-left bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3.5 flex items-center justify-between gap-3 hover:border-[#CC0000]/40 hover:bg-gray-50/60 active:scale-[0.99] transition-all"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-800 truncate">
+                        <p className="text-sm font-bold text-gray-800 truncate">
                           {e.expensedescription || (isBonus ? "รายได้อื่น ๆ" : "ค่าจ้างการสอน")}
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-gray-400 mt-0.5">
                           {isBonus ? "โบนัส / รายได้อื่น ๆ" : "ค่าจ้างการสอน"}
                         </p>
                       </div>
@@ -495,7 +521,7 @@ export default function CoachPaymentPage() {
                             +฿{e.expenseamount.toLocaleString()}
                           </p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
                     </button>
                   );
@@ -510,18 +536,18 @@ export default function CoachPaymentPage() {
           <div className="fixed inset-0 z-50">
             <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedTx(null)} />
             <div className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200">
-              <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+              <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-gray-200" />
 
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-black text-slate-800">รายละเอียดรายการ</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">รหัสรายการ #{selectedTx.id}</p>
+                  <h3 className="text-lg font-black text-gray-800">รายละเอียดรายการ</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">รหัสรายการ #{selectedTx.id}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedTx(null)}
                   aria-label="ปิด"
-                  className="p-2 -mr-2 rounded-full text-slate-400 hover:bg-slate-100 transition-colors flex-shrink-0"
+                  className="p-2 -mr-2 rounded-full text-gray-400 hover:bg-gray-100 transition-colors flex-shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -529,29 +555,29 @@ export default function CoachPaymentPage() {
 
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500 flex-shrink-0">จำนวนเงินที่ได้รับ</dt>
-                  <dd className="font-semibold text-slate-800 text-right tabular-nums">
+                  <dt className="text-gray-500 flex-shrink-0">จำนวนเงินที่ได้รับ</dt>
+                  <dd className="font-semibold text-gray-800 text-right tabular-nums">
                     ฿{selectedTx.expenseamount.toLocaleString()}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500 flex-shrink-0">ประเภท</dt>
-                  <dd className="font-semibold text-slate-800 text-right">
+                  <dt className="text-gray-500 flex-shrink-0">ประเภท</dt>
+                  <dd className="font-semibold text-gray-800 text-right">
                     {selectedTx.expensetype === "coach_other" ? "โบนัส / รายได้อื่น ๆ" : "ค่าจ้างการสอน"}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500 flex-shrink-0">วันที่ทำรายการ</dt>
-                  <dd className="font-semibold text-slate-800 text-right">{formatThaiDate(selectedTx.expensedate)}</dd>
+                  <dt className="text-gray-500 flex-shrink-0">วันที่ทำรายการ</dt>
+                  <dd className="font-semibold text-gray-800 text-right">{formatThaiDate(selectedTx.expensedate)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500 flex-shrink-0">รายละเอียด</dt>
-                  <dd className="font-semibold text-slate-800 text-right">{selectedTx.expensedescription || "-"}</dd>
+                  <dt className="text-gray-500 flex-shrink-0">รายละเอียด</dt>
+                  <dd className="font-semibold text-gray-800 text-right">{selectedTx.expensedescription || "-"}</dd>
                 </div>
                 {selectedTx.created_at && (
                   <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500 flex-shrink-0">บันทึกเมื่อ</dt>
-                    <dd className="font-semibold text-slate-800 text-right">{formatThaiDate(selectedTx.created_at)}</dd>
+                    <dt className="text-gray-500 flex-shrink-0">บันทึกเมื่อ</dt>
+                    <dd className="font-semibold text-gray-800 text-right">{formatThaiDate(selectedTx.created_at)}</dd>
                   </div>
                 )}
               </dl>
@@ -573,16 +599,16 @@ export default function CoachPaymentPage() {
       {/* ===================== เดสก์ท็อป (md+): สรุป / กราฟ / ตารางแบบเต็ม ===================== */}
       <div className="hidden md:block space-y-6">
       {wageEntries.length === 0 && otherEntries.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-20 text-center text-slate-400">
-          <Wallet className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-20 text-center text-gray-400">
+          <Wallet className="w-10 h-10 mx-auto mb-3 text-gray-300" />
           <p className="text-xs">ยังไม่มีประวัติค่าจ้างในขณะนี้</p>
         </div>
       ) : (
         <>
           {wageEntries.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-16 text-center text-slate-400">
-              <Wallet className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-              <p className="text-sm font-semibold text-slate-500">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-16 text-center text-gray-400">
+              <Wallet className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-500">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
               <p className="text-xs mt-1">เมื่อสถาบันบันทึกค่าจ้างการสอนให้ ระบบจะแสดงสรุปและกราฟรายได้ที่นี่</p>
             </div>
           ) : (
@@ -592,65 +618,101 @@ export default function CoachPaymentPage() {
             ref={statsScrollRef}
             className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory [&>*]:min-w-[78%] [&>*]:snap-center sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 sm:overflow-visible sm:snap-none sm:[&>*]:min-w-0"
           >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all">
-              <div className="p-3 rounded-xl bg-[#FFF0F0] text-[#CC0000] flex-shrink-0">
-                <Wallet className="w-6 h-6" />
+            {/* ค่าจ้างสะสม — แดง */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
+              <span className="absolute inset-y-0 left-0 w-1 bg-[#CC0000]" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#CC0000]" />
+                  <span className="text-sm font-bold text-gray-600">ค่าจ้างสะสมทั้งหมด</span>
+                </div>
+                <Wallet className="h-5 w-5 text-[#CC0000]" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ค่าจ้างสะสมทั้งหมด</p>
-                <p className="text-xl font-black text-slate-800 mt-0.5">฿{totalWages.toLocaleString()}</p>
+              <div className="mt-5 flex items-baseline gap-1">
+                <span className="text-base font-bold text-gray-400">฿</span>
+                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{totalWages.toLocaleString()}</span>
               </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all">
-              <div className="p-3 rounded-xl bg-blue-50 text-blue-600 flex-shrink-0">
-                <CalendarDays className="w-6 h-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ยอดรวมปี {selectedYear ?? "-"}</p>
-                <p className="text-xl font-black text-slate-800 mt-0.5">฿{(currentYearGroup?.total ?? 0).toLocaleString()}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">เฉลี่ย ฿{Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน</p>
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                <span className="text-xs text-gray-500">รวมทุกปีที่ผ่านมา</span>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all">
-              <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 flex-shrink-0">
-                <TrendingUp className="w-6 h-6" />
+            {/* ยอดรวมปี — น้ำเงิน */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
+              <span className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  <span className="text-sm font-bold text-gray-600">ยอดรวมปี {selectedYear ?? "-"}</span>
+                </div>
+                <CalendarDays className="h-5 w-5 text-blue-600" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ยอดเดือนนี้</p>
-                <p className="text-xl font-black text-slate-800 mt-0.5">฿{currentMonthTotal.toLocaleString()}</p>
-                {momDeltaPct !== null && (
-                  <p className={`text-[10px] font-bold mt-0.5 flex items-center gap-1 ${momDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {momDeltaPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {momDeltaPct >= 0 ? "+" : ""}
-                    {momDeltaPct.toFixed(1)}% จากเดือนก่อน
-                  </p>
+              <div className="mt-5 flex items-baseline gap-1">
+                <span className="text-base font-bold text-gray-400">฿</span>
+                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{(currentYearGroup?.total ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                <span className="text-xs text-gray-500">เฉลี่ย ฿{Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน</span>
+              </div>
+            </div>
+
+            {/* ยอดเดือนนี้ — เขียว */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
+              <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-sm font-bold text-gray-600">ยอดเดือนนี้</span>
+                </div>
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div className="mt-5 flex items-baseline gap-1">
+                <span className="text-base font-bold text-gray-400">฿</span>
+                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{currentMonthTotal.toLocaleString()}</span>
+              </div>
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                {momDeltaPct !== null ? (
+                  <span className={`flex items-center gap-1 text-xs font-semibold ${momDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {momDeltaPct >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                    {Number.isFinite(momDeltaPct)
+                      ? `${momDeltaPct >= 0 ? "+" : ""}${momDeltaPct.toFixed(1)}% จากเดือนก่อน`
+                      : "ใหม่ (เดือนก่อนไม่มีรายได้)"}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-500">เทียบกับเดือนก่อนไม่ได้</span>
                 )}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all">
-              <div className="p-3 rounded-xl bg-violet-50 text-violet-600 flex-shrink-0">
-                <Gift className="w-6 h-6" />
+            {/* โบนัส / รายได้อื่น — ม่วง */}
+            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
+              <span className="absolute inset-y-0 left-0 w-1 bg-violet-500" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-violet-500" />
+                  <span className="text-sm font-bold text-gray-600">โบนัส / รายได้อื่น ๆ</span>
+                </div>
+                <Gift className="h-5 w-5 text-violet-600" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">โบนัส / รายได้อื่น ๆ</p>
-                <p className="text-xl font-black text-slate-800 mt-0.5">฿{otherTotal.toLocaleString()}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">รวม {otherEntries.length} รายการ</p>
+              <div className="mt-5 flex items-baseline gap-1">
+                <span className="text-base font-bold text-gray-400">฿</span>
+                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{otherTotal.toLocaleString()}</span>
+              </div>
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                <span className="text-xs text-gray-500">รวม {otherEntries.length} รายการ</span>
               </div>
             </div>
           </div>
 
           {/* View toggle + year selector */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1 self-start">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 self-start">
               {(["monthly", "yearly"] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => setViewMode(v)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    viewMode === v ? "bg-[#CC0000] text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    viewMode === v ? "bg-[#CC0000] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   {v === "monthly" ? "รายเดือน" : "รายปี"}
@@ -669,8 +731,8 @@ export default function CoachPaymentPage() {
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
                       selectedYear === yg.year
-                        ? "bg-slate-800 text-white border-slate-800"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        ? "bg-gray-800 text-white border-gray-800"
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
                     }`}
                   >
                     {yg.year}
@@ -683,10 +745,10 @@ export default function CoachPaymentPage() {
           {viewMode === "monthly" && currentYearGroup ? (
             <>
               {/* Monthly bar chart — ซ่อนบนมือถือ (แท่งแคบ + tooltip อาศัย hover) ดูข้อมูลได้จากตารางด้านล่างแทน */}
-              <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                 <div className="mb-6">
-                  <h3 className="text-md font-bold text-slate-800">รายได้รายเดือน ปี {selectedYear}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h3 className="text-md font-bold text-gray-800">รายได้รายเดือน ปี {selectedYear}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {bestMonth
                       ? `เดือนที่รายได้สูงสุด: ${MONTH_NAMES_FULL[bestMonth.month]} (฿${bestMonth.total.toLocaleString()})`
                       : "ยังไม่มีข้อมูลในปีนี้"}
@@ -699,9 +761,9 @@ export default function CoachPaymentPage() {
                     const pct = maxMonthTotal > 0 ? (m.total / maxMonthTotal) * 100 : 0;
                     return (
                       <div key={m.month} className="flex-1 h-full flex flex-col items-center justify-end group relative">
-                        <div className="absolute -top-2 -translate-y-full left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                        <div className="absolute -top-2 -trangray-y-full left-1/2 -trangray-x-1/2 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
                           <span className="font-bold">฿{m.total.toLocaleString()}</span>
-                          <span className="text-slate-300"> · {MONTH_NAMES_FULL[m.month]}</span>
+                          <span className="text-gray-300"> · {MONTH_NAMES_FULL[m.month]}</span>
                         </div>
                         {m.total > 0 ? (
                           <div
@@ -709,9 +771,9 @@ export default function CoachPaymentPage() {
                             className="w-full max-w-[28px] rounded-t-md bg-[#CC0000] group-hover:brightness-110 transition-all duration-500"
                           />
                         ) : (
-                          <div className="w-full max-w-[28px] h-[3px] rounded-t-md bg-slate-150" />
+                          <div className="w-full max-w-[28px] h-[3px] rounded-t-md bg-gray-200" />
                         )}
-                        <span className={`text-[10px] font-semibold mt-2 ${isCurrent ? "text-[#CC0000] font-black" : "text-slate-500"}`}>
+                        <span className={`text-[10px] font-semibold mt-2 ${isCurrent ? "text-[#CC0000] font-black" : "text-gray-500"}`}>
                           {MONTH_NAMES_SHORT[m.month]}
                         </span>
                       </div>
@@ -724,14 +786,11 @@ export default function CoachPaymentPage() {
               {/* ตารางนี้เทียบ "คาบสอน × ค่าจ้างต่อคาบ" กับรายได้จริง — มีความหมายเฉพาะโค้ชรายครั้งเท่านั้น
                   โค้ชรายเดือนได้รับเงินคงที่ไม่ผูกกับจำนวนคาบ จึงซ่อนตารางนี้ไป */}
               {paymentType !== "monthly" && scheduleComparison && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-5 border-b border-slate-100 flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-amber-50 text-amber-600 flex-shrink-0">
-                      <ClipboardList className="w-5 h-5" />
-                    </div>
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-gray-100">
                     <div>
-                      <h3 className="text-md font-bold text-slate-800">เทียบกับรายได้ที่ควรได้จากตารางสอน</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <h3 className="text-md font-bold text-gray-800">เทียบกับรายได้ที่ควรได้จากตารางสอน</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
                         ประมาณการจากจำนวนคาบสอนที่ผ่านไปแล้ว × ค่าจ้างต่อคาบ (฿{payRate.toLocaleString()}/คาบ)
                         {payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบในระบบ ตัวเลขนี้จึงยังไม่ถูกต้อง"}
                       </p>
@@ -740,7 +799,7 @@ export default function CoachPaymentPage() {
                   <div ref={scheduleTableRef} className="overflow-x-auto no-scrollbar">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                        <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
                           <th className="py-3 px-4 sm:px-5">เดือน</th>
                           <th className="py-3 px-4 sm:px-5 hidden sm:table-cell">คาบที่สอนแล้ว</th>
                           <th className="py-3 px-4 sm:px-5 text-right hidden sm:table-cell">รายได้ที่ควรได้</th>
@@ -748,30 +807,32 @@ export default function CoachPaymentPage() {
                           <th className="py-3 px-4 sm:px-5 text-right">ส่วนต่าง</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {scheduleComparison.rows.map((r) => {
-                          const isEmpty = r.sessionsDone === 0 && r.actual === 0;
-                          return (
-                            <tr key={r.month} className={`text-xs ${isEmpty ? "text-slate-300" : ""}`}>
-                              <td className="py-3 px-4 sm:px-5 font-semibold text-slate-700 whitespace-nowrap">{MONTH_NAMES_FULL[r.month]}</td>
-                              <td className="py-3 px-4 sm:px-5 text-slate-600 hidden sm:table-cell">{isEmpty ? "-" : `${r.sessionsDone} คาบ`}</td>
-                              <td className="py-3 px-4 sm:px-5 text-right text-slate-700 hidden sm:table-cell">{isEmpty ? "-" : `฿${r.expected.toLocaleString()}`}</td>
-                              <td className="py-3 px-4 sm:px-5 text-right font-bold text-slate-900 whitespace-nowrap">{isEmpty ? "-" : `฿${r.actual.toLocaleString()}`}</td>
-                              <td className={`py-3 px-4 sm:px-5 text-right font-bold whitespace-nowrap ${isEmpty ? "" : r.variance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                {isEmpty ? "-" : `${r.variance >= 0 ? "+" : ""}฿${r.variance.toLocaleString()}`}
+                      <tbody className="divide-y divide-gray-100">
+                        {scheduleComparison.rows
+                          .filter((r) => r.sessionsDone > 0 || r.actual > 0)
+                          .map((r) => (
+                            <tr key={r.month} className="text-xs transition-colors hover:bg-gray-50/60">
+                              <td className="py-3.5 px-4 sm:px-5 font-bold text-gray-800 whitespace-nowrap">{MONTH_NAMES_FULL[r.month]}</td>
+                              <td className="py-3.5 px-4 sm:px-5 text-gray-600 hidden sm:table-cell">{r.sessionsDone} คาบ</td>
+                              <td className="py-3.5 px-4 sm:px-5 text-right text-gray-600 tabular-nums hidden sm:table-cell">฿{r.expected.toLocaleString()}</td>
+                              <td className="py-3.5 px-4 sm:px-5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">฿{r.actual.toLocaleString()}</td>
+                              <td className="py-3.5 px-4 sm:px-5 text-right whitespace-nowrap">
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${r.variance >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+                                  {r.variance >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                                  {r.variance >= 0 ? "+" : ""}฿{r.variance.toLocaleString()}
+                                </span>
                               </td>
                             </tr>
-                          );
-                        })}
+                          ))}
                       </tbody>
                       <tfoot>
-                        <tr className="text-xs bg-slate-50 border-t border-slate-200">
-                          <td className="py-3 px-4 sm:px-5 font-black text-slate-800 whitespace-nowrap">รวมทั้งปี</td>
-                          <td className="py-3 px-4 sm:px-5 font-bold text-slate-700 hidden sm:table-cell">{scheduleComparison.totals.sessionsDone} คาบ</td>
-                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-slate-700 hidden sm:table-cell">
+                        <tr className="text-xs bg-gray-50 border-t border-gray-200">
+                          <td className="py-3 px-4 sm:px-5 font-black text-gray-800 whitespace-nowrap">รวมทั้งปี</td>
+                          <td className="py-3 px-4 sm:px-5 font-bold text-gray-700 hidden sm:table-cell">{scheduleComparison.totals.sessionsDone} คาบ</td>
+                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-gray-700 hidden sm:table-cell">
                             ฿{scheduleComparison.totals.expected.toLocaleString()}
                           </td>
-                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-slate-900 whitespace-nowrap">
+                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-gray-900 whitespace-nowrap">
                             ฿{scheduleComparison.totals.actual.toLocaleString()}
                           </td>
                           <td className={`py-3 px-4 sm:px-5 text-right font-black whitespace-nowrap ${scheduleComparison.totals.variance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
@@ -785,62 +846,56 @@ export default function CoachPaymentPage() {
               )}
 
               {/* Monthly breakdown table */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-slate-100">
-                  <h3 className="text-md font-bold text-slate-800">รายละเอียดรายเดือน</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">คลิกที่แถวเพื่อดูรายการค่าจ้างของเดือนนั้น</p>
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-gray-100">
+                  <h3 className="text-md font-bold text-gray-800">รายละเอียดรายเดือน</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">คลิกที่แถวเพื่อดูรายการค่าจ้างของเดือนนั้น</p>
                 </div>
                 <div ref={monthlyTableRef} className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                      <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
                         <th className="py-3 px-5">เดือน</th>
                         <th className="py-3 px-5 whitespace-nowrap">จำนวนครั้ง</th>
                         <th className="py-3 px-5 text-right">ยอดรวม</th>
-                        <th className="py-3 px-5 text-right whitespace-nowrap">เปอร์เซ็นต์</th>
+                        <th className="py-3 px-5 text-right whitespace-nowrap">สัดส่วน</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {currentYearGroup.months.map((m) => {
-                        const hasData = m.count > 0;
+                    <tbody className="divide-y divide-gray-100">
+                      {currentYearGroup.months.filter((m) => m.count > 0).map((m) => {
                         const isExpanded = expandedMonth === m.month;
                         const pct = currentYearGroup.total > 0 ? (m.total / currentYearGroup.total) * 100 : 0;
                         return (
                           <React.Fragment key={m.month}>
                             <tr
-                              onClick={() => hasData && setExpandedMonth(isExpanded ? null : m.month)}
-                              className={`text-xs transition-colors ${hasData ? "cursor-pointer hover:bg-slate-50/50" : "text-slate-300"}`}
+                              onClick={() => setExpandedMonth(isExpanded ? null : m.month)}
+                              className={`text-xs cursor-pointer transition-colors ${isExpanded ? "bg-gray-50/70" : "hover:bg-gray-50/60"}`}
                             >
-                              <td className="py-3 px-5 font-semibold text-slate-700">
-                                <span className="flex items-center gap-1.5">
-                                  {hasData ? (
-                                    isExpanded ? (
-                                      <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-                                    ) : (
-                                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                                    )
-                                  ) : (
-                                    <span className="w-3.5 h-3.5" />
-                                  )}
+                              <td className="py-3.5 px-5 font-bold text-gray-800">
+                                <span className="flex items-center gap-2">
+                                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                                   {MONTH_NAMES_FULL[m.month]}
                                 </span>
                               </td>
-                              <td className="py-3 px-5 text-slate-600">{hasData ? `${m.count} ครั้ง` : "-"}</td>
-                              <td className="py-3 px-5 text-right font-bold text-slate-900">
-                                {hasData ? `฿${m.total.toLocaleString()}` : "-"}
-                              </td>
-                              <td className="py-3 px-5 text-right font-semibold text-slate-600 whitespace-nowrap">
-                                {hasData ? `${pct.toFixed(1)}%` : "-"}
+                              <td className="py-3.5 px-5 text-gray-600">{m.count} ครั้ง</td>
+                              <td className="py-3.5 px-5 text-right font-bold text-gray-900 tabular-nums">฿{m.total.toLocaleString()}</td>
+                              <td className="py-3.5 px-5">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="hidden sm:block h-1.5 w-16 rounded-full bg-gray-100 overflow-hidden">
+                                    <div className="h-full rounded-full bg-[#CC0000] transition-all duration-500" style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <span className="w-11 text-right font-semibold text-gray-600 tabular-nums">{pct.toFixed(1)}%</span>
+                                </div>
                               </td>
                             </tr>
                             {isExpanded &&
                               m.entries.map((e) => (
-                                <tr key={e.id} className="bg-slate-50/70 text-[11px]">
-                                  <td className="py-2.5 px-5 pl-11 text-slate-500">{e.expensedate?.split("T")[0]}</td>
-                                  <td className="py-2.5 px-5 text-slate-600" colSpan={2}>
+                                <tr key={e.id} className="bg-gray-50/40 text-[11px]">
+                                  <td className="py-2.5 px-5 pl-11 text-gray-500 whitespace-nowrap">{formatThaiDate(e.expensedate)}</td>
+                                  <td className="py-2.5 px-5 text-gray-600" colSpan={2}>
                                     {e.expensedescription || "-"}
                                   </td>
-                                  <td className="py-2.5 px-5 text-right font-semibold text-slate-700 whitespace-nowrap">
+                                  <td className="py-2.5 px-5 text-right font-semibold text-gray-700 tabular-nums whitespace-nowrap">
                                     ฿{e.expenseamount.toLocaleString()}
                                     {e.receipturl && (
                                       <button
@@ -863,15 +918,15 @@ export default function CoachPaymentPage() {
               </div>
             </>
           ) : viewMode === "yearly" ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-slate-100">
-                <h3 className="text-md font-bold text-slate-800">สรุปรายได้รายปี</h3>
-                <p className="text-xs text-slate-500 mt-0.5">ยอดรวมค่าจ้างแยกตามปี ทั้งหมด {yearGroups.length} ปี</p>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-gray-100">
+                <h3 className="text-md font-bold text-gray-800">สรุปรายได้รายปี</h3>
+                <p className="text-xs text-gray-500 mt-0.5">ยอดรวมค่าจ้างแยกตามปี ทั้งหมด {yearGroups.length} ปี</p>
               </div>
               <div ref={yearlyTableRef} className="overflow-x-auto no-scrollbar">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                    <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
                       <th className="py-3 px-5">ปี</th>
                       <th className="py-3 px-5 whitespace-nowrap">จำนวนครั้ง</th>
                       <th className="py-3 px-5 text-right">ยอดรวม</th>
@@ -880,19 +935,24 @@ export default function CoachPaymentPage() {
                       <th className="py-3 px-5" />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-gray-200">
                     {yearGroups.map((yg) => {
                       const activeMonths = yg.months.filter((m) => m.count > 0).length || 1;
                       const pct = totalWages > 0 ? (yg.total / totalWages) * 100 : 0;
                       return (
-                        <tr key={yg.year} className="text-xs hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 px-5 font-black text-slate-800">{yg.year}</td>
-                          <td className="py-3.5 px-5 text-slate-600 whitespace-nowrap">{yg.count} ครั้ง</td>
-                          <td className="py-3.5 px-5 text-right font-bold text-slate-900 whitespace-nowrap">฿{yg.total.toLocaleString()}</td>
-                          <td className="py-3.5 px-5 text-slate-600 whitespace-nowrap hidden sm:table-cell">฿{Math.round(yg.total / activeMonths).toLocaleString()}</td>
+                        <tr key={yg.year} className="text-xs hover:bg-gray-50/50 transition-colors">
+                          <td className="py-3.5 px-5 font-black text-gray-800">{yg.year}</td>
+                          <td className="py-3.5 px-5 text-gray-600 whitespace-nowrap">{yg.count} ครั้ง</td>
+                          <td className="py-3.5 px-5 text-right font-bold text-gray-900 whitespace-nowrap">฿{yg.total.toLocaleString()}</td>
+                          <td className="py-3.5 px-5 text-gray-600 whitespace-nowrap hidden sm:table-cell">฿{Math.round(yg.total / activeMonths).toLocaleString()}</td>
                           <td className="py-3.5 px-5 hidden sm:table-cell">
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                              <div className="bg-[#CC0000] h-full rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                                <div className="h-full rounded-full bg-[#CC0000] transition-all duration-700" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="w-9 shrink-0 text-right text-[11px] font-semibold text-gray-500 tabular-nums">
+                                {pct.toFixed(0)}%
+                              </span>
                             </div>
                           </td>
                           <td className="py-3.5 px-5 text-right">
@@ -920,34 +980,34 @@ export default function CoachPaymentPage() {
 
           {/* รายได้อื่น ๆ (coach_other) — แยกออกจากค่าจ้างการสอน */}
           {otherEntries.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex items-start gap-3">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-gray-100 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-md font-bold text-slate-800">รายได้อื่น ๆ</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h3 className="text-md font-bold text-gray-800">รายได้อื่น ๆ</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
                     โบนัสหรือรายได้อื่นที่สถาบันจ่ายให้ นอกเหนือจากค่าจ้างการสอน · รวม {otherEntries.length} รายการ
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">รวมทั้งหมด</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">รวมทั้งหมด</p>
                   <p className="text-lg font-black text-violet-600">฿{otherTotal.toLocaleString()}</p>
                 </div>
               </div>
               <div ref={otherTableRef} className="overflow-x-auto no-scrollbar">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                    <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
                       <th className="py-3 px-5 whitespace-nowrap">วันที่</th>
                       <th className="py-3 px-5">รายละเอียด</th>
                       <th className="py-3 px-5 text-right">จำนวนเงิน</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-gray-200">
                     {otherSorted.map((e) => (
-                      <tr key={e.id} className="text-xs hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-5 text-slate-600 font-semibold whitespace-nowrap">{e.expensedate?.split("T")[0]}</td>
-                        <td className="py-3 px-5 text-slate-600">{e.expensedescription || "-"}</td>
-                        <td className="py-3 px-5 text-right font-bold text-slate-900 whitespace-nowrap">
+                      <tr key={e.id} className="text-xs hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3 px-5 text-gray-600 font-semibold whitespace-nowrap">{e.expensedate?.split("T")[0]}</td>
+                        <td className="py-3 px-5 text-gray-600">{e.expensedescription || "-"}</td>
+                        <td className="py-3 px-5 text-right font-bold text-gray-900 whitespace-nowrap">
                           ฿{e.expenseamount.toLocaleString()}
                           {e.receipturl && (
                             <button
@@ -970,8 +1030,141 @@ export default function CoachPaymentPage() {
       )}
       </div>
 
+      {/* Modal แก้ไขบัญชีรับเงิน — เปิดจากไอคอนดินสอ (มี step-up ยืนยันรหัสผ่านในตัวการ์ด) */}
+      {coachId !== null && (
+        <Modal
+          isOpen={isBankModalOpen}
+          onClose={() => setIsBankModalOpen(false)}
+          title="แก้ไขบัญชีรับเงิน"
+          subtitle="ธนาคาร เลขบัญชี และพร้อมเพย์สำหรับรับค่าจ้าง"
+        >
+          <CoachBankAccountCard
+            key={bankModalKey}
+            coachId={coachId}
+            initialBankAccount={bankAccount}
+            initialPaymentInfo={paymentInfo}
+            initialPromptPay={promptPay}
+          />
+        </Modal>
+      )}
+
       {/* ป็อปอัพดูรูปใบเสร็จ — ใช้ได้ทั้งมือถือและเดสก์ท็อป */}
       <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="ใบเสร็จ" />
+    </div>
+  );
+}
+
+// โครงหน้าตอนโหลด — ล้อ layout จริงทั้งมือถือ (สมุดบัญชี) และเดสก์ท็อป (สรุป/กราฟ/ตาราง)
+function CoachPaymentSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl animate-pulse space-y-6">
+      {/* ===== มือถือ ===== */}
+      <div className="md:hidden space-y-4">
+        {/* การ์ดบัญชี */}
+        <div className="rounded-3xl border-2 border-[#CC0000]/30 bg-white p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 shrink-0 rounded-full bg-gray-200" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-32 rounded bg-gray-200" />
+              <div className="h-2.5 w-20 rounded bg-gray-100" />
+            </div>
+            <div className="h-8 w-8 shrink-0 rounded-full bg-gray-100" />
+          </div>
+          <div className="mt-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-28 rounded bg-gray-100" />
+              <div className="h-7 w-28 rounded bg-gray-200" />
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+              <div className="h-3 w-24 rounded bg-gray-100" />
+              <div className="h-4 w-20 rounded bg-gray-200" />
+            </div>
+          </div>
+        </div>
+
+        {/* เลือกเดือน */}
+        <div className="space-y-2">
+          <div className="h-3 w-36 rounded bg-gray-100" />
+          <div className="h-12 w-full rounded-xl bg-gray-200" />
+        </div>
+
+        {/* รายการธุรกรรม */}
+        {Array.from({ length: 2 }).map((_, g) => (
+          <div key={g} className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="h-3 w-24 rounded bg-gray-100" />
+              <div className="h-3 w-16 rounded bg-gray-100" />
+            </div>
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
+                <div className="space-y-2">
+                  <div className="h-3.5 w-40 rounded bg-gray-200" />
+                  <div className="h-2.5 w-24 rounded bg-gray-100" />
+                </div>
+                <div className="h-4 w-16 rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* ===== เดสก์ท็อป ===== */}
+      <div className="hidden md:block space-y-6">
+        {/* Stat cards — สไตล์ PaymentStats (แถบ accent + จุด + คำโปรยท้าย) */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5">
+              <span className="absolute inset-y-0 left-0 w-1 bg-gray-200" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-gray-200" />
+                  <div className="h-3.5 w-24 rounded bg-gray-200" />
+                </div>
+                <div className="h-5 w-5 rounded bg-gray-200" />
+              </div>
+              <div className="mt-5 h-8 w-28 rounded-lg bg-gray-200" />
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                <div className="h-3 w-24 rounded bg-gray-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Toggle + year selector */}
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="h-9 w-40 rounded-xl bg-gray-200" />
+          <div className="h-8 w-32 rounded bg-gray-100" />
+        </div>
+
+        {/* Chart */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-6">
+          <div className="mb-6 space-y-2">
+            <div className="h-4 w-48 rounded bg-gray-200" />
+            <div className="h-3 w-64 rounded bg-gray-100" />
+          </div>
+          <div className="flex h-40 items-end gap-2">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="flex-1 rounded-t-md bg-gray-200" style={{ height: `${20 + ((i * 37) % 80)}%` }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="space-y-2 border-b border-gray-100 p-5">
+            <div className="h-4 w-40 rounded bg-gray-200" />
+            <div className="h-3 w-56 rounded bg-gray-100" />
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between border-b border-gray-50 px-5 py-3.5 last:border-0">
+              <div className="h-3.5 w-28 rounded bg-gray-200" />
+              <div className="h-3.5 w-16 rounded bg-gray-100" />
+              <div className="h-3.5 w-20 rounded bg-gray-200" />
+              <div className="h-3.5 w-12 rounded bg-gray-100" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
