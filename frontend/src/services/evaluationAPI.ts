@@ -1,0 +1,36 @@
+// frontend/src/services/evaluationAPI.ts
+import { apiFetch } from "@/services/apiClient";
+import type { CreateEvaluationInput, EvaluableStudent, Evaluation } from "@/types/evaluation";
+
+// [GET] รายชื่อนักเรียนที่ลงทะเบียนเรียนกับโค้ชที่ล็อกอินอยู่ (เฉพาะ role coach)
+export async function fetchMyStudents(): Promise<EvaluableStudent[]> {
+  const res = await apiFetch<{ data: EvaluableStudent[] }>("/evaluations/students");
+  return res.data ?? [];
+}
+
+// [GET] ประวัติการประเมินทั้งหมดที่โค้ชที่ล็อกอินอยู่เคยให้ไว้ (ทุกนักเรียน)
+export async function fetchMyGivenEvaluations(): Promise<Evaluation[]> {
+  const res = await apiFetch<{ data: Evaluation[] }>("/evaluations/me/given");
+  return res.data ?? [];
+}
+
+// [GET] ประวัติการประเมินของตัวเอง (สำหรับนักเรียนที่ล็อกอินอยู่)
+export async function fetchMyEvaluations(): Promise<Evaluation[]> {
+  const res = await apiFetch<{ data: Evaluation[] }>("/evaluations/me");
+  return res.data ?? [];
+}
+
+// [GET] ประวัติการประเมินของนักเรียนคนหนึ่ง (โค้ชดูได้เฉพาะนักเรียนของตัวเอง)
+export async function fetchStudentEvaluations(customerId: number): Promise<Evaluation[]> {
+  const res = await apiFetch<{ data: Evaluation[] }>(`/evaluations/student/${customerId}`);
+  return res.data ?? [];
+}
+
+// [POST] บันทึกการประเมินนักเรียน (เฉพาะ role coach)
+export async function createEvaluation(input: CreateEvaluationInput): Promise<Evaluation> {
+  const res = await apiFetch<{ message: string; data: Evaluation }>("/evaluations", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return res.data;
+}

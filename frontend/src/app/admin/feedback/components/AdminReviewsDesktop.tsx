@@ -50,19 +50,23 @@ export function AdminReviewsDesktop({ manager }: { manager: AdminReviews }) {
           label="รีวิวทั้งหมด"
           value={manager.stats.total.toString()}
           icon={<MessageSquareMore size={22} />}
-          tone="gray"
+          tone="red"
+          caption="รีวิวจากลูกค้าทั้งหมดในระบบ"
         />
         <ReviewStatCard
           label="คะแนนเฉลี่ย"
           value={manager.stats.total > 0 ? manager.stats.avg.toFixed(1) : "-"}
           icon={<Star size={22} fill="currentColor" />}
           tone="amber"
+          caption={`จากทั้งหมด ${manager.stats.total} รีวิว`}
+          starValue={manager.stats.total > 0 ? Math.round(manager.stats.avg) : undefined}
         />
         <ReviewStatCard
           label="แสดงหน้าแรก"
           value={manager.stats.featured.toString()}
           icon={<Sparkles size={22} />}
-          tone="red"
+          tone="orange"
+          caption="รีวิวที่ถูกเลือกโชว์หน้าแรก"
         />
       </div>
 
