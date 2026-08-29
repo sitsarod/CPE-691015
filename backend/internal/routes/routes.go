@@ -288,7 +288,9 @@ func SetupRoutes(r *gin.Engine) {
 		evaluationGroup := protected.Group("/evaluations")
 		{
 			evaluationGroup.POST("", evaluationController.CreateEvaluation)
+			evaluationGroup.GET("/students", evaluationController.GetMyStudents)          // โค้ช: รายชื่อนักเรียนของตัวเอง
 			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
+			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations)  // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้
 			evaluationGroup.GET("/student/:customer_id", evaluationController.GetStudentEvaluations)
 		}
 

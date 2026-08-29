@@ -14,31 +14,76 @@ import { CATEGORY_META, customerName, customerInitial, formatReviewDate, isGener
  * ไม่ทัน รวมมาไว้ที่เดียว
  */
 
-/** การ์ดสรุปตัวเลขด้านบนของหน้ารีวิว */
+/**
+ * การ์ดสรุปตัวเลขด้านบนของหน้ารีวิว — ใช้หน้าตาเดียวกันทั้งแอดมิน โค้ช และผู้เรียน
+ * (แถบสีข้าง + ตัวเลขใหญ่ + บรรทัดอธิบายท้ายการ์ด) ให้ทั้งสามหน้าดูเป็นระบบเดียวกัน
+ *
+ * starValue = ใส่เมื่ออยากโชว์แถวดาวข้างตัวเลข (ใช้กับการ์ด "คะแนนเฉลี่ย")
+ * onClick = ใส่เมื่ออยากให้การ์ดกดได้ (เช่น กดแล้วเลื่อนไปดูรายการรีวิวด้านล่าง) —
+ * ไม่ใส่ก็เป็นการ์ดแสดงผลเฉยๆ เหมือนเดิม
+ */
 export function ReviewStatCard({
   label,
   value,
   icon,
   tone,
+  caption,
+  starValue,
+  onClick,
 }: {
   label: string;
   value: string;
   icon: ReactNode;
-  tone: "gray" | "amber" | "red";
+  tone: "red" | "amber" | "orange" | "gray";
+  caption?: string;
+  starValue?: number;
+  onClick?: () => void;
 }) {
-  const tones = {
-    gray: "bg-gray-100 text-gray-600",
-    amber: "bg-amber-50 text-amber-500",
-    red: "bg-rose-50 text-[#CC0000]",
+  const bar = {
+    red: "bg-[#CC0000]",
+    amber: "bg-amber-400",
+    orange: "bg-orange-400",
+    gray: "bg-gray-300",
+  };
+  const iconTone = {
+    red: "text-[#CC0000]",
+    amber: "text-amber-400",
+    orange: "text-orange-500",
+    gray: "text-gray-500",
   };
 
   return (
-    <div className="flex items-center gap-4 p-5 rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className={`p-3 rounded-lg ${tones[tone]}`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-black text-gray-900 leading-tight">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md ${
+        onClick ? "cursor-pointer active:scale-[0.98]" : ""
+      }`}
+    >
+      <span className={`absolute inset-y-0 left-0 w-1 ${bar[tone]}`} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`h-2 w-2 flex-shrink-0 rounded-full ${bar[tone]}`} />
+          <span className="truncate text-sm font-bold text-gray-600">{label}</span>
+        </div>
+        <span className={`flex-shrink-0 ${iconTone[tone]}`}>{icon}</span>
       </div>
+      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="text-3xl font-black tabular-nums text-gray-900">{value}</p>
+        {starValue !== undefined && <StarRating value={starValue} size={16} />}
+      </div>
+      {caption && <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">{caption}</div>}
     </div>
   );
 }

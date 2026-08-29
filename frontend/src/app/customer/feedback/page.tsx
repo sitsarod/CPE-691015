@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { reviewAPI } from '@/services/reviewAPI';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
 import { Review, CourseCoach, CreateReviewReq, ReviewCategory } from '@/types/review';
 import { Enrollment } from '@/types/enrollment';
+import { ReviewStatCard } from '@/components/review/ReviewUI';
 import { Star, Send, Loader2, BookOpen, UserRound, Sparkles, MessageSquareText, MapPin, Wrench, MoreHorizontal } from 'lucide-react';
 
 // ตัวเลือกหัวข้อรีวิว/ข้อเสนอแนะที่ลูกค้าเลือกได้
@@ -64,6 +65,8 @@ export default function CustomerFeedbackPage() {
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [myReviews, setMyReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const myReviewsRef = useRef<HTMLDivElement>(null);
+  const scrollToMyReviews = () => myReviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // ฟอร์ม
   const [courseId, setCourseId] = useState<number | ''>('');
@@ -192,58 +195,41 @@ export default function CustomerFeedbackPage() {
         <div className="mt-6 h-px bg-gray-200" />
       </div>
 
-      {/* Stat summary */}
+      {/* Stat summary — หน้าตาเดียวกับหน้าแอดมิน/โค้ช (ใช้ ReviewStatCard ตัวเดียวกันทั้งสามหน้า)
+          จอกว้าง: grid ปกติ / มือถือ: เลื่อนนิ้วแนวนอน — กดการ์ดไหนก็ได้เพื่อเลื่อนไปดู
+          รายการรีวิวที่เคยส่งด้านล่าง */}
       {reviewCount > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {/* รีวิวทั้งหมด */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
-            <span className="absolute inset-y-0 left-0 w-1 bg-[#CC0000]" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#CC0000]" />
-                <span className="text-sm font-bold text-gray-600">รีวิวทั้งหมด</span>
-              </div>
-              <MessageSquareText className="h-5 w-5 text-[#CC0000]" />
-            </div>
-            <p className="mt-5 text-3xl font-black tabular-nums text-gray-900">{reviewCount}</p>
-            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-              รีวิวที่คุณส่งทั้งหมด
-            </div>
+        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
+          <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+            <ReviewStatCard
+              label="รีวิวทั้งหมด"
+              value={reviewCount.toString()}
+              icon={<MessageSquareText size={22} />}
+              tone="red"
+              caption="รีวิวที่คุณส่งทั้งหมด"
+              onClick={scrollToMyReviews}
+            />
           </div>
-
-          {/* คะแนนเฉลี่ยที่ให้ */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
-            <span className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span className="text-sm font-bold text-gray-600">คะแนนเฉลี่ยที่ให้</span>
-              </div>
-              <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
-            </div>
-            <div className="mt-5 flex items-center gap-2">
-              <p className="text-3xl font-black tabular-nums text-gray-900">{avgRating.toFixed(1)}</p>
-              <StarRating value={Math.round(avgRating)} size={16} />
-            </div>
-            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-              จากทั้งหมด {reviewCount} รีวิว
-            </div>
+          <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+            <ReviewStatCard
+              label="คะแนนเฉลี่ยที่ให้"
+              value={avgRating.toFixed(1)}
+              icon={<Star size={22} fill="currentColor" />}
+              tone="amber"
+              caption={`จากทั้งหมด ${reviewCount} รีวิว`}
+              starValue={Math.round(avgRating)}
+              onClick={scrollToMyReviews}
+            />
           </div>
-
-          {/* แสดงหน้าแรก */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
-            <span className="absolute inset-y-0 left-0 w-1 bg-orange-400" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-orange-400" />
-                <span className="text-sm font-bold text-gray-600">แสดงหน้าแรก</span>
-              </div>
-              <Sparkles className="h-5 w-5 text-orange-500" />
-            </div>
-            <p className="mt-5 text-3xl font-black tabular-nums text-gray-900">{featuredCount}</p>
-            <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-              รีวิวที่ถูกเลือกโชว์หน้าแรก
-            </div>
+          <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+            <ReviewStatCard
+              label="แสดงหน้าแรก"
+              value={featuredCount.toString()}
+              icon={<Sparkles size={22} />}
+              tone="orange"
+              caption="รีวิวที่ถูกเลือกโชว์หน้าแรก"
+              onClick={scrollToMyReviews}
+            />
           </div>
         </div>
       )}
@@ -383,7 +369,7 @@ export default function CustomerFeedbackPage() {
       </div>
 
       {/* My reviews */}
-      <div>
+      <div ref={myReviewsRef} className="scroll-mt-20">
         <h2 className="mb-4 flex items-center gap-2.5 text-lg font-bold text-gray-900">
           <span className="h-5 w-1 rounded-full bg-[#CC0000]" />
           รีวิวที่เคยส่ง

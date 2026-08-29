@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Star, MessageSquareMore, Sparkles } from "lucide-react";
 import Toast from "@/components/Toast";
 import {
@@ -42,8 +43,10 @@ const TABS: { key: FilterTab; label: string }[] = [
  * ReviewTargetBadges, RatingWithNumber) ไม่ต้องเขียนใหม่
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function AdminReviewsMobile({ manager }: { manager: AdminReviews }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollToList = () => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24">
       {manager.toast && (
@@ -64,30 +67,34 @@ export function AdminReviewsMobile({ manager }: { manager: AdminReviews }) {
         </p>
       </div>
 
-      {/* Stats - Horizontal Scroll */}
-      <div className="px-4 py-4 flex gap-3 overflow-x-auto snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <div className="snap-start shrink-0 w-[140px]">
+      {/* Stats - Horizontal Scroll (หน้าตาเดียวกับหน้าโค้ช/ผู้เรียน) */}
+      <div className="no-scrollbar px-4 py-4 flex snap-x snap-mandatory gap-3 overflow-x-auto">
+        <div className="snap-start shrink-0 w-[210px]">
           <ReviewStatCard
             label="รีวิวทั้งหมด"
             value={manager.stats.total.toString()}
-            icon={<MessageSquareMore size={20} />}
-            tone="gray"
+            icon={<MessageSquareMore size={22} />}
+            tone="red"
+            caption="รีวิวจากลูกค้าทั้งหมดในระบบ"
           />
         </div>
-        <div className="snap-start shrink-0 w-[140px]">
+        <div className="snap-start shrink-0 w-[210px]">
           <ReviewStatCard
             label="คะแนนเฉลี่ย"
             value={manager.stats.total > 0 ? manager.stats.avg.toFixed(1) : "-"}
-            icon={<Star size={20} fill="currentColor" />}
+            icon={<Star size={22} fill="currentColor" />}
             tone="amber"
+            caption={`จากทั้งหมด ${manager.stats.total} รีวิว`}
+            starValue={manager.stats.total > 0 ? Math.round(manager.stats.avg) : undefined}
           />
         </div>
-        <div className="snap-start shrink-0 w-[140px]">
+        <div className="snap-start shrink-0 w-[210px]">
           <ReviewStatCard
             label="แสดงหน้าแรก"
             value={manager.stats.featured.toString()}
-            icon={<Sparkles size={20} />}
-            tone="red"
+            icon={<Sparkles size={22} />}
+            tone="orange"
+            caption="รีวิวที่ถูกเลือกโชว์หน้าแรก"
           />
         </div>
       </div>
@@ -97,7 +104,10 @@ export function AdminReviewsMobile({ manager }: { manager: AdminReviews }) {
         <div className="relative">
           <select
             value={manager.tab}
-            onChange={(e) => manager.setTab(e.target.value as FilterTab)}
+            onChange={(e) => {
+              manager.setTab(e.target.value as FilterTab);
+              scrollToList();
+            }}
             className="w-full appearance-none bg-white border border-gray-200 text-gray-700 py-3 px-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#CC0000] focus:border-transparent text-sm font-medium shadow-sm"
           >
             {TABS.map((t) => (
@@ -125,7 +135,7 @@ export function AdminReviewsMobile({ manager }: { manager: AdminReviews }) {
       </div>
 
       {/* List */}
-      <div className="px-4 pb-6 flex-1">
+      <div ref={listRef} className="scroll-mt-4 px-4 pb-6 flex-1">
         {manager.loading ? (
           <div className="py-10">
             <ReviewLoading />

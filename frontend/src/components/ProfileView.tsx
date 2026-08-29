@@ -3,6 +3,9 @@
 import React, { useEffect, useState } from "react";
 import Button from "@/components/Button";
 import { getUserProfileAPI, type UserProfileResponseDTO } from "@/services/userAPI";
+import { fetchMyEvaluations } from "@/services/evaluationAPI";
+import type { Evaluation } from "@/types/evaluation";
+import EvaluationScoreChart from "@/components/EvaluationScoreChart";
 import { Grid2X2, ClipboardCheck } from "lucide-react";
 
 
@@ -25,6 +28,70 @@ function genderLabel(value?: string) {
   return null;
 }
 
+// weekLabelOf คำนวณช่วงสัปดาห์ (จ.-อา.) ที่ timestamp นั้นตกอยู่ — ใช้จัดกลุ่มผลการประเมิน
+// เป็นรายสัปดาห์สำหรับการ์ดเลื่อนแนวนอนบนมือถือ
+function weekLabelOf(epochMs: number): string {
+  const d = new Date(epochMs);
+  const day = d.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(d);
+  start.setDate(d.getDate() + diffToMonday);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const fmt = (x: Date) => x.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+  return `${fmt(start)} - ${fmt(end)} ${(start.getFullYear() + 543).toString()}`;
+}
+
+interface EvaluationWeekRow {
+  weekLabel: string;
+  items: Evaluation[];
+}
+
+// groupEvaluationsByWeekRows จัดสัปดาห์ล่าสุดไว้บนสุด แต่ละสัปดาห์เป็น "แถว" ของตัวเอง
+// (ไม่ใช่การ์ดเดียวยัดทุกครั้งไว้ด้วยกัน) — ภายในแถวเลื่อนนิ้วแนวนอนได้ถ้าสัปดาห์นั้นมีหลายครั้ง
+// พอถึงสัปดาห์ใหม่ก็ขึ้นแถวใหม่ด้านบน แถวของสัปดาห์นี้จะถูกดันลงล่างไปเรื่อยตามเวลา
+function groupEvaluationsByWeekRows(evaluations: Evaluation[]): EvaluationWeekRow[] {
+  const byWeek = new Map<string, Evaluation[]>();
+  for (const ev of evaluations) {
+    const label = weekLabelOf(new Date(ev.created_at).getTime());
+    const list = byWeek.get(label) ?? [];
+    list.push(ev);
+    byWeek.set(label, list);
+  }
+
+  return Array.from(byWeek.entries())
+    .map(([weekLabel, items]) => ({
+      weekLabel,
+      items: [...items].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    }))
+    .sort((a, b) => new Date(b.items[0].created_at).getTime() - new Date(a.items[0].created_at).getTime());
+}
+
+// เนื้อหาผลการประเมิน 1 ครั้ง — ใช้ร่วมกันทั้งรายการแนวตั้ง (จอกว้าง) และการ์ดรายสัปดาห์ (มือถือ)
+function EvaluationEntryContent({ ev }: { ev: Evaluation }) {
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-bold text-gray-900">โค้ช {ev.coach_name || "ไม่ทราบชื่อ"}</p>
+          <p className="text-sm text-gray-400">
+            {new Date(ev.created_at).toLocaleDateString("th-TH", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+        <span className="flex-shrink-0 rounded-full bg-[#CC0000]/10 px-3.5 py-1.5 text-base font-black text-[#CC0000]">
+          {ev.score}/100
+        </span>
+      </div>
+      <p className="mt-3 text-base leading-relaxed text-gray-700 whitespace-pre-line">{ev.assessment}</p>
+    </div>
+  );
+}
+
 interface ProfileViewProps {
   /** ชื่อที่แสดงระหว่างยังไม่รู้ชื่อจริง */
   fallbackName?: string;
@@ -43,6 +110,9 @@ export default function ProfileView({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"posts" | "evaluation">("posts");
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
@@ -58,10 +128,20 @@ export default function ProfileView({
       .finally(() => setIsLoading(false));
   }, []);
 
+  const isStudentRole = profile?.role === "customer" || Boolean(profile?.isStudent);
+
+  useEffect(() => {
+    if (!isStudentRole) return;
+    setEvalLoading(true);
+    setEvalError(null);
+    fetchMyEvaluations()
+      .then(setEvaluations)
+      .catch((err: unknown) => setEvalError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลการประเมินได้"))
+      .finally(() => setEvalLoading(false));
+  }, [isStudentRole]);
+
   const fullName =
     [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || fallbackName;
-
-  const isStudentRole = profile?.role === "customer" || Boolean(profile?.isStudent);
 
   const details = [
     // วางรหัสประจำตัวไว้บนสุด เพราะเป็นสิ่งที่ต้องหยิบไปบอกเจ้าหน้าที่บ่อยที่สุด
@@ -217,6 +297,56 @@ export default function ProfileView({
           )}
 
         </div>
+
+        {/* เนื้อหาแท็บ Evaluation (เฉพาะนักเรียน) */}
+        {activeTab === "evaluation" && isStudentRole && (
+          <div className="w-full pt-8">
+            {evalLoading ? (
+              <p className="text-center text-sm text-gray-400">กำลังโหลดผลการประเมิน...</p>
+            ) : evalError ? (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
+                {evalError}
+              </div>
+            ) : evaluations.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีผลการประเมินจากโค้ช</p>
+            ) : (
+              <div className="flex flex-col gap-6">
+                <EvaluationScoreChart evaluations={evaluations} />
+
+                {/* จอกว้าง (sm+): รายการแนวตั้งเรียงล่าสุดก่อนเหมือนเดิม */}
+                <ul className="hidden sm:flex sm:flex-col sm:gap-4">
+                  {evaluations.map((ev) => (
+                    <li key={ev.id} className="rounded-2xl border border-gray-200 p-5">
+                      <EvaluationEntryContent ev={ev} />
+                    </li>
+                  ))}
+                </ul>
+
+                {/* มือถือ: สัปดาห์ล่าสุดอยู่บนสุด แต่ละสัปดาห์เป็นแถวของตัวเอง เลื่อนนิ้วแนวนอนได้
+                    เฉพาะภายในแถว (ถ้าสัปดาห์นั้นมีมากกว่า 1 ครั้ง) ส่วนแถวต่อแถวเรียงแนวตั้งตามปกติ
+                    ไม่มีสกรอลล์ซ้อนสองทิศทางในกล่องเดียวกัน — พอถึงสัปดาห์ใหม่ก็ขึ้นแถวใหม่ด้านบน
+                    แถวของสัปดาห์นี้จะถูกดันลงล่างไปเรื่อย */}
+                <div className="flex flex-col gap-5 sm:hidden">
+                  {groupEvaluationsByWeekRows(evaluations).map((week) => (
+                    <div key={week.weekLabel}>
+                      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">{week.weekLabel}</p>
+                      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1">
+                        {week.items.map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="w-[88vw] max-w-[360px] shrink-0 snap-start rounded-2xl border border-gray-200 p-6"
+                          >
+                            <EvaluationEntryContent ev={ev} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

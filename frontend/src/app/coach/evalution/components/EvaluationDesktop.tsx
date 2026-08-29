@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, CircleAlert, X, CalendarDays, List, MessageSquareText } from 'lucide-react';
+import { CheckCircle2, CircleAlert, X, CalendarDays, List, MessageSquareText, Loader2 } from 'lucide-react';
 import Toast from '@/components/Toast';
-import { MockStudent } from '../../_mock/students';
-import { EvaluationManager, WeeklyEvaluation, FilterTab, formatRelative } from './useEvaluation';
+import { EvaluationManager, EvaluationStudent, WeeklyEvaluation, FilterTab, formatRelative } from './useEvaluation';
 
 // ==================== Student row ====================
 function StudentRow({
@@ -13,7 +12,7 @@ function StudentRow({
   previous,
   onOpen,
 }: {
-  student: MockStudent;
+  student: EvaluationStudent;
   current: WeeklyEvaluation | null;
   previous: WeeklyEvaluation | null;
   onOpen: () => void;
@@ -82,26 +81,27 @@ function EvaluationModal({
   onClose,
   onSave,
 }: {
-  student: MockStudent;
+  student: EvaluationStudent;
   weekLabel: string;
   current: WeeklyEvaluation | null;
   previous: WeeklyEvaluation | null;
   onClose: () => void;
-  onSave: (data: WeeklyEvaluation) => void;
+  onSave: (comment: string, score: number) => Promise<void>;
 }) {
   const [comment, setComment] = useState(current?.comment ?? '');
+  const [score, setScore] = useState(current?.score ?? 80);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = comment.trim().length > 0 && !submitting;
+  const canSubmit = comment.trim().length > 0 && score >= 0 && score <= 100 && !submitting;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    // จำลองการบันทึกผล — ของจริงจะยิงไปยัง API ประเมินผู้เรียนภายหลัง
-    setTimeout(() => {
+    try {
+      await onSave(comment.trim(), score);
+    } finally {
       setSubmitting(false);
-      onSave({ weekLabel, comment: comment.trim(), evaluatedAt: Date.now() });
-    }, 700);
+    }
   };
 
   return (
@@ -127,6 +127,16 @@ function EvaluationModal({
               </p>
             </div>
           )}
+
+          <label className="mb-1 block text-sm font-bold text-gray-700">คะแนน (0-100)</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={score}
+            onChange={(e) => setScore(Number(e.target.value))}
+            className="mb-4 w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition-all focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+          />
 
           <label className="mb-1 block text-sm font-bold text-gray-700">คอมเมนต์ประเมินผู้เรียน</label>
           <textarea
@@ -163,6 +173,8 @@ function EvaluationModal({
 export function EvaluationDesktop({ manager }: { manager: EvaluationManager }) {
   const {
     history,
+    loading,
+    loadError,
     tab,
     setTab,
     modalStudent,
@@ -177,6 +189,23 @@ export function EvaluationDesktop({ manager }: { manager: EvaluationManager }) {
     totalCount,
     pendingCount
   } = manager;
+
+  if (loading) {
+    return (
+      <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 py-24 text-gray-400">
+        <Loader2 size={18} className="animate-spin" />
+        <span className="text-sm">กำลังโหลดรายชื่อนักเรียน...</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-7xl py-24 text-center text-sm text-red-500">
+        โหลดข้อมูลไม่สำเร็จ: {loadError}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
@@ -287,7 +316,7 @@ export function EvaluationDesktop({ manager }: { manager: EvaluationManager }) {
           current={(history[modalStudent.id] ?? []).find((e) => e.weekLabel === week.label) ?? null}
           previous={(history[modalStudent.id] ?? []).find((e) => e.weekLabel !== week.label) ?? null}
           onClose={() => setModalStudent(null)}
-          onSave={(data) => handleSave(modalStudent.id, data)}
+          onSave={(comment, score) => handleSave(modalStudent.id, comment, score)}
         />
       )}
     </div>

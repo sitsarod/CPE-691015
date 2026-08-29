@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -26,8 +27,8 @@ func NewEvaluationController(evalService *services.EvaluationService, db *gorm.D
 // โค้ชสร้างการประเมินผู้เรียนและระบุลิงก์วิดีโอ (ถ้ามี)
 func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
-	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถสร้างการประเมินได้"})
+	if !ok || role != "coach" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่สามารถสร้างการประเมินได้"})
 		return
 	}
 
@@ -39,7 +40,12 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 
 	evaluation, err := ctrl.evalService.CreateEvaluation(userID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, services.ErrCustomerNotEnrolledWithCoach):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -59,6 +65,64 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 		"message": "บันทึกการประเมินผู้เรียนสำเร็จแล้ว",
 		"data":    resp,
 	})
+}
+
+// GetMyStudents handles GET /api/evaluations/students
+// โค้ชดึงรายชื่อนักเรียนที่ลงทะเบียนเรียนกับตัวเองอยู่จริง สำหรับเลือกไปประเมิน
+func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || role != "coach" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อนักเรียนของตัวเองได้"})
+		return
+	}
+
+	students, err := ctrl.evalService.GetMyStudents(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	responses := make([]dto.EvaluableStudentResponse, 0, len(students))
+	for _, s := range students {
+		responses = append(responses, dto.EvaluableStudentResponse{
+			CustomerID:     s.ID,
+			Nickname:       s.Nickname,
+			ProfilePicture: s.ProfilePicture,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// GetMyGivenEvaluations handles GET /api/evaluations/me/given
+// โค้ชดูประวัติการประเมินทั้งหมดที่ตัวเองเคยให้ไว้ (ทุกนักเรียน)
+func (ctrl *EvaluationController) GetMyGivenEvaluations(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || role != "coach" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูข้อมูลนี้ได้"})
+		return
+	}
+
+	evaluations, err := ctrl.evalService.GetEvaluationsByCoachUserID(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var responses []dto.EvaluationResponse
+	for _, ev := range evaluations {
+		responses = append(responses, dto.EvaluationResponse{
+			ID:         ev.ID,
+			CustomerID: ev.CustomerID,
+			CoachID:    ev.CoachID,
+			Assessment: ev.Assessment,
+			Score:      ev.Score,
+			VideoURL:   ev.VideoURL,
+			CreatedAt:  ev.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
 }
 
 // GetMyEvaluations handles GET /api/evaluations/me
@@ -101,7 +165,8 @@ func (ctrl *EvaluationController) GetMyEvaluations(c *gin.Context) {
 }
 
 // GetStudentEvaluations handles GET /api/evaluations/student/:customer_id
-// โค้ชหรือแอดมิน (หรือเจ้าตัวนักเรียน) ดูประวัติการประเมินของนักเรียนคนใดคนหนึ่ง
+// โค้ช (เฉพาะนักเรียนที่ลงทะเบียนเรียนกับตัวเอง) หรือเจ้าตัวนักเรียน ดูประวัติการประเมิน
+// แอดมินไม่มีสิทธิ์เข้าถึง endpoint นี้
 func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 	customerIDParam, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
 	if err != nil {
@@ -116,9 +181,18 @@ func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 		return
 	}
 
-	// เช็คสิทธิ์ (IDOR check)
-	// ถ้าไม่ใช่ admin หรือ coach ต้องเป็นตัวนักเรียนคนนั้นเอง
-	if role != "admin" && role != "coach" {
+	// เช็คสิทธิ์ (IDOR check) — แอดมินดูข้อมูลการประเมินไม่ได้เลยตามนโยบายของระบบนี้
+	// โค้ชดูได้เฉพาะนักเรียนที่ลงทะเบียนเรียนกับตัวเองจริง ส่วนนักเรียนดูได้เฉพาะของตัวเอง
+	switch role {
+	case "admin":
+		c.JSON(http.StatusForbidden, gin.H{"error": "ผู้ดูแลระบบไม่มีสิทธิ์ดูข้อมูลการประเมินของนักเรียน"})
+		return
+	case "coach":
+		if err := ctrl.evalService.VerifyCoachCanAccessStudent(userID, customerID); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินของนักเรียนคนนี้"})
+			return
+		}
+	default:
 		myCustomerID, err := services.ResolveCustomerID(ctrl.db, userID)
 		if err != nil || myCustomerID != customerID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินนี้"})

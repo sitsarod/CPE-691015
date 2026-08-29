@@ -15,6 +15,54 @@ func NewEvaluationService(db *gorm.DB) *EvaluationService {
 	return &EvaluationService{db: db}
 }
 
+// ErrCustomerNotEnrolledWithCoach ใช้เมื่อโค้ชพยายามประเมิน/ดูข้อมูลนักเรียนที่ไม่ได้ลงทะเบียน
+// เรียนกับคอร์สของโค้ชคนนี้ — กันโค้ชคนหนึ่งยุ่งกับนักเรียนของโค้ชคนอื่น
+var ErrCustomerNotEnrolledWithCoach = errors.New("นักเรียนคนนี้ยังไม่ได้ลงทะเบียนเรียนกับโค้ชคนนี้ จึงยังทำรายการนี้ไม่ได้")
+
+// enrolledEvaluableStatuses = สถานะ enrollment ที่นับว่า "ลงทะเบียนแล้ว" สำหรับการประเมิน
+//
+// ไม่รวม awaiting_payment เพราะนักเรียนยังไม่เริ่มเรียนจริง ไม่มีอะไรให้ประเมิน
+var enrolledEvaluableStatuses = []models.EnrollmentStatus{
+	models.EnrollmentStatusActive,
+	models.EnrollmentStatusCompleted,
+}
+
+// customerEnrolledWithCoachID ตรวจว่านักเรียน (customerID) เคยลงทะเบียนเรียนคอร์สที่โค้ชคนนี้สอนจริง
+// ไล่ผ่าน Enrollment -> Package -> Course -> WorkSchedule.CoachID
+//
+// ⚠️ Course.UserID คือแอดมินที่สร้างคอร์ส "ไม่ใช่" โค้ชที่สอน (ดูคอมเมนต์ (C2) ใน
+// controllers/course.go) ความเชื่อมโยงคอร์ส -> โค้ชตัวจริงมาจากตาราง work_schedules
+// เท่านั้น — รูปแบบเดียวกับที่ใช้ใน reviewService.GetCourseCoaches
+//
+// coachID ที่รับเข้ามาคือ coaches.id (ไม่ใช่ users.id) ผู้เรียกต้อง resolve มาก่อน
+func (s *EvaluationService) customerEnrolledWithCoachID(coachID, customerID uint) error {
+	var count int64
+	err := s.db.Model(&models.Enrollment{}).
+		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Joins("JOIN work_schedules ON work_schedules.course_id = packages.course_id AND work_schedules.deleted_at IS NULL").
+		Where("enrollments.customer_id = ?", customerID).
+		Where("work_schedules.coach_id = ?", coachID).
+		Where("enrollments.status IN ?", enrolledEvaluableStatuses).
+		Count(&count).Error
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrCustomerNotEnrolledWithCoach
+	}
+	return nil
+}
+
+// VerifyCoachCanAccessStudent ตรวจว่าโค้ชคนนี้ (userID จาก JWT) มีสิทธิ์เข้าถึงประวัติการประเมินของนักเรียนคนนี้
+// (ต้องเป็นนักเรียนที่ลงทะเบียนเรียนคอร์สที่โค้ชคนนี้สอนจริง)
+func (s *EvaluationService) VerifyCoachCanAccessStudent(coachUserID, customerID uint) error {
+	coachID, err := resolveCoachIDByUser(s.db, coachUserID)
+	if err != nil {
+		return ErrCustomerNotEnrolledWithCoach
+	}
+	return s.customerEnrolledWithCoachID(coachID, customerID)
+}
+
 // CreateEvaluation บันทึกการประเมินนักเรียนโดยโค้ช
 func (s *EvaluationService) CreateEvaluation(coachUserID uint, req dto.CreateEvaluationRequest) (*models.Evaluation, error) {
 	// 1. ตรวจสอบว่าโค้ชมีจริงหรือไม่
@@ -27,6 +75,11 @@ func (s *EvaluationService) CreateEvaluation(coachUserID uint, req dto.CreateEva
 	var customer models.Customer
 	if err := s.db.First(&customer, req.CustomerID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลนักเรียนที่ต้องการประเมิน")
+	}
+
+	// 3. ตรวจสอบว่านักเรียนคนนี้ลงทะเบียนเรียนกับโค้ชคนนี้จริง (กันโค้ชประเมินนักเรียนที่ไม่ใช่ลูกศิษย์ตัวเอง)
+	if err := s.customerEnrolledWithCoachID(coach.ID, req.CustomerID); err != nil {
+		return nil, err
 	}
 
 	evaluation := models.Evaluation{
@@ -47,6 +100,29 @@ func (s *EvaluationService) CreateEvaluation(coachUserID uint, req dto.CreateEva
 	}
 
 	return &evaluation, nil
+}
+
+// GetMyStudents ดึงรายชื่อนักเรียนที่ลงทะเบียนเรียนกับโค้ชคนนี้อยู่จริง (สำหรับให้เลือกประเมิน)
+// ใช้ enrolledEvaluableStatuses ชุดเดียวกับตอนสร้าง/ดูการประเมิน เพื่อให้รายชื่อตรงกับสิทธิ์จริง
+func (s *EvaluationService) GetMyStudents(coachUserID uint) ([]models.Customer, error) {
+	coachID, err := resolveCoachIDByUser(s.db, coachUserID)
+	if err != nil {
+		return nil, errors.New("ไม่พบข้อมูลโค้ช")
+	}
+
+	var customers []models.Customer
+	err = s.db.
+		Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
+		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Joins("JOIN work_schedules ON work_schedules.course_id = packages.course_id AND work_schedules.deleted_at IS NULL").
+		Where("work_schedules.coach_id = ?", coachID).
+		Where("enrollments.status IN ?", enrolledEvaluableStatuses).
+		Group("customers.id").
+		Find(&customers).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อนักเรียนได้")
+	}
+	return customers, nil
 }
 
 // GetEvaluationsByStudentID ดึงข้อมูลการประเมินของนักเรียนคนนั้นๆ (CustomerID)
