@@ -45,6 +45,8 @@ func main() {
 		&models.Review{},
 		&models.DetectedVideo{},
 		&models.RawVideo{},
+		&models.DetectedPhoto{},
+		&models.RawPhoto{},
 		&models.Course{},
 		&models.Package{},
 		&models.PackageSchedule{},

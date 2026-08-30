@@ -17,10 +17,28 @@ func NewDetectedVideoService(db *gorm.DB) *DetectedVideoService {
 	return &DetectedVideoService{db: db}
 }
 
+// ErrRawVideoForbidden ใช้เมื่อโค้ชพยายามจัดการ/ดูวิดีโอที่ไม่ใช่ของตัวเอง (กัน IDOR)
+// วิดีโอที่แอดมินอัปโหลดเอง (CoachID เป็น nil) จะให้เฉพาะแอดมินจัดการได้เท่านั้น
+var ErrRawVideoForbidden = errors.New("ไม่มีสิทธิ์เข้าถึงวิดีโอนี้")
+
+// VerifyCoachOwnsRawVideo คืน nil ถ้าผู้ใช้เป็นแอดมิน หรือเป็นโค้ชเจ้าของวิดีโอนี้จริง
+func VerifyCoachOwnsRawVideo(db *gorm.DB, rawVideo *models.RawVideo, userID uint, role string) error {
+	if role == string(models.AdminRole) {
+		return nil
+	}
+	coachID, err := resolveCoachIDByUser(db, userID)
+	if err != nil || rawVideo.CoachID == nil || *rawVideo.CoachID != coachID {
+		return ErrRawVideoForbidden
+	}
+	return nil
+}
+
 // CreateRawVideo บันทึกวิดีโอต้นฉบับที่อัปโหลดโดยโค้ช
-func (s *DetectedVideoService) CreateRawVideo(videoURL string) (*models.RawVideo, error) {
+// coachID เป็น nil เมื่อแอดมินเป็นคนอัปโหลดเอง (ไม่ผูกกับโค้ชคนไหน)
+func (s *DetectedVideoService) CreateRawVideo(videoURL string, coachID *uint) (*models.RawVideo, error) {
 	rawVideo := models.RawVideo{
 		VideoURL: videoURL,
+		CoachID:  coachID,
 	}
 	if err := s.db.Create(&rawVideo).Error; err != nil {
 		return nil, errors.New("ไม่สามารถบันทึกข้อมูลวิดีโอต้นฉบับได้")
@@ -82,19 +100,27 @@ func (s *DetectedVideoService) ProcessFaceDetection(rawVideoID uint, videoURL st
 }
 
 // ManuallyAssignStudentsToVideo โค้ชระบุรายชื่อนักเรียนในวิดีโอเอง (เพื่อแก้ไขกรณี AI ตรวจไม่พบ หรือโค้ชเลือกเอง)
-func (s *DetectedVideoService) ManuallyAssignStudentsToVideo(rawVideoID uint, videoURL string, customerIDs []uint) ([]models.DetectedVideo, error) {
+//
+// เฉพาะนักเรียนที่ยินยอมให้เก็บข้อมูลใบหน้าแล้ว (FaceConsentStatus == granted) เท่านั้นที่จะถูกผูกจริง
+// คนที่ไม่มีอยู่จริงหรือยังไม่ยินยอมจะถูกข้าม และคืนรายชื่อที่ถูกข้ามเพราะไม่ยินยอมแยกไว้
+// ให้ฝั่งเรียกแจ้งโค้ชได้ว่าทำไมบางคนถึงไม่ถูกเพิ่ม
+func (s *DetectedVideoService) ManuallyAssignStudentsToVideo(rawVideoID uint, videoURL string, customerIDs []uint) (assigned []models.DetectedVideo, skippedNoConsent []uint, err error) {
 	// ลบความสัมพันธ์การตรวจจับใบหน้าเดิมของวิดีโอนี้ออกก่อน
-	err := s.db.Where("raw_video_id = ?", rawVideoID).Delete(&models.DetectedVideo{}).Error
-	if err != nil {
-		return nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลการวิเคราะห์วิดีโอเดิมได้")
+	if err := s.db.Where("raw_video_id = ?", rawVideoID).Delete(&models.DetectedVideo{}).Error; err != nil {
+		return nil, nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลการวิเคราะห์วิดีโอเดิมได้")
 	}
 
-	var results []models.DetectedVideo
 	for _, customerID := range customerIDs {
 		// ตรวจสอบว่านักเรียนมีจริงหรือไม่
 		var cust models.Customer
 		if err := s.db.First(&cust, customerID).Error; err != nil {
 			continue // ข้ามถ้าไม่พบ
+		}
+
+		// กันโค้ชแท็กนักเรียนที่ไม่เคยยินยอมให้เก็บข้อมูลใบหน้าเข้าไปในวิดีโอ
+		if cust.FaceConsentStatus != models.FaceConsentGranted {
+			skippedNoConsent = append(skippedNoConsent, customerID)
+			continue
 		}
 
 		detectedVideo := models.DetectedVideo{
@@ -104,14 +130,14 @@ func (s *DetectedVideoService) ManuallyAssignStudentsToVideo(rawVideoID uint, vi
 		}
 
 		if err := s.db.Create(&detectedVideo).Error; err != nil {
-			return nil, errors.New("ไม่สามารถจัดเก็บข้อมูลนักเรียนในวิดีโอได้")
+			return nil, nil, errors.New("ไม่สามารถจัดเก็บข้อมูลนักเรียนในวิดีโอได้")
 		}
 
 		s.db.Preload("Customer").Preload("Customer.User").First(&detectedVideo, detectedVideo.ID)
-		results = append(results, detectedVideo)
+		assigned = append(assigned, detectedVideo)
 	}
 
-	return results, nil
+	return assigned, skippedNoConsent, nil
 }
 
 // GetDetectedVideosByStudentID ค้นหาวิดีโอทั้งหมดที่มีภาพนักเรียนคนนี้ปรากฏตัวอยู่

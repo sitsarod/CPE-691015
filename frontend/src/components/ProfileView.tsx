@@ -6,7 +6,9 @@ import { getUserProfileAPI, type UserProfileResponseDTO } from "@/services/userA
 import { fetchMyEvaluations } from "@/services/evaluationAPI";
 import type { Evaluation } from "@/types/evaluation";
 import EvaluationScoreChart from "@/components/EvaluationScoreChart";
-import { Grid2X2, ClipboardCheck } from "lucide-react";
+import { fetchMyPosts } from "@/services/postAPI";
+import type { PostItem } from "@/types/post";
+import { Grid2X2, ClipboardCheck, ImageOff } from "lucide-react";
 
 
 const ROLE_LABEL: Record<string, string> = {
@@ -113,6 +115,9 @@ export default function ProfileView({
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalError, setEvalError] = useState<string | null>(null);
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsError, setPostsError] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
@@ -138,6 +143,16 @@ export default function ProfileView({
       .then(setEvaluations)
       .catch((err: unknown) => setEvalError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลการประเมินได้"))
       .finally(() => setEvalLoading(false));
+  }, [isStudentRole]);
+
+  useEffect(() => {
+    if (!isStudentRole) return;
+    setPostsLoading(true);
+    setPostsError(null);
+    fetchMyPosts()
+      .then(setPosts)
+      .catch((err: unknown) => setPostsError(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลโพสต์ได้"))
+      .finally(() => setPostsLoading(false));
   }, [isStudentRole]);
 
   const fullName =
@@ -213,7 +228,7 @@ export default function ProfileView({
               </div>
 
               <div className="flex flex-row items-center gap-6 text-sm md:text-lg text-gray-600 font-medium">
-                <span><strong className="text-gray-900 font-bold">0</strong> posts</span>
+                <span><strong className="text-gray-900 font-bold">{posts.length}</strong> posts</span>
                 <span><strong className="text-gray-900 font-bold">182</strong> followers</span>
               </div>
             </div>
@@ -297,6 +312,43 @@ export default function ProfileView({
           )}
 
         </div>
+
+        {/* เนื้อหาแท็บ Posts — รูป/วิดีโอที่ถูกแท็ก (เฉพาะคนที่เคยยินยอมให้เก็บข้อมูลใบหน้าเท่านั้น
+            ถึงจะมีโพสต์ให้เห็น — ฝั่ง backend กรองให้แล้วที่ /students/posts/me) */}
+        {activeTab === "posts" && (
+          <div className="w-full pt-8">
+            {postsLoading ? (
+              <p className="text-center text-sm text-gray-400">กำลังโหลดโพสต์...</p>
+            ) : postsError ? (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
+                {postsError}
+              </div>
+            ) : posts.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-14 text-center text-gray-400">
+                <ImageOff className="h-9 w-9 text-gray-300" />
+                <p className="text-sm">ยังไม่มีรูปหรือวิดีโอที่คุณถูกแท็กไว้</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
+                {posts.map((post) => (
+                  <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
+                    {post.type === "video" ? (
+                      <video src={post.media_url} className="h-full w-full object-cover" muted />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={post.media_url} alt="โพสต์" className="h-full w-full object-cover" />
+                    )}
+                    {post.type === "video" && (
+                      <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        วิดีโอ
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* เนื้อหาแท็บ Evaluation (เฉพาะนักเรียน) */}
         {activeTab === "evaluation" && isStudentRole && (
