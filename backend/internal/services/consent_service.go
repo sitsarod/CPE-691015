@@ -218,6 +218,14 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 // withdrawAndDeletePhotos เขียนแถวถอนความยินยอม + ลบภาพใบหน้า ในทรานแซกชันเดียว
 //
 // คืนรายการ URL ของไฟล์ที่ต้องลบตามหลัง commit
+//
+// ⚠️ นักเรียนที่ถอนความยินยอมแล้ว ต้องไม่เหลือ "หลักฐานว่าเคยถูกจำแนกใบหน้า" ค้างอยู่ด้วย
+// จึงต้องลบ DetectedVideo/DetectedPhoto (แถวที่บอกว่า "นักเรียนคนนี้อยู่ในวิดีโอ/รูปไหนบ้าง")
+// ของนักเรียนคนนั้นออกไปพร้อมกันในทรานแซกชันเดียวกัน — ไม่ลบ RawVideo/RawPhoto (ไฟล์ต้นฉบับ)
+// เอง เพราะอาจมีนักเรียนคนอื่นที่ยังยินยอมอยู่ถูกแท็กอยู่ในสื่อชิ้นเดียวกันด้วย
+//
+// ใช้ Unscoped() (ลบจริง ไม่ใช่ soft delete) ด้วยเหตุผลเดียวกับ Photo — แถวนี้คือ
+// หลักฐานผลลัพธ์การจำแนกใบหน้า นับเป็นข้อมูลชีวภาพเช่นกัน
 func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, error) {
 	var photoFiles []string
 
@@ -232,6 +240,9 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 			files, err = DeleteCoachPhotos(tx, *subject.CoachID)
 		} else {
 			files, err = DeleteCustomerPhotos(tx, *subject.CustomerID)
+			if err == nil {
+				err = deleteFaceDetectionLinks(tx, *subject.CustomerID)
+			}
 		}
 		if err != nil {
 			return err
@@ -244,6 +255,18 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 		return nil, err
 	}
 	return photoFiles, nil
+}
+
+// deleteFaceDetectionLinks ลบแถว DetectedVideo/DetectedPhoto ของนักเรียนคนนี้ทั้งหมด
+// (ตัวไฟล์ RawVideo/RawPhoto ไม่ถูกลบ — ดูเหตุผลในคอมเมนต์ของ withdrawAndDeletePhotos)
+func deleteFaceDetectionLinks(tx *gorm.DB, customerID uint) error {
+	if err := tx.Unscoped().Where("customer_id = ?", customerID).Delete(&models.DetectedVideo{}).Error; err != nil {
+		return errors.New("ไม่สามารถลบประวัติวิดีโอที่เคยตรวจพบใบหน้าได้")
+	}
+	if err := tx.Unscoped().Where("customer_id = ?", customerID).Delete(&models.DetectedPhoto{}).Error; err != nil {
+		return errors.New("ไม่สามารถลบประวัติรูปที่เคยตรวจพบใบหน้าได้")
+	}
+	return nil
 }
 
 // writeConsent เขียนแถว audit + อัปเดตสถานะปัจจุบัน ใน transaction เดียว

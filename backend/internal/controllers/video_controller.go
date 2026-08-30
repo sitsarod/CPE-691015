@@ -30,10 +30,19 @@ func NewVideoController(videoService *services.DetectedVideoService, db *gorm.DB
 // UploadVideo handles POST /api/coaches/videos
 // โค้ชอัปโหลดวิดีโอ ระบบจะบันทึกและรันการวิเคราะห์จำลองใบหน้า (Mock Face Detection)
 func (ctrl *VideoController) UploadVideo(c *gin.Context) {
-	_, role, ok := GetAuthContext(c)
+	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดวิดีโอได้"})
 		return
+	}
+
+	// วิดีโอที่แอดมินอัปโหลดเองจะไม่ผูกกับโค้ชคนไหน (coachID เป็น nil)
+	var coachID *uint
+	if role == "coach" {
+		var coach models.Coach
+		if err := ctrl.db.Where("user_id = ?", userID).First(&coach).Error; err == nil {
+			coachID = &coach.ID
+		}
 	}
 
 	// 1. รับไฟล์วิดีโอ
@@ -68,7 +77,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	videoURL := "http://localhost:8000/uploads/videos/" + filename
 
 	// 2. สร้าง RawVideo บันทึกลง DB
-	rawVideo, err := ctrl.videoService.CreateRawVideo(videoURL)
+	rawVideo, err := ctrl.videoService.CreateRawVideo(videoURL, coachID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -100,7 +109,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 // ManuallyAssignStudents handles POST /api/coaches/videos/:raw_video_id/assign
 // โค้ชติ๊กเลือกนักเรียนในวิดีโอด้วยตนเอง (Override / แก้ไขผลจาก AI)
 func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
-	_, role, ok := GetAuthContext(c)
+	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลวิดีโอนี้ได้"})
 		return
@@ -120,6 +129,12 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 		return
 	}
 
+	// เฉพาะแอดมิน หรือโค้ชเจ้าของวิดีโอนี้เท่านั้นที่แก้ไขได้ (กัน IDOR ข้ามวิดีโอของโค้ชคนอื่น)
+	if err := services.VerifyCoachOwnsRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	// รับลิสต์ ID นักเรียนจาก Body
 	var req struct {
 		StudentIDs []uint `json:"student_ids"`
@@ -129,7 +144,7 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 		return
 	}
 
-	results, err := ctrl.videoService.ManuallyAssignStudentsToVideo(rawVideoID, rawVideo.VideoURL, req.StudentIDs)
+	results, skipped, err := ctrl.videoService.ManuallyAssignStudentsToVideo(rawVideoID, rawVideo.VideoURL, req.StudentIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -141,8 +156,9 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "อัปเดตรายชื่อนักเรียนที่มีส่วนร่วมในวิดีโอนี้สำเร็จแล้ว",
-		"student_ids": studentIDs,
+		"message":             "อัปเดตรายชื่อนักเรียนที่มีส่วนร่วมในวิดีโอนี้สำเร็จแล้ว",
+		"student_ids":         studentIDs,
+		"skipped_no_consent":  skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
 	})
 }
 
@@ -182,14 +198,30 @@ func (ctrl *VideoController) GetMyDetectedVideos(c *gin.Context) {
 }
 
 // GetVideoDetectedStudents handles GET /api/coaches/videos/:raw_video_id/students
-// ดึงรายชื่อนักเรียนที่ระบบวิเคราะห์ว่าอยู่ในวิดีโอนี้
+// ดึงรายชื่อนักเรียนที่ระบบวิเคราะห์ว่าอยู่ในวิดีโอนี้ — เฉพาะแอดมิน หรือโค้ชเจ้าของวิดีโอนี้เท่านั้น
 func (ctrl *VideoController) GetVideoDetectedStudents(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
+		return
+	}
+
 	rawVideoIDParam, err := strconv.ParseUint(c.Param("raw_video_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสวิดีโอไม่ถูกต้อง"})
 		return
 	}
 	rawVideoID := uint(rawVideoIDParam)
+
+	var rawVideo models.RawVideo
+	if err := ctrl.db.First(&rawVideo, rawVideoID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
+		return
+	}
+	if err := services.VerifyCoachOwnsRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	list, err := ctrl.videoService.GetDetectedVideosByRawVideoID(rawVideoID)
 	if err != nil {

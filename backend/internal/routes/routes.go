@@ -101,6 +101,9 @@ func SetupRoutes(r *gin.Engine) {
 	videoService := services.NewDetectedVideoService(db)
 	videoController := controllers.NewVideoController(videoService, db)
 
+	photoPostService := services.NewDetectedPhotoService(db)
+	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, db)
+
 	photoController := controllers.NewPhotoController(db)
 
 	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
@@ -301,6 +304,20 @@ func SetupRoutes(r *gin.Engine) {
 			videoGroup.POST("/:raw_video_id/assign", videoController.ManuallyAssignStudents)
 			videoGroup.GET("/me", videoController.GetMyDetectedVideos)
 			videoGroup.GET("/:raw_video_id/students", videoController.GetVideoDetectedStudents)
+		}
+
+		// --- รูปโพสต์ที่โค้ชอัปโหลด (อาจมีนักเรียนหลายคนอยู่ในรูปเดียว) ---
+		photoPostGroup := protected.Group("/photo-posts")
+		{
+			photoPostGroup.POST("", photoPostController.UploadPhotoPost)
+			photoPostGroup.POST("/:raw_photo_id/assign", photoPostController.AssignStudentsToPhoto)
+			photoPostGroup.GET("/:raw_photo_id/students", photoPostController.GetPhotoDetectedStudents)
+		}
+
+		// --- โพสต์ (รูป+วิดีโอ) รวมของนักเรียนที่ล็อกอินอยู่ — ใช้กับแท็บ Posts ในโปรไฟล์ ---
+		studentPostsGroup := protected.Group("/students/posts")
+		{
+			studentPostsGroup.GET("/me", photoPostController.GetMyPosts)
 		}
 
 		enrollmentGroup := protected.Group("/enrollments")
