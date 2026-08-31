@@ -31,6 +31,10 @@ type Coach struct {
 	PaymentType string  `json:"payment_type" gorm:"type:varchar(20);default:'per_session'" valid:"required~paymentType is required"`
 	PayRate     float64 `json:"pay_rate" gorm:"type:decimal(10,2);default:0"` // อัตราค่าจ้าง: บาท/ครั้ง ถ้า per_session หรือ บาท/เดือน ถ้า monthly
 
+	// Bio = รายละเอียดเพิ่มเติม/แนะนำตัวของโค้ช (ประวัติ ความเชี่ยวชาญ ผลงาน)
+	// แสดงตอนผู้เยี่ยมชมคลิกโค้ชในส่วนบุคลากรหน้าแรก — แอดมินเป็นผู้กรอกให้ ไม่บังคับ
+	Bio string `json:"bio" gorm:"type:text"`
+
 	// PersonalQRCode คือ QR ประจำตัวถาวรของโค้ช ใช้สแกนเช็คชื่อเข้างาน
 	//
 	// ใช้ namespace เดียวกับ QR ของลูกค้า คือค่าไม่ซ้ำกันข้ามทั้งสองตาราง

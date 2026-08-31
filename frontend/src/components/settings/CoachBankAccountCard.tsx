@@ -114,65 +114,65 @@ export default function CoachBankAccountCard({
 
   return (
     <div className="rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="p-6">
-        <div className="flex items-start gap-4">
+      <div className="p-4 sm:p-6">
+        <div className="flex items-start gap-3 sm:gap-4">
           <div className="p-3 rounded-xl bg-red-50 flex-shrink-0">
             <Landmark className="w-6 h-6 text-[#CC0000]" />
           </div>
 
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0">
             <h2 className="font-bold text-gray-900">บัญชีรับเงิน</h2>
             <p className="text-sm text-gray-500 mt-1 leading-relaxed">
               ปลายทางที่โรงเรียนโอนค่าจ้างให้ท่าน การเปลี่ยนข้อมูลนี้ต้องยืนยันรหัสผ่านทุกครั้ง
             </p>
-
-            {notice && (
-              <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm">
-                {notice}
-              </div>
-            )}
-
-            {/* ชื่อคอลัมน์กับความหมายสลับกันอยู่: bank_account เก็บ "ชื่อธนาคาร"
-                ส่วน payment_info เก็บ "เลขบัญชี" — แก้ชื่อคอลัมน์ตอนนี้จะกระทบโค้ดเพื่อน
-                หลายจุด จึงใช้ label สื่อความหมายที่ถูกต้องแทน ให้ตรงกับหน้าจัดการสมาชิก */}
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SelectField
-                label="ธนาคาร"
-                name="bankAccount"
-                options={BANK_OPTIONS}
-                value={draft.bankAccount}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, bankAccount: e.target.value }));
-                  setNotice(null);
-                }}
-              />
-              <InputField
-                label="เลขบัญชี"
-                name="paymentInfo"
-                inputMode="numeric"
-                value={draft.paymentInfo}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, paymentInfo: e.target.value.replace(/\D/g, "") }));
-                  setNotice(null);
-                }}
-                placeholder="ระบุเลขบัญชี"
-              />
-            </div>
-
-            <div className="mt-4">
-              <InputField
-                label="พร้อมเพย์"
-                name="promptPay"
-                inputMode="numeric"
-                value={draft.promptPay}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, promptPay: e.target.value.replace(/\D/g, "") }));
-                  setNotice(null);
-                }}
-                placeholder="เบอร์โทรหรือเลขบัตรประชาชนที่ผูกพร้อมเพย์"
-              />
-            </div>
           </div>
+        </div>
+
+        {notice && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm">
+            {notice}
+          </div>
+        )}
+
+        {/* ชื่อคอลัมน์กับความหมายสลับกันอยู่: bank_account เก็บ "ชื่อธนาคาร"
+            ส่วน payment_info เก็บ "เลขบัญชี" — แก้ชื่อคอลัมน์ตอนนี้จะกระทบโค้ดเพื่อน
+            หลายจุด จึงใช้ label สื่อความหมายที่ถูกต้องแทน ให้ตรงกับหน้าจัดการสมาชิก */}
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SelectField
+            label="ธนาคาร"
+            name="bankAccount"
+            options={BANK_OPTIONS}
+            value={draft.bankAccount}
+            onChange={(e) => {
+              setDraft((prev) => ({ ...prev, bankAccount: e.target.value }));
+              setNotice(null);
+            }}
+          />
+          <InputField
+            label="เลขบัญชี"
+            name="paymentInfo"
+            inputMode="numeric"
+            value={draft.paymentInfo}
+            onChange={(e) => {
+              setDraft((prev) => ({ ...prev, paymentInfo: e.target.value.replace(/\D/g, "") }));
+              setNotice(null);
+            }}
+            placeholder="ระบุเลขบัญชี"
+          />
+        </div>
+
+        <div className="mt-4">
+          <InputField
+            label="พร้อมเพย์"
+            name="promptPay"
+            inputMode="numeric"
+            value={draft.promptPay}
+            onChange={(e) => {
+              setDraft((prev) => ({ ...prev, promptPay: e.target.value.replace(/\D/g, "") }));
+              setNotice(null);
+            }}
+            placeholder="เบอร์โทรหรือเลขบัตรประชาชนที่ผูกพร้อมเพย์"
+          />
         </div>
       </div>
 

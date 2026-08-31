@@ -213,7 +213,7 @@ export default function CoachSchedulePage() {
                           const hasCoach = s.assigned_coaches.length > 0;
                           return (
                             <button
-                              key={`${s.course_id}-${s.date}-${s.start_time}`}
+                              key={`${s.course_id}-${s.date}-${s.start_time}-${s.end_time}`}
                               onClick={() => { setActiveSession(s); setActiveIsPast(isPast); }}
                               className={`w-full text-left rounded-xl border ${color.soft} p-3 transition hover:shadow-md cursor-pointer ${isPast ? "opacity-60" : ""}`}
                             >

@@ -65,6 +65,8 @@ export interface CoachProfile {
   prompt_pay?: string;
   payment_type: CoachPaymentType;
   pay_rate: number;
+  /** รายละเอียดเพิ่มเติม/แนะนำตัว แสดงตอนคลิกโค้ชในหน้าแรก (แอดมินกรอกให้) */
+  bio?: string;
   /** QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน (มีเฉพาะใน response ตัวรายละเอียด) */
   personalQR?: string;
   /** รหัสประจำตัวแบบอ่านออกพูดได้ เช่น KYC0001 — ไม่ใช่ความลับ ใช้อ้างอิงถึงคน */

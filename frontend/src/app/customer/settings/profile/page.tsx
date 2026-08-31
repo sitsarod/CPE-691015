@@ -1,15 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { IdCard, Phone, AlertCircle } from 'lucide-react';
 import Button from '@/components/Button';
 import InputField from '@/components/InputField';
-import SelectField from '@/components/SelectField';
 import AvatarUploader from '@/components/AvatarUploader';
 import {
   getUserProfileAPI,
   updateUserProfileAPI,
   UserProfileResponseDTO
 } from '@/services/userAPI';
+
+const GENDER_LABEL: Record<string, string> = { male: "ชาย", female: "หญิง" };
+
+// ช่องแสดงข้อมูลแบบอ่านอย่างเดียว (ให้ตรงกับหน้าโปรไฟล์โค้ช)
+function ReadItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-2.5">
+      <dt className="text-xs font-medium text-gray-400">{label}</dt>
+      <dd className="text-sm font-semibold text-gray-800 mt-0.5 break-words">{value || "-"}</dd>
+    </div>
+  );
+}
 
 export default function EditForm() {
   const [userId, setUserId] = useState<number | null>(null);
@@ -116,108 +128,118 @@ export default function EditForm() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 p-6 md:p-12 text-center text-gray-500 font-medium">
+      <div className="w-full h-[50vh] flex items-center justify-center text-gray-500 font-medium">
         กำลังโหลดข้อมูลโปรไฟล์จากระบบ...
       </div>
     );
   }
 
+  const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(" ");
+  const initials = (formData.firstName?.[0] || formData.nickname?.[0] || "?").toUpperCase();
+
   return (
-    <div className="flex-1 p-6 md:p-12 overflow-y-auto max-w-4xl">
-      <h1 className="text-2xl font-black mb-8">Edit profile</h1>
+    <div className="max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">แก้ไขโปรไฟล์</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          แก้ได้เองเฉพาะช่องทางติดต่อ ส่วนข้อมูลตัวตนต้องแจ้งแอดมินเพื่อแก้ให้
+        </p>
+      </div>
 
       {errorMsg && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium">
-          {errorMsg}
+        <div className="p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {errorMsg}
         </div>
       )}
 
-      {/* Profile Header — อัปโหลดรูปโปรไฟล์ขึ้น Cloudinary */}
-      <div className="w-full bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex items-center gap-5 mb-8 shadow-xs">
+      {/* ── การ์ดโปรไฟล์ (avatar + อัปโหลดรูป) ── */}
+      <div className="rounded-2xl border border-gray-200 p-6 flex flex-col sm:flex-row items-center sm:items-start gap-5">
         <AvatarUploader
           currentUrl={profilePicture}
-          initials={(formData.firstName?.[0] || formData.nickname?.[0] || "?").toUpperCase()}
+          initials={initials}
           folder="profile"
           disabled={userId === null}
           onUploaded={handleAvatarUploaded}
         />
-        <div className="min-w-0">
-          <p className="font-bold text-gray-900 truncate">
-            {[formData.firstName, formData.lastName].filter(Boolean).join(" ") || "ผู้เรียน"}
-          </p>
-          {formData.nickname && <p className="text-sm text-gray-500 truncate">({formData.nickname})</p>}
+        <div className="flex-1 min-w-0 text-center sm:text-left">
+          <h2 className="text-lg font-bold text-gray-900 truncate">{fullName || "ผู้เรียน"}</h2>
+          {formData.nickname && <p className="text-sm text-gray-500">({formData.nickname})</p>}
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-row flex-wrap w-full gap-y-5 text-left bg-white">
-        
-        {/* (ReadOnly) */}
-        <InputField 
-          label="ชื่อ" name="firstName" value={formData.firstName} readOnly disabled 
-          containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
-        />
-        <InputField 
-          label="นามสกุล" name="lastName" value={formData.lastName} readOnly disabled 
-          containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
-        />
-        <InputField 
-          label="ชื่อเล่น" name="nickname" value={formData.nickname} readOnly disabled 
-          containerClassName="w-full sm:w-[calc(50%-0.75rem)] mr-auto" 
-        />
-        <SelectField 
-          label="เพศ" name="gender" value={formData.gender} disabled 
-          containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
-          options={[{ label: "ชาย", value: "male" }, { label: "หญิง", value: "female" }]} 
-        />
-        <InputField 
-          label="วันเกิด" name="birthDate" type="date" value={formData.birthDate} readOnly disabled 
-        />
+      {/* ── ข้อมูลส่วนตัว (อ่านอย่างเดียว) ── */}
+      <div className="rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="p-4 sm:p-6">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="p-3 rounded-xl bg-gray-100 shrink-0">
+              <IdCard className="w-6 h-6 text-gray-500" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-bold text-gray-900">ข้อมูลส่วนตัว</h2>
+              <p className="text-sm text-gray-500 mt-1">แก้เองไม่ได้ ถ้าข้อมูลไม่ถูกต้องกรุณาแจ้งแอดมินเพื่อแก้ให้</p>
+            </div>
+          </div>
 
-        {/*
-          อีเมลแก้เองไม่ได้ เพราะเป็นชื่อผู้ใช้ที่ใช้ล็อกอินและเป็นปลายทางของการกู้รหัสผ่าน
-          ถ้าเปลี่ยนเองได้ ใครที่ยึด session ไปได้จะยึดบัญชีถาวรทันที
-          ต้องแจ้งแอดมินให้เปลี่ยนให้หลังตรวจหลักฐานแทน
-        */}
-        <InputField
-          label="อีเมล (แจ้งแอดมินเพื่อเปลี่ยน)" name="email" type="email" value={formData.email}
-          readOnly disabled
-        />
-        <InputField 
-          label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" type="text" value={formData.phoneNumber} required 
-          onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ" 
-        />
-        <InputField
-          label="Line ID (ถ้ามี)" name="lineId" type="text" value={formData.lineId}
-          onChange={handleChange} placeholder="ระบุ Line ID"
-        />
-        <InputField
-          label="Facebook (ถ้ามี)" name="facebook" type="text" value={formData.facebook}
-          onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
-        />
-        <InputField
-          label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" value={formData.parentEmail}
-          onChange={handleChange} placeholder="ระบุอีเมลผู้ปกครอง" 
-        />
-        <InputField 
-          label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" type="text" value={formData.parentPhoneNumber} 
-          onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" 
-        />
-
-        <div className="flex flex-row gap-3 pt-6 border-t border-gray-200 justify-end w-full mt-4">
-          <Button 
-            variant="outline" type="button" onClick={() => window.history.back()} disabled={isSaving}
-            className="bg-transparent border border-gray-300 hover:bg-gray-50 text-gray-700"
-          >
-            ยกเลิก
-          </Button>
-          <Button 
-            variant="primary" type="submit" disabled={isSaving}
-            className="bg-[#3B82F6] hover:bg-blue-700 text-white shadow-xs"
-          >
-            {isSaving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
-          </Button>
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ReadItem label="ชื่อ - นามสกุล" value={fullName} />
+            <ReadItem label="อีเมล (ใช้ล็อกอิน)" value={formData.email} />
+            <ReadItem label="ชื่อเล่น" value={formData.nickname} />
+            <ReadItem label="เพศ" value={GENDER_LABEL[formData.gender] || ""} />
+            <ReadItem label="วันเกิด" value={formData.birthDate} />
+          </div>
         </div>
+      </div>
 
+      {/* ── ช่องทางติดต่อ (แก้เองได้) ── */}
+      <form onSubmit={handleSave} noValidate>
+        <div className="rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="p-4 sm:p-6">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="p-3 rounded-xl bg-blue-50 shrink-0">
+                <Phone className="w-6 h-6 text-[#3B82F6]" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-bold text-gray-900">ช่องทางติดต่อ</h2>
+                <p className="text-sm text-gray-500 mt-1">ส่วนนี้แก้ไขได้เองทันที ไม่ต้องแจ้งแอดมิน</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <InputField
+                label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" type="text" value={formData.phoneNumber} required
+                onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์มือถือ"
+              />
+              <InputField
+                label="Line ID (ถ้ามี)" name="lineId" type="text" value={formData.lineId}
+                onChange={handleChange} placeholder="ระบุ Line ID"
+              />
+              <InputField
+                label="Facebook (ถ้ามี)" name="facebook" type="text" value={formData.facebook}
+                onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
+              />
+              <InputField
+                label="อีเมลผู้ปกครอง (ถ้ามี)" name="parentEmail" type="email" value={formData.parentEmail}
+                onChange={handleChange} placeholder="ระบุอีเมลผู้ปกครอง"
+              />
+              <InputField
+                label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" type="text" value={formData.parentPhoneNumber}
+                onChange={handleChange} placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-end gap-3">
+            <Button variant="outline" type="button" onClick={() => window.history.back()} disabled={isSaving}>
+              ยกเลิก
+            </Button>
+            <Button
+              variant="primary" type="submit" disabled={isSaving}
+              className="bg-[#3B82F6] hover:bg-blue-700 text-white"
+            >
+              {isSaving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+            </Button>
+          </div>
+        </div>
       </form>
     </div>
   );

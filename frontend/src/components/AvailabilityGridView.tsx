@@ -39,22 +39,36 @@ const slotsToSelected = (list: AvailabilitySlot[]): Set<string> => {
 };
 
 const GRID_TEMPLATE_COLUMNS = `72px repeat(${HOURS.length}, minmax(40px, 1fr))`;
+// บนมือถือใช้ตารางแบบสลับแกน: แถว = ชั่วโมง, คอลัมน์ = 7 วัน (พอดีจอ ไม่ต้องเลื่อนแนวนอน)
+const MOBILE_GRID_COLUMNS = `44px repeat(${DAYS.length}, minmax(0, 1fr))`;
 
 export default function AvailabilityGridView({ slots }: { slots: AvailabilitySlot[] }) {
   const selected = slotsToSelected(slots);
 
   return (
     <div className="rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* เดสก์ท็อป (md+): แถว = วัน, คอลัมน์ = ชั่วโมง */}
+      <div className="hidden md:block overflow-x-auto">
         <div className="min-w-[820px]">
-          {/* หัวตาราง */}
-          <div className="grid bg-slate-50 border-b border-slate-200" style={{ gridTemplateColumns: GRID_TEMPLATE_COLUMNS }}>
-            <div className="py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">DAY</div>
-            {HOURS.map((h) => (
-              <div key={h} className="py-2.5 text-center text-[9px] font-bold text-slate-500">
-                {pad2(h)}-{pad2(h + 1)}
-              </div>
-            ))}
+          {/* หัวตาราง — เลขเวลาอยู่ที่เส้นแบ่งชั่วโมง (หมุด) + หมุดปิดท้าย 24:00 */}
+          <div className="flex bg-slate-50 border-b border-slate-200">
+            <div className="w-[72px] shrink-0 py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">DAY</div>
+            <div className="relative flex-1">
+              {Array.from({ length: HOURS.length + 1 }, (_, i) => {
+                const hour = START_HOUR + i;
+                const transform =
+                  i === 0 ? "translateY(-50%)" : i === HOURS.length ? "translate(-100%,-50%)" : "translate(-50%,-50%)";
+                return (
+                  <span
+                    key={hour}
+                    className="absolute top-1/2 text-[9px] font-bold text-slate-400 tabular-nums whitespace-nowrap"
+                    style={{ left: `${(i / HOURS.length) * 100}%`, transform }}
+                  >
+                    {hour}:00
+                  </span>
+                );
+              })}
+            </div>
           </div>
 
           {/* แถวแต่ละวัน */}
@@ -92,6 +106,54 @@ export default function AvailabilityGridView({ slots }: { slots: AvailabilitySlo
             </div>
           ))}
         </div>
+      </div>
+
+      {/* มือถือ (< md): สลับแกน — แถว = ชั่วโมง, คอลัมน์ = วัน */}
+      <div className="md:hidden">
+        {/* หัวตาราง */}
+        <div className="grid bg-slate-50 border-b border-slate-200" style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}>
+          <div className="py-2.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">TIME</div>
+          {DAYS.map((day) => (
+            <div key={day.value} className="py-2.5 text-center text-[10px] font-bold text-slate-500">
+              {day.label}
+            </div>
+          ))}
+        </div>
+
+        {/* แถวแต่ละชั่วโมง */}
+        {HOURS.map((h, hIdx) => (
+          <div
+            key={h}
+            className={`grid items-stretch ${hIdx !== HOURS.length - 1 ? "border-b border-slate-100" : ""}`}
+            style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}
+          >
+            <div className="py-1 px-2 flex items-center text-[11px] font-bold text-slate-600">{h}:00</div>
+
+            {DAYS.map((day) => {
+              const isSel = selected.has(cellKey(day.value, h));
+              const prevSel = h > START_HOUR && selected.has(cellKey(day.value, h - 1));
+              const nextSel = h < END_HOUR - 1 && selected.has(cellKey(day.value, h + 1));
+              const roundTop = isSel && !prevSel;
+              const roundBottom = isSel && !nextSel;
+
+              return (
+                <div
+                  key={day.value}
+                  title={isSel ? `${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00` : undefined}
+                  className={`flex justify-center h-8 ${roundTop ? "pt-1" : ""} ${roundBottom ? "pb-1" : ""}`}
+                >
+                  {isSel && (
+                    <div
+                      className={`w-6 h-full bg-gradient-to-b from-[#E63946] to-[#CD0D13] ${
+                        roundTop ? "rounded-t-full" : ""
+                      } ${roundBottom ? "rounded-b-full" : ""}`}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -133,6 +133,7 @@ type AdminUpdateCoachProfile struct {
 	Status         *string  `json:"status" binding:"omitempty,oneof=active inactive"`
 	PaymentType    *string  `json:"payment_type" binding:"omitempty,oneof=per_session monthly"`
 	PayRate        *float64 `json:"pay_rate" binding:"omitempty,gt=0"`
+	Bio            *string  `json:"bio"` // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
 }
 
 // ───────────────────────── ดูรายละเอียด ─────────────────────────
@@ -200,6 +201,7 @@ type AdminCoachDetail struct {
 	PromptPay      string  `json:"prompt_pay"`
 	PaymentType    string  `json:"payment_type"`
 	PayRate        float64 `json:"pay_rate"`
+	Bio            string  `json:"bio"`
 }
 
 // ToAdminUserDetail แปลง models.User (ที่ Preload Customer/Coach มาแล้ว) เป็น DTO
@@ -251,6 +253,7 @@ func ToAdminUserDetail(u *models.User) AdminUserDetailResponse {
 			PromptPay:      co.PromptPay,
 			PaymentType:    co.PaymentType,
 			PayRate:        co.PayRate,
+			Bio:            co.Bio,
 		}
 	}
 

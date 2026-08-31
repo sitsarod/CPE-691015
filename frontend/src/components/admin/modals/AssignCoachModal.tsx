@@ -135,16 +135,12 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
         <div className="space-y-7">
           {formError && <FormError message={formError} />}
 
-          {/* โค้ชที่สอนคาบนี้อยู่ */}
-          <div>
-            <p className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-[#CD0D13]" /> โค้ชที่สอนคาบนี้ ({session.assigned_coaches.length})
-            </p>
-            {session.assigned_coaches.length === 0 ? (
-              <p className="text-sm text-slate-400 rounded-xl border border-dashed border-slate-200 py-5 text-center">
-                ยังไม่มีโค้ชรับผิดชอบคาบนี้
+          {/* โค้ชที่สอนคาบนี้อยู่ — แสดงเฉพาะเมื่อมีโค้ชแล้ว */}
+          {session.assigned_coaches.length > 0 && (
+            <div>
+              <p className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-[#CD0D13]" /> โค้ชที่สอนคาบนี้ ({session.assigned_coaches.length})
               </p>
-            ) : (
               <div className="space-y-2.5">
                 {session.assigned_coaches.map((a) => (
                   <div key={a.work_schedule_id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5">
@@ -165,8 +161,8 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* เพิ่มโค้ช — ซ่อนถ้าคาบผ่านไปแล้ว */}
           {isPast ? (
@@ -177,7 +173,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
             <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-[#CD0D13]" /> เพิ่มโค้ช
+                  <Plus className="w-5 h-5 text-[#CD0D13]" /> เลือกโค้ชที่จะมอบหมาย
                 </p>
                 <span className="text-xs text-slate-400">{emergency ? "แสดงทุกคน" : "เฉพาะที่ว่างเวลานี้"}</span>
               </div>
@@ -203,7 +199,9 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                     : "ไม่มีโค้ชว่างตรงเวลานี้ — เปิด “กรณีฉุกเฉิน” ด้านล่างเพื่อแสดงทุกคน"}
                 </p>
               ) : (
-                <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                <>
+                  <p className="text-xs text-slate-400">แตะที่ชื่อโค้ชเพื่อเลือก แล้วกด &quot;มอบหมายโค้ชคนนี้&quot;</p>
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
                   {shownCoaches.map((c) => {
                     const active = selectedCoach === String(c.id);
                     return (
@@ -241,7 +239,8 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                       </button>
                     );
                   })}
-                </div>
+                  </div>
+                </>
               )}
 
               {/* สนาม + รายละเอียด (ไม่บังคับ) */}

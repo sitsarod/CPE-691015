@@ -102,6 +102,7 @@ export interface AdminCoachDetail {
   prompt_pay: string;
   payment_type: string;
   pay_rate: number;
+  bio?: string;
 }
 
 /** ตรงกับ dto.AdminUserDetailResponse */
@@ -206,6 +207,7 @@ export interface AdminUpdateCoachProfile {
   payment_type?: string;
   pay_rate?: number;
   status?: string; // "active" | "inactive"
+  bio?: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
 }
 
 /** ข้อมูลโปรไฟล์ผู้เรียนที่แอดมินแก้ได้ (ตรงกับ dto.AdminUpdateCustomerProfile) */

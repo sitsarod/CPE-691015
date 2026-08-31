@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, AlertCircle, Dumbbell, CircleCheck, CircleSlash } from "lucide-react";
+import { RefreshCw, AlertCircle, Dumbbell, CircleCheck, CircleSlash, Loader2, Phone, Eye, CalendarClock, Power, Trash2, ChevronRight } from "lucide-react";
 import {
   getAllCoachesAPI,
   getCoachDetailAPI,
@@ -24,7 +24,7 @@ type ModalMode = "view" | "edit" | "schedule" | null;
 
 const emptyEditForm: EditCoachForm = {
   nickname: "", phone: "", lineId: "", facebook: "", address: "", bank_account: "", payment_info: "", prompt_pay: "",
-  specialization: "", coach_license: "", payment_type: "per_session", pay_rate: 0,
+  specialization: "", coach_license: "", payment_type: "per_session", pay_rate: 0, bio: "",
 };
 
 export default function CoachManagementPage() {
@@ -34,6 +34,7 @@ export default function CoachManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [actionCoach, setActionCoach] = useState<CoachListItem | null>(null); // การ์ดมือถือที่ถูกแตะ → เปิด action sheet
   const [selected, setSelected] = useState<CoachListItem | null>(null);
   const [detail, setDetail] = useState<CoachProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,6 +101,7 @@ export default function CoachManagementPage() {
       coach_license: detail.coach_license ?? "",
       payment_type: detail.payment_type ?? "per_session",
       pay_rate: detail.pay_rate ?? 0,
+      bio: detail.bio ?? "",
     });
     setFormError(null);
     setModalMode("edit");
@@ -156,6 +158,7 @@ export default function CoachManagementPage() {
           coach_license: editForm.coach_license.trim(),
           payment_type: editForm.payment_type,
           pay_rate: editForm.pay_rate,
+          bio: editForm.bio.trim(),
         },
       });
 
@@ -328,18 +331,162 @@ export default function CoachManagementPage() {
         />
       </div>
 
-      <DataTable
-        isLoading={isLoading}
-        data={filteredCoaches}
-        columns={coachColumns}
-        keyExtractor={(item) => item.id}
-        totalCount={coaches.length}
-        emptyMessage="ไม่พบข้อมูลโค้ชในระบบ"
-      />
+      {/* เดสก์ท็อป (md+): ตาราง */}
+      <div className="hidden md:block">
+        <DataTable
+          isLoading={isLoading}
+          data={filteredCoaches}
+          columns={coachColumns}
+          keyExtractor={(item) => item.id}
+          totalCount={coaches.length}
+          emptyMessage="ไม่พบข้อมูลโค้ชในระบบ"
+        />
+      </div>
+
+      {/* มือถือ (< md): การ์ด — กดที่ใดก็ได้ของการ์ดเพื่อดูรายละเอียด */}
+      <div className="mt-6 space-y-2.5 md:hidden">
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-7 w-7 animate-spin text-[#E63946]" />
+          </div>
+        ) : filteredCoaches.length === 0 ? (
+          <div className="rounded-2xl border border-gray-100 bg-white py-16 text-center text-sm text-gray-400">
+            ไม่พบข้อมูลโค้ชในระบบ
+          </div>
+        ) : (
+          <>
+            {filteredCoaches.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => setActionCoach(item)}
+                className="relative cursor-pointer rounded-2xl border border-gray-100 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition active:scale-[0.99]"
+              >
+                <ChevronRight className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-300" />
+
+                <div className="flex items-center gap-2.5 pr-6">
+                  {item.profile_picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.profile_picture}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+                    />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#E63946] to-[#CC0000] text-sm font-bold text-white">
+                      {(item.firstName?.[0] || item.nickname?.[0] || "C").toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {item.firstName} {item.lastName}
+                      </span>
+                      {item.nickname && <span className="text-xs text-gray-400">({item.nickname})</span>}
+                      {item.status === "inactive" && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 ring-1 ring-inset ring-gray-300">
+                          พักงาน
+                        </span>
+                      )}
+                    </div>
+                    {item.email && <p className="mt-0.5 truncate text-xs text-gray-500">{item.email}</p>}
+                  </div>
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5 text-xs">
+                  {item.specialization && (
+                    <Pill label={`ระดับ ${item.specialization}`} color="bg-sky-50 text-sky-700 ring-sky-600/20" />
+                  )}
+                  {item.coach_license && (
+                    <Pill label={item.coach_license} color="bg-violet-50 text-violet-700 ring-violet-600/20" />
+                  )}
+                  <span className="inline-flex items-center gap-1 text-gray-500">
+                    <Phone className="h-3.5 w-3.5" /> {item.phone || "-"}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <p className="px-1 pt-1 text-xs text-gray-400">
+              แสดง {filteredCoaches.length} จาก {coaches.length} รายการ
+            </p>
+          </>
+        )}
+      </div>
 
       <ViewCoachModal isOpen={modalMode === "view"} onClose={closeModal} selected={selected} detail={detail} isLoadingDetail={isLoadingDetail} onEdit={openEdit} />
       <ViewCoachScheduleModal isOpen={modalMode === "schedule"} onClose={closeModal} coach={selected} />
       <EditCoachModal isOpen={modalMode === "edit"} onClose={closeModal} editForm={editForm} setEditForm={setEditForm} detail={detail} formError={formError} isSubmitting={isSubmitting} onSave={handleUpdate} />
+
+      {/* มือถือ: action sheet — เปิดเมื่อแตะการ์ด */}
+      {actionCoach && (
+        <div className="fixed inset-0 z-50 md:hidden" onClick={() => setActionCoach(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white pb-[calc(env(safe-area-inset-bottom)+10px)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-gray-200" />
+
+            {/* หัว: ข้อมูลโค้ช */}
+            <div className="flex items-center gap-3 px-5 py-3">
+              {actionCoach.profile_picture ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={actionCoach.profile_picture}
+                  alt=""
+                  className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+                />
+              ) : (
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#E63946] to-[#CC0000] text-sm font-bold text-white">
+                  {(actionCoach.firstName?.[0] || actionCoach.nickname?.[0] || "C").toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-gray-900">
+                  {actionCoach.firstName} {actionCoach.lastName}
+                </p>
+                {actionCoach.email && <p className="truncate text-xs text-gray-500">{actionCoach.email}</p>}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 py-1">
+              <button
+                onClick={() => { const c = actionCoach; setActionCoach(null); openView(c); }}
+                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-gray-700 active:bg-gray-50"
+              >
+                <Eye className="h-5 w-5 text-gray-400" /> ดูรายละเอียด
+              </button>
+              <button
+                onClick={() => { const c = actionCoach; setActionCoach(null); openSchedule(c); }}
+                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-gray-700 active:bg-gray-50"
+              >
+                <CalendarClock className="h-5 w-5 text-gray-400" /> ดูตารางเวลาว่าง
+              </button>
+              <button
+                onClick={() => { const c = actionCoach; setActionCoach(null); handleToggleStatus(c); }}
+                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-gray-700 active:bg-gray-50"
+              >
+                <Power className="h-5 w-5 text-gray-400" />
+                {actionCoach.status !== "inactive" ? "ปิดใช้งาน (พักงาน)" : "เปิดใช้งาน"}
+              </button>
+              <button
+                onClick={() => { const c = actionCoach; setActionCoach(null); handleDelete(c); }}
+                className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-red-600 active:bg-red-50"
+              >
+                <Trash2 className="h-5 w-5" /> ลบ
+              </button>
+            </div>
+
+            <div className="px-3 pt-2">
+              <button
+                onClick={() => setActionCoach(null)}
+                className="w-full rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-600 active:bg-gray-200"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -85,6 +85,8 @@ const selectedToSlots = (set: Set<string>): AvailabilitySlot[] => {
 };
 
 const GRID_TEMPLATE_COLUMNS = `92px repeat(${HOURS.length}, minmax(54px, 1fr))`;
+// บนมือถือใช้ตารางแบบสลับแกน: แถว = ชั่วโมง, คอลัมน์ = 7 วัน (พอดีความกว้างจอ ไม่ต้องเลื่อนแนวนอน)
+const MOBILE_GRID_COLUMNS = `48px repeat(${DAYS.length}, minmax(0, 1fr))`;
 
 export default function CoachAvailabilityPage() {
   const router = useRouter();
@@ -272,19 +274,29 @@ export default function CoachAvailabilityPage() {
       )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* เดสก์ท็อป (md+): แถว = วัน, คอลัมน์ = ชั่วโมง */}
+        <div className="hidden md:block overflow-x-auto">
           <div className={`min-w-[1000px] ${isEditing ? "select-none" : ""}`}>
-            {/* หัวตาราง */}
-            <div
-              className="grid bg-slate-50 border-b border-slate-200"
-              style={{ gridTemplateColumns: GRID_TEMPLATE_COLUMNS }}
-            >
-              <div className="py-3.5 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">DAY</div>
-              {HOURS.map((h) => (
-                <div key={h} className="py-3.5 text-center text-[10px] font-bold text-slate-500">
-                  {pad2(h)}-{pad2(h + 1)}
-                </div>
-              ))}
+            {/* หัวตาราง — เลขเวลาอยู่ที่ "เส้นแบ่งชั่วโมง" (หมุด) มีหมุดปิดท้าย 24:00
+                เพื่อให้อ่านชัดว่าแท่งที่เต็มถึงช่อง 20:00 = ว่างถึง 21:00 */}
+            <div className="flex bg-slate-50 border-b border-slate-200">
+              <div className="w-[92px] shrink-0 py-3.5 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">DAY</div>
+              <div className="relative flex-1">
+                {Array.from({ length: HOURS.length + 1 }, (_, i) => {
+                  const hour = START_HOUR + i;
+                  const transform =
+                    i === 0 ? "translateY(-50%)" : i === HOURS.length ? "translate(-100%,-50%)" : "translate(-50%,-50%)";
+                  return (
+                    <span
+                      key={hour}
+                      className="absolute top-1/2 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap"
+                      style={{ left: `${(i / HOURS.length) * 100}%`, transform }}
+                    >
+                      {hour}:00
+                    </span>
+                  );
+                })}
+              </div>
             </div>
 
             {/* แถวแต่ละวัน */}
@@ -344,6 +356,79 @@ export default function CoachAvailabilityPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* มือถือ (< md): สลับแกน — แถว = ชั่วโมง, คอลัมน์ = วัน (ไม่ต้องเลื่อนแนวนอน) */}
+        <div className={`md:hidden ${isEditing ? "select-none" : ""}`}>
+          {/* หัวตาราง */}
+          <div
+            className="grid bg-slate-50 border-b border-slate-200"
+            style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}
+          >
+            <div className="py-2.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">TIME</div>
+            {DAYS.map((day) => (
+              <div key={day.value} className="py-2.5 text-center text-[10px] font-bold text-slate-500">
+                {day.label}
+              </div>
+            ))}
+          </div>
+
+          {/* แถวแต่ละชั่วโมง */}
+          {HOURS.map((h, hIdx) => (
+            <div
+              key={h}
+              className={`grid items-stretch ${hIdx !== HOURS.length - 1 ? "border-b border-slate-100" : ""}`}
+              style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}
+            >
+              <div className="py-1 px-2 flex items-center text-[11px] font-bold text-slate-600">{h}:00</div>
+
+              {DAYS.map((day) => {
+                const isSel = displayed.has(cellKey(day.value, h));
+                const prevSel = h > START_HOUR && displayed.has(cellKey(day.value, h - 1));
+                const nextSel = h < END_HOUR - 1 && displayed.has(cellKey(day.value, h + 1));
+                const roundTop = isSel && !prevSel;
+                const roundBottom = isSel && !nextSel;
+
+                if (isEditing) {
+                  // โหมดแก้ไข: แต่ละช่องเป็นปุ่มแยก แตะเพื่อเลือก/ยกเลิก
+                  return (
+                    <div key={day.value} className="px-1 py-0.5">
+                      <div
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleCellMouseDown(day.value, h);
+                        }}
+                        onMouseEnter={() => handleCellMouseEnter(day.value, h)}
+                        title={`${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00`}
+                        className={`h-9 rounded-lg cursor-pointer transition-all ${
+                          isSel
+                            ? "bg-gradient-to-b from-[#E63946] to-[#CD0D13] shadow-sm"
+                            : "bg-slate-50 border border-dashed border-slate-300 hover:border-[#E63946]/50 hover:bg-rose-50/40"
+                        }`}
+                      />
+                    </div>
+                  );
+                }
+
+                // โหมดดูอย่างเดียว: แท่งต่อเนื่องแนวตั้ง (ชั่วโมงติดกันเชื่อมเป็นแท่งเดียว)
+                return (
+                  <div
+                    key={day.value}
+                    title={isSel ? `${day.label} ${pad2(h)}:00-${pad2(h + 1)}:00` : undefined}
+                    className={`flex justify-center h-9 ${roundTop ? "pt-1" : ""} ${roundBottom ? "pb-1" : ""}`}
+                  >
+                    {isSel && (
+                      <div
+                        className={`w-7 h-full bg-gradient-to-b from-[#E63946] to-[#CD0D13] shadow-sm ${
+                          roundTop ? "rounded-t-full" : ""
+                        } ${roundBottom ? "rounded-b-full" : ""}`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
