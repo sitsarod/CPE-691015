@@ -262,6 +262,40 @@ export async function fetchCoachSchedules(coachId: number, token: string): Promi
   return resData || [];
 }
 
+// นับ "คาบที่สอนจริง" ของโค้ช = คาบที่มีรอบเช็คชื่อปิดรอบแล้ว (ใช้คำนวณค่าจ้างค้างจ่าย)
+// ไม่นับคาบที่ถูกยกเลิก หรือคาบในอดีตที่ไม่เคยเปิด/ปิดรอบเช็คชื่อ (โค้ชไม่มา/ไม่ได้สอน)
+export async function fetchCoachTaughtSessions(coachId: number, token: string): Promise<number> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}/taught-sessions`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถนับจำนวนคาบที่สอนจริงได้");
+  }
+  return resData.count ?? 0;
+}
+
+// ดึง "วันที่ของคาบที่สอนจริง" (attendance-confirmed + fallback คาบเก่า) รูปแบบ YYYY-MM-DD
+// ใช้ในหน้าโค้ชเพื่อจัดกลุ่มจำนวนคาบรายเดือนด้วยเกณฑ์เดียวกับที่แอดมินใช้คำนวณค่าจ้าง
+export async function fetchCoachTaughtSessionDates(coachId: number, token: string): Promise<string[]> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}/taught-sessions`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลคาบที่สอนจริงได้");
+  }
+  return resData.dates ?? [];
+}
+
 // ดึงประวัติค่าจ้างของโค้ช
 export async function fetchCoachWages(coachId: number, token: string): Promise<CoachWageEntry[]> {
   const response = await fetch(`${BASE_URL}/coaches/${coachId}/expenses`, {

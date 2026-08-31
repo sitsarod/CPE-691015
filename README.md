@@ -217,6 +217,53 @@ npm install
 npm run dev      # http://localhost:3000
 ```
 
+### Deploy ด้วย Docker (แนะนำสำหรับขึ้น production)
+
+โปรเจกต์มีชุด Docker พร้อมใช้: `backend/Dockerfile`, `frontend/Dockerfile` และ `docker-compose.yml` ที่ root
+(backend build เป็น static binary บน Alpine, frontend ใช้ Next.js standalone output)
+
+**สิ่งที่ต้องมี:** Docker + Docker Compose v2
+
+**1. เตรียมไฟล์ตั้งค่า** — คัดลอกจากตัวอย่างแล้วเติมค่าจริง (compose อ่าน `.env` ที่ root อัตโนมัติ):
+```bash
+cp .env.example .env
+```
+ค่าที่ต้องแก้ก่อนขึ้น production:
+- `ALLOWED_ORIGINS` → โดเมนจริงของ frontend (คั่นหลายอันด้วยจุลภาค)
+- `NEXT_PUBLIC_API_URL` → โดเมนจริงของ backend + ลงท้าย `/api`
+
+> ⚠️ `NEXT_PUBLIC_API_URL` เป็น **build-time** (ถูกฝังลง bundle ตอน build) — ถ้าแก้ค่านี้ต้อง `docker compose build frontend` ใหม่เสมอ
+
+**2. Build อิมเมจ**
+```bash
+docker compose build
+```
+
+**3. เตรียมฐานข้อมูล (ครั้งแรก)**
+```bash
+docker compose run --rm backend /app/migrate       # อัปเดต schema แบบไม่ลบข้อมูล
+docker compose run --rm backend /app/createadmin   # สร้าง admin คนแรก
+```
+
+**4. ยกระบบขึ้น**
+```bash
+docker compose up -d
+# frontend: http://localhost:3000   |   backend: http://localhost:8000
+```
+
+**คำสั่งที่ใช้บ่อย**
+```bash
+docker compose logs -f backend     # ดู log สด
+docker compose ps                  # ดูสถานะ container
+docker compose up -d --build       # rebuild + restart หลังแก้โค้ด
+docker compose down                # หยุดทั้งหมด (ข้อมูล uploads เก็บใน volume ไม่หาย)
+```
+
+**หมายเหตุ**
+- ดีฟอลต์เชื่อมต่อ PostgreSQL ตาม `DATABASE_URL` ใน `.env` (เช่น Neon) — ถ้าอยากใช้ postgres local ตอน dev ให้เปิด profile: `docker compose --profile local-db up -d` แล้วชี้ `DATABASE_URL` ไปที่ `db:5432`
+- ไฟล์ที่ผู้ใช้อัปโหลด (`/app/uploads`) ถูก mount เป็น named volume จึงคงอยู่ข้ามการ redeploy
+- ถ้ามี reverse proxy (nginx/Cloudflare) มาคั่นหน้า ต้องแก้ `SetTrustedProxies` ใน `cmd/serve/main.go` ให้ trust IP ของ proxy นั้น ไม่งั้น rate limit จะนับ IP ผิด
+
 ---
 
 ## 8. ข้อสังเกต/สิ่งที่ยังไม่เสร็จ (จากคอมเมนต์ในโค้ด)

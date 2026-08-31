@@ -182,6 +182,7 @@ func SetupRoutes(r *gin.Engine) {
 			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
 			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability) // เจ้าของเท่านั้น (admin แก้ไม่ได้)
 			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)   // เจ้าของ หรือ admin
+			coachGroup.GET("/:id/taught-sessions", workScheduleController.GetTaughtSessionCount) // เจ้าของ หรือ admin — นับคาบที่เช็คชื่อปิดรอบจริง (คำนวณค่าจ้าง)
 			coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)               // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
 		}
 		// เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
