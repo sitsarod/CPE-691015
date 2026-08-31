@@ -390,48 +390,77 @@ export default function FinancialSummaryTab({
           </div>
         </div>
 
-        {/* Plot */}
-        <div className="h-56 flex items-end gap-2 sm:gap-4">
-          {monthlyTrend.buckets.map(b => {
-            const incPct = (b.income / monthlyTrend.max) * 100;
-            const expPct = (b.expense / monthlyTrend.max) * 100;
-            const net = b.income - b.expense;
-            const isCurrent = b.year === new Date().getFullYear() && b.month === new Date().getMonth();
-            return (
-              <div key={`${b.year}-${b.month}`} className="flex-1 h-full flex flex-col items-center justify-end group/bar">
-                <div className="relative flex-1 w-full flex items-end justify-center gap-1.5 min-h-0">
-                  {/* Tooltip */}
-                  <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none bg-slate-800 text-white rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
-                    <div className="text-[10px] font-bold mb-1 text-slate-300">{MONTH_SHORT[b.month]} {b.year + 543}</div>
-                    <div className="flex items-center gap-1.5 text-[10px]">
-                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_INCOME }} />
-                      รายรับ <span className="font-bold ml-auto">฿{b.income.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
-                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_EXPENSE }} />
-                      รายจ่าย <span className="font-bold ml-auto">฿{b.expense.toLocaleString()}</span>
-                    </div>
-                    <div className={`text-[10px] mt-1 pt-1 border-t border-white/20 font-bold ${net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                      สุทธิ {net >= 0 ? '+' : ''}฿{net.toLocaleString()}
-                    </div>
-                  </div>
-
-                  <div
-                    className="w-[42%] max-w-[24px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
-                    style={{ height: `${Math.max(incPct, b.income > 0 ? 2 : 0)}%`, backgroundColor: COLOR_INCOME }}
-                  />
-                  <div
-                    className="w-[42%] max-w-[24px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
-                    style={{ height: `${Math.max(expPct, b.expense > 0 ? 2 : 0)}%`, backgroundColor: COLOR_EXPENSE }}
-                  />
+        {/* Plot — เว้น headroom 20% เหนือแท่งสูงสุด ไม่ให้ชนขอบบน */}
+        {(() => {
+          const chartMax = monthlyTrend.max * 1.2;
+          return (
+            <>
+              <div className="relative h-56">
+                {/* เส้นกริดอ้างอิง (4 ระดับ) วางหลังแท่ง */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <div key={i} className="w-full border-t border-dashed border-slate-100" />
+                  ))}
                 </div>
-                <span className={`text-[10px] font-semibold mt-2 pt-2 border-t w-full text-center ${isCurrent ? 'text-blue-600 font-black border-slate-200' : 'text-slate-500 border-slate-100'}`}>
-                  {MONTH_SHORT[b.month]}
-                </span>
+
+                {/* แท่ง */}
+                <div className="relative h-full flex items-end gap-3 sm:gap-5">
+                  {monthlyTrend.buckets.map(b => {
+                    const incPct = (b.income / chartMax) * 100;
+                    const expPct = (b.expense / chartMax) * 100;
+                    const net = b.income - b.expense;
+                    return (
+                      <div key={`${b.year}-${b.month}`} className="relative flex-1 h-full flex items-end justify-center gap-1.5 group/bar">
+                        {/* Tooltip */}
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full z-10 opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none bg-slate-800 text-white rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                          <div className="text-[10px] font-bold mb-1 text-slate-300">{MONTH_SHORT[b.month]} {b.year + 543}</div>
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_INCOME }} />
+                            รายรับ <span className="font-bold ml-auto">฿{b.income.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
+                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_EXPENSE }} />
+                            รายจ่าย <span className="font-bold ml-auto">฿{b.expense.toLocaleString()}</span>
+                          </div>
+                          <div className={`text-[10px] mt-1 pt-1 border-t border-white/20 font-bold ${net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            สุทธิ {net >= 0 ? '+' : ''}฿{net.toLocaleString()}
+                          </div>
+                        </div>
+
+                        <div
+                          className="w-[46%] max-w-[34px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
+                          style={{ height: `${Math.max(incPct, b.income > 0 ? 2 : 0)}%`, backgroundColor: COLOR_INCOME }}
+                        />
+                        <div
+                          className="w-[46%] max-w-[34px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
+                          style={{ height: `${Math.max(expPct, b.expense > 0 ? 2 : 0)}%`, backgroundColor: COLOR_EXPENSE }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* เส้นฐาน */}
+                <div className="absolute inset-x-0 bottom-0 border-t border-slate-200" />
               </div>
-            );
-          })}
-        </div>
+
+              {/* ป้ายเดือน — แถวล่าง เรียงตรงแนวแท่ง */}
+              <div className="flex gap-3 sm:gap-5 mt-2.5">
+                {monthlyTrend.buckets.map(b => {
+                  const isCurrent = b.year === new Date().getFullYear() && b.month === new Date().getMonth();
+                  return (
+                    <span
+                      key={`${b.year}-${b.month}`}
+                      className={`flex-1 text-center text-[11px] ${isCurrent ? 'text-blue-600 font-black' : 'text-slate-500 font-semibold'}`}
+                    >
+                      {MONTH_SHORT[b.month]}
+                    </span>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Window totals */}
         <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-100">
@@ -452,10 +481,10 @@ export default function FinancialSummaryTab({
         </div>
       </div>
 
-      {/* Split layout for Table and breakdowns */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* ตารางบิลกว้างเต็ม แล้วแยกส่วนแยกประเภทลงไปข้างล่าง */}
+      <div className="space-y-6">
         {/* Invoices List Table — จอเล็ก: แสดงเฉพาะคอลัมน์สำคัญ (ผู้เรียน/ยอด/ครบกำหนด) · จอใหญ่: ครบทุกคอลัมน์ */}
-        <div className="flex lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col">
+        <div className="flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col">
           <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h3 className="text-md font-bold text-slate-800">รายการใบเรียกเก็บเงินในช่วงเวลา</h3>
@@ -583,6 +612,8 @@ export default function FinancialSummaryTab({
           )}
         </div>
 
+        {/* แยกตามประเภท — 2 คอลัมน์บนจอใหญ่ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Course Income Breakdown */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
           <div>
@@ -627,6 +658,7 @@ export default function FinancialSummaryTab({
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
 

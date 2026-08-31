@@ -17,10 +17,11 @@ import {
   Pencil,
   ChevronRight,
   X,
+  FileText,
 } from "lucide-react";
 
-import { fetchMyCoachProfile, fetchCoachWages, fetchCoachSchedules } from "@/services/coachAPI";
-import { CoachWageEntry, WorkScheduleItem } from "@/types/coach";
+import { fetchMyCoachProfile, fetchCoachWages, fetchCoachTaughtSessionDates } from "@/services/coachAPI";
+import { CoachWageEntry } from "@/types/coach";
 import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
 import ImageLightbox from "@/components/ImageLightbox";
 
@@ -39,6 +40,21 @@ const formatThaiDate = (iso?: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
   return `${d.getDate()} ${MONTH_NAMES_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+};
+
+// จัดกลุ่มรายการตามวัน (ใหม่→เก่า) พร้อมยอดรวมรายวัน — ใช้สไตล์สมุดบัญชีเดียวกับมุมมองมือถือ
+const groupEntriesByDay = (entries: CoachWageEntry[]) => {
+  const map = new Map<string, { key: string; label: string; total: number; items: CoachWageEntry[] }>();
+  [...entries]
+    .sort((a, b) => (b.expensedate || "").localeCompare(a.expensedate || ""))
+    .forEach((e) => {
+      const key = e.expensedate ? e.expensedate.split("T")[0] : "unknown";
+      if (!map.has(key)) map.set(key, { key, label: formatThaiDate(e.expensedate), total: 0, items: [] });
+      const g = map.get(key)!;
+      g.total += e.expenseamount;
+      g.items.push(e);
+    });
+  return Array.from(map.values());
 };
 
 interface MonthGroup {
@@ -69,7 +85,8 @@ export default function CoachPaymentPage() {
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [bankModalKey, setBankModalKey] = useState(0); // บังคับ remount การ์ดให้ค่าเริ่มต้นใหม่ทุกครั้งที่เปิด
   const [wages, setWages] = useState<CoachWageEntry[]>([]);
-  const [schedules, setSchedules] = useState<WorkScheduleItem[]>([]);
+  // วันที่ของคาบที่ "สอนจริง" (เช็คชื่อปิดรอบแล้ว + fallback คาบเก่า) รูปแบบ YYYY-MM-DD
+  const [taughtDates, setTaughtDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +97,8 @@ export default function CoachPaymentPage() {
 
   // เลื่อนแนวนอนด้วยล้อ/ลากเมาส์สำหรับการ์ดสถิติ (swipe) และตารางที่กว้างเกินจอบนมือถือ
   const statsScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
-  const scheduleTableRef = useHorizontalWheelScroll<HTMLDivElement>();
   const monthlyTableRef = useHorizontalWheelScroll<HTMLDivElement>();
   const yearlyTableRef = useHorizontalWheelScroll<HTMLDivElement>();
-  const otherTableRef = useHorizontalWheelScroll<HTMLDivElement>();
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -138,12 +153,12 @@ export default function CoachPaymentPage() {
         setPromptPay(myProfile.prompt_pay || "");
       }
 
-      const [wagesData, schedulesData] = await Promise.all([
+      const [wagesData, taughtDatesData] = await Promise.all([
         fetchCoachWages(resolvedId, token),
-        fetchCoachSchedules(resolvedId, token),
+        fetchCoachTaughtSessionDates(resolvedId, token),
       ]);
       setWages(wagesData);
-      setSchedules(schedulesData);
+      setTaughtDates(taughtDatesData);
     } catch (err: unknown) {
       console.error(err);
       setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดึงข้อมูล");
@@ -201,10 +216,6 @@ export default function CoachPaymentPage() {
   const otherEntries = useMemo(() => wages.filter((w) => w.expensetype === "coach_other"), [wages]);
 
   const otherTotal = useMemo(() => otherEntries.reduce((s, w) => s + w.expenseamount, 0), [otherEntries]);
-  const otherSorted = useMemo(
-    () => [...otherEntries].sort((a, b) => (b.expensedate || "").localeCompare(a.expensedate || "")),
-    [otherEntries]
-  );
 
   // ---- มือถือ: รายการธุรกรรม (ค่าจ้าง + รายได้อื่น) แยกตามเดือน ----
   // เดือนที่มีรายการทั้งหมด เรียงใหม่→เก่า (key = "YYYY-M")
@@ -328,22 +339,25 @@ export default function CoachPaymentPage() {
 
   const currentYearGroup = yearGroups.find((y) => y.year === selectedYear) || null;
 
+  // แท็บ "รายปี" มีประโยชน์เฉพาะเมื่อมีข้อมูล ≥ 2 ปี (ไว้เทียบข้ามปี) — ปีเดียวซ่อนไป
+  // effectiveView บังคับเป็นรายเดือนเสมอเมื่อมีปีเดียว กัน state ค้างที่ "yearly"
+  const showYearlyTab = yearGroups.length > 1;
+  const effectiveView = showYearlyTab ? viewMode : "monthly";
+
   const maxMonthTotal = currentYearGroup ? Math.max(...currentYearGroup.months.map((m) => m.total), 0) : 0;
 
-  const todayStr = now.toISOString().split("T")[0];
-
-  // นับเฉพาะคาบสอนที่ผ่านไปแล้ว (ยังไม่นับคาบที่ยังไม่ถึงวันสอน) แยกตามปี-เดือน
+  // นับ "คาบที่สอนจริง" (จาก backend = เช็คชื่อปิดรอบแล้ว) แยกตามปี-เดือน
+  // parse YYYY-MM-DD เองแบบ tz-proof (ไม่ผ่าน new Date เพื่อกันวันเพี้ยนข้ามเดือน)
   const sessionCountByYearMonth = useMemo(() => {
     const map = new Map<string, number>();
-    schedules.forEach((s) => {
-      if (!s.date || s.date >= todayStr) return;
-      const d = new Date(s.date);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
+    taughtDates.forEach((ds) => {
+      const [y, m] = ds.split("-").map(Number);
+      if (!y || !m) return;
+      const key = `${y}-${m - 1}`; // m เป็น 1-12 → เก็บเป็น 0-11 ให้ตรงกับ getMonth()
       map.set(key, (map.get(key) || 0) + 1);
     });
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules]);
+  }, [taughtDates]);
 
   const scheduleComparison = useMemo(() => {
     if (!currentYearGroup) return null;
@@ -369,6 +383,35 @@ export default function CoachPaymentPage() {
     );
     return { rows, totals };
   }, [currentYearGroup, sessionCountByYearMonth, payRate]);
+
+  // โค้ชรายเดือนได้เงินคงที่ไม่ผูกกับจำนวนคาบ จึงไม่โชว์คอลัมน์เทียบตารางสอน (null)
+  const comparison = paymentType !== "monthly" ? scheduleComparison : null;
+  const compByMonth = useMemo(
+    () => new Map((comparison?.rows ?? []).map((r) => [r.month, r] as const)),
+    [comparison]
+  );
+
+  // โบนัส/รายได้อื่นของปีที่เลือก แยกรายเดือน — รวมเข้ากับตารางรายละเอียดรายเดือน
+  // (ยอด "ได้รับจริง" = ค่าจ้าง + โบนัส และตอนกดขยายจะเห็นทั้งค่าจ้างและโบนัสรวมกัน)
+  const bonusByMonth = useMemo(() => {
+    const map = new Map<number, { total: number; entries: CoachWageEntry[] }>();
+    if (selectedYear === null) return map;
+    otherEntries.forEach((e) => {
+      if (!e.expensedate) return;
+      const d = new Date(e.expensedate);
+      if (d.getFullYear() !== selectedYear) return;
+      const mo = d.getMonth();
+      if (!map.has(mo)) map.set(mo, { total: 0, entries: [] });
+      const g = map.get(mo)!;
+      g.total += e.expenseamount;
+      g.entries.push(e);
+    });
+    return map;
+  }, [otherEntries, selectedYear]);
+  const yearBonusTotal = useMemo(
+    () => Array.from(bonusByMonth.values()).reduce((s, b) => s + b.total, 0),
+    [bonusByMonth]
+  );
 
   const bestMonth = useMemo<MonthGroup | null>(() => {
     if (!currentYearGroup) return null;
@@ -649,10 +692,17 @@ export default function CoachPaymentPage() {
               </div>
               <div className="mt-5 flex items-baseline gap-1">
                 <span className="text-base font-bold text-gray-400">฿</span>
-                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{(currentYearGroup?.total ?? 0).toLocaleString()}</span>
+                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{((currentYearGroup?.total ?? 0) + yearBonusTotal).toLocaleString()}</span>
               </div>
               <div className="mt-4 border-t border-gray-100 pt-3">
-                <span className="text-xs text-gray-500">เฉลี่ย ฿{Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน</span>
+                {yearBonusTotal > 0 ? (
+                  <span className="text-xs text-gray-500">
+                    ค่าจ้าง ฿{(currentYearGroup?.total ?? 0).toLocaleString()} ·{" "}
+                    <span className="font-semibold text-violet-600">โบนัส ฿{yearBonusTotal.toLocaleString()}</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-500">เฉลี่ย ฿{Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน</span>
+                )}
               </div>
             </div>
 
@@ -704,23 +754,27 @@ export default function CoachPaymentPage() {
             </div>
           </div>
 
-          {/* View toggle + year selector */}
+          {/* View toggle + year selector — ซ่อนปุ่มสลับเมื่อมีปีเดียว (ไม่มีอะไรให้สลับ) */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 self-start">
-              {(["monthly", "yearly"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setViewMode(v)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    viewMode === v ? "bg-[#CC0000] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {v === "monthly" ? "รายเดือน" : "รายปี"}
-                </button>
-              ))}
-            </div>
+            {showYearlyTab ? (
+              <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 self-start">
+                {(["monthly", "yearly"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setViewMode(v)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      effectiveView === v ? "bg-[#CC0000] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {v === "monthly" ? "รายเดือน" : "รายปี"}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <h3 className="text-md font-bold text-gray-800 self-start">รายได้รายเดือน</h3>
+            )}
 
-            {viewMode === "monthly" && yearGroups.length > 0 && (
+            {effectiveView === "monthly" && yearGroups.length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {yearGroups.map((yg) => (
                   <button
@@ -742,7 +796,7 @@ export default function CoachPaymentPage() {
             )}
           </div>
 
-          {viewMode === "monthly" && currentYearGroup ? (
+          {effectiveView === "monthly" && currentYearGroup ? (
             <>
               {/* Monthly bar chart — ซ่อนบนมือถือ (แท่งแคบ + tooltip อาศัย hover) ดูข้อมูลได้จากตารางด้านล่างแทน */}
               <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
@@ -782,142 +836,200 @@ export default function CoachPaymentPage() {
                 </div>
               </div>
 
-              {/* Schedule vs. actual wage comparison */}
-              {/* ตารางนี้เทียบ "คาบสอน × ค่าจ้างต่อคาบ" กับรายได้จริง — มีความหมายเฉพาะโค้ชรายครั้งเท่านั้น
-                  โค้ชรายเดือนได้รับเงินคงที่ไม่ผูกกับจำนวนคาบ จึงซ่อนตารางนี้ไป */}
-              {paymentType !== "monthly" && scheduleComparison && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-5 border-b border-gray-100">
-                    <div>
-                      <h3 className="text-md font-bold text-gray-800">เทียบกับรายได้ที่ควรได้จากตารางสอน</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        ประมาณการจากจำนวนคาบสอนที่ผ่านไปแล้ว × ค่าจ้างต่อคาบ (฿{payRate.toLocaleString()}/คาบ)
-                        {payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบในระบบ ตัวเลขนี้จึงยังไม่ถูกต้อง"}
-                      </p>
-                    </div>
-                  </div>
-                  <div ref={scheduleTableRef} className="overflow-x-auto no-scrollbar">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
-                          <th className="py-3 px-4 sm:px-5">เดือน</th>
-                          <th className="py-3 px-4 sm:px-5 hidden sm:table-cell">คาบที่สอนแล้ว</th>
-                          <th className="py-3 px-4 sm:px-5 text-right hidden sm:table-cell">รายได้ที่ควรได้</th>
-                          <th className="py-3 px-4 sm:px-5 text-right">ได้รับจริง</th>
-                          <th className="py-3 px-4 sm:px-5 text-right">ส่วนต่าง</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {scheduleComparison.rows
-                          .filter((r) => r.sessionsDone > 0 || r.actual > 0)
-                          .map((r) => (
-                            <tr key={r.month} className="text-xs transition-colors hover:bg-gray-50/60">
-                              <td className="py-3.5 px-4 sm:px-5 font-bold text-gray-800 whitespace-nowrap">{MONTH_NAMES_FULL[r.month]}</td>
-                              <td className="py-3.5 px-4 sm:px-5 text-gray-600 hidden sm:table-cell">{r.sessionsDone} คาบ</td>
-                              <td className="py-3.5 px-4 sm:px-5 text-right text-gray-600 tabular-nums hidden sm:table-cell">฿{r.expected.toLocaleString()}</td>
-                              <td className="py-3.5 px-4 sm:px-5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">฿{r.actual.toLocaleString()}</td>
-                              <td className="py-3.5 px-4 sm:px-5 text-right whitespace-nowrap">
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${r.variance >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
-                                  {r.variance >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                  {r.variance >= 0 ? "+" : ""}฿{r.variance.toLocaleString()}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="text-xs bg-gray-50 border-t border-gray-200">
-                          <td className="py-3 px-4 sm:px-5 font-black text-gray-800 whitespace-nowrap">รวมทั้งปี</td>
-                          <td className="py-3 px-4 sm:px-5 font-bold text-gray-700 hidden sm:table-cell">{scheduleComparison.totals.sessionsDone} คาบ</td>
-                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-gray-700 hidden sm:table-cell">
-                            ฿{scheduleComparison.totals.expected.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 sm:px-5 text-right font-bold text-gray-900 whitespace-nowrap">
-                            ฿{scheduleComparison.totals.actual.toLocaleString()}
-                          </td>
-                          <td className={`py-3 px-4 sm:px-5 text-right font-black whitespace-nowrap ${scheduleComparison.totals.variance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                            {scheduleComparison.totals.variance >= 0 ? "+" : ""}฿{scheduleComparison.totals.variance.toLocaleString()}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Monthly breakdown table */}
+              {/* Monthly breakdown table — รวมคอลัมน์เทียบตารางสอน (เฉพาะโค้ชรายครั้ง) เข้ามาในตัว
+                  กดที่แถวเพื่อขยายดูรายการแบบสมุดบัญชี */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100">
                   <h3 className="text-md font-bold text-gray-800">รายละเอียดรายเดือน</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">คลิกที่แถวเพื่อดูรายการค่าจ้างของเดือนนั้น</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {comparison
+                      ? <>คลิกที่แถวเพื่อดูรายการของเดือนนั้น · &quot;ได้รับจริง&quot; รวมค่าจ้างสอน + โบนัส/รายได้อื่น เทียบกับรายได้ที่ควรได้จากคาบที่สอนจริง × ค่าจ้างต่อคาบ (฿{payRate.toLocaleString()}/คาบ){payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้าง ตัวเลขที่ควรได้จึงยังไม่ถูกต้อง"}</>
+                      : "คลิกที่แถวเพื่อดูรายการของเดือนนั้น · ยอดรวมค่าจ้างสอน + โบนัส/รายได้อื่น"}
+                  </p>
                 </div>
                 <div ref={monthlyTableRef} className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
-                        <th className="py-3 px-5">เดือน</th>
-                        <th className="py-3 px-5 whitespace-nowrap">จำนวนครั้ง</th>
-                        <th className="py-3 px-5 text-right">ยอดรวม</th>
-                        <th className="py-3 px-5 text-right whitespace-nowrap">สัดส่วน</th>
+                        <th className="py-3 px-4 sm:px-5">เดือน</th>
+                        {comparison ? (
+                          <>
+                            <th className="py-3 px-4 sm:px-5 hidden sm:table-cell">คาบที่สอนจริง</th>
+                            <th className="py-3 px-4 sm:px-5 text-right hidden sm:table-cell">รายได้ที่ควรได้</th>
+                            <th className="py-3 px-4 sm:px-5 text-right">ได้รับจริง</th>
+                            <th className="py-3 px-4 sm:px-5 text-right">ส่วนต่าง</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="py-3 px-5 whitespace-nowrap">จำนวนครั้ง</th>
+                            <th className="py-3 px-5 text-right">ยอดรวม</th>
+                            <th className="py-3 px-5 text-right whitespace-nowrap">สัดส่วน</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {currentYearGroup.months.filter((m) => m.count > 0).map((m) => {
+                      {currentYearGroup.months
+                        .filter((m) => m.count > 0 || (bonusByMonth.get(m.month)?.total ?? 0) > 0 || (comparison && (compByMonth.get(m.month)?.sessionsDone ?? 0) > 0))
+                        .map((m) => {
                         const isExpanded = expandedMonth === m.month;
-                        const pct = currentYearGroup.total > 0 ? (m.total / currentYearGroup.total) * 100 : 0;
+                        const comp = compByMonth.get(m.month);
+                        const monthBonus = bonusByMonth.get(m.month);
+                        // ได้รับจริง = ค่าจ้างสอน + โบนัส/รายได้อื่นของเดือนนั้น (รวมกันในตัวเลขเดียว)
+                        const received = m.total + (monthBonus?.total ?? 0);
+                        const variance = received - (comp?.expected ?? 0);
+                        const yearReceivedTotal = currentYearGroup.total + yearBonusTotal;
+                        const pct = yearReceivedTotal > 0 ? (received / yearReceivedTotal) * 100 : 0;
+                        // รวมรายการค่าจ้าง + โบนัส ไว้ดูตอนกดขยาย (สมุดบัญชีแยกสีให้อยู่แล้ว)
+                        const combinedEntries = [...m.entries, ...(monthBonus?.entries ?? [])];
+                        const txCount = m.count + (monthBonus?.entries.length ?? 0);
+                        const hasEntries = combinedEntries.length > 0;
                         return (
                           <React.Fragment key={m.month}>
                             <tr
-                              onClick={() => setExpandedMonth(isExpanded ? null : m.month)}
-                              className={`text-xs cursor-pointer transition-colors ${isExpanded ? "bg-gray-50/70" : "hover:bg-gray-50/60"}`}
+                              onClick={() => hasEntries && setExpandedMonth(isExpanded ? null : m.month)}
+                              className={`text-xs transition-colors ${hasEntries ? "cursor-pointer" : ""} ${isExpanded ? "bg-gray-50/70" : "hover:bg-gray-50/60"}`}
                             >
-                              <td className="py-3.5 px-5 font-bold text-gray-800">
+                              <td className="py-3.5 px-4 sm:px-5 font-bold text-gray-800 whitespace-nowrap">
                                 <span className="flex items-center gap-2">
-                                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${hasEntries ? "" : "opacity-0"} ${isExpanded ? "rotate-180" : ""}`} />
                                   {MONTH_NAMES_FULL[m.month]}
                                 </span>
                               </td>
-                              <td className="py-3.5 px-5 text-gray-600">{m.count} ครั้ง</td>
-                              <td className="py-3.5 px-5 text-right font-bold text-gray-900 tabular-nums">฿{m.total.toLocaleString()}</td>
-                              <td className="py-3.5 px-5">
-                                <div className="flex items-center justify-end gap-2">
-                                  <div className="hidden sm:block h-1.5 w-16 rounded-full bg-gray-100 overflow-hidden">
-                                    <div className="h-full rounded-full bg-[#CC0000] transition-all duration-500" style={{ width: `${pct}%` }} />
-                                  </div>
-                                  <span className="w-11 text-right font-semibold text-gray-600 tabular-nums">{pct.toFixed(1)}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                            {isExpanded &&
-                              m.entries.map((e) => (
-                                <tr key={e.id} className="bg-gray-50/40 text-[11px]">
-                                  <td className="py-2.5 px-5 pl-11 text-gray-500 whitespace-nowrap">{formatThaiDate(e.expensedate)}</td>
-                                  <td className="py-2.5 px-5 text-gray-600" colSpan={2}>
-                                    {e.expensedescription || "-"}
-                                  </td>
-                                  <td className="py-2.5 px-5 text-right font-semibold text-gray-700 tabular-nums whitespace-nowrap">
-                                    ฿{e.expenseamount.toLocaleString()}
-                                    {e.receipturl && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setReceiptUrl(e.receipturl)}
-                                        className="ml-2 text-[#CC0000] hover:underline font-bold cursor-pointer"
-                                      >
-                                        ใบเสร็จ
-                                      </button>
+                              {comparison ? (
+                                <>
+                                  <td className="py-3.5 px-4 sm:px-5 text-gray-600 hidden sm:table-cell">{comp?.sessionsDone ?? 0} คาบ</td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-right text-gray-600 tabular-nums hidden sm:table-cell">฿{(comp?.expected ?? 0).toLocaleString()}</td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                                    ฿{received.toLocaleString()}
+                                    {(monthBonus?.total ?? 0) > 0 && (
+                                      <span className="mt-0.5 block text-[10px] font-medium text-gray-400">
+                                        ค่าจ้าง ฿{m.total.toLocaleString()} ·{" "}
+                                        <span className="font-semibold text-violet-500">โบนัส ฿{(monthBonus?.total ?? 0).toLocaleString()}</span>
+                                      </span>
                                     )}
                                   </td>
-                                </tr>
-                              ))}
+                                  <td className={`py-3.5 px-4 sm:px-5 text-right text-sm font-bold tabular-nums whitespace-nowrap ${variance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                    {variance >= 0 ? "+" : ""}฿{variance.toLocaleString()}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="py-3.5 px-5 text-gray-600">{txCount} ครั้ง</td>
+                                  <td className="py-3.5 px-5 text-right font-bold text-gray-900 tabular-nums">
+                                    ฿{received.toLocaleString()}
+                                    {(monthBonus?.total ?? 0) > 0 && (
+                                      <span className="mt-0.5 block text-[10px] font-medium text-gray-400">
+                                        ค่าจ้าง ฿{m.total.toLocaleString()} ·{" "}
+                                        <span className="font-semibold text-violet-500">โบนัส ฿{(monthBonus?.total ?? 0).toLocaleString()}</span>
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3.5 px-5">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <div className="hidden sm:block h-1.5 w-16 rounded-full bg-gray-100 overflow-hidden">
+                                        <div className="h-full rounded-full bg-[#CC0000] transition-all duration-500" style={{ width: `${pct}%` }} />
+                                      </div>
+                                      <span className="w-11 text-right font-semibold text-gray-600 tabular-nums">{pct.toFixed(1)}%</span>
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                            {isExpanded && hasEntries && (
+                              <tr className="bg-gray-50/40">
+                                <td colSpan={comparison ? 5 : 4} className="px-5 pb-5 pt-3">
+                                  {/* มุมมองสมุดบัญชี: ค่าจ้าง + โบนัสรวมกัน จัดกลุ่มตามวัน (แบบเดียวกับมือถือ) */}
+                                  <div className="space-y-4">
+                                    {groupEntriesByDay(combinedEntries).map((day) => (
+                                      <div key={day.key} className="space-y-2">
+                                        {/* หัวข้อวัน: วันที่ซ้าย + ยอดรวมของวันขวา */}
+                                        <div className="flex items-center justify-between px-1">
+                                          <span className="text-xs font-bold text-gray-500">{day.label}</span>
+                                          <span className="text-xs font-bold text-emerald-600 tabular-nums">
+                                            +฿{day.total.toLocaleString()}
+                                          </span>
+                                        </div>
+
+                                        {day.items.map((e) => {
+                                          const isBonus = e.expensetype === "coach_other";
+                                          return (
+                                            <div
+                                              key={e.id}
+                                              className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition-all hover:border-[#CC0000]/40 hover:bg-gray-50/60"
+                                            >
+                                              <div className="flex min-w-0 items-center gap-3">
+                                                <span
+                                                  className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-full ${
+                                                    isBonus ? "bg-violet-50 text-violet-600" : "bg-red-50 text-[#CC0000]"
+                                                  }`}
+                                                >
+                                                  {isBonus ? <Gift className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                                                </span>
+                                                <div className="min-w-0">
+                                                  <p className="truncate text-sm font-bold text-gray-800">
+                                                    {e.expensedescription || (isBonus ? "รายได้อื่น ๆ" : "ค่าจ้างการสอน")}
+                                                  </p>
+                                                  <p className="mt-0.5 text-[11px] text-gray-400">
+                                                    {isBonus ? "โบนัส / รายได้อื่น ๆ" : "ค่าจ้างการสอน"}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <div className="flex flex-shrink-0 items-center gap-2.5">
+                                                <span
+                                                  className={`text-sm font-black tabular-nums whitespace-nowrap ${
+                                                    isBonus ? "text-violet-600" : "text-emerald-600"
+                                                  }`}
+                                                >
+                                                  +฿{e.expenseamount.toLocaleString()}
+                                                </span>
+                                                {e.receipturl && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setReceiptUrl(e.receipturl)}
+                                                    title="ดูใบเสร็จ"
+                                                    className="rounded-md p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-[#CC0000] cursor-pointer"
+                                                  >
+                                                    <FileText className="h-4 w-4" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                           </React.Fragment>
                         );
                       })}
                     </tbody>
+                    {comparison && (() => {
+                      // รวมทั้งปี: ได้รับจริง = ค่าจ้างรวม + โบนัสรวมทั้งปี · ส่วนต่าง = ได้รับจริง − ที่ควรได้
+                      const footReceived = comparison.totals.actual + yearBonusTotal;
+                      const footVariance = footReceived - comparison.totals.expected;
+                      return (
+                      <tfoot>
+                        <tr className="text-sm bg-gray-50 border-t-2 border-gray-200">
+                          <td className="py-4 px-4 sm:px-5 font-black text-gray-900 whitespace-nowrap">รวมทั้งปี</td>
+                          <td className="py-4 px-4 sm:px-5 font-bold text-gray-800 hidden sm:table-cell">{comparison.totals.sessionsDone} คาบ</td>
+                          <td className="py-4 px-4 sm:px-5 text-right font-bold text-gray-800 tabular-nums hidden sm:table-cell">฿{comparison.totals.expected.toLocaleString()}</td>
+                          <td className="py-4 px-4 sm:px-5 text-right font-black text-gray-900 tabular-nums whitespace-nowrap">฿{footReceived.toLocaleString()}</td>
+                          <td className={`py-4 px-4 sm:px-5 text-right font-black tabular-nums whitespace-nowrap ${footVariance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {footVariance >= 0 ? "+" : ""}฿{footVariance.toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                      );
+                    })()}
                   </table>
                 </div>
               </div>
             </>
-          ) : viewMode === "yearly" ? (
+          ) : effectiveView === "yearly" ? (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-gray-100">
                 <h3 className="text-md font-bold text-gray-800">สรุปรายได้รายปี</h3>
@@ -976,55 +1088,6 @@ export default function CoachPaymentPage() {
             </div>
           ) : null}
           </>
-          )}
-
-          {/* รายได้อื่น ๆ (coach_other) — แยกออกจากค่าจ้างการสอน */}
-          {otherEntries.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-gray-100 flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-md font-bold text-gray-800">รายได้อื่น ๆ</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    โบนัสหรือรายได้อื่นที่สถาบันจ่ายให้ นอกเหนือจากค่าจ้างการสอน · รวม {otherEntries.length} รายการ
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">รวมทั้งหมด</p>
-                  <p className="text-lg font-black text-violet-600">฿{otherTotal.toLocaleString()}</p>
-                </div>
-              </div>
-              <div ref={otherTableRef} className="overflow-x-auto no-scrollbar">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
-                      <th className="py-3 px-5 whitespace-nowrap">วันที่</th>
-                      <th className="py-3 px-5">รายละเอียด</th>
-                      <th className="py-3 px-5 text-right">จำนวนเงิน</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {otherSorted.map((e) => (
-                      <tr key={e.id} className="text-xs hover:bg-gray-50/50 transition-colors">
-                        <td className="py-3 px-5 text-gray-600 font-semibold whitespace-nowrap">{e.expensedate?.split("T")[0]}</td>
-                        <td className="py-3 px-5 text-gray-600">{e.expensedescription || "-"}</td>
-                        <td className="py-3 px-5 text-right font-bold text-gray-900 whitespace-nowrap">
-                          ฿{e.expenseamount.toLocaleString()}
-                          {e.receipturl && (
-                            <button
-                              type="button"
-                              onClick={() => setReceiptUrl(e.receipturl)}
-                              className="ml-2 text-[#CC0000] hover:underline font-bold cursor-pointer"
-                            >
-                              ใบเสร็จ
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           )}
         </>
       )}

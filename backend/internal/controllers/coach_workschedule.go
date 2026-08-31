@@ -81,6 +81,34 @@ func (ctrl *WorkScheduleController) GetSchedulesByCoach(c *gin.Context) {
 	c.JSON(http.StatusOK, schedules)
 }
 
+// GetTaughtSessionCount handles GET /api/coaches/:id/taught-sessions
+// คืนจำนวนคาบที่ "สอนจริง" (มีรอบเช็คชื่อปิดแล้ว) ของโค้ช — ใช้คำนวณค่าจ้างค้างจ่าย
+func (ctrl *WorkScheduleController) GetTaughtSessionCount(c *gin.Context) {
+	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	dates, err := ctrl.service.TaughtSessionDates(uint(coachID), userID, role)
+	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count taught sessions: " + err.Error()})
+		return
+	}
+	// คืนทั้งจำนวน (แอดมินใช้) และรายวันที่ (หน้าโค้ชใช้จัดกลุ่มรายเดือน) จาก endpoint เดียว
+	c.JSON(http.StatusOK, gin.H{"count": len(dates), "dates": dates})
+}
+
 // GetScheduleByID handles GET /api/work-schedules/:id
 func (ctrl *WorkScheduleController) GetScheduleByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

@@ -1,0 +1,6 @@
+# build artifacts / ของที่ไม่ต้องเข้า image
+*.exe
+tmp/
+uploads/
+.env
+.env.*
