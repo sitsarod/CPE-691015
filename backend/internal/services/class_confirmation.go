@@ -383,9 +383,11 @@ func scheduleOn(pkg *models.Package, date time.Time) (models.PackageSchedule, bo
 // ⚠️ วันนี้วันเดียว ไม่ใช่ 7 วันเหมือนฝั่งนักเรียน — แอดมินจองสนามตอนตัวเลขนิ่ง
 // ซึ่งคือหลังเที่ยงของวันเรียน วันอื่นยังเปลี่ยนได้ เอาไปจองไม่ได้อยู่ดี
 //
-// ⚠️ รายงานทุกคาบของวันนี้ รวมคาบที่ยังไม่มีนักเรียน (total = 0)
-// เคยกรอง total = 0 ทิ้ง แล้วรายการคาบไม่ตรงกับหน้าเปิดรอบเช็คชื่อที่ดึงจาก
-// PackageSchedule ชุดเดียวกัน แอดมินไม่มีทางรู้ว่าคาบที่หายไปหายเพราะอะไร
+// ⚠️ รายงานเฉพาะคาบที่มีนักเรียนจริง — ข้ามคาบที่ total = 0
+//
+// แพ็กเกจส่วนใหญ่ตั้งตารางไว้หลายช่วงเวลาต่อวันโดยที่ยังไม่มีคนสมัคร (เช่นคอร์ส
+// PRIVATE ที่มี 4-5 คาบต่อวัน) ถ้ารายงานหมดตารางจะยาวเป็นสิบแถวที่เป็นศูนย์ทั้งหมด
+// จนหาคาบที่มีคนจริงไม่เจอ ซึ่งเป็นข้อมูลเดียวที่ใช้ตัดสินใจจองสนามได้
 //
 // โหลดสามชุดทีเดียวแล้วประกอบในหน่วยความจำ ไล่ query ต่อคาบจะกลายเป็น N+1
 func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, error) {
@@ -438,6 +440,10 @@ func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, err
 				if answered[keyOf(e.ID, date)] == models.ClassConfirmationGoing {
 					going++
 				}
+			}
+
+			if total == 0 {
+				continue
 			}
 
 			item := dto.ClassHeadcountDTO{
