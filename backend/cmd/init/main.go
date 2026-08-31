@@ -73,6 +73,7 @@ func main() {
 		&models.PasswordResetOTP{},
 		&models.Court{},
 		&models.Notification{},
+		&models.ClassConfirmation{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)

@@ -116,6 +116,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	personalQRController := controllers.NewPersonalQRController(db)
 
+	// ยืนยันการมาเรียนล่วงหน้า — โรงเรียนใช้ยอดนี้ตัดสินใจจองสนามเพิ่ม
+	classConfirmationService := services.NewClassConfirmationService(db)
+	classConfirmationController := controllers.NewClassConfirmationController(classConfirmationService)
+
 	// ระบบแจ้งเตือน (per user) — หน้าเว็บ derive แล้ว sync ขึ้นมาเก็บ + จำสถานะอ่าน + ประวัติ
 	notificationService := services.NewNotificationService(db)
 	notificationController := controllers.NewNotificationController(notificationService)
@@ -324,6 +328,18 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			enrollmentGroup.POST("/", enrollmentController.EnrollCourse)
 			enrollmentGroup.GET("/customer/:id", enrollmentController.GetCustomerEnrollments)
+			// นักเรียนถอนใบสมัครของตัวเอง เฉพาะใบที่ยังรออนุมัติ
+			// :id เป็นเลขเรียงที่เดาต่อได้ service จึงเทียบเจ้าของจาก JWT ก่อนเสมอ
+			enrollmentGroup.PATCH("/:id/cancel", enrollmentController.CancelMyEnrollment)
+		}
+
+		// --- ยืนยันการมาเรียนล่วงหน้า ---
+		// อ้างตัวตนจาก JWT อย่างเดียว ไม่รับ customer_id จาก body จึงตอบแทนคนอื่นไม่ได้
+		classConfirmGroup := protected.Group("/class-confirmations")
+		{
+			classConfirmGroup.GET("/upcoming", classConfirmationController.GetMyUpcoming)
+			classConfirmGroup.PUT("", classConfirmationController.Confirm)
+			classConfirmGroup.DELETE("", classConfirmationController.Cancel)
 		}
 
 		// --- เช็คชื่อเข้าเรียน ---
@@ -335,6 +351,9 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.GET("/openable", attendanceController.GetOpenablePackages)
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
 
+			// รอบที่เปิดค้างอยู่ — หน้าเช็คชื่อเรียกคู่กับ /openable ใน Promise.all
+			// ขาดเส้นนี้ = 404 แล้วล้มทั้งชุด หน้าโหลดไม่ขึ้นเลย
+			attendanceGroup.GET("/sessions", attendanceController.GetOpenSessions)
 			attendanceGroup.POST("/sessions", attendanceController.OpenSession)
 			attendanceGroup.GET("/sessions/:id", attendanceController.GetSession)
 			// สแกนสองจังหวะ: lookup ไม่เขียนอะไร · check-in บันทึกและหักโควตา
@@ -346,9 +365,16 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.PATCH("/records/:id", attendanceController.UpdateStatus)
 		}
 
+		// ยอดคนที่ตอบว่าจะมาเรียน "วันนี้" — ใช้ตัดสินใจจองสนามเพิ่ม
+		adminOnly.GET("/admin/class-confirmations/headcount", classConfirmationController.GetHeadcounts)
+		// รายชื่อรายคาบ — กดจากยอดสรุปเข้ามาดูว่าใครตอบว่ามา/ไม่มา/ยังไม่ตอบ
+		adminOnly.GET("/admin/class-confirmations/roster", classConfirmationController.GetClassRoster)
+
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
 		{
 			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
+			// ปฏิเสธคำขอ — ต่างจาก DELETE ตรงที่ไม่ลบทิ้ง แต่เก็บเหตุผลและคนตัดสินใจไว้
+			adminEnrollmentReviewGroup.PATCH("/:id/reject", enrollmentController.RejectEnrollment)
 			adminEnrollmentReviewGroup.POST("/:id/extend", enrollmentController.ExtendEnrollment)
 			adminEnrollmentReviewGroup.GET("/:id/extensions", enrollmentController.GetEnrollmentExtensions)
 		}

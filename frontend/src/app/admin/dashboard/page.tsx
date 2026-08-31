@@ -10,6 +10,7 @@ import { buildDashboard } from "./components/buildDashboard";
 import type { DashboardData } from "./components/types";
 import DashboardSkeleton from "./components/DashboardSkeleton";
 import DashboardNotifications from "./components/DashboardNotifications";
+import ClassHeadcountPanel from "./components/ClassHeadcountPanel";
 import {
   KpiCards,
   RevenueChart,
@@ -134,6 +135,10 @@ export default function AdminDashboardPage() {
           <div className="hidden md:block">
             <KpiCards kpis={data.kpis} />
           </div>
+
+          {/* ไม่ซ่อนบนมือถือเหมือน KPI/กราฟ เพราะต้องใช้ตอนอยู่ที่สนาม
+              วันที่ไม่มีคาบขึ้นข้อความแทน ไม่หายทั้งการ์ด เลย์เอาต์จะได้ไม่ขยับ */}
+          <ClassHeadcountPanel />
 
           <div className="hidden gap-6 md:grid md:grid-cols-1 lg:grid-cols-3">
             <RevenueChart chart={data.chart} />

@@ -28,6 +28,7 @@ import FaceConsentModal from "@/components/FaceConsentModal";
 import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
 import { FaceConsentStatus, FaceConsentDecision } from "@/types/consent";
 import EnrollmentHistoryModal from "./components/EnrollmentHistoryModal";
+import ClassConfirmationSection from "./components/ClassConfirmationSection";
 import CourseCover from "@/components/course/CourseCover";
 import CourseDetail from "@/components/course/CourseDetail";
 import CourseSummaryCard from "@/components/course/CourseSummaryCard";
@@ -234,9 +235,23 @@ export default function EnrollmentPage() {
     }
   };
 
-  // ใบที่ถูกปฏิเสธไปอยู่ในหน้าประวัติอย่างเดียว ไม่ปะปนกับคอร์สที่ใช้งานอยู่
-  const visibleEnrollments = enrollments.filter((e) => e.status !== "rejected");
-  const hiddenRejectedCount = enrollments.length - visibleEnrollments.length;
+  // ใบที่จบเส้นทางแล้วอยู่ในหน้าประวัติอย่างเดียว ไม่ปะปนกับคอร์สที่ใช้งานอยู่
+  //
+  // ยกเว้นใบที่หมดอายุแต่ยังอยู่ในช่วงผ่อนผัน — ยังมีครั้งเหลือและขอขยายสิทธิ์ได้
+  // ถ้าซ่อนไปด้วย นักเรียนจะไม่รู้ว่ามีเวลาจำกัดให้ติดต่อแอดมิน
+  const isInGrace = (e: Enrollment) =>
+    e.grace_days_left !== null && e.grace_days_left > 0;
+
+  const visibleEnrollments = enrollments.filter(
+    (e) =>
+      e.status !== "rejected" && (e.status !== "expired" || isInGrace(e))
+  );
+  const hiddenRejectedCount = enrollments.filter(
+    (e) => e.status === "rejected"
+  ).length;
+  const hiddenExpiredCount = enrollments.filter(
+    (e) => e.status === "expired" && !isInGrace(e)
+  ).length;
 
   const displayCourses = courses;
 
@@ -275,13 +290,22 @@ export default function EnrollmentPage() {
           <div className="text-[16px] text-gray-500">
             <p>คุณยังไม่มีข้อมูลการลงทะเบียนคอร์สเรียนในขณะนี้</p>
 
-            {/* กันงงกรณีเคยสมัครแล้วถูกปฏิเสธ — ไม่งั้นจะเห็นหน้าว่างทั้งที่เพิ่งสมัครไป */}
+            {/* กันงงกรณีที่ใบทั้งหมดถูกซ่อน — ไม่งั้นจะเห็นหน้าว่างทั้งที่เพิ่งสมัคร
+                หรือเพิ่งเรียนจบไป เหมือนระบบลืมประวัติของตัวเองไปเฉย ๆ */}
             {hiddenRejectedCount > 0 && (
               <button
                 onClick={() => setShowHistory(true)}
-                className="mt-2 text-sm font-semibold text-[#CC0000] underline underline-offset-2"
+                className="mt-2 block text-sm font-semibold text-[#CC0000] underline underline-offset-2"
               >
                 มีใบสมัคร {hiddenRejectedCount} ใบที่ไม่ผ่านการพิจารณา · ดูประวัติ
+              </button>
+            )}
+            {hiddenExpiredCount > 0 && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="mt-2 block text-sm font-semibold text-[#CC0000] underline underline-offset-2"
+              >
+                มีคอร์สที่หมดอายุแล้ว {hiddenExpiredCount} คอร์ส · ดูประวัติการเรียน
               </button>
             )}
           </div>
@@ -295,8 +319,7 @@ export default function EnrollmentPage() {
                 item.status,
                 item.grace_days_left
               );
-              const inGrace =
-                item.grace_days_left !== null && item.grace_days_left > 0;
+              const inGrace = isInGrace(item);
 
               return (
               <div
@@ -466,6 +489,9 @@ export default function EnrollmentPage() {
           </div>
         )}
       </div>
+
+      {/* ซ่อนตัวเองเมื่อไม่มีคาบใน 7 วันข้างหน้า */}
+      <ClassConfirmationSection />
 
       <hr className="my-8 border-gray-300" />
 
