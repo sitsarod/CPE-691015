@@ -346,7 +346,7 @@ export default function EnrollmentPage() {
                   >
                     <CalendarX className="w-3 h-3 mr-1" />
                     {inGrace
-                      ? `หมดอายุ · ขอขยายได้อีก ${item.grace_days_left} วัน`
+                      ? `หมดอายุ · ติดต่อแอดมินได้อีก ${item.grace_days_left} วัน`
                       : 'หมดอายุแล้ว'}
                   </div>
                 )}
@@ -449,7 +449,8 @@ export default function EnrollmentPage() {
                     ) : inGrace ? (
                       <span className="text-xs sm:text-sm font-semibold text-red-600">
                         เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
-                        ติดต่อแอดมินภายใน {item.grace_days_left} วันเพื่อขอขยายสิทธิ์
+                        ติดต่อแอดมินภายใน {item.grace_days_left} วัน
+                        เพื่อขอทบครึ่งหนึ่งไปใช้กับคอร์สถัดไป
                       </span>
                     ) : item.status === 'expired' ? (
                       <span className="text-xs sm:text-sm text-slate-500">

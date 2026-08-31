@@ -209,21 +209,28 @@ export interface FormattedEnrollment {
 
 
 export interface ExtendEnrollmentReq {
-  extend_days: number;
-  extend_sessions: number;
   reason: string;
 }
 
 export interface EnrollmentExtension {
   id: number;
   enrollment_id: number;
+
   extend_days: number;
   extend_sessions: number;
+
   reason: string;
   previous_expires_at: string | null;
   new_expires_at: string | null;
   previous_total_sessions: number;
   new_total_sessions: number;
+
+  previous_remaining_sessions: number;
+  new_remaining_sessions: number;
+  carried_over_sessions: number;
+  forfeited_sessions: number;
+  carry_over_expires_at: string | null;
+
   extended_by_user_id: number;
   extended_at: string;
 }
@@ -235,6 +242,11 @@ export interface ExtendEnrollmentRes {
   days_left: number | null;
   total_sessions: number;
   remaining_sessions: number;
+
+  carried_over_sessions: number;
+  forfeited_sessions: number;
+  carry_over_expires_at: string | null;
+
   extension: EnrollmentExtension;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, Loader2, CalendarPlus, AlertTriangle, BookOpen } from "lucide-react";
+import { X, Loader2, Repeat, AlertTriangle, BookOpen } from "lucide-react";
 import { fetchCustomerEnrollments } from "@/services/enrollmentAPI";
 import type { Enrollment } from "@/types/enrollment";
 import {
@@ -80,7 +80,7 @@ export default function StudentEnrollmentsModal({
                 คอร์สเรียนของ {studentName}
               </h2>
               <p className="mt-0.5 text-xs text-gray-500">
-                ขยายเวลาหรือเพิ่มจำนวนครั้งให้ได้จากที่นี่
+                ใบที่หมดอายุพร้อมครั้งที่ใช้ไม่ทัน ทบไปคอร์สถัดไปให้ได้จากที่นี่
               </p>
             </div>
             <button
@@ -161,12 +161,11 @@ export default function StudentEnrollmentsModal({
                         <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold leading-relaxed text-red-700">
                           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                           ยังเหลือ {e.remaining_sessions} ครั้งที่ใช้ไม่ทัน ·
-                          ขยายให้ได้อีก {e.grace_days_left} วัน
+                          ทบให้ได้ภายใน {e.grace_days_left} วัน
                         </p>
                       )}
 
-                      {/* ใบที่ยังไม่เริ่มเรียนไม่มีนาฬิกาให้ยืด จึงไม่ต้องมีปุ่ม */}
-                      {e.expires_at && e.status !== "cancelled" && (
+                      {inGrace && (
                         <button
                           type="button"
                           onClick={() =>
@@ -182,8 +181,8 @@ export default function StudentEnrollmentsModal({
                           }
                           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
                         >
-                          <CalendarPlus className="h-4 w-4" />
-                          ขยายสิทธิ์
+                          <Repeat className="h-4 w-4" />
+                          ทบครั้งไปคอร์สถัดไป
                         </button>
                       )}
                     </div>

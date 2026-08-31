@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,16 +12,16 @@ import (
 )
 
 var (
-	ErrExtensionNotStarted = errors.New("ไม่สามารถขยายเวลาได้ เนื่องจากการลงทะเบียนนี้ยังไม่เริ่มเรียน (ยังไม่มีวันหมดอายุให้ขยาย)")
-	ErrExtensionReasonReq  = errors.New("กรุณาระบุเหตุผลในการขยายเวลา")
-	ErrExtensionInvalid    = errors.New("จำนวนวันที่ขยายต้องไม่เกิน 366 วัน และจำนวนครั้งต้องไม่เกิน 100 ครั้ง")
-	ErrExtensionEmpty      = errors.New("กรุณาระบุจำนวนวันหรือจำนวนครั้งที่ต้องการขยาย อย่างน้อยหนึ่งอย่าง")
-	ErrExtensionCancelled  = errors.New("ไม่สามารถขยายเวลาให้การลงทะเบียนที่ถูกยกเลิกได้")
-)
+	ErrExtensionNotStarted = errors.New("ไม่สามารถขยายสิทธิ์ได้ เนื่องจากการลงทะเบียนนี้ยังไม่เริ่มเรียน")
+	ErrExtensionReasonReq  = errors.New("กรุณาระบุเหตุผลในการขยายสิทธิ์")
+	ErrExtensionCancelled  = errors.New("ไม่สามารถขยายสิทธิ์ให้การลงทะเบียนที่ถูกยกเลิกได้")
+	ErrExtensionNoSessions = errors.New("ใบลงทะเบียนนี้ไม่มีครั้งคงเหลือให้ทบไปคอร์สถัดไป")
 
-const (
-	maxExtendDays     = 366
-	maxExtendSessions = 100
+	ErrExtensionNotExpired  = errors.New("ขยายสิทธิ์ได้เฉพาะใบที่หมดอายุแล้ว — ใบนี้ยังเรียนได้ตามปกติ")
+	ErrExtensionAlreadyDone = errors.New("ใบลงทะเบียนนี้ถูกขยายสิทธิ์ไปแล้ว ทบซ้ำอีกไม่ได้")
+
+	ErrExtensionGraceOver = fmt.Errorf(
+		"เลยช่วงผ่อนผัน %d วันหลังหมดอายุแล้ว จึงขยายสิทธิ์ให้ไม่ได้", dto.GracePeriodDays)
 )
 
 func (s *EnrollmentService) ExtendEnrollment(
@@ -28,13 +29,6 @@ func (s *EnrollmentService) ExtendEnrollment(
 	adminUserID uint,
 	req dto.ExtendEnrollmentReq,
 ) (*dto.ExtendEnrollmentRes, error) {
-	if req.ExtendDays > maxExtendDays || req.ExtendSessions > maxExtendSessions {
-		return nil, ErrExtensionInvalid
-	}
-
-	if req.ExtendDays == 0 && req.ExtendSessions == 0 {
-		return nil, ErrExtensionEmpty
-	}
 	reason := strings.TrimSpace(req.Reason)
 	if reason == "" {
 		return nil, ErrExtensionReasonReq
@@ -43,6 +37,10 @@ func (s *EnrollmentService) ExtendEnrollment(
 	var result dto.ExtendEnrollmentRes
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		expireStaleEnrollments(tx)
+
+		now := time.Now()
+
 		var enrollment models.Enrollment
 		if err := tx.First(&enrollment, enrollmentID).Error; err != nil {
 			return ErrEnrollmentNotFound
@@ -56,82 +54,73 @@ func (s *EnrollmentService) ExtendEnrollment(
 			return ErrExtensionNotStarted
 		}
 
-		previous := *enrollment.ExpiresAt
-
-		newExpiresAt := previous
-		if req.ExtendDays > 0 {
-			base := previous
-			now := time.Now()
-			if base.Before(now) {
-				base = now
-			}
-			newExpiresAt = base.AddDate(0, 0, int(req.ExtendDays))
+		if now.Before(*enrollment.ExpiresAt) {
+			return ErrExtensionNotExpired
 		}
 
-		previousTotal := enrollment.TotalSessions
-		newTotal := previousTotal + req.ExtendSessions
-		newRemaining := enrollment.RemainingSessions + req.ExtendSessions
-
-		if enrollment.Status == models.EnrollmentStatusExpired {
-			var pkg models.Package
-			if err := tx.First(&pkg, enrollment.PackageID).Error; err != nil {
-				return errors.New("ไม่พบข้อมูลแพ็กเกจของการลงทะเบียนนี้")
-			}
-			
-			expireStaleEnrollments(tx)
-
-			full, err := seatsFull(tx, enrollment.PackageID, pkg.MaxSeats)
-			if err != nil {
-				return err
-			}
-			if full {
-				return ErrPackageSeatsFull
-			}
+		if enrollment.Status != models.EnrollmentStatusExpired {
+			return ErrExtensionNotExpired
 		}
 
-		updates := map[string]interface{}{"expires_at": newExpiresAt}
-		if req.ExtendSessions > 0 {
-			updates["total_sessions"] = newTotal
-			updates["remaining_sessions"] = newRemaining
-		}
-		if enrollment.Status == models.EnrollmentStatusExpired {
-			updates["status"] = models.EnrollmentStatusActive
+		previousRemaining := enrollment.RemainingSessions
+		if previousRemaining == 0 {
+			return ErrExtensionNoSessions
 		}
 
-		if err := tx.Model(&models.Enrollment{}).
-			Where("id = ?", enrollment.ID).
-			Updates(updates).Error; err != nil {
-			return errors.New("ไม่สามารถขยายสิทธิ์เรียนได้")
+		if now.After(enrollment.ExpiresAt.AddDate(0, 0, dto.GracePeriodDays)) {
+			return ErrExtensionGraceOver
+		}
+
+		var alreadyGranted int64
+		if err := tx.Model(&models.SessionCarryOver{}).
+			Where("from_enrollment_id = ?", enrollment.ID).
+			Count(&alreadyGranted).Error; err != nil {
+			return errors.New("ไม่สามารถตรวจสอบประวัติการขยายสิทธิ์ได้")
+		}
+		if alreadyGranted > 0 {
+			return ErrExtensionAlreadyDone
+		}
+
+		carriedOver := carryOverShare(previousRemaining)
+		forfeited := previousRemaining - carriedOver
+
+		deadline := now.AddDate(0, 0, carryOverWindowDays)
+		if _, err := bankCarryOver(tx, &enrollment, carriedOver, deadline, adminUserID); err != nil {
+			return err
 		}
 
 		record := models.EnrollmentExtension{
-			EnrollmentID:          enrollment.ID,
-			ExtendDays:            req.ExtendDays,
-			ExtendSessions:        req.ExtendSessions,
-			Reason:                reason,
-			PreviousExpiresAt:     &previous,
-			NewExpiresAt:          &newExpiresAt,
-			PreviousTotalSessions: previousTotal,
-			NewTotalSessions:      newTotal,
-			ExtendedByUserID:      adminUserID,
+			EnrollmentID:      enrollment.ID,
+			Reason:            reason,
+			PreviousExpiresAt: enrollment.ExpiresAt,
+			NewExpiresAt:      enrollment.ExpiresAt,
+
+			PreviousTotalSessions: enrollment.TotalSessions,
+			NewTotalSessions:      enrollment.TotalSessions,
+
+			PreviousRemainingSessions: previousRemaining,
+			NewRemainingSessions:      previousRemaining,
+			CarriedOverSessions:       carriedOver,
+			ForfeitedSessions:         forfeited,
+			CarryOverExpiresAt:        &deadline,
+
+			ExtendedByUserID: adminUserID,
 		}
 		if err := tx.Create(&record).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกประวัติการขยายสิทธิ์ได้")
 		}
 
-		status := enrollment.Status
-		if enrollment.Status == models.EnrollmentStatusExpired {
-			status = models.EnrollmentStatusActive
-		}
-
 		result = dto.ExtendEnrollmentRes{
-			EnrollmentID:      enrollment.ID,
-			Status:            string(status),
-			ExpiresAt:         &newExpiresAt,
-			DaysLeft:          dto.DaysLeft(&newExpiresAt),
-			TotalSessions:     newTotal,
-			RemainingSessions: newRemaining,
-			Extension:         dto.ToEnrollmentExtensionDTO(&record),
+			EnrollmentID:        enrollment.ID,
+			Status:              string(enrollment.Status),
+			ExpiresAt:           enrollment.ExpiresAt,
+			DaysLeft:            dto.DaysLeft(enrollment.ExpiresAt),
+			TotalSessions:       enrollment.TotalSessions,
+			RemainingSessions:   previousRemaining,
+			CarriedOverSessions: carriedOver,
+			ForfeitedSessions:   forfeited,
+			CarryOverExpiresAt:  &deadline,
+			Extension:           dto.ToEnrollmentExtensionDTO(&record),
 		}
 		return nil
 	})

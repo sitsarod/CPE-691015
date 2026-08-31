@@ -260,12 +260,14 @@ func (ctrl *EnrollmentController) ExtendEnrollment(c *gin.Context) {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
             c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-        case errors.Is(err, services.ErrExtensionInvalid),
-            errors.Is(err, services.ErrExtensionEmpty),
-            errors.Is(err, services.ErrExtensionReasonReq):
+        case errors.Is(err, services.ErrExtensionReasonReq):
             c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         case errors.Is(err, services.ErrExtensionNotStarted),
             errors.Is(err, services.ErrExtensionCancelled),
+            errors.Is(err, services.ErrExtensionNoSessions),
+            errors.Is(err, services.ErrExtensionNotExpired),
+            errors.Is(err, services.ErrExtensionAlreadyDone),
+            errors.Is(err, services.ErrExtensionGraceOver),
             errors.Is(err, services.ErrPackageSeatsFull):
             c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
         default:

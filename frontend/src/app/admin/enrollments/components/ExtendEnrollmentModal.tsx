@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { X, CalendarPlus, Loader2, AlertTriangle } from "lucide-react";
+import { X, Repeat, Loader2, AlertTriangle, PiggyBank, Trash2 } from "lucide-react";
 import { extendEnrollment } from "@/services/enrollmentAPI";
 import { formatThaiDate } from "@/components/course/expiryUtils";
+
+function carryOverShare(remaining: number) {
+  return Math.ceil(remaining / 2);
+}
 
 export interface ExtendTarget {
   id: number;
@@ -27,17 +31,15 @@ export default function ExtendEnrollmentModal({
   onClose,
   onSuccess,
 }: ExtendEnrollmentModalProps) {
-  const [days, setDays] = useState<number | "">("");
-  const [sessions, setSessions] = useState<number | "">("");
   const [reason, setReason] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!enrollment) return null;
 
-  // ใบที่ยังไม่เริ่มเรียนไม่มีนาฬิกาให้ยืด — backend จะปฏิเสธอยู่แล้ว
-  // แต่ดักที่นี่ด้วยเพื่อไม่ให้แอดมินกรอกฟอร์มเสร็จแล้วค่อยเจอ error
   const notStarted = !enrollment.expires_at;
+
+  const notExpired = !notStarted && enrollment.status !== "expired";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,32 +53,22 @@ export default function ExtendEnrollmentModal({
 
     try {
       setIsSaving(true);
-      await extendEnrollment(
-        enrollment.id,
-        {
-          extend_days: days === "" ? 0 : Number(days),
-          extend_sessions: sessions === "" ? 0 : Number(sessions),
-          reason: reason.trim(),
-        },
-        token
-      );
+      await extendEnrollment(enrollment.id, { reason: reason.trim() }, token);
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "ไม่สามารถขยายระยะเวลาได้");
+      setError(err instanceof Error ? err.message : "ไม่สามารถทบครั้งไปคอร์สถัดไปได้");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const daysValue = days === "" ? 0 : Number(days);
-  const sessionsValue = sessions === "" ? 0 : Number(sessions);
+  const carriedSessions = carryOverShare(enrollment.remaining_sessions);
+  const forfeitedSessions = enrollment.remaining_sessions - carriedSessions;
 
-  const isValid =
-    (daysValue > 0 || sessionsValue > 0) &&
-    daysValue <= 366 &&
-    sessionsValue <= 100 &&
-    reason.trim().length >= 3;
+  const noSessions = enrollment.remaining_sessions === 0;
+
+  const isValid = reason.trim().length >= 3 && !noSessions;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -84,8 +76,8 @@ export default function ExtendEnrollmentModal({
         <header className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-5">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-              <CalendarPlus className="h-5 w-5 text-[#CC0000]" />
-              ขยายระยะเวลาเรียน
+              <Repeat className="h-5 w-5 text-[#CC0000]" />
+              ขยายสิทธิ์เรียน
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">
               {[enrollment.studentName, enrollment.courseName]
@@ -104,14 +96,18 @@ export default function ExtendEnrollmentModal({
           </button>
         </header>
 
-        {notStarted ? (
+        {notStarted || notExpired ? (
           <div className="px-6 py-8 text-center">
             <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-orange-500" />
             <p className="text-sm font-semibold text-gray-800">
-              การลงทะเบียนนี้ยังไม่เริ่มเรียน
+              {notStarted
+                ? "การลงทะเบียนนี้ยังไม่เริ่มเรียน"
+                : "ใบนี้ยังไม่หมดอายุ"}
             </p>
             <p className="mt-1 text-sm text-gray-500">
-              จึงยังไม่มีวันหมดอายุให้ขยาย — ต้องอนุมัติหรือยืนยันการชำระเงินก่อน
+              {notStarted
+                ? "ต้องอนุมัติหรือยืนยันการชำระเงินก่อน จึงจะมีครั้งคงเหลือให้ทบ"
+                : "ครั้งที่เหลือยังใช้เรียนได้ตามปกติ — ทบไปคอร์สถัดไปได้ก็ต่อเมื่อหมดอายุแล้ว"}
             </p>
           </div>
         ) : (
@@ -135,53 +131,47 @@ export default function ExtendEnrollmentModal({
                   {enrollment.remaining_sessions} จาก {enrollment.total_sessions} ครั้ง
                 </span>
               </div>
-              {/* บอกกติกาการนับให้ชัด เพราะสองกรณีให้ผลต่างกันและแอดมินคาดเดาเองไม่ได้ */}
               <p className="mt-1.5 text-xs leading-relaxed text-gray-400">
-                {enrollment.status === "expired"
-                  ? "ใบนี้หมดอายุแล้ว ถ้าขยายเวลา ระบบจะนับวันใหม่จากวันนี้และเปิดสิทธิ์เรียนกลับมาให้"
-                  : "ถ้าขยายเวลา ระบบจะนับต่อจากวันหมดอายุเดิม วันที่เหลืออยู่จะไม่หายไป"}
+                ใบนี้หมดอายุแล้วและจะไม่ถูกเปิดกลับมา — สองค่าข้างบนคงไว้เป็นหลักฐาน
               </p>
             </div>
 
 
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">
-                  ขยายเวลา (วัน)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={366}
-                  value={days}
-                  onChange={(e) =>
-                    setDays(e.target.value === "" ? "" : Number(e.target.value))
-                  }
-                  placeholder="เว้นว่าง = ไม่ขยาย"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
-                />
+            <div className="mb-4 rounded-xl border border-[#CC0000]/20 bg-[#FFF7F7] p-3">
+              <p className="text-sm font-bold text-gray-900">ระบบจะดำเนินการให้อัตโนมัติ</p>
+
+              <div className="mt-2 space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <PiggyBank className="h-4 w-4 shrink-0 text-[#CC0000]" />
+                  <span className="text-gray-700">
+                    ทบไปคอร์สถัดไป <span className="font-bold">{carriedSessions}</span> ครั้ง
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4 shrink-0 text-gray-400" />
+                  <span className="text-gray-700">
+                    ริบ <span className="font-bold">{forfeitedSessions}</span> ครั้ง
+                  </span>
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">
-                  เพิ่มจำนวนครั้ง
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={sessions}
-                  onChange={(e) =>
-                    setSessions(e.target.value === "" ? "" : Number(e.target.value))
-                  }
-                  placeholder="เว้นว่าง = ไม่เพิ่ม"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#CC0000]"
-                />
-              </div>
+
+              <p className="mt-2.5 border-t border-[#CC0000]/15 pt-2 text-xs leading-relaxed text-gray-500">
+                ใบเดิมไม่ถูกแก้อะไรเลย — วันหมดอายุและเลข {enrollment.remaining_sessions} ครั้ง
+                ยังอยู่ครบเป็นหลักฐาน (ใบที่หมดอายุแล้วเอาไปเรียนต่อไม่ได้อยู่แล้ว)
+                <br />
+                ครั้งที่ทบจะถูกบวกให้อัตโนมัติเมื่อสมัครคอร์สใหม่ (ได้ระยะเวลาปกติ 1 เดือน)
+                ถ้าไม่สมัครต่อภายในกำหนดจะถูกริบตามไปด้วย
+                <br />
+                <span className="font-semibold">ใบหนึ่งทบได้ครั้งเดียว</span> — กดแล้วกดซ้ำไม่ได้
+              </p>
             </div>
 
-            <p className="mb-4 -mt-2 text-xs text-gray-400">
-              กรอกอย่างน้อยหนึ่งช่อง · การเพิ่มจำนวนครั้งจะเพิ่มทั้งโควตารวมและครั้งที่เหลือ
-            </p>
+            {noSessions && (
+              <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+                ใบนี้ไม่มีครั้งคงเหลือแล้ว จึงไม่มีอะไรให้ทบไปคอร์สถัดไป
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="mb-1 block text-sm font-semibold text-gray-700">
@@ -216,7 +206,7 @@ export default function ExtendEnrollmentModal({
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#CC0000] py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                ยืนยันการขยาย
+                ยืนยันการทบ
               </button>
             </div>
           </form>

@@ -261,12 +261,27 @@ export default function EnrollmentReviewPanel({
                           >
                             <div className="flex justify-between gap-2">
                               <span className="font-semibold text-gray-800">
-                                +{ext.extend_days} วัน
+                                {ext.extend_days > 0
+                                  ? `+${ext.extend_days} วัน`
+                                  : `ทบ ${ext.carried_over_sessions} ครั้ง`}
                               </span>
                               <span className="text-gray-400">
                                 {formatThaiDate(ext.extended_at)}
                               </span>
                             </div>
+
+                            {ext.previous_remaining_sessions > 0 && (
+                              <p className="mt-0.5 text-gray-500">
+                                เดิมเหลือ {ext.previous_remaining_sessions} ครั้ง ·{" "}
+                                <span className="font-semibold text-gray-700">
+                                  ทบ {ext.carried_over_sessions}
+                                </span>{" "}
+                                · ริบ {ext.forfeited_sessions}
+                                {ext.carry_over_expires_at &&
+                                  ` · ทบได้ถึง ${formatThaiDate(ext.carry_over_expires_at)}`}
+                              </p>
+                            )}
+
                             <p className="mt-0.5 leading-relaxed text-gray-500">
                               {ext.reason}
                             </p>

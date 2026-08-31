@@ -57,7 +57,7 @@ export function StudentManagementDesktop({ manager }: { manager: StudentManageme
               มี {manager.graceStudents.length} คนที่คอร์สหมดอายุแล้วแต่ยังเรียนไม่ครบ
             </p>
             <p className="mt-0.5 text-sm text-red-700">
-              ติดต่อกลับเพื่อขยายเวลาหรือเพิ่มจำนวนครั้งให้ก่อนพ้นช่วงผ่อนผัน ·{" "}
+              ทบครั้งที่เหลือไปคอร์สถัดไปให้ก่อนพ้นช่วงผ่อนผัน ·{" "}
               <span className="font-semibold underline">
                 {manager.showGraceOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}
               </span>
