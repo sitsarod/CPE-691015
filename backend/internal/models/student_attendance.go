@@ -15,13 +15,12 @@ const (
 	CheckInMethodQRCode   CheckInMethod = "qr_code"
 	CheckInMethodSystem CheckInMethod = "system"
 )
- 
+
 type AttendanceStatus string
 
 const (
 	AttendanceStatusPresent AttendanceStatus = "present"
 	AttendanceStatusAbsent  AttendanceStatus = "absent"
-	AttendanceStatusLeave   AttendanceStatus = "leave"
 )
 
 type StudentAttendance struct {

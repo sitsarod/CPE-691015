@@ -128,9 +128,15 @@ export default function ClassConfirmationSection() {
         )}
       </div>
 
-      <p className="mb-4 text-sm text-gray-500">
+      <p className="mb-2 text-sm text-gray-500">
         กดยืนยันล่วงหน้าเพื่อให้โรงเรียนจองสนามได้พอดีกับจำนวนคน ·
         ปิดรับตอนเที่ยงของวันที่เรียน
+      </p>
+
+      <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        ยืนยันแล้วไม่มา จะยัง<strong className="font-semibold">ถูกคิดค่าสนาม</strong>ของคาบนั้น
+        (แต่ไม่ถูกหักจำนวนครั้งที่เรียน) เพราะโรงเรียนจองสนามเผื่อไว้แล้ว —
+        ถ้ามาไม่ได้ ให้กดยกเลิกก่อนปิดรับ
       </p>
 
       {error && (

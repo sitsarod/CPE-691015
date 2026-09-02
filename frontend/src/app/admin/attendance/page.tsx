@@ -181,7 +181,9 @@ export default function AdminAttendancePage() {
         setOutcome({
           ok: true,
           title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
-          detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
+          detail: result.is_off_schedule
+            ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
+            : `เหลือ ${result.remaining_sessions} ครั้ง`,
         });
       } catch (err: unknown) {
         setOutcome({
@@ -210,7 +212,9 @@ export default function AdminAttendancePage() {
       setOutcome({
         ok: true,
         title: `เช็คชื่อให้ ${result.full_name.trim() || result.nickname} แล้ว`,
-        detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
+        detail: result.is_off_schedule
+          ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
+          : `เหลือ ${result.remaining_sessions} ครั้ง`,
       });
       await refreshSession();
     } catch (err: unknown) {
@@ -258,7 +262,7 @@ export default function AdminAttendancePage() {
     const pending = session.pending_count;
     const confirmed = window.confirm(
       pending > 0
-        ? `ปิดรอบแล้วนักเรียนที่ยังไม่ได้เช็คชื่อ ${pending} คนจะถูกบันทึกเป็นขาดเรียนและถูกหักโควตาทันที\n\nถ้ามีคนแจ้งลาไว้ ให้แก้สถานะเป็น "ลา" ทีหลังเพื่อคืนโควตาให้\n\nยืนยันปิดรอบ?`
+        ? `ปิดรอบแล้วคนที่ยืนยันว่าจะมาแล้วไม่มา ${pending} คนจะถูกบันทึกเป็นขาดเรียน\n\nไม่หักโควตา (ยังไม่ได้เรียน) แต่ยังถูกคิดค่าสนามด้วย เพราะสนามถูกจองเผื่อไว้แล้ว\n\nยืนยันปิดรอบ?`
         : "ยืนยันปิดรอบเช็คชื่อ?"
     );
     if (!confirmed) return;
@@ -329,7 +333,7 @@ export default function AdminAttendancePage() {
               <div>
                 <p className="font-semibold text-amber-900">รอบที่เปิดค้างไว้ ยังไม่ได้ปิด</p>
                 <p className="mt-0.5 text-sm text-amber-800">
-                  คนที่ไม่ได้เช็คชื่อจะยังไม่ถูกมาร์คขาดเรียนจนกว่าจะปิดรอบ —
+                  คนที่ยืนยันว่าจะมาแล้วไม่มา จะยังไม่ถูกมาร์คขาดเรียนจนกว่าจะปิดรอบ —
                   ระบบจะปิดให้อัตโนมัติหลังเลยเวลาคาบ แต่เข้าไปตรวจและปิดเองก่อนได้
                 </p>
               </div>
@@ -356,7 +360,7 @@ export default function AdminAttendancePage() {
                           row.pending_count > 0 ? "font-medium text-amber-700" : undefined
                         }
                       >
-                        ยังไม่เช็ค {row.pending_count} / {row.total_count} คน
+                        ยังไม่เช็ค {row.pending_count} / {row.total_count} คนที่ยืนยันไว้
                       </span>
                     </div>
                   </div>
@@ -411,7 +415,7 @@ export default function AdminAttendancePage() {
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        {pkg.student_count} คน
+                        ยืนยันแล้ว {pkg.confirmed_count} / {pkg.student_count} คน
                       </span>
                       <span>{pkg.sessions_count} ครั้ง/แพ็กเกจ</span>
                     </div>
@@ -464,8 +468,6 @@ export default function AdminAttendancePage() {
   // แต่ backend ปฏิเสธการสแกนทุกครั้ง (ErrAttendanceExpired) โชว์กล้องต่อ = หลอกให้กดเปล่า
   const canScan = isOpen && session.can_scan;
 
-  // ฝั่ง backend นับทุกตัวจาก roster (present + absent + leave + pending)
-  // จำนวนแถวในรายชื่อจึงเท่ากับ "ทั้งหมด" เสมอ
   const totalCount = session.roster.length;
   const checkedCount = totalCount - session.pending_count;
 
@@ -510,13 +512,18 @@ export default function AdminAttendancePage() {
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/ลา ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
-          <div className="flex items-baseline gap-2 whitespace-nowrap">
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          <div className="flex flex-wrap items-baseline gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-500">เช็คแล้ว</span>
             <span className="text-2xl font-bold leading-none text-gray-900">
               {checkedCount}
             </span>
             <span className="text-gray-400">/ {totalCount}</span>
+            {session.off_schedule_count > 0 && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-medium text-amber-700">
+                มาไม่ตรงวัน {session.off_schedule_count}
+              </span>
+            )}
           </div>
 
           <div className="flex shrink-0 gap-2">
@@ -552,8 +559,8 @@ export default function AdminAttendancePage() {
             <p className="font-semibold text-amber-900">เลยเวลาคาบแล้ว — สแกนเพิ่มไม่ได้</p>
             <p className="mt-0.5 text-sm text-amber-800">
               {session.pending_count > 0
-                ? `กด "ปิดรอบ" เพื่อบันทึกคนที่ยังไม่เช็คชื่อ ${session.pending_count} คนเป็นขาดเรียน (หักโควตาคนละ 1 ครั้ง) — ถ้ามีคนแจ้งลาไว้ ให้แก้สถานะเป็น "ลา" ทีหลังเพื่อคืนโควตา`
-                : 'เช็คชื่อครบทุกคนแล้ว กด "ปิดรอบ" เพื่อปิดงานของคาบนี้ได้เลย'}
+                ? `กด "ปิดรอบ" เพื่อบันทึกคนที่ยืนยันว่าจะมาแล้วไม่มา ${session.pending_count} คนเป็นขาดเรียน — ไม่หักโควตา แต่ยังถูกคิดค่าสนาม`
+                : 'คนที่ยืนยันไว้มาครบแล้ว กด "ปิดรอบ" เพื่อปิดงานของคาบนี้ได้เลย'}
             </p>
           </div>
         </div>

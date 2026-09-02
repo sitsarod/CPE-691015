@@ -14,8 +14,9 @@ type OpenablePackageDTO struct {
 	CourseID   uint   `json:"course_id"`
 	CourseName string `json:"course_name"`
 
-	SessionsCount uint  `json:"sessions_count"`
-	StudentCount  int64 `json:"student_count"`
+	SessionsCount  uint  `json:"sessions_count"`
+	StudentCount   int64 `json:"student_count"`
+	ConfirmedCount int   `json:"confirmed_count"`
 
 	DayOfWeek string `json:"day_of_week"`
 	StartTime string `json:"start_time"`
@@ -41,6 +42,9 @@ type RosterItemDTO struct {
 
 	TotalSessions     uint `json:"total_sessions"`
 	RemainingSessions uint `json:"remaining_sessions"`
+
+	IsConfirmed   bool `json:"is_confirmed"`
+	IsOffSchedule bool `json:"is_off_schedule"`
 
 	// null = ยังไม่มีบันทึกในรอบนี้ (ยังไม่เช็คชื่อ)
 	AttendanceID  *uint      `json:"attendance_id"`
@@ -69,12 +73,14 @@ type AttendanceSessionDTO struct {
 	// แต่สแกนไม่ได้ ถ้าหน้าเว็บดูแค่ Status จะโชว์กล้องให้ยิงแล้วเจอ error ทุกครั้ง
 	CanScan bool `json:"can_scan"`
 
-	Roster []RosterItemDTO `json:"roster"`
+	Roster           []RosterItemDTO `json:"roster"`
+	WalkInCandidates []RosterItemDTO `json:"walk_in_candidates"`
 
-	PresentCount int `json:"present_count"`
-	AbsentCount  int `json:"absent_count"`
-	LeaveCount   int `json:"leave_count"`
-	PendingCount int `json:"pending_count"`
+	ConfirmedCount   int `json:"confirmed_count"`
+	PresentCount     int `json:"present_count"`
+	AbsentCount      int `json:"absent_count"`
+	OffScheduleCount int `json:"off_schedule_count"`
+	PendingCount     int `json:"pending_count"`
 }
 
 // OpenSessionSummaryDTO คือรอบที่ยัง status='open' อยู่ (ดู GetOpenSessions)
@@ -124,6 +130,8 @@ type ScanResultDTO struct {
 	TotalSessions     uint `json:"total_sessions"`
 	RemainingSessions uint `json:"remaining_sessions"`
 
+	IsConfirmed bool `json:"is_confirmed"`
+
 	// false = ให้แสดง Reason แทนปุ่มยืนยัน นักเรียนจะได้รู้ว่าติดตรงไหน
 	CanCheckIn bool   `json:"can_check_in"`
 	Reason     string `json:"reason,omitempty"`
@@ -138,13 +146,15 @@ type CheckInResultDTO struct {
 	CheckInMethod string    `json:"check_in_method"`
 	CheckInTime   time.Time `json:"check_in_time"`
 
+	IsOffSchedule bool `json:"is_off_schedule"`
+
 	RemainingSessions uint `json:"remaining_sessions"`
 }
 
 // ─── แก้สถานะย้อนหลัง ────────────────────────────────────────────────────────
 
 type UpdateAttendanceStatusReq struct {
-	Status  string `json:"status" binding:"required,oneof=present absent leave"`
+	Status  string `json:"status" binding:"required,oneof=present absent"`
 	Remarks string `json:"remarks" binding:"omitempty,max=500"`
 }
 
@@ -178,6 +188,7 @@ type AttendanceHistoryItemDTO struct {
 	Status        string    `json:"status"`
 	CheckInMethod string    `json:"check_in_method"`
 	CheckInTime   time.Time `json:"check_in_time"`
+	IsOffSchedule bool      `json:"is_off_schedule"`
 	Remarks       string    `json:"remarks,omitempty"`
 
 	// null = นักเรียนสแกนเอง / มีค่า = แอดมินเป็นคนบันทึกหรือแก้
@@ -185,12 +196,13 @@ type AttendanceHistoryItemDTO struct {
 }
 
 // ToRosterItem แปลงหนึ่งแถวของรายชื่อ — attendance เป็น nil ได้ (ยังไม่เช็ค)
-func ToRosterItem(e *models.Enrollment, attendance *models.StudentAttendance) RosterItemDTO {
+func ToRosterItem(e *models.Enrollment, attendance *models.StudentAttendance, confirmed bool) RosterItemDTO {
 	item := RosterItemDTO{
 		EnrollmentID:      e.ID,
 		CustomerID:        e.CustomerID,
 		TotalSessions:     e.TotalSessions,
 		RemainingSessions: e.RemainingSessions,
+		IsConfirmed:       confirmed,
 	}
 
 	if e.Customer != nil {
@@ -208,6 +220,7 @@ func ToRosterItem(e *models.Enrollment, attendance *models.StudentAttendance) Ro
 		item.Status = string(attendance.Status)
 		item.CheckInMethod = string(attendance.CheckInMethod)
 		item.CheckInTime = &checkIn
+		item.IsOffSchedule = attendance.IsOffSchedule
 		item.Remarks = attendance.Remarks
 	}
 
