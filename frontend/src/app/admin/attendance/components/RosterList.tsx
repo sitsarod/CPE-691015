@@ -3,13 +3,7 @@
 import { useMemo, useState } from "react";
 import { Loader2, UserPlus, Pencil, Search, X } from "lucide-react";
 import type { RosterItem, AttendanceSession } from "@/types/attendance";
-import {
-  statusLabel,
-  statusTone,
-  METHOD_LABEL,
-  OFF_SCHEDULE_LABEL,
-  OFF_SCHEDULE_TONE,
-} from "@/types/attendance";
+import { displayStatus, METHOD_LABEL } from "@/types/attendance";
 
 interface Props {
   session: AttendanceSession;
@@ -26,20 +20,13 @@ function StatusPill({ item }: { item: RosterItem }) {
     );
   }
 
+  const { label, tone } = displayStatus(item.status, item.is_off_schedule);
+
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      <span
-        className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${statusTone(item.status)}`}
-      >
-        {statusLabel(item.status)}
-      </span>
-      {item.is_off_schedule && (
-        <span
-          className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
-        >
-          {OFF_SCHEDULE_LABEL}
-        </span>
-      )}
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${tone}`}
+    >
+      {label}
     </span>
   );
 }
@@ -204,11 +191,8 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
               </p>
               <SubLine item={item} />
 
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-3">
                 <StatusPill item={item} />
-                <span className="whitespace-nowrap text-sm text-gray-500">
-                  คงเหลือ {item.remaining_sessions} / {item.total_sessions}
-                </span>
               </div>
 
               <div className="mt-3 empty:mt-0">
@@ -223,8 +207,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
           <thead className="sticky top-0 z-10 bg-gray-50 text-sm font-semibold text-gray-600">
             <tr>
               <th className="px-4 py-3">ชื่อ</th>
-              <th className="w-24 px-3 py-3">คงเหลือ</th>
-              <th className="w-32 px-3 py-3">สถานะ</th>
+              <th className="w-56 px-3 py-3 text-center">สถานะ</th>
               <th className="w-36 px-3 py-3" />
             </tr>
           </thead>
@@ -239,11 +222,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
                   <SubLine item={item} />
                 </td>
 
-                <td className="whitespace-nowrap px-3 py-3 text-gray-700">
-                  {item.remaining_sessions} / {item.total_sessions}
-                </td>
-
-                <td className="px-3 py-3">
+                <td className="px-3 py-3 text-center">
                   <StatusPill item={item} />
                 </td>
 
@@ -280,12 +259,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
                     <SubLine item={item} />
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="whitespace-nowrap text-sm text-gray-500">
-                      คงเหลือ {item.remaining_sessions} / {item.total_sessions}
-                    </span>
-                    <ActionButton item={item} />
-                  </div>
+                  <ActionButton item={item} />
                 </li>
               ))}
             </ul>

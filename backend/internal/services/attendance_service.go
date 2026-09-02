@@ -252,7 +252,7 @@ func (s *AttendanceService) confirmedEnrollments(tx *gorm.DB, packageID uint, cl
 		Select("class_confirmations.*").
 		Joins("JOIN enrollments ON enrollments.id = class_confirmations.enrollment_id AND enrollments.deleted_at IS NULL").
 		Where("enrollments.package_id = ? AND enrollments.status = ? AND class_confirmations.class_date = ? AND class_confirmations.status = ?",
-			packageID, models.EnrollmentStatusActive, classDate, models.ClassConfirmationGoing).
+			packageID, models.EnrollmentStatusActive, dateKey(classDate), models.ClassConfirmationGoing).
 		Find(&rows).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายชื่อที่ยืนยันมาเรียนได้")
 	}
@@ -268,7 +268,7 @@ func isConfirmedForSession(tx *gorm.DB, enrollmentID uint, classDate time.Time) 
 	var count int64
 	if err := tx.Model(&models.ClassConfirmation{}).
 		Where("enrollment_id = ? AND class_date = ? AND status = ?",
-			enrollmentID, classDate, models.ClassConfirmationGoing).
+			enrollmentID, dateKey(classDate), models.ClassConfirmationGoing).
 		Count(&count).Error; err != nil {
 		return false
 	}
@@ -285,6 +285,11 @@ func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageID uint) ([]mo
 		return nil, errors.New("ไม่สามารถดึงรายชื่อผู้เรียนได้")
 	}
 	return enrollments, nil
+}
+
+// dateKey แปลงวันของรอบเป็นสตริง YYYY-MM-DD ไว้เทียบกับคอลัมน์ชนิด date โดยไม่ติดโซนเวลา
+func dateKey(t time.Time) string {
+	return t.UTC().Format("2006-01-02")
 }
 
 func sessionDateValue(t time.Time) time.Time {

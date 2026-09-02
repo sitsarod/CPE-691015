@@ -15,7 +15,7 @@ interface Props {
   outcome: ScanOutcome;
   onDismiss: () => void;
 
-  variant?: "banner" | "overlay";
+  variant?: "banner" | "overlay" | "fullscreen";
 }
 
 function beep(ok: boolean) {
@@ -56,6 +56,25 @@ export default function ScanResultBanner({
 
   const tone = outcome.ok ? "bg-green-600" : "bg-red-600";
   const Icon = outcome.ok ? CheckCircle2 : XCircle;
+
+  if (variant === "fullscreen") {
+    return (
+      <button
+        onClick={onDismiss}
+        aria-live="assertive"
+        className={`fixed inset-0 z-[80] flex flex-col items-center justify-center gap-6 px-8 text-center text-white ${tone}`}
+      >
+        <Icon className="h-24 w-24 sm:h-32 sm:w-32" strokeWidth={2} />
+
+        <p className="text-balance text-4xl font-bold leading-tight sm:text-6xl">
+          {outcome.title}
+        </p>
+        {outcome.detail && (
+          <p className="text-balance text-xl text-white/90 sm:text-3xl">{outcome.detail}</p>
+        )}
+      </button>
+    );
+  }
 
   if (variant === "overlay") {
     // ลอยทับภาพจากกล้อง จึงกว้างเท่าข้อความและใช้ตัวเล็ก ให้บังหน้าคนที่ยื่น QR น้อยที่สุด

@@ -193,6 +193,14 @@ export function statusTone(status: string): string {
   return STATUS_TONE[status as AttendanceStatus] ?? "bg-gray-100 text-gray-600";
 }
 
+// ป้ายเดียวต่อหนึ่งแถว — ป้ายที่เจาะจงกว่ากินป้ายกว้างไป
+export function displayStatus(status: string, isOffSchedule: boolean) {
+  if (isOffSchedule && status === "present") {
+    return { label: OFF_SCHEDULE_LABEL, tone: OFF_SCHEDULE_TONE };
+  }
+  return { label: statusLabel(status), tone: statusTone(status) };
+}
+
 export const METHOD_LABEL: Record<CheckInMethod, string> = {
   qr_code: "สแกน QR",
   manual: "แอดมินเช็คให้",
