@@ -18,8 +18,7 @@ import type { AttendanceHistoryItem, AttendanceStatus } from "@/types/attendance
 import {
   STATUS_LABEL,
   STATUS_TONE,
-  statusLabel,
-  statusTone,
+  displayStatus,
   METHOD_LABEL,
   OFF_SCHEDULE_LABEL,
   OFF_SCHEDULE_TONE,
@@ -36,8 +35,6 @@ function todayISO() {
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
 }
-
-const STATUS_ORDER: AttendanceStatus[] = ["present", "absent"];
 
 function formatClock(iso: string) {
   return new Date(iso).toLocaleTimeString("th-TH", {
@@ -94,7 +91,7 @@ function groupIntoRounds(items: AttendanceHistoryItem[]): Round[] {
     }
 
     if (item.status in round.counts) round.counts[item.status] += 1;
-    if (item.is_off_schedule) round.offScheduleCount += 1;
+    if (item.is_off_schedule && item.status === "present") round.offScheduleCount += 1;
     round.items.push(item);
   }
 
@@ -311,21 +308,35 @@ export default function AttendanceHistoryPage() {
                 </div>
 
                 <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                  {STATUS_ORDER.filter((st) => round.counts[st] > 0).map((st) => (
-                    <span
-                      key={st}
-                      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${STATUS_TONE[st]}`}
-                    >
-                      {STATUS_LABEL[st]} {round.counts[st]}
-                    </span>
-                  ))}
-                  {round.offScheduleCount > 0 && (
-                    <span
-                      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
-                    >
-                      {OFF_SCHEDULE_LABEL} {round.offScheduleCount}
-                    </span>
-                  )}
+                  {[
+                    {
+                      key: "present",
+                      label: STATUS_LABEL.present,
+                      tone: STATUS_TONE.present,
+                      count: round.counts.present - round.offScheduleCount,
+                    },
+                    {
+                      key: "off_schedule",
+                      label: OFF_SCHEDULE_LABEL,
+                      tone: OFF_SCHEDULE_TONE,
+                      count: round.offScheduleCount,
+                    },
+                    {
+                      key: "absent",
+                      label: STATUS_LABEL.absent,
+                      tone: STATUS_TONE.absent,
+                      count: round.counts.absent,
+                    },
+                  ]
+                    .filter((badge) => badge.count > 0)
+                    .map((badge) => (
+                      <span
+                        key={badge.key}
+                        className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${badge.tone}`}
+                      >
+                        {badge.label} {badge.count}
+                      </span>
+                    ))}
                 </div>
               </button>
 
@@ -346,20 +357,13 @@ export default function AttendanceHistoryPage() {
                             )}
                           </div>
 
-                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                            <span
-                              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${statusTone(item.status)}`}
-                            >
-                              {statusLabel(item.status)}
-                            </span>
-                            {item.is_off_schedule && (
-                              <span
-                                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
-                              >
-                                {OFF_SCHEDULE_LABEL}
-                              </span>
-                            )}
-                          </div>
+                          <span
+                            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${
+                              displayStatus(item.status, item.is_off_schedule).tone
+                            }`}
+                          >
+                            {displayStatus(item.status, item.is_off_schedule).label}
+                          </span>
                         </div>
 
                         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500">
@@ -416,20 +420,13 @@ export default function AttendanceHistoryPage() {
                           </td>
 
                           <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              <span
-                                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${statusTone(item.status)}`}
-                              >
-                                {statusLabel(item.status)}
-                              </span>
-                              {item.is_off_schedule && (
-                                <span
-                                  className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
-                                >
-                                  {OFF_SCHEDULE_LABEL}
-                                </span>
-                              )}
-                            </div>
+                            <span
+                              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${
+                                displayStatus(item.status, item.is_off_schedule).tone
+                              }`}
+                            >
+                              {displayStatus(item.status, item.is_off_schedule).label}
+                            </span>
                           </td>
 
                           <td className="px-4 py-3 text-sm text-gray-500">

@@ -102,9 +102,17 @@ interface Props {
   pausedReason?: string;
 
   overlay?: ReactNode;
+
+  frameClassName?: string;
 }
 
-export default function QRScanner({ onScan, paused, pausedReason, overlay }: Props) {
+export default function QRScanner({
+  onScan,
+  paused,
+  pausedReason,
+  overlay,
+  frameClassName = "aspect-[4/3] max-h-[52vh]",
+}: Props) {
   const scannerRef = useRef<Html5QrcodeInstance | null>(null);
   const onScanRef = useRef(onScan);
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "error">("idle");
@@ -117,6 +125,8 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
   useEffect(() => {
     let cancelled = false;
     let instance: Html5QrcodeInstance | null = null;
+
+    let startPromise: Promise<void> | null = null;
 
     const boot = async () => {
       setStatus("starting");
@@ -133,7 +143,7 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
         });
         scannerRef.current = instance;
 
-        await instance.start(
+        startPromise = instance.start(
           { facingMode: "environment" },
           {
             fps: 20,
@@ -149,6 +159,7 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
           () => {
           }
         );
+        await startPromise;
 
         if (!cancelled) setStatus("running");
       } catch (err: unknown) {
@@ -168,10 +179,13 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
       cancelled = true;
       const active = instance;
       scannerRef.current = null;
-      if (active) {
-        active.stop().catch(() => {
-        });
-      }
+      if (!active) return;
+
+      // ⚠️ ต้องรอ start() จบก่อนค่อย stop() — หยุดกลางคันแล้วไลบรารีจะโยน AbortError ทิ้งไว้
+      Promise.resolve(startPromise)
+        .catch(() => {})
+        .then(() => active.stop())
+        .catch(() => {});
     };
   }, []);
 
@@ -190,7 +204,7 @@ export default function QRScanner({ onScan, paused, pausedReason, overlay }: Pro
   return (
     <div className="space-y-3">
     
-      <div className="relative aspect-[4/3] max-h-[52vh] w-full overflow-hidden rounded-2xl bg-black">
+      <div className={`relative w-full overflow-hidden rounded-2xl bg-black ${frameClassName}`}>
         <div
           id={ELEMENT_ID}
           className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"

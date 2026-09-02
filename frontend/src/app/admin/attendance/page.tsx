@@ -14,6 +14,7 @@ import {
   Camera,
   CameraOff,
   AlertTriangle,
+  Maximize,
 } from "lucide-react";
 
 import {
@@ -37,10 +38,30 @@ import type {
 import QRScanner from "./components/QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./components/ScanResult";
 import RosterList from "./components/RosterList";
+import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 
 
 const SCAN_COOLDOWN_SECONDS = 3;
+
+// จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
+const KIOSK_STORAGE_KEY = "attendance_kiosk";
+
+type KioskState = { sessionId: number; pin: string };
+
+function readKiosk(): KioskState | null {
+  try {
+    const raw = localStorage.getItem(KIOSK_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.sessionId === "number" && typeof parsed?.pin === "string") {
+      return parsed as KioskState;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 // session_date มาเป็น date ล้วน (UTC midnight ของวันตามเวลาสนาม)
 function formatSessionDate(iso: string) {
@@ -64,9 +85,16 @@ export default function AdminAttendancePage() {
   // การให้กดเปิดกล้องเองทุกครั้งที่เข้ารอบเป็นขั้นที่ไม่ได้ให้ทางเลือกอะไรจริง ๆ
   // ใครไม่ต้องการก็กดปิดได้ แต่ค่าเริ่มต้นควรเป็นสิ่งที่จะใช้ 99% ของเวลา
   const [useCamera, setUseCamera] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
+
   const [editing, setEditing] = useState<RosterItem | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+
+  const [kioskPin, setKioskPin] = useState<string | null>(null);
+  const [isSettingUpKiosk, setIsSettingUpKiosk] = useState(false);
+
+  // เริ่มที่ true เสมอ เพื่อบังหน้าแอดมินไม่ให้แวบขึ้นมาตอนเครื่องที่สนามรีโหลด
+  const [isRestoringKiosk, setIsRestoringKiosk] = useState(true);
 
   // ─── ช่วงพักกล้องหลังจบคนหนึ่งคน ───────────────────────────────────────────
   //
@@ -86,6 +114,49 @@ export default function AdminAttendancePage() {
 
   const startCooldown = useCallback(() => setCooldown(SCAN_COOLDOWN_SECONDS), []);
 
+
+  // เครื่องที่สนามถูกรีโหลดระหว่างคาบได้ ต้องกลับเข้าโหมดเอง
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const saved = readKiosk();
+      if (saved) {
+        try {
+          const restored = await fetchSession(saved.sessionId);
+          if (cancelled) return;
+          setSession(restored);
+          setKioskPin(saved.pin);
+        } catch {
+          // โหลดรอบไม่สำเร็จก็ต้องคงล็อกไว้ ไม่ใช่ปลดออก
+          if (!cancelled) setKioskPin(saved.pin);
+        }
+      }
+      if (!cancelled) setIsRestoringKiosk(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const enterKiosk = useCallback(
+    (pin: string) => {
+      if (!session) return;
+      localStorage.setItem(
+        KIOSK_STORAGE_KEY,
+        JSON.stringify({ sessionId: session.id, pin } satisfies KioskState)
+      );
+      setKioskPin(pin);
+      setIsSettingUpKiosk(false);
+    },
+    [session]
+  );
+
+  const exitKiosk = useCallback(() => {
+    localStorage.removeItem(KIOSK_STORAGE_KEY);
+    setKioskPin(null);
+  }, []);
 
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -289,6 +360,38 @@ export default function AdminAttendancePage() {
       .filter((id): id is number => id !== null)
   );
   const staleSessions = openSessions.filter((row) => !reachableSessionIds.has(row.id));
+
+  if (isRestoringKiosk) {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
+      </div>
+    );
+  }
+
+  // ⚠️ คืนเฉพาะจอสนาม ไม่ซ้อนทับหน้าแอดมิน — QRScanner ใช้ element id ตายตัว
+  // มีสองตัวพร้อมกันกล้องพัง · และต้องอยู่ก่อนด่าน !session เพื่อให้ล็อกค้างไว้เสมอ
+  if (kioskPin !== null) {
+    return (
+      <KioskMode
+        pin={kioskPin}
+        canScan={!!session && session.status === "open" && session.can_scan}
+        notice={
+          session
+            ? "หมดเวลาเช็คชื่อของคาบนี้แล้ว"
+            : "โหลดข้อมูลรอบไม่สำเร็จ — ลองรีเฟรชหน้านี้"
+        }
+        onScan={runScan}
+        paused={isCheckingIn || cooldown > 0}
+        pausedReason={
+          cooldown > 0 ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที` : "กำลังบันทึก..."
+        }
+        outcome={outcome}
+        onDismissOutcome={() => setOutcome(null)}
+        onExit={exitKiosk}
+      />
+    );
+  }
 
   if (!session) {
     return (
@@ -512,18 +615,13 @@ export default function AdminAttendancePage() {
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* ตัวเลขเดียวพอ — ใครมา/ขาด ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
-          <div className="flex flex-wrap items-baseline gap-2 whitespace-nowrap">
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/มาไม่ตรงวัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          <div className="flex items-baseline gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-500">เช็คแล้ว</span>
             <span className="text-2xl font-bold leading-none text-gray-900">
               {checkedCount}
             </span>
             <span className="text-gray-400">/ {totalCount}</span>
-            {session.off_schedule_count > 0 && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm font-medium text-amber-700">
-                มาไม่ตรงวัน {session.off_schedule_count}
-              </span>
-            )}
           </div>
 
           <div className="flex shrink-0 gap-2">
@@ -534,6 +632,15 @@ export default function AdminAttendancePage() {
             >
               <RefreshCw className="h-4 w-4" />
             </button>
+            {isOpen && (
+              <button
+                onClick={() => setIsSettingUpKiosk(true)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-300 px-4 font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                <Maximize className="h-4 w-4" />
+                โหมดสนาม
+              </button>
+            )}
             {isOpen && (
               <button
                 onClick={handleClose}
@@ -645,6 +752,13 @@ export default function AdminAttendancePage() {
           isSubmitting={isSavingStatus}
           onSubmit={handleSaveStatus}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {isSettingUpKiosk && (
+        <KioskSetupDialog
+          onConfirm={enterKiosk}
+          onCancel={() => setIsSettingUpKiosk(false)}
         />
       )}
     </div>
