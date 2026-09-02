@@ -5,9 +5,6 @@ import "time"
 type CreateEvaluationRequest struct {
 	CustomerID uint   `json:"customer_id" binding:"required"`
 	Assessment string `json:"assessment" binding:"required"`
-	// ไม่ใส่ "required" เพราะ 0 คือคะแนนที่ถูกต้อง (แย่ที่สุด) แต่ validator ถือว่า
-	// zero-value ของ int เท่ากับ "ไม่ได้กรอก" — min=0,max=100 คุมช่วงค่าให้แล้วพอ
-	Score      int    `json:"score" binding:"min=0,max=100"`
 	VideoURL   string `json:"video_url"`
 }
 
@@ -17,7 +14,6 @@ type EvaluationResponse struct {
 	CoachID    uint      `json:"coach_id"`
 	CoachName  string    `json:"coach_name"`
 	Assessment string    `json:"assessment"`
-	Score      int       `json:"score"`
 	VideoURL   string    `json:"video_url,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 }

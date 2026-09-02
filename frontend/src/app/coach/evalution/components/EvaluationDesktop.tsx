@@ -86,19 +86,18 @@ function EvaluationModal({
   current: WeeklyEvaluation | null;
   previous: WeeklyEvaluation | null;
   onClose: () => void;
-  onSave: (comment: string, score: number) => Promise<void>;
+  onSave: (comment: string) => Promise<void>;
 }) {
   const [comment, setComment] = useState(current?.comment ?? '');
-  const [score, setScore] = useState(current?.score ?? 80);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = comment.trim().length > 0 && score >= 0 && score <= 100 && !submitting;
+  const canSubmit = comment.trim().length > 0 && !submitting;
 
   const handleConfirm = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await onSave(comment.trim(), score);
+      await onSave(comment.trim());
     } finally {
       setSubmitting(false);
     }
@@ -127,16 +126,6 @@ function EvaluationModal({
               </p>
             </div>
           )}
-
-          <label className="mb-1 block text-sm font-bold text-gray-700">คะแนน (0-100)</label>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={score}
-            onChange={(e) => setScore(Number(e.target.value))}
-            className="mb-4 w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition-all focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-          />
 
           <label className="mb-1 block text-sm font-bold text-gray-700">คอมเมนต์ประเมินผู้เรียน</label>
           <textarea
@@ -316,7 +305,7 @@ export function EvaluationDesktop({ manager }: { manager: EvaluationManager }) {
           current={(history[modalStudent.id] ?? []).find((e) => e.weekLabel === week.label) ?? null}
           previous={(history[modalStudent.id] ?? []).find((e) => e.weekLabel !== week.label) ?? null}
           onClose={() => setModalStudent(null)}
-          onSave={(comment, score) => handleSave(modalStudent.id, comment, score)}
+          onSave={(comment) => handleSave(modalStudent.id, comment)}
         />
       )}
     </div>

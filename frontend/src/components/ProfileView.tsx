@@ -5,7 +5,6 @@ import Button from "@/components/Button";
 import { getUserProfileAPI, type UserProfileResponseDTO } from "@/services/userAPI";
 import { fetchMyEvaluations } from "@/services/evaluationAPI";
 import type { Evaluation } from "@/types/evaluation";
-import EvaluationScoreChart from "@/components/EvaluationScoreChart";
 import { fetchMyPosts } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 import { Grid2X2, ClipboardCheck, ImageOff } from "lucide-react";
@@ -74,21 +73,14 @@ function groupEvaluationsByWeekRows(evaluations: Evaluation[]): EvaluationWeekRo
 function EvaluationEntryContent({ ev }: { ev: Evaluation }) {
   return (
     <div>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-bold text-gray-900">โค้ช {ev.coach_name || "ไม่ทราบชื่อ"}</p>
-          <p className="text-sm text-gray-400">
-            {new Date(ev.created_at).toLocaleDateString("th-TH", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-        <span className="flex-shrink-0 rounded-full bg-[#CC0000]/10 px-3.5 py-1.5 text-base font-black text-[#CC0000]">
-          {ev.score}/100
-        </span>
-      </div>
+      <p className="text-base font-bold text-gray-900">โค้ช {ev.coach_name || "ไม่ทราบชื่อ"}</p>
+      <p className="text-sm text-gray-400">
+        {new Date(ev.created_at).toLocaleDateString("th-TH", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}
+      </p>
       <p className="mt-3 text-base leading-relaxed text-gray-700 whitespace-pre-line">{ev.assessment}</p>
     </div>
   );
@@ -363,8 +355,6 @@ export default function ProfileView({
               <p className="text-center text-sm text-gray-400 py-8">ยังไม่มีผลการประเมินจากโค้ช</p>
             ) : (
               <div className="flex flex-col gap-6">
-                <EvaluationScoreChart evaluations={evaluations} />
-
                 {/* จอกว้าง (sm+): รายการแนวตั้งเรียงล่าสุดก่อนเหมือนเดิม */}
                 <ul className="hidden sm:flex sm:flex-col sm:gap-4">
                   {evaluations.map((ev) => (
