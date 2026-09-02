@@ -3,19 +3,19 @@
 import { useMemo, useState } from "react";
 import { Loader2, UserPlus, Pencil, Search, X } from "lucide-react";
 import type { RosterItem, AttendanceSession } from "@/types/attendance";
-import { STATUS_LABEL, METHOD_LABEL } from "@/types/attendance";
+import {
+  statusLabel,
+  statusTone,
+  METHOD_LABEL,
+  OFF_SCHEDULE_LABEL,
+  OFF_SCHEDULE_TONE,
+} from "@/types/attendance";
 
 interface Props {
   session: AttendanceSession;
   onManualCheckIn: (enrollmentId: number) => Promise<void>;
   onEditStatus: (item: RosterItem) => void;
 }
-
-const STATUS_TONE: Record<NonNullable<RosterItem["status"]>, string> = {
-  present: "bg-green-100 text-green-700",
-  absent: "bg-red-100 text-red-700",
-  leave: "bg-amber-100 text-amber-700",
-};
 
 function StatusPill({ item }: { item: RosterItem }) {
   if (!item.status) {
@@ -27,10 +27,19 @@ function StatusPill({ item }: { item: RosterItem }) {
   }
 
   return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${STATUS_TONE[item.status]}`}
-    >
-      {STATUS_LABEL[item.status]}
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span
+        className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${statusTone(item.status)}`}
+      >
+        {statusLabel(item.status)}
+      </span>
+      {item.is_off_schedule && (
+        <span
+          className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
+        >
+          {OFF_SCHEDULE_LABEL}
+        </span>
+      )}
     </span>
   );
 }
@@ -83,6 +92,21 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
       });
   }, [session.roster, search, pendingOnly]);
 
+  const walkInRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return [];
+
+    return session.walk_in_candidates
+      .filter(
+        (r) =>
+          r.full_name.toLowerCase().includes(keyword) ||
+          r.nickname.toLowerCase().includes(keyword)
+      )
+      .sort((a, b) => a.full_name.localeCompare(b.full_name, "th"));
+  }, [session.walk_in_candidates, search]);
+
+  const showWalkIns = canCheckIn && walkInRows.length > 0;
+
   const handleManual = async (enrollmentId: number) => {
     setBusyId(enrollmentId);
     try {
@@ -128,8 +152,8 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
 
   const emptyMessage =
     session.roster.length === 0
-      ? "ไม่มีผู้เรียนที่ยังใช้สิทธิ์อยู่ในแพ็กเกจนี้"
-      : "ไม่พบชื่อที่ค้นหา";
+      ? "ยังไม่มีใครยืนยันว่าจะมาเรียนคาบนี้ — คนที่โผล่มาสแกน QR จะขึ้นมาเองในรายชื่อ"
+      : "ไม่พบชื่อที่ค้นหาในรายชื่อของรอบนี้";
 
   return (
     <div className="flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -140,7 +164,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหาชื่อหรือชื่อเล่น"
+            placeholder="ค้นหาชื่อหรือชื่อเล่น (ค้นเจอคนที่ไม่ได้ยืนยันด้วย)"
             className="w-full rounded-xl border border-gray-300 py-2.5 pl-9 pr-9 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
           />
           {search && (
@@ -167,7 +191,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {rows.length === 0 && (
+        {rows.length === 0 && !showWalkIns && (
           <p className="px-4 py-10 text-center text-gray-400">{emptyMessage}</p>
         )}
 
@@ -230,6 +254,43 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
             ))}
           </tbody>
         </table>
+
+        {/* ── คนที่ไม่ได้ยืนยัน — โผล่เฉพาะตอนค้นหา ── */}
+        {showWalkIns && (
+          <div className="border-t-4 border-amber-100">
+            <div className="bg-amber-50 px-4 py-2.5">
+              <p className="font-semibold text-amber-900">
+                ไม่ได้ยืนยันว่าจะมาคาบนี้ ({walkInRows.length})
+              </p>
+              <p className="text-sm text-amber-800">
+                เช็คให้ได้ แต่จะถูกบันทึกเป็น &ldquo;มาไม่ตรงวัน&rdquo; และถูกคิดค่าสนามด้วย
+              </p>
+            </div>
+
+            <ul className="divide-y divide-gray-100">
+              {walkInRows.map((item) => (
+                <li
+                  key={item.enrollment_id}
+                  className="flex flex-wrap items-center justify-between gap-3 p-4"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">
+                      {item.full_name.trim() || "ไม่ทราบชื่อ"}
+                    </p>
+                    <SubLine item={item} />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="whitespace-nowrap text-sm text-gray-500">
+                      คงเหลือ {item.remaining_sessions} / {item.total_sessions}
+                    </span>
+                    <ActionButton item={item} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

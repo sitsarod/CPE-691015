@@ -5,16 +5,12 @@ import { Loader2, X } from "lucide-react";
 import type { AttendanceStatus } from "@/types/attendance";
 import { STATUS_LABEL } from "@/types/attendance";
 
-const OPTIONS: AttendanceStatus[] = ["present", "absent", "leave"];
+const OPTIONS: AttendanceStatus[] = ["present", "absent"];
 
-// อธิบายผลต่อโควตาให้แอดมินเห็นก่อนกด
-//
-// การแก้สถานะมีผลกับเงินจริง — leave ไม่หักโควตา ส่วน present/absent หัก
-// แอดมินที่ไม่รู้กติกานี้จะกดเปลี่ยนไปมาแล้วสงสัยว่าทำไมเลขคงเหลือขยับ
-const QUOTA_NOTE: Record<AttendanceStatus, string> = {
-  present: "หักโควตา 1 ครั้ง",
-  absent: "หักโควตา 1 ครั้ง",
-  leave: "ไม่หักโควตา — ถ้าเดิมหักไว้จะคืนให้ 1 ครั้ง",
+// อธิบายผลของแต่ละสถานะให้แอดมินเห็นก่อนกด
+const STATUS_NOTE: Record<AttendanceStatus, string> = {
+  present: "หักโควตา 1 ครั้ง · ถูกคิดค่าสนาม",
+  absent: "ไม่หักโควตา (ถ้าเดิมหักไว้จะคืนให้) · ยังถูกคิดค่าสนาม",
 };
 
 interface Props {
@@ -34,7 +30,10 @@ export default function EditStatusModal({
   onSubmit,
   onClose,
 }: Props) {
-  const [status, setStatus] = useState<AttendanceStatus>(currentStatus);
+  // แถวเก่าอาจเป็น leave ซึ่งไม่มีในตัวเลือกแล้ว — absent ให้ผลกับโควตาเหมือนกัน
+  const [status, setStatus] = useState<AttendanceStatus>(
+    OPTIONS.includes(currentStatus) ? currentStatus : "absent"
+  );
   const [remarks, setRemarks] = useState(currentRemarks ?? "");
 
   return (
@@ -69,7 +68,7 @@ export default function EditStatusModal({
               />
               <div>
                 <p className="font-medium text-gray-900">{STATUS_LABEL[opt]}</p>
-                <p className="text-sm text-gray-500">{QUOTA_NOTE[opt]}</p>
+                <p className="text-sm text-gray-500">{STATUS_NOTE[opt]}</p>
               </div>
             </label>
           ))}
@@ -79,14 +78,12 @@ export default function EditStatusModal({
           <label className="block text-sm font-medium text-gray-700">
             หมายเหตุ
           </label>
-          {/* บันทึกว่าแจ้งลาทางไหนและเมื่อไหร่ — การแจ้งลาเกิดนอกระบบ (โทร/ไลน์)
-              ถ้าไม่จดไว้ ทีหลังจะไม่มีหลักฐานว่าทำไมคนนี้ได้โควตาคืน */}
           <textarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             rows={3}
             maxLength={500}
-            placeholder="เช่น ผู้ปกครองโทรแจ้งลาเมื่อ 10:30 วันเดียวกัน"
+            placeholder="เช่น มาเรียนจริงแต่ลืมสแกน โค้ชยืนยันเมื่อ 19:20"
             className="mt-1 w-full rounded-xl border border-gray-300 p-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
           />
         </div>

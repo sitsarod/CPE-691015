@@ -15,7 +15,15 @@ import {
 import { fetchHistory, updateAttendanceStatus } from "@/services/attendanceAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
 import type { AttendanceHistoryItem, AttendanceStatus } from "@/types/attendance";
-import { STATUS_LABEL, METHOD_LABEL } from "@/types/attendance";
+import {
+  STATUS_LABEL,
+  STATUS_TONE,
+  statusLabel,
+  statusTone,
+  METHOD_LABEL,
+  OFF_SCHEDULE_LABEL,
+  OFF_SCHEDULE_TONE,
+} from "@/types/attendance";
 import type { CourseDTO } from "@/types/course";
 
 import EditStatusModal from "../components/EditStatusModal";
@@ -29,13 +37,7 @@ function todayISO() {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-const STATUS_TONE: Record<AttendanceStatus, string> = {
-  present: "bg-green-100 text-green-700",
-  absent: "bg-red-100 text-red-700",
-  leave: "bg-amber-100 text-amber-700",
-};
-
-const STATUS_ORDER: AttendanceStatus[] = ["present", "absent", "leave"];
+const STATUS_ORDER: AttendanceStatus[] = ["present", "absent"];
 
 function formatClock(iso: string) {
   return new Date(iso).toLocaleTimeString("th-TH", {
@@ -61,6 +63,7 @@ interface Round {
   startTime?: string;
   endTime?: string;
   counts: Record<AttendanceStatus, number>;
+  offScheduleCount: number;
   items: AttendanceHistoryItem[];
 }
 
@@ -83,13 +86,15 @@ function groupIntoRounds(items: AttendanceHistoryItem[]): Round[] {
         dateISO: hasSession ? item.session_date : item.check_in_time,
         startTime: item.schedule_start_time,
         endTime: item.schedule_end_time,
-        counts: { present: 0, absent: 0, leave: 0 },
+        counts: { present: 0, absent: 0 },
+        offScheduleCount: 0,
         items: [],
       };
       byKey.set(key, round);
     }
 
-    round.counts[item.status] += 1;
+    if (item.status in round.counts) round.counts[item.status] += 1;
+    if (item.is_off_schedule) round.offScheduleCount += 1;
     round.items.push(item);
   }
 
@@ -314,6 +319,13 @@ export default function AttendanceHistoryPage() {
                       {STATUS_LABEL[st]} {round.counts[st]}
                     </span>
                   ))}
+                  {round.offScheduleCount > 0 && (
+                    <span
+                      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
+                    >
+                      {OFF_SCHEDULE_LABEL} {round.offScheduleCount}
+                    </span>
+                  )}
                 </div>
               </button>
 
@@ -334,11 +346,20 @@ export default function AttendanceHistoryPage() {
                             )}
                           </div>
 
-                          <span
-                            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${STATUS_TONE[item.status]}`}
-                          >
-                            {STATUS_LABEL[item.status]}
-                          </span>
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                            <span
+                              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${statusTone(item.status)}`}
+                            >
+                              {statusLabel(item.status)}
+                            </span>
+                            {item.is_off_schedule && (
+                              <span
+                                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
+                              >
+                                {OFF_SCHEDULE_LABEL}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500">
@@ -395,11 +416,20 @@ export default function AttendanceHistoryPage() {
                           </td>
 
                           <td className="px-4 py-3">
-                            <span
-                              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${STATUS_TONE[item.status]}`}
-                            >
-                              {STATUS_LABEL[item.status]}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              <span
+                                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${statusTone(item.status)}`}
+                              >
+                                {statusLabel(item.status)}
+                              </span>
+                              {item.is_off_schedule && (
+                                <span
+                                  className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${OFF_SCHEDULE_TONE}`}
+                                >
+                                  {OFF_SCHEDULE_LABEL}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="px-4 py-3 text-sm text-gray-500">

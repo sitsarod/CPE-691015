@@ -1,4 +1,4 @@
-export type AttendanceStatus = "present" | "absent" | "leave";
+export type AttendanceStatus = "present" | "absent";
 
 export type CheckInMethod = "qr_code" | "manual" | "face_scan" | "system";
 
@@ -13,6 +13,7 @@ export interface OpenablePackage {
 
   sessions_count: number;
   student_count: number;
+  confirmed_count: number;
 
   day_of_week: string;
   start_time: string;
@@ -33,6 +34,9 @@ export interface RosterItem {
 
   total_sessions: number;
   remaining_sessions: number;
+
+  is_confirmed: boolean;
+  is_off_schedule: boolean;
 
   // null = ยังไม่มีบันทึกในรอบนี้ (ยังไม่ได้เช็คชื่อ)
   attendance_id: number | null;
@@ -60,10 +64,12 @@ export interface AttendanceSession {
   can_scan: boolean;
 
   roster: RosterItem[];
+  walk_in_candidates: RosterItem[];
 
+  confirmed_count: number;
   present_count: number;
   absent_count: number;
-  leave_count: number;
+  off_schedule_count: number;
   pending_count: number;
 }
 
@@ -98,6 +104,8 @@ export interface ScanResult {
   total_sessions: number;
   remaining_sessions: number;
 
+  is_confirmed: boolean;
+
   // false = ให้แสดง reason แทนปุ่มยืนยัน
   can_check_in: boolean;
   reason?: string;
@@ -112,6 +120,8 @@ export interface CheckInResult {
 
   check_in_method: CheckInMethod;
   check_in_time: string;
+
+  is_off_schedule: boolean;
 
   remaining_sessions: number;
 }
@@ -148,6 +158,7 @@ export interface AttendanceHistoryItem {
   status: AttendanceStatus;
   check_in_method: CheckInMethod;
   check_in_time: string;
+  is_off_schedule: boolean;
   remarks?: string;
 
   // null = นักเรียนสแกนเอง · มีค่า = แอดมินบันทึกหรือแก้ให้
@@ -159,8 +170,28 @@ export interface AttendanceHistoryItem {
 export const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: "มาเรียน",
   absent: "ขาดเรียน",
-  leave: "ลา",
 };
+
+export const STATUS_TONE: Record<AttendanceStatus, string> = {
+  present: "bg-green-100 text-green-700",
+  absent: "bg-red-100 text-red-700",
+};
+
+export const OFF_SCHEDULE_LABEL = "มาไม่ตรงวัน";
+export const OFF_SCHEDULE_TONE = "bg-amber-100 text-amber-700";
+
+// สถานะเก่าที่ถอดออกแล้วแต่ยังมีแถวค้างอยู่ในฐานข้อมูล
+const LEGACY_LABEL: Record<string, string> = {
+  leave: "ลา (เลิกใช้แล้ว)",
+};
+
+export function statusLabel(status: string): string {
+  return STATUS_LABEL[status as AttendanceStatus] ?? LEGACY_LABEL[status] ?? status;
+}
+
+export function statusTone(status: string): string {
+  return STATUS_TONE[status as AttendanceStatus] ?? "bg-gray-100 text-gray-600";
+}
 
 export const METHOD_LABEL: Record<CheckInMethod, string> = {
   qr_code: "สแกน QR",

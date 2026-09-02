@@ -202,14 +202,14 @@ func (ctrl *AttendanceController) CloseSession(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "ปิดรอบเรียบร้อย — คนที่ไม่ได้เช็คชื่อถูกบันทึกเป็นขาดเรียน",
+		"message": "ปิดรอบเรียบร้อย — คนที่ยืนยันว่าจะมาแล้วไม่มา ถูกบันทึกเป็นขาดเรียน",
 		"data":    session,
 	})
 }
 
 // UpdateStatus [PATCH] /api/attendance/records/:id
 //
-// ใช้ตอนนักเรียนแจ้งลาแล้วแอดมินมาปรับสถานะให้ทีหลัง
+// ใช้ตอนแอดมินต้องแก้ผลย้อนหลัง (present ↔ absent)
 func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสบันทึกการเช็คชื่อ")
 	if !ok {
@@ -224,7 +224,7 @@ func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 
 	var req dto.UpdateAttendanceStatusReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "สถานะต้องเป็น present, absent หรือ leave"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "สถานะต้องเป็น present หรือ absent"})
 		return
 	}
 
