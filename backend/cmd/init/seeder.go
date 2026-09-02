@@ -390,6 +390,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
         CourseName       string
         Description      string
         LearningOutcomes string
+        ImageURL         string
         Packages         []struct {
             SessionsCount uint
             HoursCount    uint
@@ -401,6 +402,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
     }{
         {
             CourseName:  "คอร์สปกติ",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786610190/koyama2/file_tmxpfw.png",
             Description: "คอร์สเรียนรวมกลุ่มสำหรับผู้เริ่มต้นถึงระดับกลาง เน้นปูพื้นฐานให้แน่นตั้งแต่การจับไม้ การยืน ไปจนถึงลูกตีพื้นฐานครบทุกแบบ เรียนกับโค้ชผู้มีประสบการณ์ในบรรยากาศเป็นกันเอง",
             LearningOutcomes: `การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง
 ฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม
@@ -417,6 +419,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส VIP นักกีฬา",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1788012043/koyama2/file_swzbxd.jpg",
             Description: "คอร์สเข้มข้นสำหรับผู้ที่มีพื้นฐานแล้วและต้องการลงแข่งขันจริงจัง เพิ่มเวลาเป็น 3 ชั่วโมงต่อครั้ง เน้นตีโต้และตีเกมจริงเพื่อสร้างความอึดและไหวพริบในสนาม",
             LearningOutcomes: `เทคนิคการตีขั้นสูง ลูกดาด (Drive) ลูกตัดหยอด (Drop Shot) และลูกหลอก
 ฟุตเวิร์กความเร็วสูงและการทรงตัวขณะตีลูกยาก
@@ -433,6 +436,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (2 ชม.)",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786531356/koyama2/file_asozst.png",
             Description: "เรียนตัวต่อตัวกับโค้ชแบบเต็ม 2 ชั่วโมงต่อครั้ง โค้ชออกแบบเนื้อหาให้ตรงกับจุดอ่อนของผู้เรียนแต่ละคนโดยเฉพาะ เหมาะกับผู้ที่ต้องการพัฒนาเร็วหรือมีเวลาจำกัด",
             LearningOutcomes: `แผนการฝึกที่ออกแบบเฉพาะบุคคลจากการประเมินฝีมือจริง
 แก้ไขท่าทางที่ผิดแบบตัวต่อตัว ได้รับคำแนะนำทันทีทุกลูก
@@ -449,6 +453,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
         },
         {
             CourseName:  "คอร์ส PRIVATE (1 ชม.)",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786355826/koyama2/file_fiyprm.png",
             Description: "เรียนตัวต่อตัวแบบกระชับ 1 ชั่วโมงต่อครั้ง เหมาะกับผู้ที่มีเวลาน้อยแต่อยากได้คำแนะนำแบบใกล้ชิด เน้นแก้จุดอ่อนทีละเรื่องให้เห็นผลชัดในแต่ละครั้ง",
             LearningOutcomes: `เลือกโฟกัสได้ครั้งละ 1 ทักษะ ทำให้เห็นพัฒนาการชัดเจน
 แก้ไขท่าทางเฉพาะจุดโดยโค้ชดูแลใกล้ชิด
@@ -473,6 +478,7 @@ func seedCoursesAndPackages(db *gorm.DB) {
                 CourseName:       seed.CourseName,
                 Description:      seed.Description,
                 LearningOutcomes: seed.LearningOutcomes,
+                ImageURL:         seed.ImageURL,
                 Status:           models.CourseStatusActive,
                 UserID:           admin.ID,
             }
@@ -568,6 +574,46 @@ func seedHomeContent(db *gorm.DB) {
 		return
 	}
 	fmt.Println("Seed HomeContent สำเร็จเรียบร้อย!")
+}
+
+// seedHeroSlides เติมรูปสไลด์ HeroSlider หน้าแรกเป็นข้อมูลตัวอย่าง (แอดมินแก้/เพิ่มเองได้ที่ /admin/settings)
+func seedHeroSlides(db *gorm.DB) {
+	var count int64
+	if err := db.Model(&models.HeroSlide{}).Count(&count).Error; err != nil {
+		log.Printf("ไม่สามารถเช็คจำนวนข้อมูล HeroSlide ได้: %v", err)
+		return
+	}
+	if count > 0 {
+		fmt.Println("ข้ามขั้นตอนการ Seed HeroSlide เนื่องจากมีข้อมูลอยู่แล้ว")
+		return
+	}
+
+	slides := []models.HeroSlide{
+		{
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1786270445/koyama2/file_d80gv5.png",
+			Caption:   "ยินดีต้อนรับสู่ Koyama Badminton School",
+			SortOrder: 1,
+			IsActive:  true,
+		},
+		{
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1787525979/koyama2/course/file_chffnq.jpg",
+			Caption:   "คอร์สเรียนครบทุกระดับ ตั้งแต่ผู้เริ่มต้นถึงนักกีฬา",
+			SortOrder: 2,
+			IsActive:  true,
+		},
+		{
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1788337878/koyama2/slip/file_qch5kx.jpg",
+			Caption:   "สมัครเรียนกับโค้ชผู้มีประสบการณ์ได้แล้ววันนี้",
+			SortOrder: 3,
+			IsActive:  true,
+		},
+	}
+
+	if err := db.Create(&slides).Error; err != nil {
+		log.Printf("การทำ Seed HeroSlide ล้มเหลว: %v", err)
+		return
+	}
+	fmt.Printf("Seed HeroSlide สำเร็จเรียบร้อย! (%d สไลด์)\n", len(slides))
 }
 
 func seedBankAccounts(db *gorm.DB) {

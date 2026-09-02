@@ -275,7 +275,7 @@ export default function BillingsTab({
 
       {/* Sticky checkout bar */}
       {selectedBillingIds.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 py-4 px-6 md:px-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] animate-slideUp">
+        <div className="fixed bottom-[calc(64px+env(safe-area-inset-bottom))] left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 py-4 px-6 md:bottom-0 md:px-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 z-[55] shadow-[0_-5px_15px_rgba(0,0,0,0.05)] animate-slideUp">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-[#FFF0F0] rounded-xl flex items-center justify-center text-[#CC0000]">
               <Wallet className="w-5 h-5" />

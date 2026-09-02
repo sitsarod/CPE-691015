@@ -13,6 +13,7 @@ import {
   describeExpiry,
   EXPIRY_WARNING_DAYS,
 } from '@/components/course/expiryUtils';
+import WelcomeOnboardingModal from './components/WelcomeOnboardingModal';
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
@@ -29,9 +30,28 @@ export default function CustomerDashboardPage() {
   /** คอร์สที่กำลังเรียนอยู่และใกล้หมดอายุภายใน 7 วัน */
   const [expiringSoon, setExpiringSoon] = useState<Enrollment[]>([]);
 
+  /** ป็อปอัพต้อนรับ — โชว์ครั้งเดียวตอนลูกค้าล็อกอินเข้ามาครั้งแรกและยังไม่มีคอร์ส */
+  const [showWelcome, setShowWelcome] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  // คีย์กันโชว์ซ้ำ ผูกกับ user_id เพื่อให้แต่ละบัญชีนับครั้งแรกของตัวเอง
+  const welcomeSeenKey = (customerId: string) => `koyama_welcomed_${customerId}`;
+
+  const goEnroll = () => {
+    const customerId = localStorage.getItem('user_id');
+    if (customerId) localStorage.setItem(welcomeSeenKey(customerId), '1');
+    setShowWelcome(false);
+    router.push('/customer/enrollment');
+  };
+
+  const dismissWelcome = () => {
+    const customerId = localStorage.getItem('user_id');
+    if (customerId) localStorage.setItem(welcomeSeenKey(customerId), '1');
+    setShowWelcome(false);
+  };
 
   const fetchData = async () => {
     try {
@@ -71,6 +91,13 @@ export default function CustomerDashboardPage() {
               e.days_left <= EXPIRY_WARNING_DAYS
           )
         );
+
+        // ครั้งแรกที่ล็อกอิน (ยังไม่เคยเห็นป็อปอัพ) และยังไม่มีคอร์สเลย → ชวนไปสมัครคอร์ส
+        // เช็ก data.length === 0 ด้วย เพื่อไม่รบกวนคนที่มีคอร์สอยู่แล้วแต่มาเปิดเครื่องใหม่
+        const seen = localStorage.getItem(welcomeSeenKey(customerId));
+        if (!seen && data.length === 0) {
+          setShowWelcome(true);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch enrollments:', error);
@@ -125,6 +152,14 @@ export default function CustomerDashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl min-h-[calc(100vh-80px)] bg-gray-50 text-gray-900 font-sans selection:bg-[#CC0000] selection:text-white pb-20 rounded-2xl overflow-hidden shadow-sm">
+
+      {showWelcome && (
+        <WelcomeOnboardingModal
+          firstName={typeof window !== 'undefined' ? localStorage.getItem('firstName') ?? undefined : undefined}
+          onStart={goEnroll}
+          onClose={dismissWelcome}
+        />
+      )}
 
       {/* Hero Cinematic Section (Kept Dark for Image Visibility) */}
       <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden group">
