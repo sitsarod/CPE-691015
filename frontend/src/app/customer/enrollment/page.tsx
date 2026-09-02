@@ -537,13 +537,17 @@ export default function EnrollmentPage() {
               ไม่มีคอร์สแนะนำในขณะนี้
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
               {displayCourses.map((course) => (
-                <CourseSummaryCard
+                <div
                   key={`course-${course.id}`}
-                  course={course}
-                  onClick={(c) => setOpenCourseId(c.id)}
-                />
+                  className="w-[280px] shrink-0 snap-start sm:w-[340px]"
+                >
+                  <CourseSummaryCard
+                    course={course}
+                    onClick={(c) => setOpenCourseId(c.id)}
+                  />
+                </div>
               ))}
             </div>
           )}

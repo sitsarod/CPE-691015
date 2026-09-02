@@ -11,6 +11,7 @@ import {
   Loader2 
 } from "lucide-react";
 import { BankAccount } from "./types";
+import { getBankVisual } from "./bankDisplay";
 import SlipUploader from "@/components/SlipUploader";
 
 interface CheckoutModalProps {
@@ -69,7 +70,7 @@ export default function CheckoutModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between bg-gray-50">
@@ -174,11 +175,16 @@ export default function CheckoutModal({
                     ไม่พบบัญชีธนาคารสโมสร กรุณาติดต่อผู้ดูแลระบบ
                   </div>
                 ) : (
-                  bankAccounts.filter(b => b.is_active).map((acc) => (
+                  bankAccounts.filter(b => b.is_active).map((acc) => {
+                    const bank = getBankVisual(acc.bank_name);
+                    return (
                     <div key={`bank-acc-${acc.ID}`} className="p-4 border border-gray-200 rounded-xl bg-white flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                          KTB
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 leading-none text-center"
+                          style={{ backgroundColor: bank.bg, color: bank.fg }}
+                        >
+                          {bank.code}
                         </div>
                         <div>
                           <h5 className="font-bold text-gray-800 text-sm">{acc.bank_name}</h5>
@@ -201,7 +207,8 @@ export default function CheckoutModal({
                         </div>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
