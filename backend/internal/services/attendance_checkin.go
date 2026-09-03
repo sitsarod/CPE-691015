@@ -27,6 +27,7 @@ func (s *AttendanceService) LookupByQR(sessionID uint, qrCode string) (*dto.Scan
 		CourseName:        ctx.CourseName,
 		TotalSessions:     ctx.Enrollment.TotalSessions,
 		RemainingSessions: ctx.Enrollment.RemainingSessions,
+		IsConfirmed:       ctx.Confirmed,
 		CanCheckIn:        true,
 	}
 
@@ -92,6 +93,7 @@ func (s *AttendanceService) checkIn(
 			CheckInTime:         now,
 			CheckInMethod:       method,
 			Status:              models.AttendanceStatusPresent,
+			IsOffSchedule:       !ctx.Confirmed,
 			Remarks:             remarks,
 			EnrollmentID:        ctx.Enrollment.ID,
 			UserID:              studentUserID,
@@ -122,6 +124,7 @@ func (s *AttendanceService) checkIn(
 			Nickname:          ctx.Nickname,
 			CheckInMethod:     string(method),
 			CheckInTime:       now,
+			IsOffSchedule:     record.IsOffSchedule,
 			RemainingSessions: remaining,
 		}
 		return nil
@@ -146,7 +149,6 @@ func deductSession(tx *gorm.DB, enrollmentID uint) error {
 	return nil
 }
 
-
 func refundSession(tx *gorm.DB, enrollmentID uint) error {
 	res := tx.Model(&models.Enrollment{}).
 		Where("id = ? AND remaining_sessions < total_sessions", enrollmentID).
@@ -154,5 +156,5 @@ func refundSession(tx *gorm.DB, enrollmentID uint) error {
 	if res.Error != nil {
 		return errors.New("ไม่สามารถคืนจำนวนครั้งคงเหลือได้")
 	}
-	return nil 
+	return nil
 }

@@ -34,7 +34,6 @@ var (
 	ErrEnrollmentNotCancellable = errors.New("ยกเลิกเองได้เฉพาะใบที่ยังรออนุมัติ หากแอดมินอนุมัติไปแล้วกรุณาติดต่อแอดมิน")
 )
 
-
 const defaultEnrollmentDurationDays = 30
 
 const billingTypeCourseFee = "ค่าคอร์สเรียน"
@@ -68,6 +67,24 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 	e.Status = models.EnrollmentStatusActive
 	e.StartedAt = &now
 	e.ExpiresAt = &expiresAt
+
+	carried, err := consumeCarryOver(tx, e)
+	if err != nil {
+		return err
+	}
+	if carried > 0 {
+		if err := tx.Model(&models.Enrollment{}).
+			Where("id = ?", e.ID).
+			Updates(map[string]interface{}{
+				"total_sessions":     gorm.Expr("total_sessions + ?", carried),
+				"remaining_sessions": gorm.Expr("remaining_sessions + ?", carried),
+			}).Error; err != nil {
+			return errors.New("ไม่สามารถทบครั้งที่ค้างไว้เข้าคอร์สนี้ได้")
+		}
+		e.TotalSessions += carried
+		e.RemainingSessions += carried
+	}
+
 	return nil
 }
 
@@ -175,7 +192,6 @@ func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
 	return nil
 }
 
-
 // toCustomerID แปลง users.id → customers.id
 //
 // ตรรกะจริงย้ายไปอยู่ที่ ResolveCustomerID ใน customer_resolver.go แล้ว เพื่อให้ service
@@ -262,7 +278,6 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 			return nil
 		}
 
-
 		full, err := seatsFull(tx, packageID, pkg.MaxSeats)
 		if err != nil {
 			return err
@@ -315,7 +330,7 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 // [POST] อนุมัติการลงทะเบียนและสร้างบิล
 func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (*models.Enrollment, error) {
 	var enrollment models.Enrollment
-	
+
 	if err := s.db.Preload("Package").Preload("Package.Course").First(&enrollment, enrollmentID).Error; err != nil {
 		return nil, ErrEnrollmentNotFound
 	}

@@ -28,7 +28,8 @@ func announcementErrorStatus(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, services.ErrInvalidDateRange),
 		errors.Is(err, services.ErrUserNotFound),
-		errors.Is(err, services.ErrCategoryNotFound):
+		errors.Is(err, services.ErrCategoryNotFound),
+		errors.Is(err, services.ErrInvalidLink):
 		return http.StatusBadRequest
 	case errors.Is(err, services.ErrCategoryInUse):
 		return http.StatusConflict

@@ -25,7 +25,7 @@ type PublicAutoQADTO struct {
 }
 
 type CreateAutoQAReq struct {
-	Mode            string `json:"mode" binding:"required,oneof=keyword_match ai_predict"`
+	Mode            string `json:"mode" binding:"required,oneof=keyword_match"`
 	Question        string `json:"question" binding:"required"`
 	SimilarQuestion string `json:"similar_question"`
 	Answer          string `json:"answer" binding:"required"`

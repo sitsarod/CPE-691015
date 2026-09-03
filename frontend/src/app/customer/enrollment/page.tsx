@@ -346,7 +346,7 @@ export default function EnrollmentPage() {
                   >
                     <CalendarX className="w-3 h-3 mr-1" />
                     {inGrace
-                      ? `หมดอายุ · ขอขยายได้อีก ${item.grace_days_left} วัน`
+                      ? `หมดอายุ · ติดต่อแอดมินได้อีก ${item.grace_days_left} วัน`
                       : 'หมดอายุแล้ว'}
                   </div>
                 )}
@@ -449,7 +449,8 @@ export default function EnrollmentPage() {
                     ) : inGrace ? (
                       <span className="text-xs sm:text-sm font-semibold text-red-600">
                         เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
-                        ติดต่อแอดมินภายใน {item.grace_days_left} วันเพื่อขอขยายสิทธิ์
+                        ติดต่อแอดมินภายใน {item.grace_days_left} วัน
+                        เพื่อขอทบครึ่งหนึ่งไปใช้กับคอร์สถัดไป
                       </span>
                     ) : item.status === 'expired' ? (
                       <span className="text-xs sm:text-sm text-slate-500">
@@ -536,13 +537,17 @@ export default function EnrollmentPage() {
               ไม่มีคอร์สแนะนำในขณะนี้
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
               {displayCourses.map((course) => (
-                <CourseSummaryCard
+                <div
                   key={`course-${course.id}`}
-                  course={course}
-                  onClick={(c) => setOpenCourseId(c.id)}
-                />
+                  className="w-[280px] shrink-0 snap-start sm:w-[340px]"
+                >
+                  <CourseSummaryCard
+                    course={course}
+                    onClick={(c) => setOpenCourseId(c.id)}
+                  />
+                </div>
               ))}
             </div>
           )}

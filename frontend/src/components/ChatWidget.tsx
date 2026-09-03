@@ -24,7 +24,8 @@ export const OPEN_CHAT_EVENT = 'koyama:open-chat';
 const ANON_NAME = 'ผู้เยี่ยมชม';
 
 // "เจ้าของห้องแชท" ตามตัวตนปัจจุบัน — ผู้ล็อกอิน "u:<id>", guest "guest"
-function chatOwner(): string {
+// export ไว้ให้ CustomerTopbar ใช้คำนวณ badge จำนวนข้อความตอบกลับใหม่ที่ยังไม่ได้เปิดดู
+export function chatOwner(): string {
   if (typeof window === 'undefined') return 'guest';
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
@@ -35,8 +36,14 @@ function chatOwner(): string {
 
 // เก็บ session id แยกคีย์ตามเจ้าของ เพื่อให้คนเดิมล็อกอินกลับมาเจอห้อง/ประวัติเดิม
 // และ guest กับผู้ล็อกอินไม่ใช้ห้องปนกัน
-function chatSessionKey(owner: string): string {
+export function chatSessionKey(owner: string): string {
   return `auto_qa_session_${owner}`;
+}
+
+// เวลาที่เปิดกล่องแชทดูข้อความล่าสุดครั้งล่าสุด — ใช้เทียบกับข้อความ admin_reply
+// เพื่อคำนวณ badge แจ้งเตือน "ข้อความตอบกลับใหม่ที่ยังไม่ได้อ่าน" บน CustomerTopbar
+export function chatLastViewedKey(owner: string): string {
+  return `auto_qa_last_viewed_${owner}`;
 }
 
 function mapAutoQAsToMessages(qas: AutoQA[]): ChatMessage[] {
@@ -88,10 +95,10 @@ export default function ChatWidget() {
   const [identityReady, setIdentityReady] = useState(false);
 
   const [creating, setCreating] = useState(false);
-  const [createFailed, setCreateFailed] = useState(false);
-  const [restoring, setRestoring] = useState(true); // กำลังกู้ห้องเดิม (กัน auto-create ซ้อน)
+  const [restoring, setRestoring] = useState(true); // กำลังกู้ห้องเดิม
   const autoStartTriedRef = useRef(false);
   const ownerRef = useRef<string>('__init__');
+  const [greetingTime] = useState(() => new Date());
 
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -186,7 +193,6 @@ export default function ChatWidget() {
     ownerRef.current = owner;
     setSession(null);
     setMessages([]);
-    setCreateFailed(false);
     setEditingRowId(null);
     autoStartTriedRef.current = false;
     setRestoring(true);
@@ -209,21 +215,23 @@ export default function ChatWidget() {
   }, []);
 
   // เปิดกล่อง → ซิงก์เจ้าของอีกครั้ง (เผื่อ login/logout ระหว่างที่กล่องปิดอยู่)
+  // และมาร์คว่า "อ่านแล้ว" (ไว้เทียบคำนวณ badge แจ้งเตือนข้อความใหม่บน CustomerTopbar)
   useEffect(() => {
-    if (isOpen) syncToOwner();
+    if (isOpen) {
+      syncToOwner();
+      try {
+        localStorage.setItem(chatLastViewedKey(chatOwner()), new Date().toISOString());
+      } catch {
+        // เพิกเฉยถ้า localStorage ใช้งานไม่ได้ (private mode ฯลฯ)
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // สร้างห้องอัตโนมัติเมื่อเปิดกล่อง และไม่มีห้องเดิมให้กู้
-  useEffect(() => {
-    if (!isOpen || session || !identityReady || creating || createFailed || restoring) return;
-    if (autoStartTriedRef.current) return;
-    autoStartTriedRef.current = true;
-    createSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, session, identityReady, creating, createFailed, restoring]);
+  // หมายเหตุ: ไม่สร้างห้องแชททันทีที่เปิดกล่อง — สร้างแบบ lazy ตอนกดส่งข้อความ/ไฟล์ครั้งแรก
+  // (ดู createSession() ที่ถูกเรียกจาก handleSend) เพื่อไม่ให้เกิดห้องแชทว่างเปล่าเวลาผู้ใช้แค่เปิดดู
 
-  const createSession = async () => {
+  const createSession = async (): Promise<ChatSession | null> => {
     setCreating(true);
     try {
       const payload: CreateChatSessionReq = loggedInCustomer
@@ -236,13 +244,15 @@ export default function ChatWidget() {
         {
           id: 'greeting',
           sender: 'bot',
-          text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 3 วัน มีอะไรให้เราช่วยไหมคะ?`,
+          text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 7 วัน มีอะไรให้เราช่วยไหมคะ?`,
           timestamp: new Date(),
         },
       ]);
+      autoStartTriedRef.current = true;
+      return newSession;
     } catch (err) {
       console.error('Failed to create session:', err);
-      setCreateFailed(true);
+      return null;
     } finally {
       setCreating(false);
     }
@@ -313,7 +323,20 @@ export default function ChatWidget() {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if ((!text && !pendingAttachment) || !session || isSending) return;
+    if ((!text && !pendingAttachment) || isSending || creating) return;
+
+    // ยังไม่มีห้องแชท (ยังไม่เคยส่งข้อความ) → สร้างห้องแบบ lazy ตอนนี้เป็นครั้งแรก
+    let activeSession = session;
+    if (!activeSession) {
+      activeSession = await createSession();
+      if (!activeSession) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `error-bot-${Date.now()}`, sender: 'bot', text: 'ขออภัย เริ่มการสนทนาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', timestamp: new Date() },
+        ]);
+        return;
+      }
+    }
 
     const attach = pendingAttachment;
     setMessages((prev) => [
@@ -333,7 +356,7 @@ export default function ChatWidget() {
     setIsSending(true);
 
     try {
-      const response = await autoQaAPI.askQuestion(session.id, {
+      const response = await autoQaAPI.askQuestion(activeSession.id, {
         question: text,
         attachment_url: attach?.url,
         attachment_type: attach?.type,
@@ -416,25 +439,33 @@ export default function ChatWidget() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
-        {!session ? (
-          createFailed ? (
-            <div className="flex flex-col h-full items-center justify-center gap-3 text-center px-4">
-              <p className="text-sm text-gray-500">เริ่มการสนทนาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</p>
-              <button
-                onClick={() => { setCreateFailed(false); autoStartTriedRef.current = false; }}
-                className="text-sm font-medium bg-[#CC0000] text-white px-4 py-2 rounded-full hover:bg-[#990000] transition-colors"
-              >
-                ลองใหม่
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
-              <Loader2 size={28} className="animate-spin text-[#CC0000]" />
-              <p className="text-sm">กำลังเริ่มการสนทนา...</p>
-            </div>
-          )
+        {restoring ? (
+          <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
+            <Loader2 size={28} className="animate-spin text-[#CC0000]" />
+            <p className="text-sm">กำลังโหลด...</p>
+          </div>
         ) : (
           <div className="flex flex-col space-y-3">
+            {/* ยังไม่มีห้องแชท (ยังไม่เคยส่งข้อความ) → แสดงข้อความต้อนรับแบบ preview เฉยๆ ยังไม่สร้างห้องจริง */}
+            {!session && (
+              <MessageRow
+                key="greeting-preview"
+                msg={{
+                  id: 'greeting-preview',
+                  sender: 'bot',
+                  text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 7 วัน มีอะไรให้เราช่วยไหมคะ?`,
+                  timestamp: greetingTime,
+                }}
+                isEditing={false}
+                editText=""
+                setEditText={() => {}}
+                onStartEdit={() => {}}
+                onCancelEdit={() => {}}
+                onSaveEdit={() => {}}
+                onDelete={() => {}}
+              />
+            )}
+
             {messages.map((msg) => (
               <MessageRow
                 key={msg.id}
@@ -449,7 +480,7 @@ export default function ChatWidget() {
               />
             ))}
 
-            {isSending && (
+            {(isSending || creating) && (
               <div className="self-end flex space-x-1 items-center bg-[#CC0000]/80 px-4 py-3 rounded-2xl rounded-br-none">
                 <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -462,9 +493,9 @@ export default function ChatWidget() {
       </div>
 
       {/* Input Area */}
-      {session && (
+      {!restoring && (
         <div className="bg-white border-t border-gray-200 p-3 flex flex-col gap-2 flex-shrink-0">
-          {session.status === 'closed' ? (
+          {session?.status === 'closed' ? (
             <div className="flex flex-col items-center gap-2 py-2 text-center">
               <p className="text-xs text-gray-500">การสนทนานี้ถูกปิดแล้ว</p>
               <button
@@ -521,11 +552,11 @@ export default function ChatWidget() {
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="พิมพ์ข้อความ..."
                   className="flex-1 text-black bg-gray-100 border-none rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#CC0000]/40"
-                  disabled={isSending}
+                  disabled={isSending || creating}
                 />
                 <button
                   onClick={handleSend}
-                  disabled={(!inputText.trim() && !pendingAttachment) || isSending}
+                  disabled={(!inputText.trim() && !pendingAttachment) || isSending || creating}
                   className="p-2 bg-[#CC0000] text-white rounded-full hover:bg-[#990000] disabled:bg-gray-300 transition-colors flex-shrink-0"
                 >
                   <Send size={18} className="ml-0.5" />

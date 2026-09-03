@@ -199,15 +199,31 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 		return errors.New("ไม่พบข้อมูลประเภทการเรียกเก็บเงิน")
 	}
 
+	var openSessions int64
+	if err := s.db.Model(&models.AttendanceSession{}).
+		Joins("JOIN packages ON packages.id = attendance_sessions.package_id AND packages.deleted_at IS NULL").
+		Where("packages.course_id = ? AND attendance_sessions.session_date >= ? AND attendance_sessions.session_date < ? AND attendance_sessions.status = ?",
+			courseID, parsedDate, nextDay, models.AttendanceSessionOpen).
+		Count(&openSessions).Error; err != nil {
+		return errors.New("ไม่สามารถตรวจสอบสถานะรอบเช็คชื่อของวันที่ระบุได้")
+	}
+	if openSessions > 0 {
+		return errors.New("ยังมีรอบเช็คชื่อของวันที่เลือกที่ยังไม่ได้ปิด — ต้องปิดรอบก่อนออกบิล ไม่งั้นคนที่ยืนยันว่าจะมาแล้วไม่มาจะหลุดจากยอดหาร ทำให้คนที่มาเรียนจ่ายแพงเกิน")
+	}
+
 	// ดึงประวัติการเข้าเรียน (StudentAttendance) ของ Course นี้ในวันที่ระบุ
 	var attendances []models.StudentAttendance
 	err = s.db.Preload("Enrollment").
 		Preload("Enrollment.Customer").
 		Joins("JOIN enrollments ON enrollments.id = student_attendances.enrollment_id").
 		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Joins("LEFT JOIN attendance_sessions ON attendance_sessions.id = student_attendances.attendance_session_id AND attendance_sessions.deleted_at IS NULL").
 		Where("packages.course_id = ?", courseID).
-		Where("student_attendances.check_in_time >= ? AND student_attendances.check_in_time < ?", parsedDate, nextDay).
-		Where("student_attendances.status = ?", models.AttendanceStatusPresent).
+		Where(s.db.
+			Where("attendance_sessions.session_date >= ? AND attendance_sessions.session_date < ?", parsedDate, nextDay).
+			Or("student_attendances.attendance_session_id IS NULL AND student_attendances.check_in_time >= ? AND student_attendances.check_in_time < ?", parsedDate, nextDay)).
+		Where("(student_attendances.status = ? OR (student_attendances.status = ? AND student_attendances.is_off_schedule = false))",
+			models.AttendanceStatusPresent, models.AttendanceStatusAbsent).
 		Find(&attendances).Error
 
 	if err != nil {
@@ -230,7 +246,7 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 	}
 
 	if len(uniqueUserIDs) == 0 {
-		return errors.New("ไม่พบนักเรียนเช็คอินเข้าเรียนในวิชาและวันที่ระบุ")
+		return errors.New("ไม่พบรายชื่อที่ต้องหารค่าสนามของวิชาและวันที่ระบุ (ไม่มีใครยืนยันมาเรียนหรือเช็คชื่อไว้)")
 	}
 
 	// คำนวณยอดเงินรวมและยอดหารเฉลี่ย
@@ -378,4 +394,3 @@ func (s *BillingService) DeleteBilling(id uint) error {
 	}
 	return nil
 }
-

@@ -1,0 +1,75 @@
+# docker-compose สำหรับรันทั้งระบบ (backend + frontend)
+#
+# ค่าตัวแปรทั้งหมดถูกดึงจากไฟล์ .env ที่โฟลเดอร์นี้โดยอัตโนมัติ (Neon, JWT, Cloudinary,
+# SlipOK, SMTP ฯลฯ) — ไม่ต้อง commit ค่าจริงลง compose ไฟล์นี้
+#
+# วิธีใช้:
+#   docker compose build
+#   docker compose run --rm backend /app/migrate      # อัปเดต schema ครั้งแรก (ไม่ลบข้อมูล)
+#   docker compose up -d
+#
+# สร้าง admin คนแรก (ครั้งเดียว):
+#   docker compose run --rm backend /app/createadmin
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: koyama-backend
+    restart: unless-stopped
+    environment:
+      PORT: "8000"
+      TZ: Asia/Bangkok
+      # database — ดีฟอลต์ใช้ Neon จาก .env; ถ้าจะใช้ postgres local ให้เปิด profile local-db ด้านล่าง
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      # ⚠️ ตอนขึ้น production เปลี่ยนเป็นโดเมนจริงของ frontend (คั่นหลายอันด้วย comma)
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      CLOUDINARY_URL: ${CLOUDINARY_URL}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER}
+      SLIPOK_API_KEY: ${SLIPOK_API_KEY}
+      SLIPOK_BRANCH_ID: ${SLIPOK_BRANCH_ID}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # build-time — ฝังลง bundle ตอน build; ต้องชี้ไป backend และลงท้ายด้วย /api
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    image: koyama-frontend
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # (ทางเลือก) PostgreSQL local — ใช้แทน Neon ตอน dev
+  # เปิดด้วย:  docker compose --profile local-db up -d
+  # แล้วตั้งใน .env:  DATABASE_URL=postgresql://postgres:postgres@db:5432/koyama?sslmode=disable
+  db:
+    image: postgres:17-alpine
+    profiles: ["local-db"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: koyama
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  backend_uploads:
+  pgdata:

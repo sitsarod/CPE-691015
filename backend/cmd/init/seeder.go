@@ -7,7 +7,6 @@ import (
 
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
-
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -119,7 +118,7 @@ func seedCoaches(db *gorm.DB) {
 			Uid:            "C001",
 			Address:        "123/45 ถ.สุขุมวิท กรุงเทพฯ",
 			BirthDate:      "1988-06-10",
-			ProfilePicture: "",
+			ProfilePicture: "https://example.com/profiles/coach1.png",
 			Specialization: "S",
 			CoachLicense:   "License A",
 			BankAccount:    "ธนาคารกสิกรไทย",
@@ -146,7 +145,7 @@ func seedCoaches(db *gorm.DB) {
 			Uid:            "C002",
 			Address:        "456/78 ถ.เพชรบุรี กรุงเทพฯ",
 			BirthDate:      "1993-10-05",
-			ProfilePicture: "",
+			ProfilePicture: "https://example.com/profiles/coach2.png",
 			Specialization: "S",
 			CoachLicense:   "License B",
 			BankAccount:    "ธนาคารไทยพาณิชย์",
@@ -171,7 +170,7 @@ func seedCoaches(db *gorm.DB) {
 			Uid:            "C003",
 			Address:        "789/12 ถ.พหลโยธิน กรุงเทพฯ",
 			BirthDate:      "1992-05-30",
-			ProfilePicture: "",
+			ProfilePicture: "https://example.com/profiles/coach3.png",
 			Specialization: "P",
 			CoachLicense:   "License C",
 			BankAccount:    "ธนาคารกรุงเทพ",
@@ -379,154 +378,140 @@ func seedCustomers(db *gorm.DB) {
 }
 
 func seedCoursesAndPackages(db *gorm.DB) {
-	var admin models.User
-	if err := db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
-		log.Printf("ไม่สามารถค้นหาแอดมินหลักได้เพื่อสร้างคอร์ส: %v", err)
-		return
-	}
+    var admin models.User
+    if err := db.Where("role = ?", models.AdminRole).First(&admin).Error; err != nil {
+        log.Printf("ไม่สามารถค้นหาแอดมินหลักได้เพื่อสร้างคอร์ส: %v", err)
+        return
+    }
 
-	// สร้างข้อมูลตามโปสเตอร์ Koyama Badminton School
-	// LearningOutcomes เก็บเป็นข้อความหลายบรรทัด บรรทัดละ 1 ข้อ (ดู models.Course.LearningOutcomes)
-	courseSeeds := []struct {
-		CourseName       string
-		Description      string
-		LearningOutcomes string
-		Packages         []struct {
-			SessionsCount uint
-			HoursCount    uint
-			Price         float64
-			MaxSeats      uint
-			StartTime     string
-			EndTime       string
-		}
-	}{
-		{
-			CourseName:  "คอร์สปกติ",
-			Description: "คอร์สเรียนรวมกลุ่มสำหรับผู้เริ่มต้นถึงระดับกลาง เน้นปูพื้นฐานให้แน่นตั้งแต่การจับไม้ การยืน ไปจนถึงลูกตีพื้นฐานครบทุกแบบ เรียนกับโค้ชผู้มีประสบการณ์ในบรรยากาศเป็นกันเอง",
-			LearningOutcomes: `การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง
+    // สร้างข้อมูลตามโปสเตอร์ Koyama Badminton School
+    // LearningOutcomes เก็บเป็นข้อความหลายบรรทัด บรรทัดละ 1 ข้อ (ดู models.Course.LearningOutcomes)
+    courseSeeds := []struct {
+        CourseName       string
+        Description      string
+        LearningOutcomes string
+        ImageURL         string
+        Packages         []struct {
+            SessionsCount uint
+            HoursCount    uint
+            Price         float64
+            MaxSeats      uint
+            StartTime     string
+            EndTime       string
+        }
+    }{
+        {
+            CourseName:  "คอร์สปกติ",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786610190/koyama2/file_tmxpfw.png",
+            Description: "คอร์สเรียนรวมกลุ่มสำหรับผู้เริ่มต้นถึงระดับกลาง เน้นปูพื้นฐานให้แน่นตั้งแต่การจับไม้ การยืน ไปจนถึงลูกตีพื้นฐานครบทุกแบบ เรียนกับโค้ชผู้มีประสบการณ์ในบรรยากาศเป็นกันเอง",
+            LearningOutcomes: `การจับไม้และการวางท่าทางพื้นฐานที่ถูกต้อง
 ฟุตเวิร์กพื้นฐาน การเคลื่อนที่เข้าออก 6 จุดในสนาม
 ลูกโยนหลัง (Clear) และลูกหยอดหน้าเน็ต (Net Drop)
 ลูกตบ (Smash) และการรับลูกตบเบื้องต้น
 การเสิร์ฟสั้นและเสิร์ฟยาวให้แม่นยำ
 กติกาการแข่งขันและการนับคะแนน`,
-			Packages: []struct {
-				SessionsCount, HoursCount uint
-				Price                     float64
-				MaxSeats                  uint
-				StartTime, EndTime        string
-			}{
-				{8, 16, 1800, 10, "18:00", "20:00"},
-				{12, 24, 2200, 10, "18:00", "20:00"},
-				{16, 32, 2600, 10, "18:00", "20:00"},
-				{20, 40, 3000, 10, "18:00", "20:00"},
-			},
-		},
-		{
-			CourseName:  "คอร์ส VIP นักกีฬา",
-			Description: "คอร์สเข้มข้นสำหรับผู้ที่มีพื้นฐานแล้วและต้องการลงแข่งขันจริงจัง เพิ่มเวลาเป็น 3 ชั่วโมงต่อครั้ง เน้นตีโต้และตีเกมจริงเพื่อสร้างความอึดและไหวพริบในสนาม",
-			LearningOutcomes: `เทคนิคการตีขั้นสูง ลูกดาด (Drive) ลูกตัดหยอด (Drop Shot) และลูกหลอก
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 1800, 10, "18:00", "20:00"},
+                {12, 24, 2200, 10, "18:00", "20:00"},
+                {16, 32, 2600, 10, "18:00", "20:00"},
+                {20, 40, 3000, 10, "18:00", "20:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส VIP นักกีฬา",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1788012043/koyama2/file_swzbxd.jpg",
+            Description: "คอร์สเข้มข้นสำหรับผู้ที่มีพื้นฐานแล้วและต้องการลงแข่งขันจริงจัง เพิ่มเวลาเป็น 3 ชั่วโมงต่อครั้ง เน้นตีโต้และตีเกมจริงเพื่อสร้างความอึดและไหวพริบในสนาม",
+            LearningOutcomes: `เทคนิคการตีขั้นสูง ลูกดาด (Drive) ลูกตัดหยอด (Drop Shot) และลูกหลอก
 ฟุตเวิร์กความเร็วสูงและการทรงตัวขณะตีลูกยาก
 การวางแผนเกมและอ่านทางคู่ต่อสู้
 การเล่นคู่ ตำแหน่งยืนและการสลับหน้า-หลังกับคู่ขา
 โปรแกรมเสริมสร้างความแข็งแรงและความอึดเฉพาะนักแบดมินตัน
 การเตรียมตัวและการวางแผนก่อนลงแข่งขันรายการจริง`,
-			Packages: []struct {
-				SessionsCount, HoursCount uint
-				Price                     float64
-				MaxSeats                  uint
-				StartTime, EndTime        string
-			}{
-				{8, 16, 2000, 10, "18:00", "21:00"},
-				{12, 24, 2400, 10, "18:00", "21:00"},
-				{16, 32, 2800, 10, "18:00", "21:00"},
-				{20, 40, 3200, 10, "18:00", "21:00"},
-			},
-		},
-		{
-			CourseName:  "คอร์ส PRIVATE (2 ชม.)",
-			Description: "เรียนตัวต่อตัวกับโค้ชแบบเต็ม 2 ชั่วโมงต่อครั้ง โค้ชออกแบบเนื้อหาให้ตรงกับจุดอ่อนของผู้เรียนแต่ละคนโดยเฉพาะ เหมาะกับผู้ที่ต้องการพัฒนาเร็วหรือมีเวลาจำกัด",
-			LearningOutcomes: `แผนการฝึกที่ออกแบบเฉพาะบุคคลจากการประเมินฝีมือจริง
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 2000, 10, "18:00", "21:00"},
+                {12, 24, 2400, 10, "18:00", "21:00"},
+                {16, 32, 2800, 10, "18:00", "21:00"},
+                {20, 40, 3200, 10, "18:00", "21:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส PRIVATE (2 ชม.)",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786531356/koyama2/file_asozst.png",
+            Description: "เรียนตัวต่อตัวกับโค้ชแบบเต็ม 2 ชั่วโมงต่อครั้ง โค้ชออกแบบเนื้อหาให้ตรงกับจุดอ่อนของผู้เรียนแต่ละคนโดยเฉพาะ เหมาะกับผู้ที่ต้องการพัฒนาเร็วหรือมีเวลาจำกัด",
+            LearningOutcomes: `แผนการฝึกที่ออกแบบเฉพาะบุคคลจากการประเมินฝีมือจริง
 แก้ไขท่าทางที่ผิดแบบตัวต่อตัว ได้รับคำแนะนำทันทีทุกลูก
 ฝึกซ้ำเฉพาะจุดที่เป็นจุดอ่อนจนกว่าจะแก้ได้
 ตีโต้กับโค้ชเพื่อสร้างความสม่ำเสมอของลูก
 ตีเกมจริงกับโค้ชพร้อมวิเคราะห์หลังจบเกม
 ติดตามพัฒนาการรายครั้งตลอดคอร์ส`,
-			Packages: []struct {
-				SessionsCount, HoursCount uint
-				Price                     float64
-				MaxSeats                  uint
-				StartTime, EndTime        string
-			}{
-				{8, 16, 0, 2, "10:00", "12:00"},
-				{12, 24, 0, 2, "14:00", "16:00"},
-				{16, 32, 0, 2, "16:00", "18:00"},
-				{20, 40, 0, 2, "21:00", "23:00"},
-			},
-		},
-		{
-			CourseName:  "คอร์ส PRIVATE (1 ชม.)",
-			Description: "เรียนตัวต่อตัวแบบกระชับ 1 ชั่วโมงต่อครั้ง เหมาะกับผู้ที่มีเวลาน้อยแต่อยากได้คำแนะนำแบบใกล้ชิด เน้นแก้จุดอ่อนทีละเรื่องให้เห็นผลชัดในแต่ละครั้ง",
-			LearningOutcomes: `เลือกโฟกัสได้ครั้งละ 1 ทักษะ ทำให้เห็นพัฒนาการชัดเจน
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 16, 0, 2, "10:00", "12:00"},
+                {12, 24, 0, 2, "14:00", "16:00"},
+                {16, 32, 0, 2, "16:00", "18:00"},
+                {20, 40, 0, 2, "21:00", "23:00"},
+            },
+        },
+        {
+            CourseName:  "คอร์ส PRIVATE (1 ชม.)",
+            ImageURL:    "https://res.cloudinary.com/wwwka2em/image/upload/v1786355826/koyama2/file_fiyprm.png",
+            Description: "เรียนตัวต่อตัวแบบกระชับ 1 ชั่วโมงต่อครั้ง เหมาะกับผู้ที่มีเวลาน้อยแต่อยากได้คำแนะนำแบบใกล้ชิด เน้นแก้จุดอ่อนทีละเรื่องให้เห็นผลชัดในแต่ละครั้ง",
+            LearningOutcomes: `เลือกโฟกัสได้ครั้งละ 1 ทักษะ ทำให้เห็นพัฒนาการชัดเจน
 แก้ไขท่าทางเฉพาะจุดโดยโค้ชดูแลใกล้ชิด
 ฝึกความแม่นยำของลูกเสิร์ฟและลูกหยอด
 เพิ่มความเร็วของฟุตเวิร์กด้วยแบบฝึกเฉพาะทาง
 ได้รับการบ้านไปฝึกต่อเองระหว่างรอคาบถัดไป
 ยืดหยุ่นเรื่องเวลา เลือกช่วงที่สะดวกได้`,
-			Packages: []struct {
-				SessionsCount, HoursCount uint
-				Price                     float64
-				MaxSeats                  uint
-				StartTime, EndTime        string
-			}{
-				{8, 8, 0, 2, "10:00", "11:00"},
-				{12, 12, 0, 2, "13:00", "14:00"},
-				{16, 16, 0, 2, "15:00", "16:00"},
-				{20, 20, 0, 2, "21:00", "22:00"},
-			},
-		},
-	}
+            Packages: []struct{ SessionsCount, HoursCount uint; Price float64; MaxSeats uint; StartTime, EndTime string }{
+                {8, 8, 0, 2, "10:00", "11:00"},
+                {12, 12, 0, 2, "13:00", "14:00"},
+                {16, 16, 0, 2, "15:00", "16:00"},
+                {20, 20, 0, 2, "21:00", "22:00"},
+            },
+        },
+    }
 
-	for _, seed := range courseSeeds {
-		var course models.Course
-		err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
-		if err == gorm.ErrRecordNotFound {
-			course = models.Course{
-				CourseName:       seed.CourseName,
-				Description:      seed.Description,
-				LearningOutcomes: seed.LearningOutcomes,
-				Status:           models.CourseStatusActive,
-				UserID:           admin.ID,
-			}
-			if err := db.Create(&course).Error; err != nil {
-				log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)
-				continue
-			}
-			fmt.Printf("Seed คอร์ส %s สำเร็จเรียบร้อย!\n", seed.CourseName)
-		}
+    for _, seed := range courseSeeds {
+        var course models.Course
+        err := db.Where("course_name = ?", seed.CourseName).First(&course).Error
+        if err == gorm.ErrRecordNotFound {
+            course = models.Course{
+                CourseName:       seed.CourseName,
+                Description:      seed.Description,
+                LearningOutcomes: seed.LearningOutcomes,
+                ImageURL:         seed.ImageURL,
+                Status:           models.CourseStatusActive,
+                UserID:           admin.ID,
+            }
+            if err := db.Create(&course).Error; err != nil {
+                log.Printf("ไม่สามารถสร้างคอร์ส %s ได้: %v", seed.CourseName, err)
+                continue
+            }
+            fmt.Printf("Seed คอร์ส %s สำเร็จเรียบร้อย!\n", seed.CourseName)
+        }
 
-		for _, p := range seed.Packages {
-			pkg := models.Package{
-				SessionsCount: p.SessionsCount,
-				HoursCount:    p.HoursCount,
-				Price:         p.Price,
-				MaxSeats:      p.MaxSeats,
-				DurationDays:  30,
-				CourseID:      course.ID,
-			}
-			db.Create(&pkg)
+        for _, p := range seed.Packages {
+            pkg := models.Package{
+                SessionsCount: p.SessionsCount,
+                HoursCount:    p.HoursCount,
+                Price:         p.Price,
+                MaxSeats:      p.MaxSeats,
+                DurationDays: 30,
+                CourseID:     course.ID,
+            }
+            db.Create(&pkg)
 
-			// จัดตารางเรียน 3 วัน (ตัวอย่าง: จันทร์ พุธ ศุกร์)
-			days := []models.DayOfWeek{models.Monday, models.Wednesday, models.Friday}
-			for _, d := range days {
-				db.Create(&models.PackageSchedule{
-					PackageID: pkg.ID,
-					DayOfWeek: d,
-					StartTime: p.StartTime,
-					EndTime:   p.EndTime,
-				})
-			}
-		}
-	}
+            // จัดตารางเรียน 3 วัน (ตัวอย่าง: จันทร์ พุธ ศุกร์)
+            days := []models.DayOfWeek{models.Monday, models.Wednesday, models.Friday}
+            for _, d := range days {
+                db.Create(&models.PackageSchedule{
+                    PackageID: pkg.ID,
+                    DayOfWeek: d,
+                    StartTime: p.StartTime,
+                    EndTime:   p.EndTime,
+                })
+            }
+        }
+    }
 }
 
 // seedHomeContent เติมเนื้อหาหน้าแรกสาธารณะ (singleton) ให้ครบทุกช่องเป็นข้อมูลตัวอย่าง
@@ -591,38 +576,78 @@ func seedHomeContent(db *gorm.DB) {
 	fmt.Println("Seed HomeContent สำเร็จเรียบร้อย!")
 }
 
-func seedBankAccounts(db *gorm.DB) {
-	accounts := []models.BankAccount{
+// seedHeroSlides เติมรูปสไลด์ HeroSlider หน้าแรกเป็นข้อมูลตัวอย่าง (แอดมินแก้/เพิ่มเองได้ที่ /admin/settings)
+func seedHeroSlides(db *gorm.DB) {
+	var count int64
+	if err := db.Model(&models.HeroSlide{}).Count(&count).Error; err != nil {
+		log.Printf("ไม่สามารถเช็คจำนวนข้อมูล HeroSlide ได้: %v", err)
+		return
+	}
+	if count > 0 {
+		fmt.Println("ข้ามขั้นตอนการ Seed HeroSlide เนื่องจากมีข้อมูลอยู่แล้ว")
+		return
+	}
+
+	slides := []models.HeroSlide{
 		{
-			BankName:    "ธนาคารกรุงไทย (KTB)",
-			AccountNo:   "6629946995",
-			AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
-			PromptPayID: "1309801486371", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
-			IsActive:    true,
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1786270445/koyama2/file_d80gv5.png",
+			Caption:   "ยินดีต้อนรับสู่ Koyama Badminton School",
+			SortOrder: 1,
+			IsActive:  true,
 		},
 		{
-			BankName:    "ธนาคารกรุงไทย (KTB)",
-			AccountNo:   "3350495907",
-			AccountName: "นายธีรศักดิ์  กุลเกตุ",
-			PromptPayID: "0830512752", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
-			IsActive:    false,
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1787525979/koyama2/course/file_chffnq.jpg",
+			Caption:   "คอร์สเรียนครบทุกระดับ ตั้งแต่ผู้เริ่มต้นถึงนักกีฬา",
+			SortOrder: 2,
+			IsActive:  true,
+		},
+		{
+			ImageURL:  "https://res.cloudinary.com/wwwka2em/image/upload/v1788337878/koyama2/slip/file_qch5kx.jpg",
+			Caption:   "สมัครเรียนกับโค้ชผู้มีประสบการณ์ได้แล้ววันนี้",
+			SortOrder: 3,
+			IsActive:  true,
 		},
 	}
 
-	for _, acc := range accounts {
-		var existing models.BankAccount
-		if err := db.Where("account_no = ?", acc.AccountNo).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&acc).Error; err != nil {
-					log.Printf("ไม่สามารถสร้างบัญชีธนาคาร %s ได้: %v", acc.BankName, err)
-				} else {
-					fmt.Printf("Seed บัญชีธนาคาร %s สำเร็จเรียบร้อย!\n", acc.BankName)
-				}
-			} else {
-				log.Printf("เกิดข้อผิดพลาดในการตรวจสอบบัญชีธนาคาร %s: %v", acc.BankName, err)
-			}
-		} else {
-			fmt.Printf("ข้ามขั้นตอนการ Seed บัญชีธนาคาร %s เนื่องจากมีข้อมูลอยู่แล้ว\n", acc.BankName)
-		}
+	if err := db.Create(&slides).Error; err != nil {
+		log.Printf("การทำ Seed HeroSlide ล้มเหลว: %v", err)
+		return
 	}
+	fmt.Printf("Seed HeroSlide สำเร็จเรียบร้อย! (%d สไลด์)\n", len(slides))
+}
+
+func seedBankAccounts(db *gorm.DB) {
+    accounts := []models.BankAccount{
+        {
+            BankName:    "ธนาคารกรุงไทย (KTB)",
+            AccountNo:   "6629946995",
+            AccountName: "นายสิษฐ์สโรจ  กันทรสุรพล",
+            PromptPayID: "1309801486371", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
+            IsActive:    true,
+        },
+        {
+            BankName:    "ธนาคารกรุงไทย (KTB)",
+            AccountNo:   "3350495907",
+            AccountName: "นายธีรศักดิ์  กุลเกตุ",
+            PromptPayID: "0830512752", // เลขพร้อมเพย์สำหรับ QR (ข้อมูลตัวอย่าง)
+            IsActive:    false,
+        },
+    }
+
+    for _, acc := range accounts {
+        var existing models.BankAccount
+        if err := db.Where("account_no = ?", acc.AccountNo).First(&existing).Error; err != nil {
+            if err == gorm.ErrRecordNotFound {
+                if err := db.Create(&acc).Error; err != nil {
+                    log.Printf("ไม่สามารถสร้างบัญชีธนาคาร %s ได้: %v", acc.BankName, err)
+                } else {
+                    fmt.Printf("Seed บัญชีธนาคาร %s สำเร็จเรียบร้อย!\n", acc.BankName)
+                }
+            } else {
+                log.Printf("เกิดข้อผิดพลาดในการตรวจสอบบัญชีธนาคาร %s: %v", acc.BankName, err)
+            }
+        } else {
+            fmt.Printf("ข้ามขั้นตอนการ Seed บัญชีธนาคาร %s เนื่องจากมีข้อมูลอยู่แล้ว\n", acc.BankName)
+        }
+    }
 }

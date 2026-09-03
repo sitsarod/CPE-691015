@@ -23,6 +23,7 @@ type WorkScheduleService interface {
 	AssignWorkSchedule(req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error)
 	GetAll() ([]models.WorkSchedule, error)
 	GetByCoachID(coachID uint, userID uint, role string) ([]models.WorkSchedule, error)
+	TaughtSessionDates(coachID uint, userID uint, role string) ([]string, error)
 	GetByID(id uint) (*models.WorkSchedule, error)
 	Update(id uint, req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error)
 	Delete(id uint) error
@@ -214,6 +215,56 @@ func (s *workScheduleService) GetByCoachID(coachID uint, userID uint, role strin
 	var schedules []models.WorkSchedule
 	err := s.db.Where("coach_id = ?", coachID).Preload("Course").Find(&schedules).Error
 	return schedules, err
+}
+
+// TaughtSessionDates คืน "วันที่ของคาบที่สอนจริง" ของโค้ช (รูปแบบ YYYY-MM-DD)
+// ใช้คำนวณค่าจ้าง (นับจำนวน) และให้ frontend จัดกลุ่มรายเดือนได้ด้วยเกณฑ์เดียวกันทั้งระบบ
+//
+// นิยาม "สอนจริง" = คาบสอน (WorkSchedule) ที่มีรอบเช็คชื่อ (AttendanceSession) ของ
+// package เดียวกันในวันเดียวกัน และรอบนั้น "ปิดแล้ว" (status = closed)
+// การปิดรอบเช็คชื่อคือหลักฐานว่าคาบนั้นเกิดขึ้นจริง (ไม่ใช่แค่มีตารางในอดีต)
+//
+// ผลที่ได้:
+//   - คาบที่ถูกยกเลิก (ลบตารางทิ้ง = soft delete) ไม่ถูกนับอยู่แล้ว
+//   - คาบในอดีตที่ไม่เคยเปิด/ปิดรอบเช็คชื่อ (โค้ชไม่มา/ไม่ได้สอน) ก็ไม่ถูกนับ
+//
+// Fallback สำหรับคาบแบบเก่า (package_id = NULL) ที่จับคู่ attendance ไม่ได้:
+// ใช้เกณฑ์เดิม = คาบที่วันสอนผ่านไปแล้ว (date < วันนี้) และยังไม่ถูกลบ
+// เพื่อให้คาบเก่าที่สอนไปจริงยังได้ค่าจ้าง (สองเงื่อนไขไม่ทับกัน: NOT NULL vs NULL)
+func (s *workScheduleService) TaughtSessionDates(coachID uint, userID uint, role string) ([]string, error) {
+	if err := VerifyCoachOwnership(s.db, coachID, userID, role); err != nil {
+		return nil, err
+	}
+	return s.taughtSessionDates(coachID)
+}
+
+// taughtSessionDates เป็น query จริง (ไม่เช็คสิทธิ์) — ให้ public method ข้างบนเรียกหลังตรวจสิทธิ์แล้ว
+// คืนวันที่แบบ YYYY-MM-DD ผ่าน to_char เพื่อกัน format วันที่เพี้ยนจากชนิด time.Time ของ driver
+func (s *workScheduleService) taughtSessionDates(coachID uint) ([]string, error) {
+	// คาบใหม่ (มี package_id): เอาเฉพาะที่มีรอบเช็คชื่อปิดแล้วจริง
+	var attended []string
+	if err := s.db.Model(&models.WorkSchedule{}).
+		Joins("JOIN attendance_sessions a ON a.package_id = work_schedules.package_id AND a.session_date = work_schedules.date AND a.deleted_at IS NULL").
+		Where("work_schedules.coach_id = ? AND work_schedules.package_id IS NOT NULL AND a.status = ?", coachID, models.AttendanceSessionClosed).
+		Pluck("to_char(work_schedules.date, 'YYYY-MM-DD')", &attended).Error; err != nil {
+		return nil, err
+	}
+
+	// คาบเก่า (package_id = NULL): ใช้วันที่ท้องถิ่นไทยเป็นเส้นแบ่ง "อดีต"
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		loc = time.Local
+	}
+	todayStr := time.Now().In(loc).Format("2006-01-02")
+
+	var legacy []string
+	if err := s.db.Model(&models.WorkSchedule{}).
+		Where("coach_id = ? AND package_id IS NULL AND date < ?", coachID, todayStr).
+		Pluck("to_char(date, 'YYYY-MM-DD')", &legacy).Error; err != nil {
+		return nil, err
+	}
+
+	return append(attended, legacy...), nil
 }
 
 // GetByID ดึงตารางงาน 1 รายการ

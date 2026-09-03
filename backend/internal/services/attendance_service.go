@@ -32,7 +32,6 @@ var (
 	ErrAttendanceExpired = errors.New("เลยเวลาเช็คชื่อของคาบนี้แล้ว")
 )
 
-
 const attendanceGraceMinutes = 30
 
 func classWindow(startTime, endTime string) (from, to int, ok bool) {
@@ -82,14 +81,20 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			Where("package_id = ? AND status = ?", pkg.ID, models.EnrollmentStatusActive).
 			Count(&studentCount)
 
+		confirmedCount := 0
+		if confirmed, err := s.confirmedEnrollments(s.db, pkg.ID, sessionDateValue(now)); err == nil {
+			confirmedCount = len(confirmed)
+		}
+
 		item := dto.OpenablePackageDTO{
-			PackageID:     pkg.ID,
-			CourseID:      pkg.CourseID,
-			SessionsCount: pkg.SessionsCount,
-			StudentCount:  studentCount,
-			DayOfWeek:     string(sch.DayOfWeek),
-			StartTime:     sch.StartTime,
-			EndTime:       sch.EndTime,
+			PackageID:      pkg.ID,
+			CourseID:       pkg.CourseID,
+			SessionsCount:  pkg.SessionsCount,
+			StudentCount:   studentCount,
+			ConfirmedCount: confirmedCount,
+			DayOfWeek:      string(sch.DayOfWeek),
+			StartTime:      sch.StartTime,
+			EndTime:        sch.EndTime,
 		}
 		if pkg.Course != nil {
 			item.CourseName = pkg.Course.CourseName
@@ -158,7 +163,7 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		return nil, ErrSessionNotFound
 	}
 
-	roster, err := s.getRoster(s.db, &session)
+	roster, walkInCandidates, err := s.getRoster(s.db, &session)
 	if err != nil {
 		return nil, err
 	}
@@ -174,19 +179,24 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		ScheduleEndTime:   session.ScheduleEndTime,
 		CanScan:           canScanNow(&session, nowLocal()),
 		Roster:            roster,
+		WalkInCandidates:  walkInCandidates,
 	}
 	if session.Package != nil && session.Package.Course != nil {
 		result.CourseName = session.Package.Course.CourseName
 	}
 
 	for _, r := range roster {
+		if r.IsConfirmed {
+			result.ConfirmedCount++
+		}
 		switch r.Status {
 		case string(models.AttendanceStatusPresent):
 			result.PresentCount++
+			if r.IsOffSchedule {
+				result.OffScheduleCount++
+			}
 		case string(models.AttendanceStatusAbsent):
 			result.AbsentCount++
-		case string(models.AttendanceStatusLeave):
-			result.LeaveCount++
 		default:
 			result.PendingCount++
 		}
@@ -195,31 +205,74 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 	return result, nil
 }
 
-// getRoster คืนรายชื่อผู้เรียนในแพ็กเกจของรอบนั้น พร้อมสถานะการเช็คชื่อ
-func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSession) ([]dto.RosterItemDTO, error) {
+// getRoster คืนรายชื่อของรอบนั้น พร้อมสถานะการเช็คชื่อ และคนที่ยังไม่ได้ยืนยัน
+func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSession) (roster, walkInCandidates []dto.RosterItemDTO, err error) {
 	expireStaleEnrollments(tx)
 
 	enrollments, err := s.activeEnrollments(tx, session.PackageID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	confirmed, err := s.confirmedEnrollments(tx, session.PackageID, session.SessionDate)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// ดึงบันทึกทีเดียวแล้วทำ map กันยิง query ทีละคน
 	var records []models.StudentAttendance
 	if err := tx.Where("attendance_session_id = ?", session.ID).Find(&records).Error; err != nil {
-		return nil, errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อได้")
+		return nil, nil, errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อได้")
 	}
 	byEnrollment := make(map[uint]*models.StudentAttendance, len(records))
 	for i := range records {
 		byEnrollment[records[i].EnrollmentID] = &records[i]
 	}
 
-	items := make([]dto.RosterItemDTO, 0, len(enrollments))
+	roster = make([]dto.RosterItemDTO, 0, len(confirmed)+len(records))
+	walkInCandidates = make([]dto.RosterItemDTO, 0)
+
 	for i := range enrollments {
 		e := &enrollments[i]
-		items = append(items, dto.ToRosterItem(e, byEnrollment[e.ID]))
+
+		record := byEnrollment[e.ID]
+		if !confirmed[e.ID] && record == nil {
+			walkInCandidates = append(walkInCandidates, dto.ToRosterItem(e, nil, false))
+			continue
+		}
+
+		roster = append(roster, dto.ToRosterItem(e, record, confirmed[e.ID]))
 	}
-	return items, nil
+	return roster, walkInCandidates, nil
+}
+
+func (s *AttendanceService) confirmedEnrollments(tx *gorm.DB, packageID uint, classDate time.Time) (map[uint]bool, error) {
+	var rows []models.ClassConfirmation
+	if err := tx.Model(&models.ClassConfirmation{}).
+		Select("class_confirmations.*").
+		Joins("JOIN enrollments ON enrollments.id = class_confirmations.enrollment_id AND enrollments.deleted_at IS NULL").
+		Where("enrollments.package_id = ? AND enrollments.status = ? AND class_confirmations.class_date = ? AND class_confirmations.status = ?",
+			packageID, models.EnrollmentStatusActive, dateKey(classDate), models.ClassConfirmationGoing).
+		Find(&rows).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อที่ยืนยันมาเรียนได้")
+	}
+
+	out := make(map[uint]bool, len(rows))
+	for _, r := range rows {
+		out[r.EnrollmentID] = true
+	}
+	return out, nil
+}
+
+func isConfirmedForSession(tx *gorm.DB, enrollmentID uint, classDate time.Time) bool {
+	var count int64
+	if err := tx.Model(&models.ClassConfirmation{}).
+		Where("enrollment_id = ? AND class_date = ? AND status = ?",
+			enrollmentID, dateKey(classDate), models.ClassConfirmationGoing).
+		Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
 }
 
 func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageID uint) ([]models.Enrollment, error) {
@@ -234,12 +287,15 @@ func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageID uint) ([]mo
 	return enrollments, nil
 }
 
+// dateKey แปลงวันของรอบเป็นสตริง YYYY-MM-DD ไว้เทียบกับคอลัมน์ชนิด date โดยไม่ติดโซนเวลา
+func dateKey(t time.Time) string {
+	return t.UTC().Format("2006-01-02")
+}
 
 func sessionDateValue(t time.Time) time.Time {
 	y, m, d := t.In(appLocation()).Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
-
 
 func dayBounds(t time.Time) (string, string) {
 	start := sessionDateValue(t)
@@ -269,14 +325,12 @@ func findCurrentSchedule(schedules []models.PackageSchedule, now time.Time) *mod
 	return nil
 }
 
-
 func minutesToClock(m int) string {
 	if m < 0 {
 		m += 24 * 60
 	}
 	return fmt.Sprintf("%02d:%02d", (m/60)%24, m%60)
 }
-
 
 func checkSessionWindow(session *models.AttendanceSession, now time.Time) error {
 	loc := appLocation()
@@ -304,7 +358,6 @@ func checkSessionWindow(session *models.AttendanceSession, now time.Time) error 
 
 	return nil
 }
-
 
 // canScanNow บอกว่ารอบนี้ยังรับการเช็คชื่อได้จริงไหม ณ เวลานี้
 //
@@ -348,6 +401,7 @@ type scanContext struct {
 	FullName   string
 	Nickname   string
 	CourseName string
+	Confirmed  bool
 }
 
 func (s *AttendanceService) loadOpenSession(tx *gorm.DB, sessionID uint) (*models.AttendanceSession, error) {
@@ -414,7 +468,11 @@ func (s *AttendanceService) buildContext(
 	enrollment *models.Enrollment,
 	customer *models.Customer,
 ) *scanContext {
-	ctx := &scanContext{Session: *session, Enrollment: *enrollment}
+	ctx := &scanContext{
+		Session:    *session,
+		Enrollment: *enrollment,
+		Confirmed:  isConfirmedForSession(tx, enrollment.ID, session.SessionDate),
+	}
 
 	if customer != nil {
 		ctx.Nickname = customer.Nickname

@@ -52,6 +52,7 @@ func main() {
 		&models.PackageSchedule{},
 		&models.Enrollment{},
 		&models.EnrollmentExtension{},
+		&models.SessionCarryOver{},
 		&models.AttendanceSession{},
 		&models.StudentAttendance{},
 		&models.CoachAttendance{},
@@ -93,6 +94,7 @@ func main() {
 	seedCoursesAndPackages(db)
 	seedBankAccounts(db)
 	seedHomeContent(db)
+	seedHeroSlides(db)
 	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
 }
 

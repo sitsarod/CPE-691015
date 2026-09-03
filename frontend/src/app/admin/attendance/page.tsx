@@ -14,6 +14,7 @@ import {
   Camera,
   CameraOff,
   AlertTriangle,
+  Maximize,
 } from "lucide-react";
 
 import {
@@ -37,10 +38,30 @@ import type {
 import QRScanner from "./components/QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./components/ScanResult";
 import RosterList from "./components/RosterList";
+import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 
 
 const SCAN_COOLDOWN_SECONDS = 3;
+
+// จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
+const KIOSK_STORAGE_KEY = "attendance_kiosk";
+
+type KioskState = { sessionId: number; pin: string };
+
+function readKiosk(): KioskState | null {
+  try {
+    const raw = localStorage.getItem(KIOSK_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.sessionId === "number" && typeof parsed?.pin === "string") {
+      return parsed as KioskState;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 // session_date มาเป็น date ล้วน (UTC midnight ของวันตามเวลาสนาม)
 function formatSessionDate(iso: string) {
@@ -64,9 +85,16 @@ export default function AdminAttendancePage() {
   // การให้กดเปิดกล้องเองทุกครั้งที่เข้ารอบเป็นขั้นที่ไม่ได้ให้ทางเลือกอะไรจริง ๆ
   // ใครไม่ต้องการก็กดปิดได้ แต่ค่าเริ่มต้นควรเป็นสิ่งที่จะใช้ 99% ของเวลา
   const [useCamera, setUseCamera] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
+
   const [editing, setEditing] = useState<RosterItem | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+
+  const [kioskPin, setKioskPin] = useState<string | null>(null);
+  const [isSettingUpKiosk, setIsSettingUpKiosk] = useState(false);
+
+  // เริ่มที่ true เสมอ เพื่อบังหน้าแอดมินไม่ให้แวบขึ้นมาตอนเครื่องที่สนามรีโหลด
+  const [isRestoringKiosk, setIsRestoringKiosk] = useState(true);
 
   // ─── ช่วงพักกล้องหลังจบคนหนึ่งคน ───────────────────────────────────────────
   //
@@ -86,6 +114,49 @@ export default function AdminAttendancePage() {
 
   const startCooldown = useCallback(() => setCooldown(SCAN_COOLDOWN_SECONDS), []);
 
+
+  // เครื่องที่สนามถูกรีโหลดระหว่างคาบได้ ต้องกลับเข้าโหมดเอง
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const saved = readKiosk();
+      if (saved) {
+        try {
+          const restored = await fetchSession(saved.sessionId);
+          if (cancelled) return;
+          setSession(restored);
+          setKioskPin(saved.pin);
+        } catch {
+          // โหลดรอบไม่สำเร็จก็ต้องคงล็อกไว้ ไม่ใช่ปลดออก
+          if (!cancelled) setKioskPin(saved.pin);
+        }
+      }
+      if (!cancelled) setIsRestoringKiosk(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const enterKiosk = useCallback(
+    (pin: string) => {
+      if (!session) return;
+      localStorage.setItem(
+        KIOSK_STORAGE_KEY,
+        JSON.stringify({ sessionId: session.id, pin } satisfies KioskState)
+      );
+      setKioskPin(pin);
+      setIsSettingUpKiosk(false);
+    },
+    [session]
+  );
+
+  const exitKiosk = useCallback(() => {
+    localStorage.removeItem(KIOSK_STORAGE_KEY);
+    setKioskPin(null);
+  }, []);
 
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -181,7 +252,9 @@ export default function AdminAttendancePage() {
         setOutcome({
           ok: true,
           title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
-          detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
+          detail: result.is_off_schedule
+            ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
+            : `เหลือ ${result.remaining_sessions} ครั้ง`,
         });
       } catch (err: unknown) {
         setOutcome({
@@ -210,7 +283,9 @@ export default function AdminAttendancePage() {
       setOutcome({
         ok: true,
         title: `เช็คชื่อให้ ${result.full_name.trim() || result.nickname} แล้ว`,
-        detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
+        detail: result.is_off_schedule
+          ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
+          : `เหลือ ${result.remaining_sessions} ครั้ง`,
       });
       await refreshSession();
     } catch (err: unknown) {
@@ -258,7 +333,7 @@ export default function AdminAttendancePage() {
     const pending = session.pending_count;
     const confirmed = window.confirm(
       pending > 0
-        ? `ปิดรอบแล้วนักเรียนที่ยังไม่ได้เช็คชื่อ ${pending} คนจะถูกบันทึกเป็นขาดเรียนและถูกหักโควตาทันที\n\nถ้ามีคนแจ้งลาไว้ ให้แก้สถานะเป็น "ลา" ทีหลังเพื่อคืนโควตาให้\n\nยืนยันปิดรอบ?`
+        ? `ปิดรอบแล้วคนที่ยืนยันว่าจะมาแล้วไม่มา ${pending} คนจะถูกบันทึกเป็นขาดเรียน\n\nไม่หักโควตา (ยังไม่ได้เรียน) แต่ยังถูกคิดค่าสนามด้วย เพราะสนามถูกจองเผื่อไว้แล้ว\n\nยืนยันปิดรอบ?`
         : "ยืนยันปิดรอบเช็คชื่อ?"
     );
     if (!confirmed) return;
@@ -285,6 +360,38 @@ export default function AdminAttendancePage() {
       .filter((id): id is number => id !== null)
   );
   const staleSessions = openSessions.filter((row) => !reachableSessionIds.has(row.id));
+
+  if (isRestoringKiosk) {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
+      </div>
+    );
+  }
+
+  // ⚠️ คืนเฉพาะจอสนาม ไม่ซ้อนทับหน้าแอดมิน — QRScanner ใช้ element id ตายตัว
+  // มีสองตัวพร้อมกันกล้องพัง · และต้องอยู่ก่อนด่าน !session เพื่อให้ล็อกค้างไว้เสมอ
+  if (kioskPin !== null) {
+    return (
+      <KioskMode
+        pin={kioskPin}
+        canScan={!!session && session.status === "open" && session.can_scan}
+        notice={
+          session
+            ? "หมดเวลาเช็คชื่อของคาบนี้แล้ว"
+            : "โหลดข้อมูลรอบไม่สำเร็จ — ลองรีเฟรชหน้านี้"
+        }
+        onScan={runScan}
+        paused={isCheckingIn || cooldown > 0}
+        pausedReason={
+          cooldown > 0 ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที` : "กำลังบันทึก..."
+        }
+        outcome={outcome}
+        onDismissOutcome={() => setOutcome(null)}
+        onExit={exitKiosk}
+      />
+    );
+  }
 
   if (!session) {
     return (
@@ -329,7 +436,7 @@ export default function AdminAttendancePage() {
               <div>
                 <p className="font-semibold text-amber-900">รอบที่เปิดค้างไว้ ยังไม่ได้ปิด</p>
                 <p className="mt-0.5 text-sm text-amber-800">
-                  คนที่ไม่ได้เช็คชื่อจะยังไม่ถูกมาร์คขาดเรียนจนกว่าจะปิดรอบ —
+                  คนที่ยืนยันว่าจะมาแล้วไม่มา จะยังไม่ถูกมาร์คขาดเรียนจนกว่าจะปิดรอบ —
                   ระบบจะปิดให้อัตโนมัติหลังเลยเวลาคาบ แต่เข้าไปตรวจและปิดเองก่อนได้
                 </p>
               </div>
@@ -356,7 +463,7 @@ export default function AdminAttendancePage() {
                           row.pending_count > 0 ? "font-medium text-amber-700" : undefined
                         }
                       >
-                        ยังไม่เช็ค {row.pending_count} / {row.total_count} คน
+                        ยังไม่เช็ค {row.pending_count} / {row.total_count} คนที่ยืนยันไว้
                       </span>
                     </div>
                   </div>
@@ -411,7 +518,7 @@ export default function AdminAttendancePage() {
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        {pkg.student_count} คน
+                        ยืนยันแล้ว {pkg.confirmed_count} / {pkg.student_count} คน
                       </span>
                       <span>{pkg.sessions_count} ครั้ง/แพ็กเกจ</span>
                     </div>
@@ -464,8 +571,6 @@ export default function AdminAttendancePage() {
   // แต่ backend ปฏิเสธการสแกนทุกครั้ง (ErrAttendanceExpired) โชว์กล้องต่อ = หลอกให้กดเปล่า
   const canScan = isOpen && session.can_scan;
 
-  // ฝั่ง backend นับทุกตัวจาก roster (present + absent + leave + pending)
-  // จำนวนแถวในรายชื่อจึงเท่ากับ "ทั้งหมด" เสมอ
   const totalCount = session.roster.length;
   const checkedCount = totalCount - session.pending_count;
 
@@ -510,7 +615,7 @@ export default function AdminAttendancePage() {
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/ลา ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/มาไม่ตรงวัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
           <div className="flex items-baseline gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-500">เช็คแล้ว</span>
             <span className="text-2xl font-bold leading-none text-gray-900">
@@ -527,6 +632,15 @@ export default function AdminAttendancePage() {
             >
               <RefreshCw className="h-4 w-4" />
             </button>
+            {isOpen && (
+              <button
+                onClick={() => setIsSettingUpKiosk(true)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-300 px-4 font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                <Maximize className="h-4 w-4" />
+                โหมดสนาม
+              </button>
+            )}
             {isOpen && (
               <button
                 onClick={handleClose}
@@ -552,8 +666,8 @@ export default function AdminAttendancePage() {
             <p className="font-semibold text-amber-900">เลยเวลาคาบแล้ว — สแกนเพิ่มไม่ได้</p>
             <p className="mt-0.5 text-sm text-amber-800">
               {session.pending_count > 0
-                ? `กด "ปิดรอบ" เพื่อบันทึกคนที่ยังไม่เช็คชื่อ ${session.pending_count} คนเป็นขาดเรียน (หักโควตาคนละ 1 ครั้ง) — ถ้ามีคนแจ้งลาไว้ ให้แก้สถานะเป็น "ลา" ทีหลังเพื่อคืนโควตา`
-                : 'เช็คชื่อครบทุกคนแล้ว กด "ปิดรอบ" เพื่อปิดงานของคาบนี้ได้เลย'}
+                ? `กด "ปิดรอบ" เพื่อบันทึกคนที่ยืนยันว่าจะมาแล้วไม่มา ${session.pending_count} คนเป็นขาดเรียน — ไม่หักโควตา แต่ยังถูกคิดค่าสนาม`
+                : 'คนที่ยืนยันไว้มาครบแล้ว กด "ปิดรอบ" เพื่อปิดงานของคาบนี้ได้เลย'}
             </p>
           </div>
         </div>
@@ -638,6 +752,13 @@ export default function AdminAttendancePage() {
           isSubmitting={isSavingStatus}
           onSubmit={handleSaveStatus}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {isSettingUpKiosk && (
+        <KioskSetupDialog
+          onConfirm={enterKiosk}
+          onCancel={() => setIsSettingUpKiosk(false)}
         />
       )}
     </div>

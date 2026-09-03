@@ -5,7 +5,7 @@ import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import { createExpense, deleteExpense } from "@/services/paymentAPI";
-import { fetchCoachById, fetchCoachSchedules } from "@/services/coachAPI";
+import { fetchCoachById, fetchCoachTaughtSessions } from "@/services/coachAPI";
 import { CreateExpenseReq } from "@/types/payment";
 
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
@@ -99,9 +99,9 @@ export default function ExpensesTab({
     setWageInfo({ loading: true, paymentType: 'per_session', payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0 });
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const [coach, schedules] = await Promise.all([
+      const [coach, taughtSessions] = await Promise.all([
         fetchCoachById(coachId, token || ""),
-        fetchCoachSchedules(coachId, token || ""),
+        fetchCoachTaughtSessions(coachId, token || ""),
       ]);
 
       const paymentType = coach.payment_type || 'per_session';
@@ -129,9 +129,9 @@ export default function ExpensesTab({
         return;
       }
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      // นับเฉพาะคาบที่วันสอนผ่านไปแล้ว (ยังไม่นับคาบที่ยังไม่ถึงวันสอน)
-      const sessionsDone = schedules.filter(s => s.date && s.date.split('T')[0] < todayStr).length;
+      // นับ "คาบที่สอนจริง" จาก backend = คาบที่มีรอบเช็คชื่อปิดรอบแล้ว (attendance-based)
+      // แทนการนับ "คาบในอดีตที่ยังไม่ถูกลบ" ซึ่งไม่การันตีว่าคาบเกิดขึ้นจริง
+      const sessionsDone = taughtSessions;
       const expected = sessionsDone * payRate;
       // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว (จากรายการค่าใช้จ่ายประเภทค่าจ้างโค้ชที่มีอยู่)
       const alreadyPaid = expenses
@@ -350,17 +350,24 @@ export default function ExpensesTab({
               ) : (
                 <div className="text-[11px] text-slate-600 space-y-0.5">
                   <div className="flex justify-between">
-                    <span>คาบที่สอนแล้ว × ค่าจ้างต่อคาบ</span>
+                    <span>คาบที่สอนจริง × ค่าจ้างต่อคาบ</span>
                     <span className="font-semibold text-slate-800">{wageInfo.sessionsDone} × ฿{wageInfo.payRate.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>ค่าจ้างที่ควรได้ทั้งหมด</span>
                     <span className="font-semibold text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>จ่ายไปแล้วทั้งหมด</span>
+                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
+                  </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
                     <span className="font-bold text-slate-700">คงค้างจ่าย</span>
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
+                  <p className="text-[10px] text-slate-400 pt-0.5">
+                    นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)
+                  </p>
                   {wageInfo.payRate === 0 && (
                     <p className="text-[10px] text-amber-600 pt-1">
                       ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบของโค้ชคนนี้ ยอดจึงเป็น 0

@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrAttendanceNotFound = errors.New("ไม่พบบันทึกการเช็คชื่อนี้")
-	ErrInvalidStatus      = errors.New("สถานะไม่ถูกต้อง (รองรับเฉพาะ present, absent, leave)")
+	ErrInvalidStatus      = errors.New("สถานะไม่ถูกต้อง (รองรับเฉพาะ present, absent)")
 )
 
 func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto.AttendanceSessionDTO, error) {
@@ -97,19 +97,27 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 			item.CourseName = session.Package.Course.CourseName
 		}
 
-		var total, checked int64
-		s.db.Model(&models.Enrollment{}).
-			Where("package_id = ? AND status = ?", session.PackageID, models.EnrollmentStatusActive).
-			Count(&total)
-		s.db.Model(&models.StudentAttendance{}).
+		confirmed, err := s.confirmedEnrollments(s.db, session.PackageID, session.SessionDate)
+		if err != nil {
+			return nil, err
+		}
+
+		var records []models.StudentAttendance
+		if err := s.db.Select("enrollment_id").
 			Where("attendance_session_id = ?", session.ID).
-			Count(&checked)
+			Find(&records).Error; err != nil {
+			return nil, errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อได้")
+		}
+		checked := make(map[uint]bool, len(records))
+		for _, r := range records {
+			checked[r.EnrollmentID] = true
+		}
 
-		item.TotalCount = int(total)
-
-		// ติดลบได้ถ้าคนที่เช็คชื่อไปแล้วสิทธิ์หมดอายุทีหลัง (หลุดจาก total แต่ยังอยู่ใน checked)
-		if pending := int(total - checked); pending > 0 {
-			item.PendingCount = pending
+		item.TotalCount = len(confirmed)
+		for enrollmentID := range confirmed {
+			if !checked[enrollmentID] {
+				item.PendingCount++
+			}
 		}
 
 		items = append(items, item)
@@ -166,7 +174,7 @@ func isStaleSession(session *models.AttendanceSession, now time.Time) bool {
 	return !sameDay(now, session.SessionDate)
 }
 
-// markAbsentees สร้างแถว absent ให้ทุกคนใน roster ที่ไม่มีบันทึกในรอบนี้
+// markAbsentees สร้างแถว absent ให้คนที่ยืนยันว่าจะมาเรียนแล้วไม่มาเช็คชื่อ
 func (s *AttendanceService) markAbsentees(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
@@ -177,6 +185,11 @@ func (s *AttendanceService) markAbsentees(
 	expireStaleEnrollments(tx)
 
 	enrollments, err := s.activeEnrollments(tx, session.PackageID)
+	if err != nil {
+		return err
+	}
+
+	confirmed, err := s.confirmedEnrollments(tx, session.PackageID, session.SessionDate)
 	if err != nil {
 		return err
 	}
@@ -193,7 +206,7 @@ func (s *AttendanceService) markAbsentees(
 	sessionID := session.ID
 	for i := range enrollments {
 		e := &enrollments[i]
-		if checked[e.ID] {
+		if checked[e.ID] || !confirmed[e.ID] {
 			continue
 		}
 
@@ -218,25 +231,19 @@ func (s *AttendanceService) markAbsentees(
 			}
 			return errors.New("ไม่สามารถบันทึกการขาดเรียนได้")
 		}
-
-		if e.RemainingSessions > 0 {
-			if err := deductSession(tx, e.ID); err != nil && !errors.Is(err, ErrNoSessionsLeft) {
-				return err
-			}
-		}
 	}
 
 	return nil
 }
 
 func quotaDelta(from, to models.AttendanceStatus) int {
-	fromLeave := from == models.AttendanceStatusLeave
-	toLeave := to == models.AttendanceStatusLeave
+	fromPresent := from == models.AttendanceStatusPresent
+	toPresent := to == models.AttendanceStatusPresent
 
 	switch {
-	case !fromLeave && toLeave:
+	case fromPresent && !toPresent:
 		return +1
-	case fromLeave && !toLeave:
+	case !fromPresent && toPresent:
 		return -1
 	default:
 		return 0
@@ -250,7 +257,7 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 ) (*dto.UpdateAttendanceResultDTO, error) {
 	newStatus := models.AttendanceStatus(req.Status)
 	switch newStatus {
-	case models.AttendanceStatusPresent, models.AttendanceStatusAbsent, models.AttendanceStatusLeave:
+	case models.AttendanceStatusPresent, models.AttendanceStatusAbsent:
 	default:
 		return nil, ErrInvalidStatus
 	}
@@ -357,6 +364,7 @@ func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.Attend
 			Status:           string(r.Status),
 			CheckInMethod:    string(r.CheckInMethod),
 			CheckInTime:      r.CheckInTime,
+			IsOffSchedule:    r.IsOffSchedule,
 			Remarks:          r.Remarks,
 			RecordedByUserID: r.RecordedByUserID,
 		}
