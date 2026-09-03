@@ -14,7 +14,7 @@ func TestWithdrawCascadesDeleteDetectionLinksButKeepsRawMedia(t *testing.T) {
 	db := newTestDB(t,
 		&models.User{}, &models.Customer{}, &models.BiometricConsent{},
 		&models.Photo{}, &models.RawVideo{}, &models.DetectedVideo{},
-		&models.RawPhoto{}, &models.DetectedPhoto{},
+		&models.RawPhoto{}, &models.DetectedPhoto{}, &models.FaceImage{},
 	)
 
 	user := models.User{Role: models.CustomerRole, Email: "withdraw-test@example.com"}
@@ -40,7 +40,8 @@ func TestWithdrawCascadesDeleteDetectionLinksButKeepsRawMedia(t *testing.T) {
 	db.Create(&rawPhoto)
 	db.Create(&models.DetectedPhoto{CustomerID: customer.ID, RawPhotoID: rawPhoto.ID, PhotoURL: rawPhoto.PhotoURL})
 
-	svc := NewConsentService(db)
+	// cloudinary เป็น nil ในเทส — ลบแถวทำงานปกติ ส่วนการลบไฟล์จริงจะถูกข้าม
+	svc := NewConsentService(db, nil)
 	if _, err := svc.Withdraw(user.ID, ConsentMeta{}); err != nil {
 		t.Fatalf("ถอนความยินยอมควรผ่าน แต่ได้: %v", err)
 	}

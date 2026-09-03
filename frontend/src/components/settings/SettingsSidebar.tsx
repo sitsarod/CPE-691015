@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Bell, ShieldCheck } from "lucide-react";
+import { User, Bell, ShieldCheck, ScanFace } from "lucide-react";
 
 /**
  * แถบเมนูของหน้าตั้งค่า ใช้ร่วมกันทั้งฝั่งนักเรียนและฝั่งโค้ช
@@ -32,6 +32,11 @@ export default function SettingsSidebar({ basePath }: Props) {
 
   const profileHref = `${basePath}/profile`;
   const privacyHref = `${basePath}/privacy`;
+  const faceHref = `${basePath}/face`;
+
+  // หน้าลงทะเบียนใบหน้ามีเฉพาะฝั่งนักเรียน — ตาราง face_images ผูกกับ customers เท่านั้น
+  // ถ้าโชว์ให้โค้ชจะกดแล้ว 404 (ต่างจากหน้าความยินยอมที่ทั้งสองบทบาทใช้ร่วมกันได้)
+  const showFaceLink = basePath.startsWith("/customer");
 
   return (
     <div className="w-80 border-r border-gray-200 p-6 hidden md:flex flex-col space-y-6 bg-white">
@@ -49,6 +54,13 @@ export default function SettingsSidebar({ basePath }: Props) {
           <ShieldCheck className={iconClass(privacyHref)} />
           <span>ความเป็นส่วนตัว</span>
         </Link>
+
+        {showFaceLink && (
+          <Link href={faceHref} className={linkClass(faceHref)}>
+            <ScanFace className={iconClass(faceHref)} />
+            <span>ลงทะเบียนใบหน้า</span>
+          </Link>
+        )}
 
         {/* ยังไม่มีหน้านี้ในระบบ — แสดงเป็น disabled ไว้ก่อน ไม่ผูก Link เพื่อไม่ให้กดแล้ว 404 */}
         <div className="flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-sm text-gray-300 cursor-not-allowed">

@@ -3,17 +3,25 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 )
 
 // allowedSubfolders คือรายชื่อโฟลเดอร์ย่อยที่อนุญาตให้แยกเก็บได้
 // เพื่อกันไม่ให้ผู้ใช้ส่งชื่อโฟลเดอร์มั่ว ๆ มาสร้างโฟลเดอร์เกะกะบน Cloudinary
+//
+// ⚠️ ห้ามเพิ่ม "faces" — รายการนี้ใช้กับเส้นทางอัปโหลดสาธารณะ (UploadFileToFolder)
+// รูปใบหน้าต้องผ่าน UploadPrivateImage เท่านั้น
 var allowedSubfolders = map[string]bool{
 	"profile": true,
 	"slip":    true,
@@ -109,4 +117,125 @@ func (s *CloudinaryService) UploadFileToFolder(ctx context.Context, file multipa
 		return "", errors.New("cloudinary: อัปโหลดไม่สำเร็จ (ไม่ได้รับ URL กลับมา ตรวจสอบ credential ใน .env)")
 	}
 	return res.SecureURL, nil
+}
+
+// ─── โหมด authenticated — สำหรับข้อมูลชีวภาพเท่านั้น ───
+//
+// เมธอดข้างบนอัปแบบ type=upload ซึ่งได้ URL สาธารณะ ใครมีลิงก์ก็เปิดได้
+// ยอมรับได้กับรูปโปรไฟล์ แต่กับรูปใบหน้าคือรั่วข้อมูลอ่อนไหวตาม PDPA ม.26
+//
+// ชุดข้างล่างจึงบังคับ type=authenticated ไว้ในตัวฟังก์ชัน ไม่รับเป็นพารามิเตอร์
+// และคืน public_id ไม่ใช่ URL (URL ของ authenticated asset ต้อง sign ใหม่ทุกครั้ง)
+
+const faceRootFolder = "faces"
+
+func (s *CloudinaryService) FaceEnrollmentFolder(customerID uint) string {
+	return fmt.Sprintf("%s/%s/enrollment/%d", s.folder, faceRootFolder, customerID)
+}
+
+// UploadPrivateImage อัปโหลดรูปแบบ authenticated แล้วคืน public_id
+//
+// ⚠️ folder ต้องมาจาก FaceEnrollmentFolder เท่านั้น ห้ามรับค่าจากผู้ใช้
+// ผู้เรียกต้องตรวจขนาด/ชนิดไฟล์มาก่อน
+func (s *CloudinaryService) UploadPrivateImage(ctx context.Context, file io.Reader, folder string) (string, error) {
+	useFilename := false   // ชื่อไฟล์ของผู้ใช้อาจมีข้อมูลส่วนตัว
+	uniqueFilename := true // ให้สุ่มชื่อ เดา public_id ของคนอื่นไม่ได้
+	overwrite := false
+
+	res, err := s.cld.Upload.Upload(ctx, file, uploader.UploadParams{
+		Folder: folder,
+		// ค่านี้หลุดเป็น upload เมื่อไหร่ ภาพใบหน้ากลายเป็นสาธารณะทันที
+		Type:           api.Authenticated,
+		ResourceType:   "image",
+		UseFilename:    &useFilename,
+		UniqueFilename: &uniqueFilename,
+		Overwrite:      &overwrite,
+	})
+	if err != nil {
+		return "", err
+	}
+	if res.Error.Message != "" {
+		return "", errors.New("cloudinary: " + res.Error.Message)
+	}
+	if res.PublicID == "" {
+		return "", errors.New("cloudinary: อัปโหลดไม่สำเร็จ (ไม่ได้รับ public_id กลับมา)")
+	}
+
+	// ตรวจผลที่ได้จริง ไม่ใช่เชื่อว่าที่ส่งไปมีผล — ถ้าโหมดหลุด ภาพใบหน้าเปิดสาธารณะได้แล้ว
+	// ต้องลบทิ้งทันที ดีกว่าปล่อยให้แถวในฐานชี้ไปหาภาพที่ใครก็เปิดได้
+	if res.Type != api.Authenticated {
+		_ = s.DestroyPrivateImage(ctx, res.PublicID)
+		return "", fmt.Errorf("cloudinary: อัปโหลดได้โหมด %q แทนที่จะเป็น authenticated — ยกเลิกแล้ว", res.Type)
+	}
+
+	return res.PublicID, nil
+}
+
+// DestroyPrivateImage ลบไฟล์ออกจาก Cloudinary จริง ๆ
+//
+// ⚠️ ต้องระบุ Type ให้ตรงกับตอนอัปโหลด ไม่งั้นหาไฟล์ไม่เจอแล้วคืน "not found"
+// แบบเงียบ ๆ ทั้งที่ไฟล์ยังอยู่
+func (s *CloudinaryService) DestroyPrivateImage(ctx context.Context, publicID string) error {
+	if strings.TrimSpace(publicID) == "" {
+		return nil
+	}
+
+	invalidate := true // ล้าง cache ที่ CDN ด้วย ไม่งั้นสำเนาเดิมยังเปิดได้อีกพักใหญ่
+	res, err := s.cld.Upload.Destroy(ctx, uploader.DestroyParams{
+		PublicID:     publicID,
+		Type:         api.Authenticated,
+		ResourceType: "image",
+		Invalidate:   &invalidate,
+	})
+	if err != nil {
+		return err
+	}
+	if res.Error.Message != "" {
+		return errors.New("cloudinary: " + res.Error.Message)
+	}
+	// "not found" = ไฟล์ไม่อยู่แล้ว ซึ่งคือผลลัพธ์ที่ต้องการอยู่ดี
+	if res.Result != "ok" && res.Result != "not found" {
+		return fmt.Errorf("cloudinary: ลบไฟล์ไม่สำเร็จ (result=%s)", res.Result)
+	}
+	return nil
+}
+
+// DownloadPrivateImage ดึงไฟล์มาให้ backend stream ต่อเอง — ผู้เรียกต้องปิด ReadCloser เสมอ
+//
+// ⚠️ ตั้งใจไม่คืน signed URL ให้ client เพราะเป็นลิงก์ที่ใครถือก็เปิดได้จนกว่าจะหมดอายุ
+// ถ้าหลุดออกนอกระบบก็คุมไม่ได้แล้ว ให้ backend ถือคนเดียวแล้ว proxy เนื้อไฟล์กลับไปแทน
+// (เรียกน้อยมาก มีแค่ตอนแอดมินเปิดดูตอนตรวจรูป จึงไม่กระทบ bandwidth)
+func (s *CloudinaryService) DownloadPrivateImage(ctx context.Context, publicID string) (io.ReadCloser, string, error) {
+	img, err := s.cld.Image(publicID)
+	if err != nil {
+		return nil, "", err
+	}
+	img.DeliveryType = api.Authenticated
+	img.Config.URL.SignURL = true
+
+	signedURL, err := img.String()
+	if err != nil {
+		return nil, "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, signedURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, "", fmt.Errorf("cloudinary: ดึงไฟล์ไม่สำเร็จ (HTTP %d)", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return resp.Body, contentType, nil
 }

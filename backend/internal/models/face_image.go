@@ -1,6 +1,7 @@
 package models
 
 import (
+	"slices"
 	"time"
 )
 
@@ -23,6 +24,13 @@ const (
 	PoseLeft  FacePose = "left"
 	PoseRight FacePose = "right"
 )
+
+// AllFacePoses คือท่าที่ต้องถ่ายให้ครบ — จำนวนนี้คือเพดานรูปต่อคนด้วย
+var AllFacePoses = []FacePose{PoseFront, PoseLeft, PoseRight}
+
+func IsValidFacePose(p FacePose) bool {
+	return slices.Contains(AllFacePoses, p)
+}
 
 // FaceImage คือรูปใบหน้าอ้างอิงของนักเรียนหนึ่งใบ พร้อม embedding ที่คำนวณจากรูปนั้น
 //

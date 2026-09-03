@@ -80,6 +80,19 @@ func ValidateImageUpload(fh *multipart.FileHeader) (string, error) {
 	return validateUpload(fh, MaxImageUploadBytes, imageExtByType)
 }
 
+// faceImageExtByType แคบกว่า imageExtByType โดยตั้งใจ — รับแค่ JPEG/PNG
+// gif เป็นภาพเคลื่อนไหว เฟรมแรกอาจไม่ใช่หน้าคน ส่วน webp โมเดลฝั่ง Python
+// อ่านได้ไม่ครบทุกรุ่นย่อย · กล้องในเบราว์เซอร์ส่ง JPEG อยู่แล้ว จึงไม่กระทบการใช้งาน
+var faceImageExtByType = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+}
+
+// ValidateFaceImageUpload ใช้เกณฑ์เดียวกับ ValidateImageUpload แต่จำกัดชนิดไฟล์แคบลง
+func ValidateFaceImageUpload(fh *multipart.FileHeader) (string, error) {
+	return validateUpload(fh, MaxImageUploadBytes, faceImageExtByType)
+}
+
 // MaxChatUploadBytes เพดานไฟล์แนบในแชท (รูป/PDF)
 const MaxChatUploadBytes = 10 << 20 // 10 MB
 
