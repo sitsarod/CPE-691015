@@ -34,6 +34,11 @@ func main() {
 	// 2. clear database and auto migrate models
 	db.Exec("DROP SCHEMA public CASCADE;")
     db.Exec("CREATE SCHEMA public;")
+
+	// ต้องเปิดใหม่ทุกครั้ง เพราะ DROP SCHEMA ลบ extension ไปด้วย และต้องมาก่อน AutoMigrate
+	if err := services.EnableVectorExtension(db); err != nil {
+		log.Fatalf("เปิด extension pgvector ไม่สำเร็จ: %v", err)
+	}
 	// สั่ง Auto Migrate โดยดึงโมเดลมาจาก package models
 	err = db.AutoMigrate(
 		&models.User{},
@@ -41,6 +46,7 @@ func main() {
 		&models.Product{}, // อย่าลืมสร้างไฟล์ product.go ใน internal/models/
 		&models.Customer{},
 		&models.Photo{},
+		&models.FaceImage{},
 		&models.Evaluation{},
 		&models.Review{},
 		&models.DetectedVideo{},
@@ -85,6 +91,10 @@ func main() {
 	// ไม่งั้นข้อมูลตัวอย่างที่ยังไม่มีรหัสประจำตัวจะชนกันเอง
 	if err := services.EnsureMemberCodeIndexes(db); err != nil {
 		log.Fatalf("สร้าง index ของรหัสประจำตัวไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.EnsureFaceImageIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของ embedding ใบหน้าไม่สำเร็จ: %v", err)
 	}
 
 	seedBillingTypes(db)

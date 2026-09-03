@@ -22,6 +22,8 @@ import (
 //	ลบสมาชิก (UserService.DeleteUser)            → ลบแถวอย่างเดียว  ✗
 //	ถอนความยินยอม (ConsentService.Withdraw)      → ไม่ลบอะไรเลย     ✗
 //
+// (PhotoController ถูกลบไปแล้วตอนย้ายรูปใบหน้าไป face_images เหลือใช้จริงสองทางล่าง)
+//
 // สองทางหลังเป็นปัญหาเพราะระบบขึ้นข้อความบอกผู้ใช้ไปแล้วว่า
 // "ระบบจะลบภาพใบหน้าและข้อมูลที่เกี่ยวข้องทั้งหมด" แต่ไฟล์ยังอยู่ครบ
 // ตาม PDPA คือยังเก็บข้อมูลชีวภาพไว้ทั้งที่ไม่มีฐานให้เก็บแล้ว
@@ -29,7 +31,8 @@ import (
 // ไฟล์นี้รวมตรรกะการลบไว้ที่เดียว ทั้งสามทางจะได้ใช้ตัวเดียวกัน
 // ─────────────────────────────────────────────────────────────────────────────
 
-// facesDir คือโฟลเดอร์ที่เก็บภาพใบหน้า ต้องตรงกับที่ PhotoController ใช้ตอนอัปโหลด
+// facesDir คือโฟลเดอร์ที่ระบบเก่าเคยเก็บภาพใบหน้าไว้
+// ไม่มีใครเขียนลงที่นี่แล้ว แต่ยังต้องรู้จักพาธเพื่อตามลบไฟล์ที่ค้างจากของเดิม
 const facesDir = "./uploads/faces"
 
 // PhotoFilePath แปลง URL ของรูปเป็นพาธไฟล์บนดิสก์
@@ -108,9 +111,8 @@ func deletePhotoRows(tx *gorm.DB, column string, ownerID uint) ([]string, error)
 
 	// Unscoped = ลบออกจากตารางจริง ไม่ใช่ soft delete
 	//
-	// ต่างจากตารางอื่นที่เก็บแถวไว้เผื่อตรวจสอบย้อนหลัง เพราะแถวนี้เก็บค่าที่คำนวณ
-	// จากใบหน้า (FaceEmbedding) ซึ่งเป็นข้อมูลชีวภาพเอง การ soft delete
-	// เท่ากับยังเก็บข้อมูลไว้ แค่ซ่อนจาก query ปกติ ซึ่งไม่นับว่าลบตาม PDPA
+	// ต่างจากตารางอื่นที่เก็บแถวไว้เผื่อตรวจย้อนหลัง เพราะรูปของคนที่ขอให้ลบข้อมูล
+	// ต้องหายจริงตาม PDPA — soft delete เท่ากับยังเก็บไว้ แค่ซ่อนจาก query
 	if err := tx.Unscoped().Where(column+" = ?", ownerID).Delete(&models.Photo{}).Error; err != nil {
 		return nil, err
 	}
@@ -126,4 +128,46 @@ func DeleteCustomerPhotos(tx *gorm.DB, customerID uint) ([]string, error) {
 // DeleteCoachPhotos ลบภาพใบหน้าทั้งหมดของโค้ช (coaches.id)
 func DeleteCoachPhotos(tx *gorm.DB, coachID uint) ([]string, error) {
 	return deletePhotoRows(tx, "coach_id", coachID)
+}
+
+// CleanupLegacyFacePhotos ล้างซากของระบบใบหน้าตัวเก่าออกจากตาราง photos
+//
+// photo_controller เดิมเขียน embedding ที่สุ่มจาก math/rand ลงคอลัมน์ face_embedding
+// controller ถูกลบไปแล้ว แต่ AutoMigrate ไม่ลบคอลัมน์ให้ — ถ้าปล่อยไว้จะเหลือคอลัมน์
+// ที่หน้าตาเหมือนข้อมูลชีวภาพจริงค้างในฐาน เสี่ยงมีคนหยิบไปใช้โดยไม่รู้ว่าเป็นค่ามั่ว
+//
+// เป็นคำสั่งเฉพาะ postgres เรียกจาก cmd/migrate เท่านั้น (รันซ้ำได้ ครั้งที่สองเป็น no-op)
+//
+// ⚠️ ลบแถวเฉพาะที่ชี้ไป /uploads/faces/ เป็นตัวกันพลาด เผื่อมีรูปโปรไฟล์/แกลเลอรี
+// ถูกเพิ่มเข้ามาทีหลัง (ตอนนี้ทุกแถวมาจาก controller ตัวเก่าตัวเดียว)
+func CleanupLegacyFacePhotos(db *gorm.DB) error {
+	const legacyPattern = "%/uploads/faces/%"
+
+	// อ่าน URL เก็บไว้ก่อนลบแถว เพื่อเอาไปตามลบไฟล์จริงบนดิสก์ต่อ
+	var legacyURLs []string
+	if err := db.Table("photos").
+		Where("photo_url LIKE ?", legacyPattern).
+		Pluck("photo_url", &legacyURLs).Error; err != nil {
+		return err
+	}
+
+	if len(legacyURLs) > 0 {
+		if err := db.Exec(`DELETE FROM photos WHERE photo_url LIKE ?`, legacyPattern).Error; err != nil {
+			return err
+		}
+		// เรียกหลังลบแถวสำเร็จเท่านั้น (เหตุผลอยู่ที่ RemovePhotoFiles ด้านบน)
+		RemovePhotoFiles(legacyURLs)
+		log.Printf("ล้างรูปใบหน้าของระบบเก่าออกจากตาราง photos แล้ว %d แถว", len(legacyURLs))
+	}
+
+	statements := []string{
+		`ALTER TABLE photos DROP COLUMN IF EXISTS face_embedding`,
+		`ALTER TABLE photos DROP COLUMN IF EXISTS is_verified`,
+	}
+	for _, sql := range statements {
+		if err := db.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

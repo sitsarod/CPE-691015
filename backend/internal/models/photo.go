@@ -2,26 +2,22 @@ package models
 
 import (
 	"gorm.io/gorm"
-
 )
 
+// Photo คือรูปทั่วไปของนักเรียนหรือโค้ช (โปรไฟล์/แกลเลอรี) เท่านั้น
+//
+// ⚠️ "ไม่ใช่" ตารางข้อมูลชีวภาพ — รูปใบหน้าที่ใช้เช็คชื่อและ embedding
+// ย้ายไปอยู่ face_images หมดแล้ว เพื่อให้ลบตามคำขอถอนความยินยอมได้แบบตารางเดียวจบ
 type Photo struct {
-
 	gorm.Model
-	CustomerID    	uint      	`json:"customer_id"`
-	Customer   		*Customer  	`json:"customer" `
 
-	CoachID    		uint      	`json:"coach_id" valid:"required~CoachID is required"`
-	Coach   		*Coach  	`json:"coach"`
+	CustomerID uint      `json:"customer_id"`
+	Customer   *Customer `json:"customer"`
 
-	PhotoURL  		string    	`json:"photoUrl" valid:"required~Photo URL is required,url~Invalid photo URL format"` // URL รูปต้นฉบับ 
+	// pointer เพราะรูปหนึ่งใบมีเจ้าของฝั่งเดียว — เดิมเป็น uint + required
+	// ซึ่งบังคับให้ทุกรูปต้องมีโค้ช เท่ากับบันทึกรูปของนักเรียนไม่ได้เลย
+	CoachID *uint  `json:"coach_id"`
+	Coach   *Coach `json:"coach"`
 
-	// เก็บค่า Face Embedding (ตัวเลขทศนิยมที่ AI แปลงออกมาจากใบหน้า)
-	// สมมติว่าใช้โมเดลที่ให้ค่าออกมา 128 มิติ
-	FaceEmbedding 	[]float64 	`json:"-" gorm:"type:float8[]"` 
-	
-	IsVerified 		bool      	`json:"isVerified" gorm:"default:false"` // เช็กว่ารูปนี้ผ่านการตรวจสอบใบหน้าหรือยัง
-	
-	
-
+	PhotoURL string `json:"photoUrl" valid:"required~Photo URL is required,url~Invalid photo URL format"`
 }

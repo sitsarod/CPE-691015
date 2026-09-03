@@ -54,6 +54,8 @@ type Customer struct {
 
 
 	Photos            	[]Photo 		`json:"photo" gorm:"foreignKey:CustomerID"`
+	// json:"-" เพราะเป็นข้อมูลชีวภาพ ห้ามหลุดออก API
+	FaceImages        	[]FaceImage 	`json:"-" gorm:"foreignKey:CustomerID"`
 	Evaluations       	[]Evaluation    `json:"evaluation" gorm:"foreignKey:CustomerID"`
 	Reviews           	[]Review        `json:"reviews" gorm:"foreignKey:CustomerID"`
 	DetectedVideos    	[]DetectedVideo `json:"detectedVideo" gorm:"foreignKey:CustomerID"`
