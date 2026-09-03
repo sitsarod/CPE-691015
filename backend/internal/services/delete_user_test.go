@@ -161,7 +161,7 @@ func TestDeleteUserCleansCoachRelatedData(t *testing.T) {
 	}
 
 	// ภาพใบหน้า (ข้อมูลชีวภาพ) — ต้องหาย
-	db.Create(&models.Photo{CoachID: coach.ID, PhotoURL: "https://example.com/a.jpg"})
+	db.Create(&models.Photo{CoachID: &coach.ID, PhotoURL: "https://example.com/a.jpg"})
 	// เวลาว่างประจำสัปดาห์ — ต้องหาย
 	db.Create(&models.CoachAvailability{CoachID: coach.ID, DayOfWeek: "monday", StartTime: "09:00", EndTime: "12:00"})
 

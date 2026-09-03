@@ -144,7 +144,8 @@ func TestDeleteCustomerPhotosReturnsFilesAndHardDeletes(t *testing.T) {
 func TestDeleteCoachPhotos(t *testing.T) {
 	db := newTestDB(t, &models.Photo{})
 
-	db.Create(&models.Photo{CoachID: 5, PhotoURL: "http://x/uploads/faces/coach.jpg"})
+	coachID := uint(5)
+	db.Create(&models.Photo{CoachID: &coachID, PhotoURL: "http://x/uploads/faces/coach.jpg"})
 
 	files, err := DeleteCoachPhotos(db, 5)
 	if err != nil {

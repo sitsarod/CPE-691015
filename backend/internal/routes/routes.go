@@ -104,8 +104,6 @@ func SetupRoutes(r *gin.Engine) {
 	photoPostService := services.NewDetectedPhotoService(db)
 	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, db)
 
-	photoController := controllers.NewPhotoController(db)
-
 	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
 	attendanceService := services.NewAttendanceService(db)
 	attendanceController := controllers.NewAttendanceController(attendanceService)
@@ -284,13 +282,10 @@ func SetupRoutes(r *gin.Engine) {
 			adminConsentGroup.GET("", consentController.GetConsentHistory)
 		}
 
-		// --- การลงทะเบียนใบหน้าตรงนักเรียน ---
-		studentFacePhotoGroup := protected.Group("/students/face-photo")
-		{
-			studentFacePhotoGroup.POST("", photoController.UploadFacePhoto)
-			studentFacePhotoGroup.GET("/me", photoController.GetMyPhotos)
-			studentFacePhotoGroup.DELETE("/:id", photoController.DeleteFacePhoto)
-		}
+		// --- การลงทะเบียนใบหน้าของนักเรียน ---
+		// กลุ่ม /students/face-photo เดิมถูกลบพร้อม photo_controller.go (เป็น mock ที่
+		// สุ่ม embedding และเก็บรูปใบหน้าไว้ในโฟลเดอร์สาธารณะ)
+		// ของใหม่จะมาที่ /api/face-images เก็บบน Cloudinary โหมด authenticated
 
 		// --- การประเมินนักเรียนโดยโค้ช ---
 		evaluationGroup := protected.Group("/evaluations")

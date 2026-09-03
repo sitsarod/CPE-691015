@@ -34,6 +34,11 @@ func main() {
 	}
 	fmt.Println("เชื่อมต่อสำเร็จแล้ว! กำลังอัปเดตสคีมา (ไม่ลบข้อมูล)...")
 
+	// ต้องมาก่อน AutoMigrate เสมอ ไม่งั้นสร้างคอลัมน์ vector(512) ของ face_images ไม่ได้
+	if err := services.EnableVectorExtension(db); err != nil {
+		log.Fatalf("เปิด extension pgvector ไม่สำเร็จ: %v", err)
+	}
+
 	// AutoMigrate ทุกโมเดล (รายการเดียวกับ cmd/init แต่ไม่ DROP SCHEMA)
 	// เพิ่มคอลัมน์/ตารางที่ขาดให้อัตโนมัติทุกครั้งที่เพิ่มฟิลด์ใหม่ในโมเดล
 	if err := db.AutoMigrate(
@@ -42,6 +47,7 @@ func main() {
 		&models.Product{},
 		&models.Customer{},
 		&models.Photo{},
+		&models.FaceImage{},
 		&models.Evaluation{},
 		&models.Review{},
 		&models.DetectedVideo{},
@@ -83,6 +89,15 @@ func main() {
 	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ (ดู services.EnsureMemberCodeIndexes)
 	if err := services.EnsureMemberCodeIndexes(db); err != nil {
 		log.Fatalf("สร้าง index ของรหัสประจำตัวไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.EnsureFaceImageIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของ embedding ใบหน้าไม่สำเร็จ: %v", err)
+	}
+
+	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
+	if err := services.CleanupLegacyFacePhotos(db); err != nil {
+		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)
 	}
 
 	fmt.Println("อัปเดตสคีมาเรียบร้อย — เพิ่มคอลัมน์/ตารางที่ขาดของทุกโมเดลแล้ว (ข้อมูลเดิมอยู่ครบ)")
