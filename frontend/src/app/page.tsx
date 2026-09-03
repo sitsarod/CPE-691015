@@ -109,7 +109,10 @@ export default function Home() {
                     {coach.specialization && (
                       <p className="mt-1 text-sm text-[#CC0000] font-medium">{coach.specialization}</p>
                     )}
-                    <span className="mt-1 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูข้อมูล</span>
+                    {coach.bio?.trim() && (
+                      <p className="mt-2 line-clamp-3 max-w-[15rem] text-sm text-gray-500">{coach.bio}</p>
+                    )}
+                    <span className="mt-2 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูเพิ่มเติม</span>
                   </button>
                 );
               })}

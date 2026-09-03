@@ -303,7 +303,6 @@ export default function ChatWidget() {
     setPendingAttachment(null);
     setEditingRowId(null);
     autoStartTriedRef.current = false;
-    setCreateFailed(false);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
