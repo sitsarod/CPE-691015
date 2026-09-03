@@ -109,6 +109,7 @@ type CoachDetailResponse struct {
 	PromptPay      string  `json:"prompt_pay"`
 	PaymentType    string  `json:"payment_type"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 	PayRate        float64 `json:"pay_rate"`     // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
+	Bio            string  `json:"bio"`          // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
 
 	// PersonalQRCode คือ QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน
 	//
@@ -176,6 +177,12 @@ type WeekSessionResponse struct {
 	StartTime         string             `json:"start_time"`
 	EndTime           string             `json:"end_time"`
 	AssignedCoaches   []WeekSessionCoach `json:"assigned_coaches"`
+
+	// GoingCount = จำนวนนักเรียนที่ "ยืนยันมาเรียน" (ClassConfirmation going) ของคลาสนี้
+	// TotalCount = จำนวนนักเรียนที่มีสิทธิ์เรียนคาบนี้ทั้งหมด (canAttend)
+	// รวมข้าม package ของคอร์สเดียวกัน/เวลาเดียวกันแล้ว (ตามคีย์ merge)
+	GoingCount int `json:"going_count"`
+	TotalCount int `json:"total_count"`
 }
 
 // Response สำหรับแสดงผลปฏิทินงานของโค้ชคนนั้นๆ

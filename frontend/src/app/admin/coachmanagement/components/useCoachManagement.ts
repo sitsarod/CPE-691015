@@ -36,6 +36,7 @@ const emptyEditForm: EditCoachForm = {
   coach_license: "",
   payment_type: "per_session",
   pay_rate: 0,
+  bio: "",
 };
 
 /**
@@ -121,6 +122,7 @@ export function useCoachManagement() {
       coach_license: d.coach_license ?? "",
       payment_type: d.payment_type ?? "per_session",
       pay_rate: d.pay_rate ?? 0,
+      bio: d.bio ?? "",
     });
     base.setFormError(null);
     base.setModalMode("edit");
@@ -164,6 +166,7 @@ export function useCoachManagement() {
           coach_license: editForm.coach_license.trim(),
           payment_type: editForm.payment_type,
           pay_rate: editForm.pay_rate,
+          bio: editForm.bio.trim(),
         },
       });
     }, "ไม่สามารถบันทึกการแก้ไขได้");

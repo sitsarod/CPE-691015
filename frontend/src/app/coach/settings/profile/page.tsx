@@ -187,25 +187,25 @@ export default function CoachEditProfilePage() {
 
       {/* ── ข้อมูลระบุตัวตน (อ่านอย่างเดียว) ── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-start gap-4">
+        <div className="p-4 sm:p-6">
+          <div className="flex items-start gap-3 sm:gap-4">
             <div className="p-3 rounded-xl bg-gray-100 shrink-0">
               <IdCard className="w-6 h-6 text-gray-500" />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <h2 className="font-bold text-gray-900">ข้อมูลระบุตัวตน</h2>
               <p className="text-sm text-gray-500 mt-1">แก้เองไม่ได้ ถ้าข้อมูลไม่ถูกต้องกรุณาส่งหลักฐานให้แอดมินแก้ให้</p>
-
-              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <ReadItem label="ชื่อ - นามสกุล" value={fullName} />
-                <ReadItem label="อีเมล (ใช้ล็อกอิน)" value={readOnlyData.email} />
-                <ReadItem label="ชื่อเล่น" value={readOnlyData.nickname} />
-                <ReadItem label="วันเกิด" value={readOnlyData.birthDate} />
-                <ReadItem label="เลขบัตรประชาชน" value={readOnlyData.uid} />
-                <ReadItem label="ระดับฝีมือ" value={readOnlyData.specialization} />
-                <ReadItem label="ใบรับรองผู้ฝึกสอน" value={readOnlyData.coachLicense} />
-              </div>
             </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ReadItem label="ชื่อ - นามสกุล" value={fullName} />
+            <ReadItem label="อีเมล (ใช้ล็อกอิน)" value={readOnlyData.email} />
+            <ReadItem label="ชื่อเล่น" value={readOnlyData.nickname} />
+            <ReadItem label="วันเกิด" value={readOnlyData.birthDate} />
+            <ReadItem label="เลขบัตรประชาชน" value={readOnlyData.uid} />
+            <ReadItem label="ระดับฝีมือ" value={readOnlyData.specialization} />
+            <ReadItem label="ใบรับรองผู้ฝึกสอน" value={readOnlyData.coachLicense} />
           </div>
         </div>
       </div>
@@ -213,38 +213,38 @@ export default function CoachEditProfilePage() {
       {/* ── ช่องทางติดต่อ (แก้เองได้) ── */}
       <form onSubmit={handleSave} noValidate>
         <div className="rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-start gap-4">
+          <div className="p-4 sm:p-6">
+            <div className="flex items-start gap-3 sm:gap-4">
               <div className="p-3 rounded-xl bg-red-50 shrink-0">
                 <Phone className="w-6 h-6 text-[#CC0000]" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0">
                 <h2 className="font-bold text-gray-900">ช่องทางติดต่อ</h2>
                 <p className="text-sm text-gray-500 mt-1">ส่วนนี้แก้ไขได้เองทันที ไม่ต้องแจ้งแอดมิน</p>
-
-                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <InputField
-                    label="หมายเลขโทรศัพท์ (10 หลัก)" name="phone" inputMode="numeric" maxLength={10} required
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
-                    }
-                    placeholder="ระบุหมายเลขโทรศัพท์"
-                  />
-                  <InputField
-                    label="Line ID (ถ้ามี)" name="lineId" value={formData.lineId}
-                    onChange={handleChange} placeholder="ระบุ Line ID"
-                  />
-                  <InputField
-                    label="Facebook (ถ้ามี)" name="facebook" value={formData.facebook}
-                    onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
-                  />
-                  <InputField
-                    label="ที่อยู่" name="address" value={formData.address}
-                    onChange={handleChange} placeholder="ระบุที่อยู่"
-                  />
-                </div>
               </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <InputField
+                label="หมายเลขโทรศัพท์ (10 หลัก)" name="phone" inputMode="numeric" maxLength={10} required
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
+                }
+                placeholder="ระบุหมายเลขโทรศัพท์"
+              />
+              <InputField
+                label="Line ID (ถ้ามี)" name="lineId" value={formData.lineId}
+                onChange={handleChange} placeholder="ระบุ Line ID"
+              />
+              <InputField
+                label="Facebook (ถ้ามี)" name="facebook" value={formData.facebook}
+                onChange={handleChange} placeholder="ระบุชื่อ/ลิงก์ Facebook"
+              />
+              <InputField
+                label="ที่อยู่" name="address" value={formData.address}
+                onChange={handleChange} placeholder="ระบุที่อยู่"
+              />
             </div>
           </div>
 

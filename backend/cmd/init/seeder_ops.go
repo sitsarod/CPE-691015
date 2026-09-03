@@ -13,8 +13,9 @@ import (
 // Seed ข้อมูล "ดำเนินงาน" เพื่อให้ UI มีข้อมูลจริงให้ดู:
 //   • การเงิน  — ลงทะเบียน + บิล + ใบแจ้งหนี้ (กระจายบิลที่จ่ายแล้วย้อนหลัง 6 เดือน
 //                สำหรับกราฟรายได้ + มีบิลค้าง/เกินกำหนด/รอตรวจของเดือนนี้)
-//   • คาบสอน   — WorkSchedule ของโค้ช (มีทั้งคาบที่ผ่านมาและที่กำลังจะถึง)
 //   • รายจ่าย  — Expense หลายประเภทย้อนหลัง 6 เดือน
+//
+// หมายเหตุ: ไม่ seed คาบสอน (WorkSchedule) ให้โค้ชอัตโนมัติแล้ว — ให้แอดมินมอบหมายเองผ่านหน้าจัดตารางสอน
 //
 // ทั้งหมด idempotent: ถ้ามีข้อมูลอยู่แล้วจะข้าม ต้องรันหลัง seed คอร์ส/ลูกค้า/โค้ช
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,7 +84,6 @@ func seedOperationalData(db *gorm.DB) {
 	}
 
 	seedFinance(db, admin, billingType)
-	seedWorkSchedules(db)
 	seedExpenses(db)
 }
 
@@ -234,62 +234,6 @@ func createEnrollmentWithBilling(db *gorm.DB, admin models.User, bType models.Bi
 		// paid_at ของบิล = invoice.updated_at → กำหนดเดือนที่รายได้ตกลงในกราฟ
 		backdate(db, &inv, when)
 	}
-}
-
-// ── คาบสอน ──
-
-func seedWorkSchedules(db *gorm.DB) {
-	var count int64
-	db.Model(&models.WorkSchedule{}).Count(&count)
-	if count > 0 {
-		fmt.Println("ข้ามการ Seed คาบสอน เนื่องจากมีข้อมูลอยู่แล้ว")
-		return
-	}
-
-	var coaches []models.Coach
-	db.Order("id ASC").Limit(2).Find(&coaches)
-	if len(coaches) == 0 {
-		log.Println("[seed-ops] ไม่พบโค้ช ข้ามการ seed คาบสอน")
-		return
-	}
-	var courses []models.Course
-	db.Order("id ASC").Find(&courses)
-	if len(courses) == 0 {
-		log.Println("[seed-ops] ไม่พบคอร์ส ข้ามการ seed คาบสอน")
-		return
-	}
-
-	now := time.Now()
-	// ออฟเซ็ตวัน: ลบ = ผ่านมาแล้ว, 0/บวก = กำลังจะถึง (dashboard โค้ชโชว์ที่ date >= วันนี้)
-	dayOffsets := []int{-7, -3, -1, 0, 1, 2, 4, 6, 9}
-	slots := []struct{ start, end string }{
-		{"18:00", "20:00"},
-		{"17:00", "19:00"},
-		{"19:00", "21:00"},
-	}
-
-	created := 0
-	for ci, coach := range coaches {
-		for i, off := range dayOffsets {
-			course := courses[(i+ci)%len(courses)]
-			slot := slots[i%len(slots)]
-			ws := models.WorkSchedule{
-				Date:        now.AddDate(0, 0, off).Format("2006-01-02"),
-				StartTime:   slot.start,
-				EndTime:     slot.end,
-				Description: "สอน" + course.CourseName,
-				Courtnumber: fmt.Sprintf("%d", (i%4)+1),
-				CoachID:     coach.ID,
-				CourseID:    course.ID,
-			}
-			if err := db.Create(&ws).Error; err != nil {
-				log.Printf("[seed-ops] สร้างคาบสอนไม่สำเร็จ: %v", err)
-				continue
-			}
-			created++
-		}
-	}
-	fmt.Printf("Seed คาบสอน %d รายการสำเร็จเรียบร้อย!\n", created)
 }
 
 // ── รายจ่าย ──

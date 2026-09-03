@@ -15,7 +15,9 @@ export interface PublicCoach {
   lastName: string;
   nickname: string;
   specialization: string;
+  coach_license: string;
   profile_picture: string;
+  bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
   feature_on_home: boolean;
 }
 

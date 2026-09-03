@@ -19,7 +19,9 @@ type PublicCoachDTO struct {
 	LastName       string `json:"lastName"`
 	Nickname       string `json:"nickname"`
 	Specialization string `json:"specialization"`
+	CoachLicense   string `json:"coach_license"`
 	ProfilePicture string `json:"profile_picture"`
+	Bio            string `json:"bio"` // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
 	FeatureOnHome  bool   `json:"feature_on_home"`
 }
 

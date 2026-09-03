@@ -24,14 +24,24 @@ export function buildMemberColumns(actions: {
     {
       header: "สมาชิก",
       render: (item) => (
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-gray-900">
-              {item.firstName} {item.lastName}
+        <div className="flex items-center gap-3 min-w-0">
+          {item.profile_picture ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.profile_picture} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-gray-200" />
+          ) : (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#E63946] to-[#CC0000] text-sm font-bold text-white">
+              {(item.firstName?.[0] || item.nickname?.[0] || "U").toUpperCase()}
             </span>
-            {item.nickname && <span className="text-xs text-gray-400">({item.nickname})</span>}
+          )}
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-gray-900">
+                {item.firstName} {item.lastName}
+              </span>
+              {item.nickname && <span className="text-xs text-gray-400">({item.nickname})</span>}
+            </div>
+            <span className="mt-0.5 text-xs text-gray-400">{item.email || `ID #${getId(item)}`}</span>
           </div>
-          <span className="mt-0.5 text-xs text-gray-400">{item.email || `ID #${getId(item)}`}</span>
         </div>
       ),
     },

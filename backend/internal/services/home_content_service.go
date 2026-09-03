@@ -330,7 +330,9 @@ func mapToPublicCoachDTO(m *models.Coach) dto.PublicCoachDTO {
 		ID:             m.ID,
 		Nickname:       m.Nickname,
 		Specialization: m.Specialization,
+		CoachLicense:   m.CoachLicense,
 		ProfilePicture: m.ProfilePicture,
+		Bio:            m.Bio,
 		FeatureOnHome:  m.FeatureOnHome,
 	}
 	if m.User != nil {

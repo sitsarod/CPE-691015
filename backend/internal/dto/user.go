@@ -87,6 +87,7 @@ type StudentListResponseDTO struct {
 	Facebook    string `json:"facebook"`
 	BirthDate   string `json:"birthDate"`
 	Gender      string `json:"gender"`
+	ProfilePicture string `json:"profile_picture"`
 }
 
 // UpdateProfileInput คือข้อมูลที่ผู้เรียนแก้ไขเองได้

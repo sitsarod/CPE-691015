@@ -344,6 +344,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 		facebook := ""
 		birthDate := ""
 		gender := ""
+		profilePicture := ""
 
 		if u.Customer != nil {
 			nickname = u.Customer.Nickname
@@ -351,6 +352,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 			lineID = u.Customer.LineID
 			facebook = u.Customer.Facebook
 			gender = strings.ToLower(string(u.Customer.Gender))
+			profilePicture = u.Customer.ProfilePicture
 			if !u.Customer.BirthDate.IsZero() {
 				birthDate = u.Customer.BirthDate.Format("2006-01-02")
 			}
@@ -368,6 +370,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 			Facebook:         facebook,
 			BirthDate:        birthDate,
 			Gender:           gender,
+			ProfilePicture:   profilePicture,
 		})
 	}
 

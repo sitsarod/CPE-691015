@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users, UserCheck, MoreVertical, MapPin } from "lucide-react";
 
 import { getAllCoachesAPI, fetchAllCoachAvailabilities, CoachListItem } from "@/services/coachAPI";
 import { getWeekSessions, WeekSession } from "@/services/workScheduleAPI";
 import { getCourts, Court } from "@/services/courtAPI";
 import { AvailabilitySlot } from "@/types/coach";
 import { AssignCoachModal } from "@/components/admin/modals/AssignCoachModal";
+import { loadStudentsPerCoach, saveStudentsPerCoach, suggestedCoaches } from "@/lib/coachRatio";
 import { CourtManageModal } from "@/components/admin/modals/CourtManageModal";
-import { MapPin } from "lucide-react";
+import Modal from "@/components/Modal";
+import Button from "@/components/Button";
 
 const DAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -33,6 +35,9 @@ const colorForCourse = (courseId: number) => {
   return COURSE_COLORS[h % COURSE_COLORS.length];
 };
 
+// อัตราส่วนแนะนำจำนวนโค้ช (โค้ช 1 : นักเรียนกี่คน) ย้ายไป lib/coachRatio.ts
+// เพื่อให้แอดมินตั้งค่าเองได้และใช้ร่วมกับ AssignCoachModal
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const toISODate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const startOfWeek = (date: Date) => {
@@ -55,6 +60,16 @@ export default function CoachSchedulePage() {
   const [search, setSearch] = useState("");
   const [activeSession, setActiveSession] = useState<WeekSession | null>(null);
   const [activeIsPast, setActiveIsPast] = useState(false);
+  // อัตราส่วนโค้ช:นักเรียน — โหลดจาก localStorage หลัง mount (กัน hydration mismatch)
+  const [perCoach, setPerCoach] = useState(6);
+  useEffect(() => { setPerCoach(loadStudentsPerCoach()); }, []);
+  const changePerCoach = (n: number) => {
+    const safe = Math.min(50, Math.max(1, Number.isFinite(n) ? n : 1));
+    setPerCoach(safe);
+    saveStudentsPerCoach(safe);
+  };
+  const [menuOpen, setMenuOpen] = useState(false);     // เมนู 3 จุดบนหัวหน้า
+  const [ratioModalOpen, setRatioModalOpen] = useState(false); // โมดัลตั้งเกณฑ์จำนวนโค้ช
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d; }),
@@ -153,9 +168,35 @@ export default function CoachSchedulePage() {
           <button onClick={loadData} disabled={isLoading} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer" title="รีเฟรช">
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </button>
-          <button onClick={() => setCourtModalOpen(true)} className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer text-sm font-semibold" title="จัดการสนาม">
-            <MapPin className="h-4 w-4" /> จัดการสนาม
-          </button>
+          {/* เมนู 3 จุด: จัดการข้อมูลสนาม + เกณฑ์จำนวนโค้ช */}
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className={`grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer ${menuOpen ? "bg-gray-50" : ""}`}
+              title="ตัวเลือก"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black/5">
+                  <button
+                    onClick={() => { setMenuOpen(false); setCourtModalOpen(true); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <MapPin className="h-4 w-4 text-gray-400" /> จัดการข้อมูลสนาม
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); setRatioModalOpen(true); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <UserCheck className="h-4 w-4 text-gray-400" /> เกณฑ์จำนวนโค้ช
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -211,9 +252,11 @@ export default function CoachSchedulePage() {
                         daySessions.map((s) => {
                           const color = colorForCourse(s.course_id);
                           const hasCoach = s.assigned_coaches.length > 0;
+                          const suggested = suggestedCoaches(s.going_count, perCoach);
+                          const short = suggested - s.assigned_coaches.length; // ขาดโค้ชกี่คน (>0 = ยังไม่พอ)
                           return (
                             <button
-                              key={`${s.course_id}-${s.date}-${s.start_time}`}
+                              key={`${s.course_id}-${s.date}-${s.start_time}-${s.end_time}`}
                               onClick={() => { setActiveSession(s); setActiveIsPast(isPast); }}
                               className={`w-full text-left rounded-xl border ${color.soft} p-3 transition hover:shadow-md cursor-pointer ${isPast ? "opacity-60" : ""}`}
                             >
@@ -222,7 +265,20 @@ export default function CoachSchedulePage() {
                                 <span className="text-sm font-bold leading-tight truncate">{s.course_name}</span>
                               </div>
                               <div className="mt-1.5 text-xs font-semibold text-slate-500">{s.start_time} - {s.end_time}</div>
-                              <div className="mt-2 flex items-center gap-1.5 text-xs">
+
+                              {/* ยืนยันมาเรียน X/Y + แนะนำจำนวนโค้ช */}
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                                <span className="inline-flex items-center gap-1 text-slate-500">
+                                  <UserCheck className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                                  ยืนยัน <span className="font-bold text-slate-700">{s.going_count}</span>
+                                  <span className="text-slate-400">/{s.total_count}</span>
+                                </span>
+                                {suggested > 0 && (
+                                  <span className="text-slate-400">แนะนำ {suggested} โค้ช</span>
+                                )}
+                              </div>
+
+                              <div className="mt-1.5 flex items-center gap-1.5 text-xs">
                                 <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 {hasCoach ? (
                                   <span className="text-slate-600 truncate">{s.assigned_coaches.map((c) => c.coach_name).join(", ")}</span>
@@ -230,6 +286,9 @@ export default function CoachSchedulePage() {
                                   <span className="font-semibold text-[#CC0000]">ยังไม่มีโค้ช</span>
                                 )}
                               </div>
+                              {hasCoach && short > 0 && (
+                                <p className="mt-1 text-[11px] font-semibold text-amber-600">ควรเพิ่มอีก {short} โค้ช</p>
+                              )}
                             </button>
                           );
                         })
@@ -257,6 +316,7 @@ export default function CoachSchedulePage() {
         coaches={coaches}
         courts={courts}
         availByCoach={availByCoach}
+        studentsPerCoach={perCoach}
         onChanged={() => {
           setActiveSession(null);
           loadData();
@@ -268,6 +328,33 @@ export default function CoachSchedulePage() {
         onClose={() => setCourtModalOpen(false)}
         onChanged={loadData}
       />
+
+      {/* โมดัลตั้งเกณฑ์จำนวนโค้ช (โค้ช 1 : นักเรียนกี่คน) */}
+      <Modal
+        isOpen={ratioModalOpen}
+        onClose={() => setRatioModalOpen(false)}
+        title="เกณฑ์จำนวนโค้ช"
+        subtitle="ใช้คำนวณจำนวนโค้ชที่ควรมีต่อคาบ จากจำนวนนักเรียนที่ยืนยันมาเรียน"
+        maxWidth="max-w-md"
+        footer={<Button variant="outline" onClick={() => setRatioModalOpen(false)}>ปิด</Button>}
+      >
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-gray-700">อัตราส่วนแนะนำ</label>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>โค้ช 1 คน ต่อ</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={perCoach}
+              onChange={(e) => changePerCoach(parseInt(e.target.value, 10))}
+              className="h-10 w-20 rounded-lg border border-gray-200 bg-white px-2 text-center text-base font-bold text-gray-900 outline-none focus:border-gray-300"
+            />
+            <span>นักเรียน</span>
+          </div>
+          <p className="text-xs text-slate-400">ตั้งได้ 1–50 · บันทึกในเครื่องนี้ · การ์ดคาบและหน้ามอบหมายจะคำนวณตามนี้ทันที</p>
+        </div>
+      </Modal>
     </div>
   );
 }

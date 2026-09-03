@@ -21,6 +21,7 @@ export interface EditCoachForm {
   coach_license: string;
   payment_type: CoachPaymentType;
   pay_rate: number;
+  bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก (ไม่บังคับ)
 }
 
 interface Props {
@@ -119,6 +120,21 @@ export function EditCoachModal({
             value={editForm.pay_rate || ""}
             onChange={(e) => setEditForm({ ...editForm, pay_rate: Number(e.target.value) })}
           />
+        </div>
+
+        {/* รายละเอียดเพิ่มเติม — แสดงตอนคลิกโค้ชในหน้าแรก (ไม่บังคับ) */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            รายละเอียดเพิ่มเติม <span className="font-normal text-gray-400">(แสดงตอนคลิกโค้ชในหน้าแรก)</span>
+          </label>
+          <textarea
+            rows={4}
+            value={editForm.bio}
+            onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+            placeholder="ประวัติ ความเชี่ยวชาญ ประสบการณ์ ผลงาน ฯลฯ (ไม่บังคับ)"
+            className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-[#E63946] focus:ring-1 focus:ring-[#E63946]/30"
+          />
+          <p className="mt-1 text-xs text-gray-400">เว้นว่างได้ — ถ้ามีข้อความ จะแสดงเมื่อผู้เยี่ยมชมคลิกที่โค้ชในหน้าแรก</p>
         </div>
       </div>
     </Modal>

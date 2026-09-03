@@ -17,10 +17,6 @@ import {
  *
  * กฎของ React ห้ามเรียก hook แบบมีเงื่อนไข และถ้าย้ายการเรียกเข้าไปในแต่ละหน้าจอ
  * สองฝั่งจะมีสถานะคนละชุด พอหมุนจอทีข้อมูลที่โหลดไว้จะหายที
- *
- * ⚠️ CoachManagementMobile ยังเป็นโครงเปล่า
- * ถ้าอยากให้มือถือใช้งานได้ไปพลางก่อน เปลี่ยนบรรทัดล่างเป็น
- * <CoachManagementDesktop manager={manager} /> อย่างเดียว
  */
 export default function CoachManagementPage() {
   const manager = useCoachManagement();

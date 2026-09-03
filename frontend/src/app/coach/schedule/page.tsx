@@ -168,8 +168,8 @@ export default function CoachSchedulePage() {
         </div>
       )}
 
-      {/* Weekly board */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      {/* Weekly board — เดสก์ท็อป (md+): ปฏิทินสัปดาห์ */}
+      <div className="hidden md:block rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[1000px]">
             <div className="grid border-b border-slate-200 bg-slate-50" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
@@ -222,6 +222,83 @@ export default function CoachSchedulePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* มือถือ (< md): agenda แบบ timeline — ป้ายวันที่ซ้าย + การ์ดคาบขวา (ไม่ต้องเลื่อนแนวนอน) */}
+      <div className="md:hidden space-y-3">
+        {weekDays.map((d) => {
+          const dISO = toISODate(d);
+          const isToday = dISO === todayISO;
+          const isPast = dISO < todayISO;
+          const items = byDate.get(dISO) ?? [];
+          const hasItems = items.length > 0;
+          return (
+            <div key={dISO} className="flex gap-3">
+              {/* ป้ายวันที่ */}
+              <div
+                className={`shrink-0 w-14 rounded-2xl py-2 flex flex-col items-center self-start ${
+                  isToday
+                    ? "bg-[#CC0000] text-white shadow-sm shadow-red-200"
+                    : hasItems
+                    ? "bg-slate-100 text-slate-700"
+                    : "bg-slate-50 text-slate-400"
+                }`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wide">{DAY_LABELS[d.getDay()]}</span>
+                <span className="text-xl font-black leading-none mt-0.5">{d.getDate()}</span>
+                <span className="text-[9px] font-semibold mt-0.5 opacity-80">{TH_MONTHS[d.getMonth()]}</span>
+              </div>
+
+              {/* คาบสอนของวันนั้น */}
+              <div className="flex-1 min-w-0 space-y-2">
+                {isToday && (
+                  <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-[#CC0000]">
+                    วันนี้
+                  </span>
+                )}
+
+                {!hasItems ? (
+                  <div className="flex min-h-[3.5rem] items-center pl-1">
+                    <p className="text-xs text-slate-300">ไม่มีคาบสอน</p>
+                  </div>
+                ) : (
+                  items.map((s) => {
+                    const color = colorForCourse(s.course_id);
+                    return (
+                      <button
+                        key={s.ID}
+                        onClick={() => setDetail(s)}
+                        className={`group flex w-full overflow-hidden rounded-2xl border border-slate-100 bg-white text-left shadow-sm transition active:scale-[0.99] hover:shadow-md ${
+                          isPast ? "opacity-60" : ""
+                        }`}
+                      >
+                        <span className={`w-1.5 shrink-0 ${color.bar}`} />
+                        <div className="min-w-0 flex-1 p-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-bold leading-tight text-slate-800">
+                              {s.course?.course_name || "คาบสอน"}
+                            </span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-slate-400" />
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-semibold">
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${color.soft}`}>
+                              <Clock className="h-3 w-3 shrink-0" /> {s.start_time} - {s.end_time}
+                            </span>
+                            {s.court_number && (
+                              <span className="inline-flex items-center gap-1 text-slate-400">
+                                <MapPin className="h-3.5 w-3.5 shrink-0" /> สนาม {s.court_number}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {schedules.length === 0 && !error && (
