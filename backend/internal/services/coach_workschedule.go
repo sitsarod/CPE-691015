@@ -310,6 +310,30 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 		return nil, err
 	}
 
+	// 2.1) เตรียมนับจำนวนนักเรียน: จับ enrollment เข้าตาม package
+	//      + โหลด "ยืนยันมาเรียน" (ClassConfirmation going) ของทั้งสัปดาห์ทีเดียว กัน N+1
+	enrollmentsByPackage := make(map[uint][]*models.Enrollment)
+	enrollmentIDs := make([]uint, 0, len(enrollments))
+	for i := range enrollments {
+		e := &enrollments[i]
+		enrollmentsByPackage[e.PackageID] = append(enrollmentsByPackage[e.PackageID], e)
+		enrollmentIDs = append(enrollmentIDs, e.ID)
+	}
+
+	goingSet := make(map[confirmKey]bool)
+	if len(enrollmentIDs) > 0 {
+		var confs []models.ClassConfirmation
+		if err := s.db.
+			Where("enrollment_id IN ? AND status = ? AND class_date >= ? AND class_date <= ?",
+				enrollmentIDs, models.ClassConfirmationGoing, start, weekEnd).
+			Find(&confs).Error; err != nil {
+			return nil, err
+		}
+		for _, c := range confs {
+			goingSet[keyOf(c.EnrollmentID, sessionDateValue(c.ClassDate))] = true
+		}
+	}
+
 	// 3) รวมคาบเป็น "คลาส" ตาม course + วันที่ + เวลาเริ่ม-จบ
 	//    package เป็นแค่โควตาจำนวนครั้งที่นักเรียนมาเรียนได้ ไม่ใช่ตัวแยกคลาส
 	//    ดังนั้นหลาย package ของคอร์สเดียวกันที่เรียนวัน-เวลาเดียวกัน = คลาสเดียว การ์ดเดียว
@@ -334,10 +358,12 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 			if !ok {
 				continue
 			}
-			dateStr := start.AddDate(0, 0, off).Format("2006-01-02")
+			classDate := sessionDateValue(start.AddDate(0, 0, off))
+			dateStr := classDate.Format("2006-01-02")
 			key := classKey{courseID: courseID, date: dateStr, start: sch.StartTime, end: sch.EndTime}
-			if _, exists := classMap[key]; !exists {
-				classMap[key] = &dto.WeekSessionResponse{
+			entry, exists := classMap[key]
+			if !exists {
+				entry = &dto.WeekSessionResponse{
 					PackageID:         pkg.ID, // แค่ตัวแทน (มีหลาย package ในคลาสเดียว)
 					PackageScheduleID: sch.ID, // แค่ตัวแทน
 					CourseID:          courseID,
@@ -346,6 +372,19 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 					DayOfWeek:         string(sch.DayOfWeek),
 					StartTime:         sch.StartTime,
 					EndTime:           sch.EndTime,
+				}
+				classMap[key] = entry
+			}
+
+			// นับนักเรียนของ package นี้เข้า "คลาส" — หลาย package ของคอร์ส/เวลาเดียวกัน
+			// ใช้คีย์เดียวกัน ยอดจึงบวกรวมข้าม package ให้อัตโนมัติตามที่ต้องการ
+			for _, e := range enrollmentsByPackage[pkg.ID] {
+				if !canAttend(e, classDate) {
+					continue
+				}
+				entry.TotalCount++
+				if goingSet[keyOf(e.ID, classDate)] {
+					entry.GoingCount++
 				}
 			}
 		}

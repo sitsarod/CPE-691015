@@ -45,6 +45,8 @@ func main() {
 		&models.Review{},
 		&models.DetectedVideo{},
 		&models.RawVideo{},
+		&models.DetectedPhoto{},
+		&models.RawPhoto{},
 		&models.Course{},
 		&models.Package{},
 		&models.PackageSchedule{},
@@ -71,6 +73,7 @@ func main() {
 		&models.PasswordResetOTP{},
 		&models.Court{},
 		&models.Notification{},
+		&models.ClassConfirmation{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)
@@ -90,6 +93,7 @@ func main() {
 	seedCoursesAndPackages(db)
 	seedBankAccounts(db)
 	seedHomeContent(db)
+	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
 }
 
 

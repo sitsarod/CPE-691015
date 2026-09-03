@@ -8,6 +8,9 @@ type AutoQADTO struct {
 	Question        string    `json:"question"`
 	SimilarQuestion string    `json:"similar_question"`
 	Answer          string    `json:"answer"`
+	AttachmentURL   string    `json:"attachment_url,omitempty"`
+	AttachmentType  string    `json:"attachment_type,omitempty"`
+	AttachmentName  string    `json:"attachment_name,omitempty"`
 	SessionID       *uint     `json:"session_id,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -48,10 +51,13 @@ type ChatSessionDTO struct {
 	UpdatedAt  time.Time   `json:"updated_at"`
 }
 
+// CreateChatSessionReq — ทุกฟิลด์เป็น optional
+// ผู้ใช้ที่ไม่ได้ล็อกอินจะเริ่มแชทแบบไม่ระบุตัวตน (ไม่เก็บชื่อ/อีเมล/เบอร์)
+// ผู้ใช้ที่ล็อกอินแล้วฝั่งหน้าเว็บจะส่งข้อมูลจากบัญชีมาให้ พร้อม user_id
 type CreateChatSessionReq struct {
-	GuestName  string `json:"guest_name" binding:"required"`
-	GuestEmail string `json:"guest_email" binding:"required,email"`
-	GuestPhone string `json:"guest_phone" binding:"required"`
+	GuestName  string `json:"guest_name"`
+	GuestEmail string `json:"guest_email"`
+	GuestPhone string `json:"guest_phone"`
 	UserID     *uint  `json:"user_id"`
 }
 
@@ -59,8 +65,13 @@ type UpdateChatSessionReq struct {
 	Status string `json:"status" binding:"required,oneof=active closed"`
 }
 
+// AskQuestionReq — question ไม่บังคับแล้ว เพราะอาจส่งเป็นรูป/ไฟล์แนบอย่างเดียวได้
+// (service จะตรวจเองว่าต้องมีอย่างน้อยข้อความหรือไฟล์แนบ)
 type AskQuestionReq struct {
-	Question string `json:"question" binding:"required"`
+	Question       string `json:"question"`
+	AttachmentURL  string `json:"attachment_url"`
+	AttachmentType string `json:"attachment_type"`
+	AttachmentName string `json:"attachment_name"`
 }
 
 type AskQuestionResponse struct {
@@ -68,7 +79,23 @@ type AskQuestionResponse struct {
 	Match  *AutoQADTO `json:"match,omitempty"`
 }
 
+// AdminReplyReq — answer ไม่บังคับ เพราะแอดมินอาจส่งไฟล์แนบอย่างเดียวได้
 type AdminReplyReq struct {
-	Answer string `json:"answer" binding:"required"`
+	Answer         string `json:"answer"`
+	AttachmentURL  string `json:"attachment_url"`
+	AttachmentType string `json:"attachment_type"`
+	AttachmentName string `json:"attachment_name"`
+}
+
+// ChatUploadResponse ผลลัพธ์การอัปโหลดไฟล์แนบในแชท
+type ChatUploadResponse struct {
+	URL  string `json:"url"`
+	Type string `json:"type"` // "image" | "file"
+	Name string `json:"name"`
+}
+
+// EditMessageReq สำหรับแก้ไขข้อความของลูกค้าในห้องแชท (แก้เฉพาะข้อความ)
+type EditMessageReq struct {
+	Question string `json:"question"`
 }
 

@@ -11,6 +11,8 @@ type Announcement struct {
 	Title   string `json:"title" gorm:"type:varchar(255);not null"`
 	Content string `json:"content" gorm:"type:text"`
 	ImageURL string `json:"image_url" gorm:"column:image_url;type:text"`
+	// Link คือลิงก์ที่แนบมากับประกาศ (ไม่บังคับ) เช่น ลิงก์สมัคร/รายละเอียดเพิ่มเติมภายนอก
+	Link string `json:"link" gorm:"type:text"`
 	
 	UserID uint  `json:"user_id" gorm:"not null"`
 	User   *User `json:"user,omitempty" gorm:"foreignKey:UserID"`

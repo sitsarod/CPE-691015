@@ -6,6 +6,7 @@ import Button from "@/components/Button";
 import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
 import { registerAPI } from "@/services/authAPI";
+import { saveSession } from "@/services/session";
 
 export default function RegisterPage() {
   const router = useRouter(); 
@@ -40,13 +41,17 @@ export default function RegisterPage() {
       newErrors.parentEmail = "กรุณาระบุรูปแบบอีเมลผู้ปกครองให้ถูกต้อง";
     }
 
-    // เกณฑ์ต้องตรงกับฝั่ง backend (dto.RegisterRequest + services.ValidatePasswordStrength)
-    // ถ้าไม่ตรงกัน ผู้ใช้จะกดสมัครแล้วเจอ error จากเซิร์ฟเวอร์ทีหลังโดยไม่รู้สาเหตุ
-    if (formData.password.length < 8) {
+    // ⚠️ สองด่านนี้นับคนละหน่วย ให้ตรงกับ services.ValidatePasswordStrength ฝั่ง backend
+    //
+    //   ขั้นต่ำ นับเป็นตัวอักษร — เป็นกติกาที่สื่อกับผู้ใช้
+    //   เพดาน  นับเป็นไบต์     — เป็นข้อจำกัดจริงของ bcrypt (ไทย 1 ตัว = 3 ไบต์)
+    //
+    // เดิมใช้ .length ทั้งสองด่าน ทำให้รหัสผ่านภาษาไทย 30 ตัว (90 ไบต์)
+    // ผ่านหน้าเว็บไปได้ แล้วไปโดนเซิร์ฟเวอร์ปฏิเสธ ผู้ใช้จะงงว่าทำตามที่บอกแล้วทำไมไม่ผ่าน
+    if ([...formData.password].length < 8) {
       newErrors.password = "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
-    } else if (formData.password.length > 72) {
-      // 72 คือเพดานของ bcrypt ที่ backend ใช้ ถ้าเกินจะถูกตัดทิ้งเงียบ ๆ
-      newErrors.password = "รหัสผ่านต้องไม่เกิน 72 ตัวอักษร";
+    } else if (new TextEncoder().encode(formData.password).length > 72) {
+      newErrors.password = "รหัสผ่านยาวเกินไป (ภาษาอังกฤษไม่เกิน 72 ตัว หรือภาษาไทยไม่เกิน 24 ตัว)";
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -83,14 +88,10 @@ export default function RegisterPage() {
         }
       });
 
-      localStorage.setItem("token", data.token);
-      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
-      localStorage.setItem("role", data.user.role);
-      localStorage.setItem("firstName", data.user.firstName);
-      localStorage.setItem("email", data.user.email);
-      localStorage.setItem("user_id", data.user.id.toString());
-      if (data.customer?.qrImage) localStorage.setItem("qrImage", data.customer.qrImage);
-      
+      // ใช้ตัวเดียวกับหน้าเข้าสู่ระบบ — เดิมตรงนี้ลืมเขียน lastName
+      // ทำให้แถบเมนูด้านข้างแสดงแค่ชื่อต้นหลังสมัครเสร็จ
+      saveSession(data);
+
       router.push("/login");
       router.refresh();
     } catch (err: unknown) {

@@ -177,6 +177,12 @@ type WeekSessionResponse struct {
 	StartTime         string             `json:"start_time"`
 	EndTime           string             `json:"end_time"`
 	AssignedCoaches   []WeekSessionCoach `json:"assigned_coaches"`
+
+	// GoingCount = จำนวนนักเรียนที่ "ยืนยันมาเรียน" (ClassConfirmation going) ของคลาสนี้
+	// TotalCount = จำนวนนักเรียนที่มีสิทธิ์เรียนคาบนี้ทั้งหมด (canAttend)
+	// รวมข้าม package ของคอร์สเดียวกัน/เวลาเดียวกันแล้ว (ตามคีย์ merge)
+	GoingCount int `json:"going_count"`
+	TotalCount int `json:"total_count"`
 }
 
 // Response สำหรับแสดงผลปฏิทินงานของโค้ชคนนั้นๆ

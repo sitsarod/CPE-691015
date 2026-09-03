@@ -16,6 +16,7 @@ export interface Announcement {
   title: string;
   content: string;
   image_url: string;
+  link?: string;
   user_id: number;
   user?: User;
   category_id: number;
@@ -32,6 +33,7 @@ export interface CreateAnnouncementReq {
   title: string;
   content: string;
   image_url: string;
+  link?: string;
   category_id: number;
   start_date: string;
   end_date: string;
@@ -41,6 +43,7 @@ export interface UpdateAnnouncementReq {
   title?: string;
   content?: string;
   image_url?: string;
+  link?: string;
   category_id?: number;
   start_date?: string;
   end_date?: string;

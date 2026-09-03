@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Loader2, Calculator, Plus, X } from 'lucide-react';
+import { Trash2, Loader2, Calculator, Plus, X, QrCode, Copy } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
@@ -18,6 +18,10 @@ interface CoachWageInfo {
   expected: number;     // ค่าจ้างที่ควรได้ทั้งหมด = sessionsDone * payRate (รายครั้ง) หรือ = payRate เต็มจำนวน (รายเดือน)
   alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว (รายครั้ง = สะสมทั้งหมด, รายเดือน = เฉพาะเดือนนี้)
   unpaid: number;       // ยอดที่เติมลงช่องจำนวนเงินให้อัตโนมัติ
+  // ข้อมูลบัญชีรับเงินของโค้ช — ไว้สร้าง QR พร้อมเพย์ + แสดงเลขบัญชีให้แอดมินโอน
+  promptPay?: string;
+  bankName?: string;    // ชื่อธนาคาร (คอลัมน์ bank_account)
+  accountNo?: string;   // เลขบัญชี (คอลัมน์ payment_info)
 }
 
 export interface ExpensesTabProps {
@@ -74,6 +78,16 @@ export default function ExpensesTab({
     setOtherIncomes(prev => prev.filter((_, i) => i !== index));
   };
 
+  // คัดลอกเลขบัญชี/พร้อมเพย์ลงคลิปบอร์ด — เผื่อแอดมินโอนเองไม่สะดวกสแกน
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onTriggerToast(`คัดลอก${label}แล้ว`, 'info');
+    } catch {
+      onTriggerToast('คัดลอกไม่สำเร็จ', 'error');
+    }
+  };
+
   // คำนวณค่าจ้างค้างจ่ายของโค้ชที่เลือก แล้วเติมยอดลงช่องจำนวนเงินแบบ fix
   const loadCoachWage = async (coachIdStr: string) => {
     if (!coachIdStr) {
@@ -92,6 +106,10 @@ export default function ExpensesTab({
 
       const paymentType = coach.payment_type || 'per_session';
       const payRate = coach.pay_rate || 0;
+      // ข้อมูลบัญชีรับเงินของโค้ช (ใช้สร้าง QR + แสดงเลขบัญชี)
+      const promptPay = coach.prompt_pay || '';
+      const bankName = coach.bank_account || '';
+      const accountNo = coach.payment_info || '';
 
       if (paymentType === 'monthly') {
         // โค้ชรายเดือน: ยอดค้างจ่าย = เงินเดือน − ค่าจ้างที่จ่ายไปแล้ว "ในเดือนนี้" (กันจ่ายซ้ำในเดือนเดียว)
@@ -106,7 +124,7 @@ export default function ExpensesTab({
           })
           .reduce((sum, e) => sum + e.expenseamount, 0);
         const unpaid = Math.max(payRate - alreadyPaid, 0);
-        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid, unpaid });
+        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid, unpaid, promptPay, bankName, accountNo });
         setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
         return;
       }
@@ -121,7 +139,7 @@ export default function ExpensesTab({
         .reduce((sum, e) => sum + e.expenseamount, 0);
       const unpaid = Math.max(expected - alreadyPaid, 0);
 
-      setWageInfo({ loading: false, paymentType, payRate, sessionsDone, expected, alreadyPaid, unpaid });
+      setWageInfo({ loading: false, paymentType, payRate, sessionsDone, expected, alreadyPaid, unpaid, promptPay, bankName, accountNo });
       setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
     } catch (err: unknown) {
       setWageInfo({
@@ -428,6 +446,82 @@ export default function ExpensesTab({
                   <p className="text-[10px] text-slate-400">จะบันทึกแยกเป็น {1 + otherIncomes.filter(i => (parseFloat(i.amount) || 0) > 0).length} รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่นรวม ฿{otherIncomeNum.toLocaleString()}</p>
                 )}
               </div>
+
+              {/* ช่องทางจ่ายเงินให้โค้ช: QR พร้อมเพย์ (ยอด = ยอดจ่ายรวม) + เลขบัญชีเผื่อสแกนไม่สะดวก */}
+              {expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    <QrCode className="w-3.5 h-3.5 text-[#CD0D13]" />
+                    <span className="text-xs font-bold">ช่องทางจ่ายเงินให้โค้ช</span>
+                  </div>
+
+                  {/* QR พร้อมเพย์ */}
+                  {wageInfo.promptPay ? (
+                    totalCoachPayout > 0 ? (
+                      <div className="flex flex-col items-center gap-1.5">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://promptpay.io/${wageInfo.promptPay}/${totalCoachPayout.toFixed(2)}.png`}
+                          alt="PromptPay QR"
+                          className="w-40 h-40 rounded-lg border border-slate-100"
+                        />
+                        <p className="text-[10px] text-slate-400">
+                          สแกนด้วยแอปธนาคาร · ยอด ฿{totalCoachPayout.toLocaleString()}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400">ยอดจ่ายเป็น 0 — ยังไม่สร้าง QR</p>
+                    )
+                  ) : (
+                    <p className="text-[11px] text-amber-600">
+                      โค้ชยังไม่ได้ตั้งพร้อมเพย์ ใช้โอนผ่านเลขบัญชีด้านล่างแทน
+                    </p>
+                  )}
+
+                  {/* เลขบัญชี เผื่อไม่สะดวกสแกน */}
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-500">ธนาคาร</span>
+                      <span className="text-[11px] font-semibold text-slate-800 text-right">{wageInfo.bankName || "-"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-500">เลขบัญชี</span>
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-bold text-slate-800 tabular-nums truncate">{wageInfo.accountNo || "-"}</span>
+                        {wageInfo.accountNo && (
+                          <button
+                            type="button"
+                            onClick={() => copyText(wageInfo.accountNo!, 'เลขบัญชี')}
+                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="คัดลอกเลขบัญชี"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                    {wageInfo.promptPay && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">พร้อมเพย์</span>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-slate-800 tabular-nums truncate">{wageInfo.promptPay}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyText(wageInfo.promptPay!, 'พร้อมเพย์')}
+                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="คัดลอกพร้อมเพย์"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </span>
+                      </div>
+                    )}
+                    {!wageInfo.bankName && !wageInfo.accountNo && (
+                      <p className="text-[10px] text-amber-600">โค้ชยังไม่ได้กรอกข้อมูลบัญชีรับเงิน</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="space-y-1">

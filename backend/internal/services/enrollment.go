@@ -320,6 +320,7 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		return nil, ErrEnrollmentNotFound
 	}
 
+	// ด่านนี้แค่ตอบเร็วโดยไม่ต้องเปิดทรานแซกชัน ตัวที่กันอนุมัติซ้ำจริงคือการจองข้างล่าง
 	if enrollment.Status != models.EnrollmentStatusPending {
 		return nil, ErrEnrollmentNotPending
 	}
@@ -332,6 +333,8 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 
 		expireStaleEnrollments(tx)
 
+		// ⚠️ ต้องเช็คที่นั่งก่อนจองสถานะ — awaiting_payment อยู่ใน enrollmentApprovedStatuses
+		// ถ้าจองก่อน seatsFull จะนับใบนี้เป็นที่นั่งที่ยึดแล้ว แล้วตอบว่าเต็มทั้งที่ยังว่าง
 		full, err := seatsFull(tx, enrollment.PackageID, enrollment.Package.MaxSeats)
 		if err != nil {
 			return err
@@ -339,6 +342,22 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		if full {
 			return ErrPackageSeatsFull
 		}
+
+		// จองใบนี้ก่อนแตะอะไรที่เกี่ยวกับเงิน — ⚠️ ห้ามย้ายไปหลัง createEnrollmentBilling
+		//
+		// คำขอสองอันที่เข้ามาพร้อมกันอ่านเจอ pending ได้ทั้งคู่ แล้วสร้างบิลคนละใบ
+		// ให้ใบสมัครเดียวกัน billing_id เก็บได้ใบเดียว อีกใบกลายเป็นบิลลอยที่ลูกค้าอาจจ่ายซ้ำ
+		// UPDATE ... WHERE status = 'pending' รับประกันว่ามีผู้ชนะรายเดียว ผู้แพ้ได้ 0 แถว
+		claim := tx.Model(&models.Enrollment{}).
+			Where("id = ? AND status = ?", enrollment.ID, models.EnrollmentStatusPending).
+			Update("status", models.EnrollmentStatusAwaitingPayment)
+		if claim.Error != nil {
+			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
+		}
+		if claim.RowsAffected == 0 {
+			return ErrEnrollmentNotPending
+		}
+		enrollment.Status = models.EnrollmentStatusAwaitingPayment
 
 		if err := createEnrollmentBilling(tx, &enrollment, &adminID); err != nil {
 			return err
@@ -349,16 +368,12 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 			return err
 		}
 
+		// เคยเรียนมาก่อน = ไม่ต้องรอชำระเงิน เขียนทับสถานะที่จองไว้เป็น active
 		if studiedBefore {
 			return activateEnrollment(tx, &enrollment, enrollment.Package)
 		}
 
-		enrollment.Status = models.EnrollmentStatusAwaitingPayment
-		if err := tx.Model(&models.Enrollment{}).
-			Where("id = ?", enrollment.ID).
-			Update("status", models.EnrollmentStatusAwaitingPayment).Error; err != nil {
-			return errors.New("ไม่สามารถอัปเดตสถานะการลงทะเบียนได้")
-		}
+		// นักเรียนใหม่ = ค้างที่ awaiting_payment ตามที่จองไว้แล้ว
 		return nil
 	})
 

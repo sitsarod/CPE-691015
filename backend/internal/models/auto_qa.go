@@ -25,6 +25,14 @@ type AutoQA struct {
 	SimilarQuestion string `json:"similar_question" gorm:"type:text"`
 	Answer          string `json:"answer" gorm:"type:text" valid:"required~answer is required"`
 
+	// ไฟล์/รูปแนบของข้อความในห้องแชท (ไม่บังคับ)
+	// AttachmentURL ว่าง = ข้อความนี้ไม่มีไฟล์แนบ
+	// AttachmentType: "image" (รูป) หรือ "file" (ไฟล์อื่น เช่น pdf) — ใช้เลือกวิธีแสดงผล
+	// เจ้าของไฟล์คือผู้ส่งของแถวนั้น (question row = ลูกค้า, admin_reply row = แอดมิน)
+	AttachmentURL  string `json:"attachment_url" gorm:"type:text"`
+	AttachmentType string `json:"attachment_type" gorm:"type:varchar(20)"`
+	AttachmentName string `json:"attachment_name" gorm:"type:varchar(255)"`
+
 	// Optional FK — links the AutoQA response to the session it was triggered in
 	SessionID   *uint        `json:"session_id" gorm:"index"`
 	ChatSession *ChatSession `json:"chat_session,omitempty" gorm:"foreignKey:SessionID"`

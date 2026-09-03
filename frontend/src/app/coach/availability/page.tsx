@@ -285,7 +285,7 @@ export default function CoachAvailabilityPage() {
                 {Array.from({ length: HOURS.length + 1 }, (_, i) => {
                   const hour = START_HOUR + i;
                   const transform =
-                    i === 0 ? "translateY(-50%)" : i === HOURS.length ? "translate(-100%,-50%)" : "translate(-50%,-50%)";
+                    i === 0 ? "translateY(-50%)" : i === HOURS.length ? "translate(calc(-100% - 6px),-50%)" : "translate(-50%,-50%)";
                   return (
                     <span
                       key={hour}
@@ -380,7 +380,10 @@ export default function CoachAvailabilityPage() {
               className={`grid items-stretch ${hIdx !== HOURS.length - 1 ? "border-b border-slate-100" : ""}`}
               style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}
             >
-              <div className="py-1 px-2 flex items-center text-[11px] font-bold text-slate-600">{h}:00</div>
+              {/* หมุดเวลาอยู่ที่เส้นแบ่งด้านบนของแถว (จุดเริ่มชั่วโมงนั้น) */}
+              <div className="relative px-2 text-[10px] font-bold text-slate-400 tabular-nums">
+                <span className="absolute left-2 top-0 -translate-y-1/2 bg-white pr-1">{h}:00</span>
+              </div>
 
               {DAYS.map((day) => {
                 const isSel = displayed.has(cellKey(day.value, h));
@@ -429,6 +432,13 @@ export default function CoachAvailabilityPage() {
               })}
             </div>
           ))}
+
+          {/* หมุดปิดท้าย 24:00 (เส้นล่างสุดของชั่วโมงสุดท้าย) */}
+          <div className="grid" style={{ gridTemplateColumns: MOBILE_GRID_COLUMNS }}>
+            <div className="relative h-3 px-2 text-[10px] font-bold text-slate-400 tabular-nums">
+              <span className="absolute left-2 top-0 -translate-y-1/2 bg-white pr-1">24:00</span>
+            </div>
+          </div>
         </div>
       </div>
 

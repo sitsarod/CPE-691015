@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { announcementAPI } from '@/services/announcementAPI';
 import { reviewAPI } from '@/services/reviewAPI';
 import { Announcement, Category } from '@/types/announcement';
 import { Review } from '@/types/review';
-import { ChevronLeft, ChevronRight, Calendar, Eye, X, Star, Quote, BookOpen, UserRound, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Eye, Star, Quote, BookOpen, UserRound, CalendarClock } from 'lucide-react';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
 import type { Enrollment } from '@/types/enrollment';
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/components/course/expiryUtils';
 
 export default function CustomerDashboardPage() {
+  const router = useRouter();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredReviews, setFeaturedReviews] = useState<Review[]>([]);
@@ -24,8 +26,6 @@ export default function CustomerDashboardPage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Modal State
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   /** คอร์สที่กำลังเรียนอยู่และใกล้หมดอายุภายใน 7 วัน */
   const [expiringSoon, setExpiringSoon] = useState<Enrollment[]>([]);
 
@@ -106,20 +106,9 @@ export default function CustomerDashboardPage() {
     resetTimer();
   };
 
-  const handleOpenModal = async (announcement: Announcement) => {
-    setSelectedAnnouncement(announcement);
-    try {
-      await announcementAPI.incrementViewCount(announcement.id);
-      setAnnouncements(prev => prev.map(a => 
-        a.id === announcement.id ? { ...a, view_count: a.view_count + 1 } : a
-      ));
-    } catch (error) {
-      console.error('Failed to increment view count:', error);
-    }
-  };
-
-  const closeModal = () => {
-    setSelectedAnnouncement(null);
+  // เปิดหน้ารายละเอียดข่าวแยกของประกาศนั้น (ไม่ใช้หน้าต่างลอยแล้ว)
+  const openDetail = (announcement: Announcement) => {
+    router.push(`/customer/announcements/${announcement.id}`);
   };
 
   const displayedAnnouncements = selectedCategory
@@ -151,13 +140,13 @@ export default function CustomerDashboardPage() {
               >
                 {/* Background Image or Gradient */}
                 {ann.image_url ? (
-                  <img src={ann.image_url} alt="Cover" className="absolute inset-0 w-full h-full object-cover opacity-90" />
+                  <img src={ann.image_url} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 opacity-90" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
                 )}
-                
-                <div className="absolute inset-0 bg-black/40" /> 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
+                {/* overlay ให้อ่านตัวหนังสือด้านล่างได้ แต่เบาลงเพื่อให้รูปสว่างขึ้น */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                 
                 <div className="absolute bottom-0 left-0 w-full p-8 md:p-16 flex flex-col items-start justify-end h-full">
                   <span className="px-3 py-1 bg-white text-gray-900 text-xs font-bold uppercase tracking-wider rounded-md mb-4 shadow-sm">
@@ -169,8 +158,8 @@ export default function CustomerDashboardPage() {
                   <p className="text-gray-200 text-lg md:text-xl max-w-2xl mb-8 line-clamp-2 drop-shadow-md">
                     {ann.content}
                   </p>
-                  <button 
-                    onClick={() => handleOpenModal(ann)}
+                  <button
+                    onClick={() => openDetail(ann)}
                     className="flex items-center gap-2 px-8 py-3 bg-[#CC0000] hover:bg-[#990000] transition-all duration-300 text-white font-semibold rounded-full shadow-lg shadow-[#CC0000]/30 hover:scale-105"
                   >
                     อ่านเพิ่มเติม
@@ -253,9 +242,9 @@ export default function CustomerDashboardPage() {
           {displayedAnnouncements.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayedAnnouncements.map((ann) => (
-                <div 
+                <div
                   key={ann.id}
-                  onClick={() => handleOpenModal(ann)}
+                  onClick={() => openDetail(ann)}
                   className="bg-white border border-gray-100 rounded-2xl cursor-pointer hover:border-[#CC0000]/50 hover:shadow-lg transition-all duration-300 group flex flex-col h-full overflow-hidden shadow-sm"
                 >
                   {ann.image_url && (
@@ -356,61 +345,6 @@ export default function CustomerDashboardPage() {
           </div>
         )}
       </main>
-
-      {/* Detail Modal */}
-      {selectedAnnouncement && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-            onClick={closeModal}
-          ></div>
-          <div className="relative bg-white border border-gray-100 shadow-2xl rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-            <button 
-              onClick={closeModal}
-              className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur shadow-sm hover:bg-[#CC0000] rounded-full text-gray-600 hover:text-white transition-colors z-10"
-            >
-              <X size={20} />
-            </button>
-            
-            {/* Header Image if available */}
-            {selectedAnnouncement.image_url && (
-              <div className="w-full h-64 md:h-80 overflow-hidden bg-gray-100">
-                <img src={selectedAnnouncement.image_url} alt="Cover" className="w-full h-full object-cover" />
-              </div>
-            )}
-            
-            <div className="p-8 md:p-12">
-               <div className="flex flex-wrap items-center gap-4 mb-6">
-                 <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-md border border-gray-200">
-                    {selectedAnnouncement.category?.name}
-                 </span>
-                 <span className="flex items-center gap-1 text-sm text-gray-500">
-                    <Calendar size={16} />
-                    {new Date(selectedAnnouncement.start_date).toLocaleDateString('th-TH', {
-                      month: 'long', day: 'numeric', year: 'numeric'
-                    })}
-                 </span>
-                 <span className="flex items-center gap-1 text-sm text-gray-500 ml-auto">
-                    <Eye size={16} /> {selectedAnnouncement.view_count} ครั้ง
-                 </span>
-               </div>
-               
-               <h2 className="text-3xl md:text-4xl font-extrabold mb-8 text-gray-900 leading-tight">
-                 {selectedAnnouncement.title}
-               </h2>
-               
-               <div className="prose max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
-                 {selectedAnnouncement.content}
-               </div>
-
-               <div className="mt-12 pt-6 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
-                 <p>ประกาศโดย: {selectedAnnouncement.user?.firstName} {selectedAnnouncement.user?.lastName}</p>
-                 <p>ใช้งานถึง: {new Date(selectedAnnouncement.end_date).toLocaleDateString('th-TH')}</p>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

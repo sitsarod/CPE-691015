@@ -88,8 +88,14 @@ export default function BillingsTab({
     }
 
     // 2. Status Filter (ประเภทรายการ) — ใช้สถานะจริงที่คิดวันครบกำหนดแล้ว
+    // "ค้างชำระ" (unfunded) เป็นร่มของบิลที่ยังไม่จ่าย จึงรวมบิลที่เกินกำหนด (overdue) ด้วย
+    // ส่วน "เกินกำหนดชำระ" เป็นตัวกรองย่อยที่เห็นเฉพาะใบที่เลยกำหนด
     if (statusFilter !== "all") {
-      result = result.filter(b => effectiveStatus(b) === statusFilter);
+      result = result.filter((b) => {
+        const s = effectiveStatus(b);
+        if (statusFilter === "unfunded") return s === "unfunded" || s === "overdue";
+        return s === statusFilter;
+      });
     }
 
     // 3. เรียงลำดับตามสถานะเสมอ: เกินกำหนด > ค้างชำระ > รอตรวจสอบ > ชำระแล้ว

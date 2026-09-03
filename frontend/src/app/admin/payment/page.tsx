@@ -40,6 +40,17 @@ export default function FinancialPortal() {
     }
   }, []);
 
+  // เปลี่ยนแท็บ + เขียน ?tab= ลง URL ด้วย history API เพื่อให้รีเฟรชแล้วยังอยู่แท็บเดิม
+  // (ไม่ใช้ Next router เพราะไม่ต้องการ navigation/scroll — แค่บันทึกสถานะไว้ใน URL)
+  const changeTab = (id: typeof subTab) => {
+    setSubTab(id);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', id);
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
+
   // แสดง skeleton สั้น ๆ ทุกครั้งที่สลับแท็บ เพื่อให้รู้สึกลื่นและรู้ว่ากำลังโหลดเนื้อหาแท็บใหม่
   const [tabLoading, setTabLoading] = useState(false);
   useEffect(() => {
@@ -230,7 +241,7 @@ export default function FinancialPortal() {
         <div className="relative">
           <select
             value={subTab}
-            onChange={(e) => setSubTab(e.target.value as typeof subTab)}
+            onChange={(e) => changeTab(e.target.value as typeof subTab)}
             className="w-full appearance-none bg-white border border-slate-200 rounded-xl shadow-sm pl-4 pr-10 py-3 text-sm font-bold text-[#CD0D13] outline-none focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100"
           >
             {subTabs.map((tab) => (
@@ -253,7 +264,7 @@ export default function FinancialPortal() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setSubTab(tab.id)}
+                onClick={() => changeTab(tab.id)}
                 className={`flex items-center space-x-2 px-6 py-4 border-b-2 font-medium text-sm transition-all whitespace-nowrap ${
                   isActive
                     ? 'border-[#CD0D13] text-[#CD0D13] bg-rose-50/50 font-bold'
@@ -280,10 +291,10 @@ export default function FinancialPortal() {
         </div>
       )}
 
-      {/* Loading Overlay */}
+      {/* Loading Skeleton (โหลดครั้งแรก) — ใช้โครงเดียวกับตอนสลับแท็บ ไม่ให้หน้ากระโดด */}
       {isLoading && (
-        <div className="bg-white/50 backdrop-blur-xs flex items-center justify-center p-12 rounded-2xl border border-slate-200">
-          <div className="text-slate-500 font-bold text-xs animate-pulse">กำลังโหลดข้อมูลและสถิติการเงิน...</div>
+        <div className="min-h-[500px]">
+          <TabSkeleton tab={subTab} />
         </div>
       )}
 
@@ -291,7 +302,7 @@ export default function FinancialPortal() {
       {!isLoading && (
         <div className="min-h-[500px]">
           {tabLoading ? (
-            <TabSkeleton />
+            <TabSkeleton tab={subTab} />
           ) : (
           <>
           {subTab === 'issue' && (
@@ -356,35 +367,179 @@ export default function FinancialPortal() {
   );
 }
 
-// Skeleton แบบทั่วไป (การ์ดสถิติ + บล็อกตาราง) ใช้ระหว่างสลับแท็บ
-function TabSkeleton() {
+// Skeleton เฉพาะทางของแต่ละแท็บ — ล้อ layout จริงของแท็บนั้น ๆ ไม่ให้หน้ากระโดด
+function TabSkeleton({ tab }: { tab: 'issue' | 'slips' | 'summary' | 'banks' | 'expenses' }) {
+  const skeletons = {
+    issue: <IssueSkeleton />,
+    slips: <SlipsSkeleton />,
+    summary: <SummarySkeleton />,
+    expenses: <ExpensesSkeleton />,
+    banks: <BanksSkeleton />,
+  };
   return (
-    <div className="animate-pulse space-y-6" aria-hidden="true">
-      {/* แถวการ์ดด้านบน */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-slate-100 flex-shrink-0" />
+    <div className="animate-pulse" aria-hidden="true">
+      {skeletons[tab]}
+    </div>
+  );
+}
+
+const CARD = "bg-white rounded-2xl border border-slate-200 shadow-sm";
+
+// แจ้งค่าใช้จ่าย/ออกบิล — ฟอร์มใหญ่ (2 คอลัมน์) + คอลัมน์รายการด้านข้าง
+function IssueSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`lg:col-span-2 ${CARD} p-6 space-y-5`}>
+        <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-xl max-w-md">
+          <div className="h-8 flex-1 rounded-lg bg-white" />
+          <div className="h-8 flex-1 rounded-lg bg-slate-200/60" />
+        </div>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-3 w-24 rounded bg-slate-100" />
+            <div className="h-10 w-full rounded-xl bg-slate-100" />
+          </div>
+        ))}
+        <div className="h-11 w-full rounded-xl bg-slate-200" />
+      </div>
+      <div className={`${CARD} p-6 space-y-4 self-start`}>
+        <div className="h-4 w-32 rounded bg-slate-200" />
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2 border-b border-slate-50 pb-3">
+            <div className="h-3 w-3/4 rounded bg-slate-100" />
+            <div className="h-3 w-1/2 rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ตรวจสอบสลิป — การ์ดเดียว: หัว (ค้นหา + ฟิลเตอร์) + รายการสลิป
+function SlipsSkeleton() {
+  return (
+    <div className={`${CARD} overflow-hidden`}>
+      <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row gap-4">
+        <div className="h-9 w-full sm:w-64 rounded-xl bg-slate-100" />
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+          {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-7 w-16 rounded-lg bg-slate-200/60" />)}
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center gap-4 p-5">
+            <div className="h-12 w-12 rounded-xl bg-slate-100 shrink-0" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-2/3 bg-slate-100 rounded" />
-              <div className="h-5 w-1/2 bg-slate-200 rounded" />
+              <div className="h-3.5 w-40 rounded bg-slate-200" />
+              <div className="h-3 w-56 max-w-full rounded bg-slate-100" />
+            </div>
+            <div className="h-6 w-20 rounded-lg bg-slate-100 shrink-0 hidden sm:block" />
+            <div className="h-8 w-24 rounded-lg bg-slate-200 shrink-0" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// สรุปการเงิน — ฟิลเตอร์ + การ์ดสถิติ + กราฟแนวโน้ม + รายรับ/รายจ่ายแยกประเภท
+function SummarySkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-9 w-20 rounded-xl bg-slate-100" />)}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`${CARD} p-6 flex items-center gap-4`}>
+            <div className="h-12 w-12 rounded-xl bg-slate-100 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-2/3 rounded bg-slate-100" />
+              <div className="h-5 w-1/2 rounded bg-slate-200" />
             </div>
           </div>
         ))}
       </div>
+      <div className={`${CARD} p-6`}>
+        <div className="mb-6 h-4 w-40 rounded bg-slate-200" />
+        <div className="flex h-40 items-end gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex-1 rounded-t-md bg-slate-100" style={{ height: `${30 + ((i * 23) % 60)}%` }} />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[0, 1].map((c) => (
+          <div key={c} className={`${CARD} p-6 space-y-4`}>
+            <div className="h-4 w-40 rounded bg-slate-200" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex justify-between">
+                  <div className="h-3 w-20 rounded bg-slate-100" />
+                  <div className="h-3 w-16 rounded bg-slate-100" />
+                </div>
+                <div className="h-2 w-full rounded-full bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-      {/* บล็อกตาราง/เนื้อหาหลัก */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="h-4 w-40 bg-slate-200 rounded" />
-        <div className="space-y-3">
+// บันทึกค่าใช้จ่าย — ฟอร์ม (1 คอลัมน์) + ตาราง (2 คอลัมน์)
+function ExpensesSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`${CARD} p-6 space-y-4 self-start`}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-3 w-24 rounded bg-slate-100" />
+            <div className="h-10 w-full rounded-xl bg-slate-100" />
+          </div>
+        ))}
+        <div className="h-11 w-full rounded-xl bg-slate-200" />
+      </div>
+      <div className={`lg:col-span-2 ${CARD} overflow-hidden self-start`}>
+        <div className="p-6 border-b border-slate-200">
+          <div className="h-4 w-48 rounded bg-slate-200" />
+        </div>
+        <div className="divide-y divide-slate-100">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex items-center gap-4">
-              <div className="h-3 w-24 bg-slate-100 rounded" />
-              <div className="h-3 flex-1 bg-slate-100 rounded" />
-              <div className="h-3 w-16 bg-slate-100 rounded" />
+            <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+              <div className="h-3 w-20 rounded bg-slate-100" />
+              <div className="h-3 flex-1 rounded bg-slate-100" />
+              <div className="h-3 w-16 rounded bg-slate-100" />
+              <div className="h-6 w-6 rounded-full bg-slate-100" />
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// บัญชีรับเงิน — กริดการ์ดบัญชี
+function BanksSkeleton() {
+  return (
+    <div className={`${CARD} p-6`}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-3xl border border-slate-200 p-6 space-y-4">
+            <div className="flex justify-between">
+              <div className="h-5 w-28 rounded bg-slate-200" />
+              <div className="h-5 w-16 rounded-full bg-slate-100" />
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-5 space-y-3">
+              <div className="h-3 w-16 rounded bg-slate-100" />
+              <div className="h-5 w-40 rounded bg-slate-200" />
+              <div className="h-3 w-16 rounded bg-slate-100" />
+              <div className="h-5 w-32 rounded bg-slate-200" />
+            </div>
+            <div className="h-9 w-full rounded-xl bg-slate-100" />
+          </div>
+        ))}
       </div>
     </div>
   );

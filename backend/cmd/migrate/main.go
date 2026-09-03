@@ -46,6 +46,8 @@ func main() {
 		&models.Review{},
 		&models.DetectedVideo{},
 		&models.RawVideo{},
+		&models.DetectedPhoto{},
+		&models.RawPhoto{},
 		&models.Course{},
 		&models.Package{},
 		&models.PackageSchedule{},
@@ -72,6 +74,7 @@ func main() {
 		&models.PasswordResetOTP{},
 		&models.Court{},
 		&models.Notification{},
+		&models.ClassConfirmation{},
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}

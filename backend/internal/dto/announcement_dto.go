@@ -7,6 +7,7 @@ type AnnouncementDTO struct {
 	Title       string       `json:"title"`
 	Content     string       `json:"content"`
 	ImageURL    string       `json:"image_url"`
+	Link        string       `json:"link"`
 	UserID      uint         `json:"user_id"`
 	User        *UserDTO     `json:"user"`
 	CategoryID  uint         `json:"category_id"`
@@ -35,6 +36,7 @@ type CreateAnnouncementReq struct {
 	Title      string    `json:"title" binding:"required"`
 	Content    string    `json:"content"`
 	ImageURL   string    `json:"image_url"`
+	Link       string    `json:"link"`
 	// user_id ไม่รับจาก client อีกต่อไป — controller จะดึงจาก JWT ของแอดมินที่ล็อกอินอยู่
 	// เพื่อกันการปลอมเจ้าของประกาศ (attribution) และให้ตรงกับตัวตนจริงเสมอ
 	CategoryID uint      `json:"category_id" binding:"required"`
@@ -50,6 +52,7 @@ type UpdateAnnouncementReq struct {
 	Title      *string    `json:"title"`
 	Content    *string    `json:"content"`
 	ImageURL   *string    `json:"image_url"`
+	Link       *string    `json:"link"`
 	CategoryID *uint      `json:"category_id"`
 	StartDate  *time.Time `json:"start_date"`
 	EndDate    *time.Time `json:"end_date"`

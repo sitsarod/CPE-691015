@@ -12,9 +12,19 @@ export interface AutoQA {
   question: string;
   similar_question: string;
   answer: string;
+  attachment_url?: string;
+  attachment_type?: 'image' | 'file' | string;
+  attachment_name?: string;
   session_id?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+// ผลลัพธ์การอัปโหลดไฟล์แนบในแชท
+export interface ChatUploadResponse {
+  url: string;
+  type: 'image' | 'file';
+  name: string;
 }
 
 export interface ChatSession {
@@ -44,10 +54,11 @@ export interface UpdateAutoQAReq {
   answer?: string;
 }
 
+// ทุกฟิลด์ optional — guest ที่ไม่ล็อกอินเริ่มแชทแบบไม่ระบุตัวตนได้
 export interface CreateChatSessionReq {
-  guest_name: string;
-  guest_email: string;
-  guest_phone: string;
+  guest_name?: string;
+  guest_email?: string;
+  guest_phone?: string;
   user_id?: number;
 }
 
@@ -56,7 +67,10 @@ export interface UpdateChatSessionReq {
 }
 
 export interface AskQuestionReq {
-  question: string;
+  question?: string;
+  attachment_url?: string;
+  attachment_type?: string;
+  attachment_name?: string;
 }
 
 export interface AskQuestionResponse {
@@ -65,6 +79,9 @@ export interface AskQuestionResponse {
 }
 
 export interface AdminReplyReq {
-  answer: string;
+  answer?: string;
+  attachment_url?: string;
+  attachment_type?: string;
+  attachment_name?: string;
 }
 

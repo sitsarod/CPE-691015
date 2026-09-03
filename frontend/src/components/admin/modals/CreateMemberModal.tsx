@@ -177,7 +177,7 @@ export function CreateMemberModal({
                 onChange={(e) => setCoach({ pay_rate: Number(e.target.value) })}
               />
             </div>
-            <InputField label="รูปโปรไฟล์ (URL, ถ้ามี)" value={coach.profile_picture ?? ""} onChange={(e) => setCoach({ profile_picture: e.target.value })} />
+            {/* รูปโปรไฟล์ตั้งทีหลังได้ผ่านหน้าโปรไฟล์โค้ช (อัปโหลดขึ้น Cloudinary) จึงไม่ต้องกรอก URL ตอนสร้าง */}
           </div>
         )}
 

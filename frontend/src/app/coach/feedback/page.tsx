@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { reviewAPI } from '@/services/reviewAPI';
 import { Review } from '@/types/review';
 import Toast from '@/components/Toast';
-import { Star, Search, MessageSquareMore, BookOpen, Loader2 } from 'lucide-react';
+import { ReviewStatCard } from '@/components/review/ReviewUI';
+import { Star, Search, MessageSquareText, Sparkles, BookOpen, Loader2 } from 'lucide-react';
 
 // ==================== Star Rating (read-only) ====================
 function StarRating({ value, size = 16 }: { value: number; size?: number }) {
@@ -108,26 +109,37 @@ export default function CoachFeedbackPage() {
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <StatCard
-          label="รีวิวทั้งหมด"
-          value={stats.total.toString()}
-          icon={<MessageSquareMore size={22} />}
-          tone="gray"
-        />
-        <StatCard
-          label="คะแนนเฉลี่ย"
-          value={stats.total > 0 ? stats.avg.toFixed(1) : '-'}
-          icon={<Star size={22} fill="currentColor" />}
-          tone="amber"
-        />
-        <StatCard
-          label="รีวิว 5 ดาว"
-          value={stats.fiveStar.toString()}
-          icon={<Star size={22} fill="currentColor" />}
-          tone="red"
-        />
+      {/* Stats — หน้าตาเดียวกับหน้าแอดมิน/ผู้เรียน (ใช้ ReviewStatCard ตัวเดียวกันทั้งสามหน้า)
+          จอกว้าง: grid ปกติ / มือถือ: เลื่อนนิ้วแนวนอน */}
+      <div className="no-scrollbar -mx-4 mb-8 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+          <ReviewStatCard
+            label="รีวิวทั้งหมด"
+            value={stats.total.toString()}
+            icon={<MessageSquareText size={22} />}
+            tone="red"
+            caption="รีวิวที่ลูกค้าให้คุณทั้งหมด"
+          />
+        </div>
+        <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+          <ReviewStatCard
+            label="คะแนนเฉลี่ย"
+            value={stats.total > 0 ? stats.avg.toFixed(1) : '-'}
+            icon={<Star size={22} fill="currentColor" />}
+            tone="amber"
+            caption={`จากทั้งหมด ${stats.total} รีวิว`}
+            starValue={stats.total > 0 ? Math.round(stats.avg) : undefined}
+          />
+        </div>
+        <div className="w-[210px] shrink-0 snap-start sm:w-auto sm:shrink">
+          <ReviewStatCard
+            label="รีวิว 5 ดาว"
+            value={stats.fiveStar.toString()}
+            icon={<Sparkles size={22} />}
+            tone="orange"
+            caption="คะแนนเต็มจากลูกค้า"
+          />
+        </div>
       </div>
 
       {/* Filter tabs + search */}
@@ -190,7 +202,7 @@ export default function CoachFeedbackPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 py-16 text-center text-gray-400">
-          <MessageSquareMore size={40} className="mx-auto mb-3 opacity-40" />
+          <MessageSquareText size={40} className="mx-auto mb-3 opacity-40" />
           {reviews.length === 0 ? 'ยังไม่มีลูกค้ารีวิวถึงคุณ' : 'ไม่พบรีวิวที่ตรงกับเงื่อนไข'}
         </div>
       ) : (
@@ -205,33 +217,6 @@ export default function CoachFeedbackPage() {
 }
 
 // ==================== Sub-components ====================
-function StatCard({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  tone: 'gray' | 'amber' | 'red';
-}) {
-  const tones = {
-    gray: 'bg-gray-100 text-gray-600',
-    amber: 'bg-amber-50 text-amber-500',
-    red: 'bg-rose-50 text-[#CC0000]',
-  };
-  return (
-    <div className="flex items-center gap-4 p-5 rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className={`p-3 rounded-lg ${tones[tone]}`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-black text-gray-900 leading-tight">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 function ReviewCard({ review }: { review: Review }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex flex-col gap-4 transition-shadow hover:shadow-md">

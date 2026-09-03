@@ -80,6 +80,48 @@ func ValidateImageUpload(fh *multipart.FileHeader) (string, error) {
 	return validateUpload(fh, MaxImageUploadBytes, imageExtByType)
 }
 
+// MaxChatUploadBytes เพดานไฟล์แนบในแชท (รูป/PDF)
+const MaxChatUploadBytes = 10 << 20 // 10 MB
+
+// chatFileExtByType ชนิดไฟล์ที่ไม่ใช่รูปแต่อนุญาตให้แนบในแชทได้
+// จงใจรับแค่ PDF ที่ปลอดภัย ไม่รับ html/svg/ไฟล์รันได้ (กัน XSS เหมือน upload.go ด้านบน)
+var chatFileExtByType = map[string]string{
+	"application/pdf": ".pdf",
+}
+
+// ValidateChatAttachment ตรวจไฟล์แนบในแชท — อนุญาต "รูปภาพ" และ "PDF"
+// คืน (นามสกุลที่จะใช้บันทึก, ชนิด: "image" หรือ "file")
+// ตรวจจากเนื้อไฟล์จริง ไม่เชื่อชื่อไฟล์/Content-Type ที่ client ส่งมา
+func ValidateChatAttachment(fh *multipart.FileHeader) (ext string, kind string, err error) {
+	if fh.Size > MaxChatUploadBytes {
+		return "", "", fmt.Errorf("%w (สูงสุด %d MB)", ErrUploadTooLarge, MaxChatUploadBytes>>20)
+	}
+	if fh.Size == 0 {
+		return "", "", ErrUploadUnreadable
+	}
+
+	src, e := fh.Open()
+	if e != nil {
+		return "", "", ErrUploadUnreadable
+	}
+	defer src.Close()
+
+	head := make([]byte, sniffLen)
+	n, e := src.Read(head)
+	if n == 0 && e != nil {
+		return "", "", ErrUploadUnreadable
+	}
+
+	detected := http.DetectContentType(head[:n])
+	if ex, ok := imageExtByType[detected]; ok {
+		return ex, "image", nil
+	}
+	if ex, ok := chatFileExtByType[detected]; ok {
+		return ex, "file", nil
+	}
+	return "", "", fmt.Errorf("%w (ตรวจพบว่าเป็น %s)", ErrUploadBadType, detected)
+}
+
 // ValidateVideoUpload ตรวจว่าไฟล์เป็นวิดีโอจริงและขนาดไม่เกิน แล้วคืนนามสกุลที่ควรใช้บันทึก
 func ValidateVideoUpload(fh *multipart.FileHeader) (string, error) {
 	return validateUpload(fh, MaxVideoUploadBytes, videoExtByType)

@@ -1,24 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { clearSession } from "@/services/session";
 
-// รายการ key ใน localStorage ที่เก็บข้อมูล session ของผู้ใช้ (ต้องล้างทั้งหมดตอน logout/หมดอายุ)
-const SESSION_KEYS = [
-  "token",
-  "refresh_token",
-  "role",
-  "user_id",
-  "user_name",
-  "user_email",
-  "firstName",
-  "lastName",
-  "email",
-  "qrImage",
-];
-
-function clearSession() {
-  SESSION_KEYS.forEach((key) => localStorage.removeItem(key));
-}
+// ⚠️ รายการคีย์กับฟังก์ชันล้าง session เคยอยู่ในไฟล์นี้ ย้ายไป services/session.ts แล้ว
+//
+// ตอนนั้นมีรายการคีย์อยู่สี่ชุดในโปรเจกต์ (ไฟล์นี้ + แถบบนสามบทบาท)
+// และไม่มีชุดไหนตรงกันเลย ชุดในไฟล์นี้เป็นชุดที่ครบที่สุดจึงยกไปเป็นตัวจริง
 
 // กันไม่ให้ patch window.fetch ซ้ำเมื่อ component re-render
 let installed = false;

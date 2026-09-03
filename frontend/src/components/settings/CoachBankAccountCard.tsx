@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Landmark, ShieldAlert } from "lucide-react";
+import { ShieldAlert, Landmark } from "lucide-react";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
 import InputField from "@/components/InputField";

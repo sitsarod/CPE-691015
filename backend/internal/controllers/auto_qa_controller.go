@@ -2,8 +2,12 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
@@ -12,11 +16,69 @@ import (
 )
 
 type AutoQAController struct {
-	service services.AutoQAService
+	service    services.AutoQAService
+	cloudinary *services.CloudinaryService // nil = ไม่ได้ตั้งค่า จะ fallback เก็บไฟล์ในเครื่อง
 }
 
-func NewAutoQAController(s services.AutoQAService) *AutoQAController {
-	return &AutoQAController{service: s}
+func NewAutoQAController(s services.AutoQAService, cloud *services.CloudinaryService) *AutoQAController {
+	return &AutoQAController{service: s, cloudinary: cloud}
+}
+
+// UploadChatAttachment รับไฟล์แนบในแชท (รูป/PDF) — ใช้ได้ทั้งลูกค้า (guest) และแอดมิน
+// endpoint สาธารณะ (มี rate limit) เพราะผู้ที่ไม่ได้ล็อกอินก็ต้องแนบไฟล์ได้
+func (ctrl *AutoQAController) UploadChatAttachment(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการส่ง"})
+		return
+	}
+
+	ext, kind, err := ValidateChatAttachment(file)
+	if err != nil {
+		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	// ชื่อไฟล์เดิมใช้เพื่อ "แสดงผล" เท่านั้น (React escape ให้อยู่แล้ว) ไม่เอาไปตั้งชื่อไฟล์จริง
+	displayName := filepath.Base(file.Filename)
+	if len(displayName) > 120 {
+		displayName = displayName[:120]
+	}
+
+	// เก็บบน Cloudinary เมื่อถูกตั้งค่า
+	if ctrl.cloudinary != nil {
+		src, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
+			return
+		}
+		defer src.Close()
+
+		url, err := ctrl.cloudinary.UploadFileToFolder(c.Request.Context(), src, "chat")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, dto.ChatUploadResponse{URL: url, Type: kind, Name: displayName})
+		return
+	}
+
+	// fallback เก็บไฟล์ในเครื่อง (โฟลเดอร์ ./uploads/chat) — ตั้งชื่อไฟล์เองทั้งหมด
+	uploadDir := filepath.Join("./uploads", "chat")
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
+		return
+	}
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+	if err := c.SaveUploadedFile(file, filepath.Join(uploadDir, filename)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์อัปโหลดไม่สำเร็จ"})
+		return
+	}
+	c.JSON(http.StatusOK, dto.ChatUploadResponse{
+		URL:  "http://localhost:8000/uploads/chat/" + filename,
+		Type: kind,
+		Name: displayName,
+	})
 }
 
 // autoQAErrorStatus map error จาก service เป็น HTTP status code ที่ถูกต้อง
@@ -26,7 +88,11 @@ func autoQAErrorStatus(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, services.ErrChatSessionClosed):
 		return http.StatusConflict
-	case errors.Is(err, services.ErrUserNotFoundForChat):
+	case errors.Is(err, services.ErrMessageNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, services.ErrCannotModifyMessage):
+		return http.StatusForbidden
+	case errors.Is(err, services.ErrUserNotFoundForChat), errors.Is(err, services.ErrEmptyMessage):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
@@ -259,4 +325,51 @@ func (ctrl *AutoQAController) AdminReply(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// EditMessage — ลูกค้าแก้ไขข้อความของตัวเองในห้องแชท
+func (ctrl *AutoQAController) EditMessage(c *gin.Context) {
+	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		return
+	}
+
+	var req dto.EditMessageReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := ctrl.service.EditUserMessage(uint(sessionID), uint(msgID), &req)
+	if err != nil {
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// DeleteMessage — ลูกค้าลบข้อความของตัวเองในห้องแชท
+func (ctrl *AutoQAController) DeleteMessage(c *gin.Context) {
+	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		return
+	}
+
+	if err := ctrl.service.DeleteUserMessage(uint(sessionID), uint(msgID)); err != nil {
+		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ลบข้อความสำเร็จ"})
 }

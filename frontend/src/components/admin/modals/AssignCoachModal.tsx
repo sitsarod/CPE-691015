@@ -7,6 +7,7 @@ import { CoachListItem } from "@/services/coachAPI";
 import { Court } from "@/services/courtAPI";
 import { AvailabilitySlot, COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS } from "@/types/coach";
 import { WeekSession, createWorkSchedule, deleteWorkSchedule } from "@/services/workScheduleAPI";
+import { suggestedCoaches } from "@/lib/coachRatio";
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface Props {
   coaches: CoachListItem[];
   courts: Court[]; // รายการสนาม (จาก API) — เลือกได้หรือเว้นว่าง (ไม่ระบุ)
   availByCoach: Map<number, Map<string, AvailabilitySlot[]>>;
+  studentsPerCoach: number; // อัตราส่วนแนะนำ: โค้ช 1 : นักเรียนกี่คน
   onChanged: () => void;
 }
 
@@ -24,7 +26,8 @@ const toMin = (t: string) => {
   return (h || 0) * 60 + (m || 0);
 };
 
-export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, courts, availByCoach, onChanged }: Props) {
+
+export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, courts, availByCoach, studentsPerCoach, onChanged }: Props) {
   // ตัวเลือกสนาม: เฉพาะสนามที่เปิดใช้งาน (SelectField มี placeholder ว่าง = ไม่ระบุ อยู่แล้ว)
   const courtOptions = courts.filter((c) => c.is_active).map((c) => ({ label: c.name, value: c.name }));
   const [selectedCoach, setSelectedCoach] = useState("");
@@ -34,6 +37,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
   const [search, setSearch] = useState(""); // ค้นหาชื่อโค้ช
   const [formError, setFormError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null); // แถวโค้ชที่กำลังถามยืนยันถอน
 
   // รีเซ็ตฟอร์มทุกครั้งที่เปิด modal ใหม่
   useEffect(() => {
@@ -44,6 +48,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
     setEmergency(false);
     setSearch("");
     setFormError(null);
+    setConfirmRemoveId(null);
   }, [isOpen]);
 
   const assignedIds = useMemo(
@@ -109,11 +114,12 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
     }
   };
 
-  const handleRemove = async (workScheduleId: number) => {
-    if (!confirm("ถอนโค้ชคนนี้ออกจากคาบสอนนี้ใช่หรือไม่?")) return;
+  // ถอนจริง — ยืนยันด้วย UI inline ในแถวโค้ช (ไม่ใช้ window.confirm ที่หน้าตาเป็นของเบราว์เซอร์)
+  const doRemove = async (workScheduleId: number) => {
     try {
       setIsBusy(true);
       await deleteWorkSchedule(workScheduleId);
+      setConfirmRemoveId(null);
       onChanged();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "ถอนโค้ชไม่สำเร็จ");
@@ -135,6 +141,33 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
         <div className="space-y-7">
           {formError && <FormError message={formError} />}
 
+          {/* สรุปจำนวนนักเรียน (ยืนยัน/ทั้งหมด) + คำแนะนำจำนวนโค้ช */}
+          {(() => {
+            const suggested = suggestedCoaches(session.going_count, studentsPerCoach);
+            const short = suggested - session.assigned_coaches.length;
+            return (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <span className="inline-flex items-center gap-1.5 text-slate-600">
+                  <UserCheck className="h-4 w-4 text-emerald-500" />
+                  ยืนยันมาเรียน <span className="font-bold text-slate-800">{session.going_count}</span>
+                  <span className="text-slate-400">/ {session.total_count} คน</span>
+                </span>
+                {suggested > 0 && (
+                  <span className="text-slate-500">
+                    แนะนำ <span className="font-bold text-slate-800">{suggested}</span> โค้ช
+                    <span className="text-slate-400"> (1:{studentsPerCoach})</span>
+                  </span>
+                )}
+                <span className="text-slate-500">
+                  มอบหมายแล้ว <span className="font-bold text-slate-800">{session.assigned_coaches.length}</span>
+                </span>
+                {short > 0 && session.assigned_coaches.length > 0 && (
+                  <span className="font-semibold text-amber-600">ควรเพิ่มอีก {short}</span>
+                )}
+              </div>
+            );
+          })()}
+
           {/* โค้ชที่สอนคาบนี้อยู่ — แสดงเฉพาะเมื่อมีโค้ชแล้ว */}
           {session.assigned_coaches.length > 0 && (
             <div>
@@ -142,24 +175,53 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                 <UserCheck className="w-5 h-5 text-[#CD0D13]" /> โค้ชที่สอนคาบนี้ ({session.assigned_coaches.length})
               </p>
               <div className="space-y-2.5">
-                {session.assigned_coaches.map((a) => (
-                  <div key={a.work_schedule_id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5">
-                    <div>
-                      <span className="text-base font-semibold text-slate-800">{a.coach_name || `โค้ช #${a.coach_id}`}</span>
-                      <span className="text-sm text-slate-400 ml-3">{a.court_number ? `สนาม ${a.court_number}` : "ไม่ระบุสนาม"}</span>
+                {session.assigned_coaches.map((a) => {
+                  const confirming = confirmRemoveId === a.work_schedule_id;
+                  return (
+                    <div
+                      key={a.work_schedule_id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 transition-colors ${
+                        confirming ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <span className="text-base font-semibold text-slate-800">{a.coach_name || `โค้ช #${a.coach_id}`}</span>
+                        <span className="text-sm text-slate-400 ml-3">{a.court_number ? `สนาม ${a.court_number}` : "ไม่ระบุสนาม"}</span>
+                      </div>
+
+                      {!isPast && (
+                        confirming ? (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="hidden text-xs font-medium text-slate-500 sm:inline">ถอนออกจากคาบ?</span>
+                            <button
+                              onClick={() => setConfirmRemoveId(null)}
+                              disabled={isBusy}
+                              className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-white cursor-pointer disabled:opacity-50"
+                            >
+                              ยกเลิก
+                            </button>
+                            <button
+                              onClick={() => doRemove(a.work_schedule_id)}
+                              disabled={isBusy}
+                              className="rounded-lg bg-[#E63946] px-3 py-2 text-sm font-bold text-white hover:bg-[#d62839] cursor-pointer disabled:opacity-60"
+                            >
+                              {isBusy ? "กำลังถอน..." : "ยืนยันถอน"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmRemoveId(a.work_schedule_id)}
+                            disabled={isBusy}
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer disabled:opacity-50"
+                            title="ถอนโค้ช"
+                          >
+                            <Trash2 className="w-4 h-4" /> ถอน
+                          </button>
+                        )
+                      )}
                     </div>
-                    {!isPast && (
-                      <button
-                        onClick={() => handleRemove(a.work_schedule_id)}
-                        disabled={isBusy}
-                        className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer disabled:opacity-50"
-                        title="ถอนโค้ช"
-                      >
-                        <Trash2 className="w-4 h-4" /> ถอน
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -2,39 +2,74 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X, Send, Paperclip, FileText, Loader2, Download, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { autoQaAPI } from '../services/autoQaAPI';
 import { getUserProfileAPI } from '../services/userAPI';
-import { AutoQA, ChatSession } from '../types/autoQa';
+import { AutoQA, ChatSession, CreateChatSessionReq } from '../types/autoQa';
 
 interface ChatMessage {
   id: string;
+  rowId?: number; // id ของแถว AutoQA จริง (ใช้แก้ไข/ลบ) — ข้อความชั่วคราวจะไม่มี
   sender: 'user' | 'bot' | 'admin';
   text: string;
   timestamp: Date;
+  attachmentUrl?: string;
+  attachmentType?: string; // "image" | "file"
+  attachmentName?: string;
 }
 
-// ให้ปุ่ม "สอบถาม" บน Topbar เปิดกล่องแชทนี้ได้ผ่าน event กลาง (ไม่ต้อง prop drilling ข้าม layout)
+// ให้ปุ่ม "สอบถาม" บน Topbar เปิดกล่องแชทนี้ได้ผ่าน event กลาง
 export const OPEN_CHAT_EVENT = 'koyama:open-chat';
 
-// แปลง log แชท (AutoQA) เป็นข้อความในกล่องแชท — แยก "แอดมินตอบเอง" ออกจาก "บอทตอบ"
+const ANON_NAME = 'ผู้เยี่ยมชม';
+
+// "เจ้าของห้องแชท" ตามตัวตนปัจจุบัน — ผู้ล็อกอิน "u:<id>", guest "guest"
+function chatOwner(): string {
+  if (typeof window === 'undefined') return 'guest';
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+  const uid = localStorage.getItem('user_id');
+  if (token && role === 'customer' && uid) return `u:${uid}`;
+  return 'guest';
+}
+
+// เก็บ session id แยกคีย์ตามเจ้าของ เพื่อให้คนเดิมล็อกอินกลับมาเจอห้อง/ประวัติเดิม
+// และ guest กับผู้ล็อกอินไม่ใช้ห้องปนกัน
+function chatSessionKey(owner: string): string {
+  return `auto_qa_session_${owner}`;
+}
+
 function mapAutoQAsToMessages(qas: AutoQA[]): ChatMessage[] {
   const out: ChatMessage[] = [];
   qas.forEach((qa) => {
-    if (qa.question) {
+    if (qa.mode === 'admin_reply') {
+      out.push({
+        id: `admin-${qa.id}`,
+        rowId: qa.id,
+        sender: 'admin',
+        text: qa.answer,
+        timestamp: new Date(qa.created_at),
+        attachmentUrl: qa.attachment_url,
+        attachmentType: qa.attachment_type,
+        attachmentName: qa.attachment_name,
+      });
+      return;
+    }
+    if (qa.question || qa.attachment_url) {
       out.push({
         id: `user-${qa.id}`,
+        rowId: qa.id,
         sender: 'user',
         text: qa.question,
         timestamp: new Date(qa.created_at),
+        attachmentUrl: qa.attachment_url,
+        attachmentType: qa.attachment_type,
+        attachmentName: qa.attachment_name,
       });
     }
-    out.push({
-      id: `bot-${qa.id}`,
-      sender: qa.mode === 'admin_reply' ? 'admin' : 'bot',
-      text: qa.answer,
-      timestamp: new Date(qa.created_at),
-    });
+    if (qa.answer) {
+      out.push({ id: `bot-${qa.id}`, rowId: qa.id, sender: 'bot', text: qa.answer, timestamp: new Date(qa.created_at) });
+    }
   });
   return out;
 }
@@ -44,250 +79,302 @@ export default function ChatWidget() {
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [quickReplies, setQuickReplies] = useState<AutoQA[]>([]);
-  
-  // Form state
-  const [name, setName] = useState('');
+
+  const [loggedInCustomer, setLoggedInCustomer] = useState(false);
+  const [customerUserId, setCustomerUserId] = useState<number | null>(null);
+  const [displayName, setDisplayName] = useState(ANON_NAME);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [identityReady, setIdentityReady] = useState(false);
 
-  // Chat input state
+  const [creating, setCreating] = useState(false);
+  const [createFailed, setCreateFailed] = useState(false);
+  const [restoring, setRestoring] = useState(true); // กำลังกู้ห้องเดิม (กัน auto-create ซ้อน)
+  const autoStartTriedRef = useRef(false);
+  const ownerRef = useRef<string>('__init__');
+
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  // ลูกค้าที่ล็อกอินแล้ว — ดึงชื่อ/อีเมล/เบอร์จากโปรไฟล์อัตโนมัติ ไม่ต้องกรอกซ้ำ
-  const [loggedInCustomer, setLoggedInCustomer] = useState(false);
-  const [customerUserId, setCustomerUserId] = useState<number | null>(null);
-  const [identityReady, setIdentityReady] = useState(false); // โหลดโปรไฟล์เสร็จแล้ว
-  const [autoStarting, setAutoStarting] = useState(false);   // กำลังเปิดห้องแชทอัตโนมัติ
-  const [autoStartFailed, setAutoStartFailed] = useState(false);
-  const autoStartTriedRef = useRef(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // แก้ไขข้อความ
+  const [editingRowId, setEditingRowId] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const pathname = usePathname();
-  // ในโซนลูกค้า (/customer) ปุ่ม "สอบถาม" บน Topbar เป็นตัวเปิดแชทแทน
-  // จึงไม่ต้องแสดงปุ่มลอยมุมขวาล่างให้ซ้ำซ้อน (หน้าสาธารณะยังใช้ปุ่มลอยตามเดิม)
   const isCustomerArea = pathname?.startsWith('/customer') ?? false;
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // เปิดกล่องแชทเมื่อปุ่ม "สอบถาม" บน Topbar ส่ง event มา
   useEffect(() => {
     const openHandler = () => setIsOpen(true);
     window.addEventListener(OPEN_CHAT_EVENT, openHandler);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, openHandler);
   }, []);
 
-  // ลูกค้าที่ล็อกอินแล้ว: ดึงชื่อ/อีเมล/เบอร์จากโปรไฟล์อัตโนมัติ จะได้ไม่ต้องกรอกซ้ำ
-  useEffect(() => {
+  // อ่านตัวตนปัจจุบันจาก localStorage → ตั้งชื่อ/อีเมล/เบอร์
+  const deriveIdentity = () => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
     const uid = localStorage.getItem('user_id');
+
     if (!token || role !== 'customer' || !uid) {
-      return; // ผู้เยี่ยมชมทั่วไป (ไม่ล็อกอิน) — ใช้ฟอร์มกรอกเองตามเดิม
+      setLoggedInCustomer(false);
+      setCustomerUserId(null);
+      setDisplayName(ANON_NAME);
+      setEmail('');
+      setPhone('');
+      setIdentityReady(true);
+      return;
     }
 
     setLoggedInCustomer(true);
     setCustomerUserId(Number(uid));
-
-    // เติมชื่อ/อีเมลจาก localStorage ทันที (เผื่อ API ช้า) แล้วเสริมเบอร์โทรจากโปรไฟล์
     const fn = localStorage.getItem('firstName') || '';
     const ln = localStorage.getItem('lastName') || '';
     const em = localStorage.getItem('email') || '';
-    const localName = `${fn} ${ln}`.trim();
-    if (localName) setName(localName);
-    if (em) setEmail(em);
+    setDisplayName(`${fn} ${ln}`.trim() || ANON_NAME);
+    setEmail(em);
+    setPhone('');
+    setIdentityReady(false);
 
     getUserProfileAPI(Number(uid))
       .then((p) => {
         const full = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
-        if (full) setName(full);
+        if (full) setDisplayName(full);
         if (p.email) setEmail(p.email);
         if (p.phoneNumber) setPhone(p.phoneNumber);
       })
       .catch((err) => console.error('โหลดโปรไฟล์ลูกค้าไม่สำเร็จ:', err))
       .finally(() => setIdentityReady(true));
-  }, []);
+  };
 
-  // Initial load
+  // กู้ห้องแชทเดิมของเจ้าของนี้ (ถ้ามีและยังไม่หมดอายุ 3 วัน)
+  const loadSavedSession = async (owner: string) => {
+    const id = localStorage.getItem(chatSessionKey(owner));
+    if (!id) {
+      setRestoring(false);
+      return;
+    }
+    try {
+      const fetched = await autoQaAPI.getChatSessionById(Number(id));
+      if (fetched && fetched.status === 'active' && chatOwner() === owner) {
+        setSession(fetched);
+        if (fetched.auto_qas) setMessages(mapAutoQAsToMessages(fetched.auto_qas));
+        autoStartTriedRef.current = true;
+      } else {
+        localStorage.removeItem(chatSessionKey(owner));
+      }
+    } catch {
+      localStorage.removeItem(chatSessionKey(owner));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  // ซิงก์ให้ตรงกับตัวตนปัจจุบัน — เรียกตอน mount และตอนเปิดกล่อง (จับ login/logout กลางคัน)
+  const syncToOwner = () => {
+    const owner = chatOwner();
+    if (ownerRef.current === owner) return;
+    ownerRef.current = owner;
+    setSession(null);
+    setMessages([]);
+    setCreateFailed(false);
+    setEditingRowId(null);
+    autoStartTriedRef.current = false;
+    setRestoring(true);
+    deriveIdentity();
+    loadSavedSession(owner);
+  };
+
+  // mount: โหลด quick replies + ซิงก์เจ้าของครั้งแรก
   useEffect(() => {
-    const loadData = async () => {
+    (async () => {
       try {
-        // Load quick replies
         const qas = await autoQaAPI.getPublicAutoQAs();
         setQuickReplies(qas || []);
-
-        // Check if there's an active session in local storage
-        const savedSessionId = localStorage.getItem('auto_qa_session_id');
-        if (savedSessionId) {
-          const fetchedSession = await autoQaAPI.getChatSessionById(Number(savedSessionId));
-          if (fetchedSession && fetchedSession.status === 'active') {
-            setSession(fetchedSession);
-            // Load message history from auto_qas
-            if (fetchedSession.auto_qas) {
-              setMessages(mapAutoQAsToMessages(fetchedSession.auto_qas));
-            }
-          } else {
-            // Session closed or invalid, clear it
-            localStorage.removeItem('auto_qa_session_id');
-          }
-        }
       } catch (err) {
-        console.error('Failed to load chat data:', err);
+        console.error('Failed to load quick replies:', err);
       }
-    };
-    loadData();
+    })();
+    syncToOwner();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll for new messages every 5 seconds if session is active and widget is open
+  // เปิดกล่อง → ซิงก์เจ้าของอีกครั้ง (เผื่อ login/logout ระหว่างที่กล่องปิดอยู่)
+  useEffect(() => {
+    if (isOpen) syncToOwner();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // สร้างห้องอัตโนมัติเมื่อเปิดกล่อง และไม่มีห้องเดิมให้กู้
+  useEffect(() => {
+    if (!isOpen || session || !identityReady || creating || createFailed || restoring) return;
+    if (autoStartTriedRef.current) return;
+    autoStartTriedRef.current = true;
+    createSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, session, identityReady, creating, createFailed, restoring]);
+
+  const createSession = async () => {
+    setCreating(true);
+    try {
+      const payload: CreateChatSessionReq = loggedInCustomer
+        ? { guest_name: displayName, guest_email: email, guest_phone: phone, user_id: customerUserId ?? undefined }
+        : {};
+      const newSession = await autoQaAPI.createChatSession(payload);
+      setSession(newSession);
+      localStorage.setItem(chatSessionKey(chatOwner()), String(newSession.id));
+      setMessages([
+        {
+          id: 'greeting',
+          sender: 'bot',
+          text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 3 วัน มีอะไรให้เราช่วยไหมคะ?`,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err) {
+      console.error('Failed to create session:', err);
+      setCreateFailed(true);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Poll ข้อความใหม่ทุก 5 วิ
   useEffect(() => {
     if (!isOpen || !session || session.status !== 'active') return;
-    
     const interval = setInterval(async () => {
       try {
-        const fetchedSession = await autoQaAPI.getChatSessionById(session.id);
-        if (fetchedSession && fetchedSession.status === 'active') {
-          if (fetchedSession.auto_qas) {
-            const loadedMessages = mapAutoQAsToMessages(fetchedSession.auto_qas);
-            // Update messages only if there is a change in length (simple check)
-            // Assuming greeting is length 1, so loadedMessages + greeting is the total
-            setMessages(prev => {
-              // Only update if there are more messages from server than we have locally (minus greeting & temp messages)
-              // This is a naive way to avoid overwriting optimistic UI if it's identical
-              const serverMsgCount = loadedMessages.length;
-              const localSavedCount = prev.filter(m => !m.id.startsWith('temp-') && !m.id.startsWith('error-') && m.id !== 'greeting').length;
-              if (serverMsgCount > localSavedCount) {
-                const greeting = prev.find(m => m.id === 'greeting');
-                return greeting ? [greeting, ...loadedMessages] : loadedMessages;
+        const fetched = await autoQaAPI.getChatSessionById(session.id);
+        if (fetched && fetched.status === 'active') {
+          if (fetched.auto_qas) {
+            const loaded = mapAutoQAsToMessages(fetched.auto_qas);
+            setMessages((prev) => {
+              const serverCount = loaded.length;
+              const localSaved = prev.filter((m) => !m.id.startsWith('temp-') && !m.id.startsWith('error-') && m.id !== 'greeting').length;
+              if (serverCount > localSaved) {
+                const greeting = prev.find((m) => m.id === 'greeting');
+                return greeting ? [greeting, ...loaded] : loaded;
               }
               return prev;
             });
           }
         } else {
-          setSession(fetchedSession); // Could be closed now
+          setSession(fetched);
         }
       } catch (err) {
-        console.error('Failed to poll chat session:', err);
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('not found') || msg.includes('ไม่พบ')) {
+          localStorage.removeItem(chatSessionKey(chatOwner()));
+          setSession(null);
+          setMessages([]);
+          autoStartTriedRef.current = false;
+        } else {
+          console.error('Failed to poll chat session:', err);
+        }
       }
     }, 5000);
-
     return () => clearInterval(interval);
   }, [isOpen, session]);
 
-  // สร้างห้องแชทหนึ่งครั้ง — ใช้ร่วมกันทั้งการกรอกฟอร์มเองและการเปิดอัตโนมัติของลูกค้าที่ล็อกอิน
-  const startSession = async (
-    nm: string,
-    em: string,
-    ph: string,
-    userId?: number,
-    isAuto = false,
-  ): Promise<boolean> => {
-    try {
-      setAutoStarting(isAuto);
-      setIsSubmitting(true);
-      const newSession = await autoQaAPI.createChatSession({
-        guest_name: nm,
-        guest_email: em,
-        guest_phone: ph,
-        user_id: userId, // ผูกห้องแชทกับบัญชีลูกค้า (ถ้าล็อกอิน) เพื่อใช้อ้างอิงภายหลัง
-      });
-      setSession(newSession);
-      localStorage.setItem('auto_qa_session_id', String(newSession.id));
+  const handleResetSession = () => {
+    localStorage.removeItem(chatSessionKey(chatOwner()));
+    setSession(null);
+    setMessages([]);
+    setInputText('');
+    setPendingAttachment(null);
+    setEditingRowId(null);
+    autoStartTriedRef.current = false;
+    setCreateFailed(false);
+  };
 
-      // Add initial greeting
-      setMessages([
-        {
-          id: 'greeting',
-          sender: 'bot',
-          text: `สวัสดีค่ะคุณ ${nm}, มีอะไรให้เราช่วยไหมคะ?`,
-          timestamp: new Date(),
-        },
-      ]);
-      return true;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    try {
+      setUploading(true);
+      const res = await autoQaAPI.uploadChatAttachment(file);
+      setPendingAttachment({ url: res.url, type: res.type, name: res.name });
     } catch (err) {
-      console.error('Failed to create session:', err);
-      if (isAuto) {
-        // เปิดอัตโนมัติไม่สำเร็จ → กลับไปแสดงฟอร์ม (เติมค่าไว้ให้แล้ว) ให้กดเริ่มเอง
-        setAutoStartFailed(true);
-      } else {
-        alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
-      }
-      return false;
+      alert(err instanceof Error ? err.message : 'อัปโหลดไฟล์ไม่สำเร็จ');
     } finally {
-      setIsSubmitting(false);
-      setAutoStarting(false);
+      setUploading(false);
     }
   };
 
-  const handleStartChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !email || !phone) return;
-    await startSession(name, email, phone, customerUserId ?? undefined, false);
-  };
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if ((!text && !pendingAttachment) || !session || isSending) return;
 
-  // ลูกค้าที่ล็อกอิน + ข้อมูลครบ: เปิดห้องแชทอัตโนมัติเมื่อกดเปิดกล่องแชท (ข้ามฟอร์ม)
-  useEffect(() => {
-    if (!isOpen || session || autoStartFailed) return;
-    if (!loggedInCustomer || !identityReady) return;
-    if (autoStartTriedRef.current) return;
-    if (!name || !email || !phone) return; // ข้อมูลไม่ครบ → ใช้ฟอร์ม fallback
-    autoStartTriedRef.current = true;
-    startSession(name, email, phone, customerUserId ?? undefined, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, session, loggedInCustomer, identityReady, autoStartFailed, name, email, phone]);
-
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || !session || isSending) return;
-
-    // Add user message to UI optimistically
-    const userMsg: ChatMessage = {
-      id: `temp-user-${Date.now()}`,
-      sender: 'user',
-      text: text,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMsg]);
+    const attach = pendingAttachment;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `temp-user-${Date.now()}`,
+        sender: 'user',
+        text,
+        timestamp: new Date(),
+        attachmentUrl: attach?.url,
+        attachmentType: attach?.type,
+        attachmentName: attach?.name,
+      },
+    ]);
     setInputText('');
+    setPendingAttachment(null);
     setIsSending(true);
 
     try {
-      const response = await autoQaAPI.askQuestion(session.id, { question: text });
-      
-      // Add bot response to UI
-      const botMsg: ChatMessage = {
-        id: `temp-bot-${Date.now()}`,
-        sender: 'bot',
-        text: response.answer,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botMsg]);
+      const response = await autoQaAPI.askQuestion(session.id, {
+        question: text,
+        attachment_url: attach?.url,
+        attachment_type: attach?.type,
+        attachment_name: attach?.name,
+      });
+      if (response.answer) {
+        setMessages((prev) => [...prev, { id: `temp-bot-${Date.now()}`, sender: 'bot', text: response.answer, timestamp: new Date() }]);
+      }
     } catch (err) {
       console.error('Failed to send message:', err);
-      const errorMsg: ChatMessage = {
-        id: `error-bot-${Date.now()}`,
-        sender: 'bot',
-        text: 'ขออภัย เกิดข้อผิดพลาดในการส่งข้อความ',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMsg]);
+      setMessages((prev) => [...prev, { id: `error-bot-${Date.now()}`, sender: 'bot', text: 'ขออภัย เกิดข้อผิดพลาดในการส่งข้อความ', timestamp: new Date() }]);
     } finally {
       setIsSending(false);
     }
   };
 
-  // ล้าง session เดิม (เช่น เมื่อแชทถูกปิด) เพื่อกลับไปหน้าเริ่มการสนทนาใหม่
-  const handleResetSession = () => {
-    localStorage.removeItem('auto_qa_session_id');
-    setSession(null);
-    setMessages([]);
-    setInputText('');
-    // เปิดโอกาสให้ลูกค้าที่ล็อกอินเริ่มห้องใหม่แบบอัตโนมัติได้อีกครั้ง
-    autoStartTriedRef.current = false;
-    setAutoStartFailed(false);
+  const handleSaveEdit = async () => {
+    const rowId = editingRowId;
+    const t = editText.trim();
+    if (rowId == null || !session) return;
+    if (!t) return;
+    try {
+      await autoQaAPI.editChatMessage(session.id, rowId, t);
+      setMessages((prev) => prev.map((m) => (m.rowId === rowId && m.sender === 'user' ? { ...m, text: t } : m)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'แก้ไขข้อความไม่สำเร็จ');
+    } finally {
+      setEditingRowId(null);
+      setEditText('');
+    }
+  };
+
+  const handleDeleteMessage = async (rowId: number) => {
+    if (!session) return;
+    if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) return;
+    try {
+      await autoQaAPI.deleteChatMessage(session.id, rowId);
+      setMessages((prev) => prev.filter((m) => m.rowId !== rowId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'ลบข้อความไม่สำเร็จ');
+    }
   };
 
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/coach')) {
@@ -295,12 +382,11 @@ export default function ChatWidget() {
   }
 
   if (!isOpen) {
-    // โซนลูกค้าเปิดแชทจากปุ่ม "สอบถาม" บน Topbar จึงไม่แสดงปุ่มลอย
     if (isCustomerArea) return null;
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 transition-colors z-50 animate-bounce"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-[#CC0000] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#990000] transition-colors z-50 animate-bounce"
         aria-label="Open chat"
       >
         <MessageCircle size={28} />
@@ -308,16 +394,14 @@ export default function ChatWidget() {
     );
   }
 
-  // ลูกค้าล็อกอินและกำลังเปิดห้องแชทอัตโนมัติ (หรือรอโหลดโปรไฟล์) → แสดงสถานะกำลังโหลดแทนฟอร์ม
-  const showAutoLoading =
-    loggedInCustomer &&
-    !autoStartFailed &&
-    (autoStarting || !identityReady || (identityReady && !!name && !!email && !!phone));
-
   return (
-    <div className="fixed bottom-6 right-6 w-80 sm:w-96 h-[500px] max-h-[80vh] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-gray-200">
+    <div
+      className="fixed z-50 bg-white shadow-2xl flex flex-col overflow-hidden border border-gray-200 rounded-2xl
+                 left-1/2 -translate-x-1/2 w-[94vw] top-20 bottom-24
+                 sm:left-auto sm:right-6 sm:translate-x-0 sm:top-auto sm:bottom-6 sm:w-96 sm:h-[500px] sm:max-h-[80vh]"
+    >
       {/* Header */}
-      <div className="bg-red-600 text-white p-4 flex justify-between items-center">
+      <div className="bg-[#CC0000] text-white p-4 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-2">
           <MessageCircle size={24} />
           <div>
@@ -325,10 +409,7 @@ export default function ChatWidget() {
             <p className="text-xs text-red-100">ติดต่อสอบถามรายละเอียดได้ 24 ชั่วโมง</p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsOpen(false)}
-          className="text-white hover:text-red-200 transition-colors p-1"
-        >
+        <button onClick={() => setIsOpen(false)} className="text-white hover:text-red-200 transition-colors p-1">
           <X size={24} />
         </button>
       </div>
@@ -336,94 +417,43 @@ export default function ChatWidget() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
         {!session ? (
-          showAutoLoading ? (
-            <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
-              <p className="text-sm">กำลังเริ่มการสนทนา...</p>
+          createFailed ? (
+            <div className="flex flex-col h-full items-center justify-center gap-3 text-center px-4">
+              <p className="text-sm text-gray-500">เริ่มการสนทนาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</p>
+              <button
+                onClick={() => { setCreateFailed(false); autoStartTriedRef.current = false; }}
+                className="text-sm font-medium bg-[#CC0000] text-white px-4 py-2 rounded-full hover:bg-[#990000] transition-colors"
+              >
+                ลองใหม่
+              </button>
             </div>
           ) : (
-          <div className="flex flex-col h-full items-center justify-center">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 w-full">
-              <h4 className="text-center font-semibold text-gray-800 mb-2">ยินดีต้อนรับ!</h4>
-              <p className="text-center text-sm text-gray-500 mb-6">กรุณากรอกข้อมูลเพื่อเริ่มการสนทนา</p>
-              
-              <form onSubmit={handleStartChat} className="space-y-4">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">ชื่อ-นามสกุล *</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full text-black px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 text-sm"
-                    placeholder="สมชาย ใจดี"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">อีเมล *</label>
-                  <input 
-                    type="email" 
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full text-black px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 text-sm"
-                    placeholder="somchai@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">เบอร์โทรศัพท์ *</label>
-                  <input 
-                    type="tel" 
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full text-black px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 text-sm"
-                    placeholder="0812345678"
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-red-600 text-white font-medium py-2 rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400"
-                >
-                  {isSubmitting ? 'กำลังโหลด...' : 'เริ่มคุยเลย'}
-                </button>
-              </form>
+            <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
+              <Loader2 size={28} className="animate-spin text-[#CC0000]" />
+              <p className="text-sm">กำลังเริ่มการสนทนา...</p>
             </div>
-          </div>
           )
         ) : (
-          <div className="flex flex-col space-y-4">
+          <div className="flex flex-col space-y-3">
             {messages.map((msg) => (
-              <div
+              <MessageRow
                 key={msg.id}
-                className={`flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'}`}
-              >
-                {msg.sender === 'admin' && (
-                  <span className="text-[10px] font-semibold text-blue-600 mb-1 ml-1">เจ้าหน้าที่</span>
-                )}
-                <div
-                  className={`px-4 py-2 rounded-2xl ${
-                    msg.sender === 'user'
-                      ? 'bg-red-600 text-white rounded-br-none'
-                      : msg.sender === 'admin'
-                        ? 'bg-blue-50 text-blue-900 border border-blue-200 rounded-bl-none shadow-sm'
-                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                </div>
-                <span className="text-[10px] text-gray-400 mt-1 mx-1">
-                  {msg.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
+                msg={msg}
+                isEditing={editingRowId != null && msg.sender === 'user' && msg.rowId === editingRowId}
+                editText={editText}
+                setEditText={setEditText}
+                onStartEdit={() => { setEditingRowId(msg.rowId ?? null); setEditText(msg.text); }}
+                onCancelEdit={() => { setEditingRowId(null); setEditText(''); }}
+                onSaveEdit={handleSaveEdit}
+                onDelete={() => msg.rowId != null && handleDeleteMessage(msg.rowId)}
+              />
             ))}
 
             {isSending && (
-              <div className="self-start flex space-x-1 items-center bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              <div className="self-end flex space-x-1 items-center bg-[#CC0000]/80 px-4 py-3 rounded-2xl rounded-br-none">
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -433,28 +463,26 @@ export default function ChatWidget() {
 
       {/* Input Area */}
       {session && (
-        <div className="bg-white border-t border-gray-200 p-3 flex flex-col gap-2">
+        <div className="bg-white border-t border-gray-200 p-3 flex flex-col gap-2 flex-shrink-0">
           {session.status === 'closed' ? (
-            /* แชทถูกปิดแล้ว — ปิดช่องพิมพ์ และให้เริ่มการสนทนาใหม่ได้ */
             <div className="flex flex-col items-center gap-2 py-2 text-center">
               <p className="text-xs text-gray-500">การสนทนานี้ถูกปิดแล้ว</p>
               <button
                 onClick={handleResetSession}
-                className="text-xs font-medium bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition-colors"
+                className="text-xs font-medium bg-[#CC0000] text-white px-4 py-2 rounded-full hover:bg-[#990000] transition-colors"
               >
                 เริ่มการสนทนาใหม่
               </button>
             </div>
           ) : (
             <>
-              {/* Quick Replies */}
-              {(quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && (
+              {(quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && !pendingAttachment && (
                 <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar">
                   {quickReplies.map((qr) => (
                     <button
                       key={qr.id}
-                      onClick={() => handleSendMessage(qr.question)}
-                      className="whitespace-nowrap bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-full text-xs hover:bg-red-100 transition-colors"
+                      onClick={() => setInputText(qr.question)}
+                      className="whitespace-nowrap bg-red-50 text-[#CC0000] border border-red-200 px-3 py-1.5 rounded-full text-xs hover:bg-red-100 transition-colors"
                     >
                       {qr.question}
                     </button>
@@ -462,22 +490,45 @@ export default function ChatWidget() {
                 </div>
               )}
 
+              {pendingAttachment && (
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-2">
+                  {pendingAttachment.type === 'image' ? (
+                    <img src={pendingAttachment.url} alt="แนบ" className="w-12 h-12 object-cover rounded" />
+                  ) : (
+                    <FileText size={22} className="text-[#CC0000]" />
+                  )}
+                  <span className="text-xs text-gray-600 truncate flex-1">{pendingAttachment.name || 'ไฟล์แนบ'}</span>
+                  <button onClick={() => setPendingAttachment(null)} className="text-gray-400 hover:text-red-500">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
+                <input type="file" accept="image/*,application/pdf" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || isSending}
+                  className="p-2 text-gray-400 hover:text-[#CC0000] disabled:opacity-50 transition-colors flex-shrink-0"
+                  title="แนบรูป/ไฟล์"
+                >
+                  {uploading ? <Loader2 size={20} className="animate-spin" /> : <Paperclip size={20} />}
+                </button>
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputText)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="พิมพ์ข้อความ..."
-                  className="flex-1 text-black bg-gray-100 border-none rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="flex-1 text-black bg-gray-100 border-none rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#CC0000]/40"
                   disabled={isSending}
                 />
                 <button
-                  onClick={() => handleSendMessage(inputText)}
-                  disabled={!inputText.trim() || isSending}
-                  className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:bg-gray-300 transition-colors"
+                  onClick={handleSend}
+                  disabled={(!inputText.trim() && !pendingAttachment) || isSending}
+                  className="p-2 bg-[#CC0000] text-white rounded-full hover:bg-[#990000] disabled:bg-gray-300 transition-colors flex-shrink-0"
                 >
-                  <Send size={18} className="ml-1" />
+                  <Send size={18} className="ml-0.5" />
                 </button>
               </div>
             </>
@@ -485,5 +536,131 @@ export default function ChatWidget() {
         </div>
       )}
     </div>
+  );
+}
+
+// ฟองข้อความ — ข้อความของลูกค้าเอง (ส่งแล้ว) กดสามจุด/กดค้างเพื่อแก้ไข/ลบได้
+function MessageRow({
+  msg, isEditing, editText, setEditText, onStartEdit, onCancelEdit, onSaveEdit, onDelete,
+}: {
+  msg: ChatMessage;
+  isEditing: boolean;
+  editText: string;
+  setEditText: (v: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUser = msg.sender === 'user';
+  const editable = isUser && !!msg.rowId; // เฉพาะข้อความของลูกค้าที่ถูกบันทึกแล้ว
+
+  const startPress = () => {
+    if (!editable) return;
+    timer.current = setTimeout(() => setMenuOpen(true), 500); // กดค้าง 0.5 วิ บนมือถือ
+  };
+  const endPress = () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+  };
+
+  const bubbleClass =
+    isUser
+      ? 'bg-[#CC0000] text-white rounded-br-none'
+      : msg.sender === 'admin'
+        ? 'bg-blue-50 text-blue-900 border border-blue-200 rounded-bl-none shadow-sm'
+        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm';
+
+  return (
+    <div
+      className={`group flex flex-col max-w-[85%] ${isUser ? 'self-end items-end' : 'self-start items-start'}`}
+      onTouchStart={startPress}
+      onTouchEnd={endPress}
+      onTouchMove={endPress}
+    >
+      {msg.sender === 'admin' && <span className="text-[10px] font-semibold text-blue-600 mb-1 ml-1">เจ้าหน้าที่</span>}
+
+      <div className="relative flex items-center gap-1">
+        {editable && !isEditing && (
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+            title="ตัวเลือก"
+          >
+            <MoreVertical size={16} />
+          </button>
+        )}
+
+        <div className={`px-3 py-2 rounded-2xl ${bubbleClass}`}>
+          {msg.attachmentUrl && (
+            <Attachment url={msg.attachmentUrl} type={msg.attachmentType} name={msg.attachmentName} onDark={isUser} />
+          )}
+          {isEditing ? (
+            <div className="flex flex-col gap-2 min-w-[180px]">
+              <input
+                autoFocus
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(); if (e.key === 'Escape') onCancelEdit(); }}
+                className="bg-white text-black rounded px-2 py-1 text-sm outline-none"
+              />
+              <div className="flex gap-2 justify-end text-xs">
+                <button onClick={onCancelEdit} className="px-2 py-1 rounded bg-white/25 hover:bg-white/40">ยกเลิก</button>
+                <button onClick={onSaveEdit} className="px-2 py-1 rounded bg-white text-[#CC0000] font-medium">บันทึก</button>
+              </div>
+            </div>
+          ) : (
+            msg.text && <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+          )}
+        </div>
+
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 w-28 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+              <button
+                onClick={() => { setMenuOpen(false); onStartEdit(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <Pencil size={14} /> แก้ไข
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); onDelete(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              >
+                <Trash2 size={14} /> ลบ
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <span className="text-[10px] text-gray-400 mt-1 mx-1">
+        {msg.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+      </span>
+    </div>
+  );
+}
+
+function Attachment({ url, type, name, onDark }: { url: string; type?: string; name?: string; onDark?: boolean }) {
+  if (type === 'image') {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block mb-1">
+        <img src={url} alt={name || 'รูปแนบ'} className="max-w-[200px] max-h-[220px] rounded-lg object-cover" />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex items-center gap-2 mb-1 underline ${onDark ? 'text-white' : 'text-[#CC0000]'}`}
+    >
+      <FileText size={18} />
+      <span className="text-sm truncate max-w-[180px]">{name || 'ไฟล์แนบ'}</span>
+      <Download size={14} />
+    </a>
   );
 }

@@ -48,6 +48,10 @@ export interface WeekSession {
   start_time: string;
   end_time: string;
   assigned_coaches: WeekSessionCoach[];
+  /** จำนวนนักเรียนที่ยืนยันมาเรียน (going) — รวมข้าม package ของคลาสนี้แล้ว */
+  going_count: number;
+  /** จำนวนนักเรียนที่มีสิทธิ์เรียนคาบนี้ทั้งหมด */
+  total_count: number;
 }
 
 // [GET] ดึงคาบเรียนของทุก package ในสัปดาห์ (เฉพาะที่มี enrollment active)

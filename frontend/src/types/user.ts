@@ -38,6 +38,7 @@ export interface StudentListResponseDTO {
   facebook?: string;
   birthDate?: string;
   gender?: string;
+  profile_picture?: string;
 }
 
 export interface UpdateProfileInput {

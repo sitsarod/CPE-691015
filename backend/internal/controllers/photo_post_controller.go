@@ -1,0 +1,241 @@
+package controllers
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"time"
+
+	"CPE-691015/internal/dto"
+	"CPE-691015/internal/models"
+	"CPE-691015/internal/services"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// PhotoPostController จัดการ "รูปโพสต์" ที่โค้ชอัปโหลด (อาจมีนักเรียนหลายคนอยู่ในรูปเดียว)
+// แล้วนำไปแสดงในแท็บ Posts ของโปรไฟล์นักเรียนที่ถูกแท็ก
+//
+// อย่าสับสนกับ PhotoController — ตัวนั้นจัดการ "รูปยินยอมอ้างอิงใบหน้า" ของนักเรียน/โค้ชคนเดียว
+type PhotoPostController struct {
+	photoPostService *services.DetectedPhotoService
+	videoService     *services.DetectedVideoService
+	db               *gorm.DB
+}
+
+func NewPhotoPostController(photoPostService *services.DetectedPhotoService, videoService *services.DetectedVideoService, db *gorm.DB) *PhotoPostController {
+	return &PhotoPostController{
+		photoPostService: photoPostService,
+		videoService:     videoService,
+		db:               db,
+	}
+}
+
+// UploadPhotoPost handles POST /api/photo-posts
+// โค้ช/แอดมินอัปโหลดรูป (ยังไม่ระบุว่าใครอยู่ในรูปบ้าง — ระบุทีหลังผ่าน AssignStudentsToPhoto)
+func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดรูปได้"})
+		return
+	}
+
+	file, err := c.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพ (ฟิลด์ 'photo')"})
+		return
+	}
+
+	ext, err := ValidateImageUpload(file)
+	if err != nil {
+		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	uploadDir := "./uploads/photo-posts"
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์ระบบได้"})
+		return
+	}
+
+	filename := fmt.Sprintf("photo-%d%s", time.Now().UnixNano(), ext)
+	filePath := filepath.Join(uploadDir, filename)
+
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์รูปล้มเหลว"})
+		return
+	}
+
+	photoURL := "http://localhost:8000/uploads/photo-posts/" + filename
+
+	// รูปที่แอดมินอัปโหลดเองจะไม่ผูกกับโค้ชคนไหน (coachID เป็น nil)
+	var coachID *uint
+	if role == "coach" {
+		var coach models.Coach
+		if err := ctrl.db.Where("user_id = ?", userID).First(&coach).Error; err == nil {
+			coachID = &coach.ID
+		}
+	}
+
+	rawPhoto, err := ctrl.photoPostService.CreateRawPhoto(photoURL, coachID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "อัปโหลดรูปสำเร็จ",
+		"data": dto.UploadPhotoPostResponse{
+			RawPhotoID: rawPhoto.ID,
+			PhotoURL:   rawPhoto.PhotoURL,
+		},
+	})
+}
+
+// AssignStudentsToPhoto handles POST /api/photo-posts/:raw_photo_id/assign
+// โค้ชระบุว่านักเรียนคนไหนอยู่ในรูปนี้บ้าง
+func (ctrl *PhotoPostController) AssignStudentsToPhoto(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลรูปนี้ได้"})
+		return
+	}
+
+	rawPhotoIDParam, err := strconv.ParseUint(c.Param("raw_photo_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
+		return
+	}
+	rawPhotoID := uint(rawPhotoIDParam)
+
+	var rawPhoto models.RawPhoto
+	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		return
+	}
+
+	if err := services.VerifyCoachOwnsRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	var req struct {
+		StudentIDs []uint `json:"student_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรายการ ID นักเรียนไม่ถูกต้อง"})
+		return
+	}
+
+	results, skipped, err := ctrl.photoPostService.AssignStudentsToPhoto(rawPhotoID, rawPhoto.PhotoURL, req.StudentIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var studentIDs []uint
+	for _, r := range results {
+		studentIDs = append(studentIDs, r.CustomerID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":            "อัปเดตรายชื่อนักเรียนในรูปนี้สำเร็จแล้ว",
+		"student_ids":        studentIDs,
+		"skipped_no_consent": skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
+	})
+}
+
+// GetVideoDetectedStudentsInPhoto handles GET /api/photo-posts/:raw_photo_id/students
+// ดึงรายชื่อนักเรียนที่ถูกแท็กอยู่ในรูปนี้ — เฉพาะแอดมิน หรือโค้ชเจ้าของรูปนี้เท่านั้น
+func (ctrl *PhotoPostController) GetPhotoDetectedStudents(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
+		return
+	}
+
+	rawPhotoIDParam, err := strconv.ParseUint(c.Param("raw_photo_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
+		return
+	}
+	rawPhotoID := uint(rawPhotoIDParam)
+
+	var rawPhoto models.RawPhoto
+	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		return
+	}
+	if err := services.VerifyCoachOwnsRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	list, err := ctrl.photoPostService.GetDetectedPhotosByRawPhotoID(rawPhotoID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	type DetectedStudentInfo struct {
+		CustomerID uint   `json:"customer_id"`
+		Nickname   string `json:"nickname"`
+		FirstName  string `json:"firstName"`
+		LastName   string `json:"lastName"`
+	}
+
+	var response []DetectedStudentInfo
+	for _, item := range list {
+		if item.Customer != nil && item.Customer.User != nil {
+			response = append(response, DetectedStudentInfo{
+				CustomerID: item.CustomerID,
+				Nickname:   item.Customer.Nickname,
+				FirstName:  item.Customer.User.FirstName,
+				LastName:   item.Customer.User.LastName,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+// GetMyPosts handles GET /api/students/posts/me
+// นักเรียนดูโพสต์ (รูป+วิดีโอ) ทั้งหมดที่ตัวเองถูกแท็กไว้ รวมกันเรียงตามเวลาล่าสุดก่อน
+func (ctrl *PhotoPostController) GetMyPosts(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		return
+	}
+
+	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
+		return
+	}
+
+	photos, err := ctrl.photoPostService.GetDetectedPhotosByStudentID(customerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	videos, err := ctrl.videoService.GetDetectedVideosByStudentID(customerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	posts := make([]dto.PostItem, 0, len(photos)+len(videos))
+	for _, p := range photos {
+		posts = append(posts, dto.PostItem{ID: p.ID, Type: "photo", MediaURL: p.PhotoURL, CreatedAt: p.CreatedAt})
+	}
+	for _, v := range videos {
+		posts = append(posts, dto.PostItem{ID: v.ID, Type: "video", MediaURL: v.VideoURL, CreatedAt: v.CreatedAt})
+	}
+	sort.Slice(posts, func(i, j int) bool { return posts[i].CreatedAt.After(posts[j].CreatedAt) })
+
+	c.JSON(http.StatusOK, gin.H{"data": posts})
+}
