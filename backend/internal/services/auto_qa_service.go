@@ -196,7 +196,9 @@ func (s *autoQAService) GetChatSessionByID(id uint) (*dto.ChatSessionDTO, error)
 
 func (s *autoQAService) GetAllChatSessions() ([]dto.ChatSessionDTO, error) {
 	var sessions []models.ChatSession
-	if err := s.db.Preload("User").Order("created_at DESC").Find(&sessions).Error; err != nil {
+	// Preload AutoQAs เพื่อให้หน้าแอดมิน (badge แจ้งเตือนข้อความใหม่) รู้เวลาของข้อความล่าสุดในแต่ละห้อง
+	// โดยไม่ต้องยิง API แยกทีละห้อง
+	if err := s.db.Preload("User").Preload("AutoQAs").Order("created_at DESC").Find(&sessions).Error; err != nil {
 		return nil, err
 	}
 
@@ -235,14 +237,15 @@ func (s *autoQAService) DeleteChatSession(id uint) error {
 	return s.db.Delete(&models.ChatSession{}, id).Error
 }
 
-// DeleteOldSessions ลบห้องแชทที่สร้างมานานเกิน olderThan (ทุกสถานะ)
-// ตรงกับข้อความต้อนรับที่บอกว่า "แชทนี้จะยังคงอยู่ภายใน 3 วัน"
+// DeleteOldSessions ลบเฉพาะห้องแชทของ "ผู้เยี่ยมชม" (guest, user_id IS NULL) ที่สร้างมานานเกิน olderThan
+// ห้องแชทของผู้ใช้ที่ล็อกอินแล้วจะไม่ถูกลบอัตโนมัติ เพื่อรักษาประวัติการแชทของลูกค้า
+// ตรงกับข้อความต้อนรับที่บอกว่า "แชทนี้จะยังคงอยู่ภายใน 7 วัน" (guest เท่านั้น)
 // ลบ log ข้อความ (AutoQA) ของห้องเหล่านั้นก่อน แล้วค่อยลบตัวห้อง — เรียกจาก background job
 func (s *autoQAService) DeleteOldSessions(olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
 
 	var sessions []models.ChatSession
-	if err := s.db.Where("created_at < ?", cutoff).
+	if err := s.db.Where("created_at < ? AND user_id IS NULL", cutoff).
 		Find(&sessions).Error; err != nil {
 		return 0, err
 	}

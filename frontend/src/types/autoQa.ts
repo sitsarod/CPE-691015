@@ -8,7 +8,7 @@ export interface User {
 
 export interface AutoQA {
   id: number;
-  mode: 'keyword_match' | 'ai_predict' | 'admin_reply';
+  mode: 'keyword_match' | 'admin_reply';
   question: string;
   similar_question: string;
   answer: string;
@@ -41,14 +41,14 @@ export interface ChatSession {
 }
 
 export interface CreateAutoQAReq {
-  mode: 'keyword_match' | 'ai_predict';
+  mode: 'keyword_match';
   question: string;
   similar_question?: string;
   answer: string;
 }
 
 export interface UpdateAutoQAReq {
-  mode?: 'keyword_match' | 'ai_predict';
+  mode?: 'keyword_match';
   question?: string;
   similar_question?: string;
   answer?: string;

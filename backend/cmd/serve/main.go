@@ -45,17 +45,18 @@ func startAnnouncementCleanupJob() {
 	}()
 }
 
-// startChatCleanupJob ลบห้องแชทที่สร้างมานานเกิน 3 วันอัตโนมัติ (ทุกสถานะ พร้อม log ข้อความ)
-// ตรงกับข้อความต้อนรับที่แจ้งผู้ใช้ว่า "แชทนี้จะยังคงอยู่ภายใน 3 วัน"
+// startChatCleanupJob ลบห้องแชทของผู้เยี่ยมชม (guest) ที่สร้างมานานเกิน 7 วันอัตโนมัติ
+// (เฉพาะ guest — ห้องแชทของผู้ใช้ที่ล็อกอินแล้วจะไม่ถูกลบ) พร้อม log ข้อความ
+// ตรงกับข้อความต้อนรับที่แจ้งผู้ใช้ว่า "แชทนี้จะยังคงอยู่ภายใน 7 วัน"
 // รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง
 func startChatCleanupJob() {
 	autoQAService := services.NewAutoQAService(config.DB)
 	go func() {
 		for {
-			if n, err := autoQAService.DeleteOldSessions(3 * 24 * time.Hour); err != nil {
-				log.Printf("ลบแชทที่เกิน 3 วันอัตโนมัติล้มเหลว: %v", err)
+			if n, err := autoQAService.DeleteOldSessions(7 * 24 * time.Hour); err != nil {
+				log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติล้มเหลว: %v", err)
 			} else if n > 0 {
-				log.Printf("ลบแชทที่เกิน 3 วันอัตโนมัติ %d ห้อง", n)
+				log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติ %d ห้อง", n)
 			}
 			time.Sleep(6 * time.Hour)
 		}

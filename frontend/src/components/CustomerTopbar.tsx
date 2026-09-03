@@ -8,13 +8,17 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MessageCircleMore, Settings, User, LogOut } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
-import { OPEN_CHAT_EVENT } from "@/components/ChatWidget";
+import { OPEN_CHAT_EVENT, chatOwner, chatSessionKey, chatLastViewedKey } from "@/components/ChatWidget";
+import { autoQaAPI } from "@/services/autoQaAPI";
 
 export default function CustomerTopbar() {
   const router = useRouter();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // จำนวนข้อความตอบกลับใหม่จากแอดมินที่ยังไม่ได้เปิดดู (badge สีแดงบนปุ่ม "สอบถาม")
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -24,6 +28,39 @@ export default function CustomerTopbar() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // เช็คข้อความตอบกลับใหม่จากแอดมินเป็นระยะ ๆ (เทียบกับเวลาที่เปิดกล่องแชทครั้งล่าสุด)
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkUnread = async () => {
+      try {
+        const owner = chatOwner();
+        const sessionId = localStorage.getItem(chatSessionKey(owner));
+        if (!sessionId) {
+          if (!cancelled) setUnreadCount(0);
+          return;
+        }
+        const lastViewedRaw = localStorage.getItem(chatLastViewedKey(owner));
+        const lastViewed = lastViewedRaw ? new Date(lastViewedRaw).getTime() : 0;
+
+        const session = await autoQaAPI.getChatSessionById(Number(sessionId));
+        const count = (session.auto_qas || []).filter(
+          (qa) => qa.mode === "admin_reply" && new Date(qa.created_at).getTime() > lastViewed
+        ).length;
+        if (!cancelled) setUnreadCount(count);
+      } catch {
+        // เงียบไว้ — ไม่ให้ error กระทบ topbar หลัก
+      }
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -62,10 +99,20 @@ export default function CustomerTopbar() {
 
         {/* ปุ่ม "สอบถาม" เปิดกล่องแชทของลูกค้า (ChatWidget) ผ่าน event กลาง */}
         <button
-          onClick={() => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT))}
-          className="flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]"
+          onClick={() => {
+            setUnreadCount(0);
+            window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT));
+          }}
+          className="relative flex items-center gap-3 text-gray-700 hover:text-red-600 transition font-bold text-[16px]"
         >
-          <MessageCircleMore className="w-7 h-7 text-[#CC0000]" />
+          <span className="relative inline-flex">
+            <MessageCircleMore className="w-7 h-7 text-[#CC0000]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#CC0000] border border-white text-white text-[10px] font-bold leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </span>
           <span className="hidden md:inline">สอบถาม</span>
         </button>
 

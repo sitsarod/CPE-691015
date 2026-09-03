@@ -15,6 +15,10 @@ export default function AnnouncementDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // ลิงก์ปลอดภัยเฉพาะ http/https — กัน scheme อันตราย (javascript:, data: ฯลฯ) ที่อาจหลุดผ่านมา
+  // แม้แบ็กเอนด์จะ validate ไว้แล้ว (defense in depth ฝั่ง client)
+  const isSafeLink = (link?: string) => !!link && (link.startsWith('http://') || link.startsWith('https://'));
+
   useEffect(() => {
     if (!id || Number.isNaN(id)) {
       setNotFound(true);
@@ -28,8 +32,21 @@ export default function AnnouncementDetailPage() {
         setLoading(true);
         const data = await announcementAPI.getAnnouncementById(id);
         if (active) setAnnouncement(data);
-        // นับยอดเข้าชมเมื่อเปิดหน้ารายละเอียด (กลืน error ไม่ให้กระทบการแสดงผล)
-        announcementAPI.incrementViewCount(id).catch(() => {});
+
+        // นับยอดเข้าชมแค่ครั้งแรกต่อเบราว์เซอร์ต่อประกาศ กัน endpoint (ไม่ต้องล็อกอิน) โดนยิงซ้ำ
+        // เพื่อปั่นยอดวิว — เก็บรายการ id ที่นับไปแล้วไว้ใน localStorage
+        try {
+          const KEY = 'viewed_announcements';
+          const raw = localStorage.getItem(KEY);
+          const viewed: number[] = raw ? JSON.parse(raw) : [];
+          if (!viewed.includes(id)) {
+            announcementAPI.incrementViewCount(id).catch(() => {});
+            localStorage.setItem(KEY, JSON.stringify([...viewed, id]));
+          }
+        } catch {
+          // ถ้า localStorage ใช้งานไม่ได้ (private mode ฯลฯ) ก็ยังนับยอดวิวไปตามปกติ ไม่ block การแสดงผล
+          announcementAPI.incrementViewCount(id).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to load announcement:', err);
         if (active) setNotFound(true);
@@ -123,8 +140,9 @@ export default function AnnouncementDetailPage() {
             {announcement.content}
           </div>
 
-          {/* ปุ่มลิงก์ที่แนบมา (ถ้ามี) — กดแล้วไปที่ลิงก์นั้นเลย */}
-          {announcement.link && (
+          {/* ปุ่มลิงก์ที่แนบมา (ถ้ามี) — กดแล้วไปที่ลิงก์นั้นเลย
+              แสดงเฉพาะลิงก์ http/https เท่านั้น กัน scheme อันตราย (javascript:, data: ฯลฯ) */}
+          {isSafeLink(announcement.link) && (
             <div className="mt-8">
               <a
                 href={announcement.link}
