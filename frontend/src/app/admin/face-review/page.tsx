@@ -1,0 +1,257 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  Check,
+  CheckCircle2,
+  Clock,
+  ImageOff,
+  Loader2,
+  ScanFace,
+  ShieldAlert,
+  X,
+  XCircle,
+} from "lucide-react";
+import {
+  AdminFaceImage,
+  FaceImageStatus,
+  POSE_LABEL,
+  STATUS_LABEL,
+} from "@/types/faceImage";
+import { fetchFaceImagesForAdmin, reviewFaceImage } from "@/services/faceImageAPI";
+import FaceImageThumb from "@/components/face/FaceImageThumb";
+
+const STATUS_STYLE: Record<FaceImageStatus, { icon: typeof Clock; className: string }> = {
+  pending: { icon: Clock, className: "text-amber-600 bg-amber-50" },
+  awaiting_review: { icon: Clock, className: "text-blue-600 bg-blue-50" },
+  ready: { icon: CheckCircle2, className: "text-green-700 bg-green-50" },
+  rejected: { icon: XCircle, className: "text-[#CC0000] bg-red-50" },
+};
+
+const FILTERS: { value: FaceImageStatus | ""; label: string }[] = [
+  { value: "", label: "ทั้งหมด" },
+  { value: "pending", label: "กำลังประมวลผล" },
+  { value: "awaiting_review", label: "รอตรวจสอบ" },
+  { value: "ready", label: "พร้อมใช้งาน" },
+  { value: "rejected", label: "ไม่ผ่าน" },
+];
+
+export default function FaceReviewPage() {
+  const [images, setImages] = useState<AdminFaceImage[]>([]);
+  const [filter, setFilter] = useState<FaceImageStatus | "">("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyID, setBusyID] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<AdminFaceImage | null>(null);
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await fetchFaceImagesForAdmin(filter || undefined);
+        if (cancelled) return;
+        setError(null);
+        setImages(list);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filter]);
+
+  const refresh = async () => {
+    try {
+      setImages(await fetchFaceImagesForAdmin(filter || undefined));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
+    }
+  };
+
+  const handleApprove = async (image: AdminFaceImage) => {
+    setBusyID(image.id);
+    try {
+      await reviewFaceImage(image.id, "approve");
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "อนุมัติไม่สำเร็จ");
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejecting) return;
+    setBusyID(rejecting.id);
+    try {
+      await reviewFaceImage(rejecting.id, "reject", reason);
+      setRejecting(null);
+      setReason("");
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "ปฏิเสธไม่สำเร็จ");
+    } finally {
+      setBusyID(null);
+    }
+  };
+
+  return (
+    <div className="p-6 md:p-10">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">ตรวจสอบรูปใบหน้า</h1>
+      <p className="text-gray-500 text-sm mb-6">
+        ตรวจว่ารูปที่นักเรียนอัปโหลดเป็นใบหน้าของเจ้าตัวจริง ก่อนอนุญาตให้ใช้เช็คชื่อ
+      </p>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value || "all"}
+            onClick={() => setFilter(f.value)}
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+              filter === f.value
+                ? "bg-[#CC0000] text-white"
+                : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="mb-6 flex items-start gap-2 text-sm text-[#CC0000] bg-red-50 rounded-xl px-4 py-3">
+          <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="h-[40vh] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[#CC0000]" />
+        </div>
+      ) : images.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 p-10 text-center">
+          <ScanFace className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">ไม่มีรูปในสถานะนี้</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {images.map((image) => {
+            const style = STATUS_STYLE[image.status];
+            const StatusIcon = style.icon;
+            const canReview = image.status !== "rejected";
+
+            return (
+              <div key={image.id} className="rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="aspect-square bg-gray-100">
+                  {image.has_file ? (
+                    <FaceImageThumb id={image.id} />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 gap-2">
+                      <ImageOff className="w-7 h-7" />
+                      <span className="text-xs">ไฟล์ถูกลบแล้ว</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4">
+                  <p className="font-bold text-gray-900 truncate">
+                    {image.nickname || "ไม่ทราบชื่อ"}
+                    {image.member_code && (
+                      <span className="ml-2 text-xs font-normal text-gray-400">
+                        {image.member_code}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">ท่า: {POSE_LABEL[image.pose]}</p>
+
+                  <span
+                    className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-lg text-xs font-medium ${style.className}`}
+                  >
+                    <StatusIcon className="w-3 h-3" />
+                    {STATUS_LABEL[image.status]}
+                  </span>
+
+                  {image.status === "rejected" && image.reject_reason && (
+                    <p className="text-xs text-gray-500 mt-2">เหตุผล: {image.reject_reason}</p>
+                  )}
+
+                  {canReview && (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => handleApprove(image)}
+                        disabled={busyID === image.id || image.status === "ready"}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-white bg-green-700 hover:bg-green-800 disabled:opacity-40"
+                      >
+                        {busyID === image.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4" />
+                        )}
+                        อนุมัติ
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRejecting(image);
+                          setReason("");
+                        }}
+                        disabled={busyID === image.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-[#CC0000] bg-red-50 hover:bg-red-100 disabled:opacity-40"
+                      >
+                        <X className="w-4 h-4" />
+                        ปฏิเสธ
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {rejecting && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5">
+            <h2 className="font-bold text-gray-900 mb-1">
+              ปฏิเสธรูปของ {rejecting.nickname || "นักเรียน"}
+            </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              ไฟล์รูปจะถูกลบออกจากระบบทันที เหลือไว้แต่เหตุผลให้นักเรียนเห็นเพื่อถ่ายใหม่
+            </p>
+
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="เช่น ภาพเบลอเกินไป / ไม่ใช่ใบหน้าเจ้าของบัญชี / มีคนมากกว่าหนึ่งคนในภาพ"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#CC0000]"
+            />
+
+            <div className="flex gap-3 justify-end mt-4">
+              <button
+                onClick={() => setRejecting(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={!reason.trim() || busyID === rejecting.id}
+                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-[#CC0000] hover:bg-[#a50000] disabled:opacity-40"
+              >
+                ยืนยันปฏิเสธ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

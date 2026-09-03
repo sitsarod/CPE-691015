@@ -80,10 +80,14 @@ func (s *ConsentService) resolveSubject(userID uint) (*consentSubject, error) {
 
 type ConsentService struct {
 	db *gorm.DB
+
+	// faceStorage ใช้ตอนถอนความยินยอม เพื่อลบไฟล์รูปใบหน้าบน Cloudinary ให้หมดจริง
+	// เป็น nil ได้ (เครื่องที่ยังไม่ตั้งค่า Cloudinary / เทสที่ไม่แตะไฟล์)
+	faceStorage *CloudinaryService
 }
 
-func NewConsentService(db *gorm.DB) *ConsentService {
-	return &ConsentService{db: db}
+func NewConsentService(db *gorm.DB, faceStorage *CloudinaryService) *ConsentService {
+	return &ConsentService{db: db, faceStorage: faceStorage}
 }
 
 // GetPolicy คืนเนื้อหาประกาศการเก็บข้อมูลใบหน้า พร้อมเติมข้อมูลผู้ควบคุมข้อมูล (ม.23(5))
@@ -204,13 +208,14 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 	// ต้องอยู่ใน transaction เดียวกันเพราะถ้าแยกกันแล้วอันหลังพลาด จะเกิดกรณี
 	// "บันทึกว่าถอนแล้ว แต่ข้อมูลใบหน้ายังอยู่" ซึ่งคือการเก็บข้อมูลชีวภาพ
 	// โดยไม่มีฐานความยินยอมรองรับ — ผิดตรงกับที่ประกาศไว้กับผู้ใช้พอดี
-	photoFiles, err := s.withdrawAndDeletePhotos(subject, userID, meta)
+	photoFiles, faceKeys, err := s.withdrawAndDeletePhotos(subject, userID, meta)
 	if err != nil {
 		return nil, err
 	}
 
 	// ลบไฟล์จริงหลัง commit เท่านั้น (ดูเหตุผลที่ RemovePhotoFiles)
 	RemovePhotoFiles(photoFiles)
+	DestroyFaceImageFiles(s.faceStorage, faceKeys)
 
 	return s.GetStatus(userID)
 }
@@ -226,8 +231,11 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 //
 // ใช้ Unscoped() (ลบจริง ไม่ใช่ soft delete) ด้วยเหตุผลเดียวกับ Photo — แถวนี้คือ
 // หลักฐานผลลัพธ์การจำแนกใบหน้า นับเป็นข้อมูลชีวภาพเช่นกัน
-func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, error) {
+// คืนสองรายการที่ต้องเอาไปลบ "หลัง commit": URL ของไฟล์ในเครื่อง (ตาราง photos)
+// และ StorageKey บน Cloudinary (ตาราง face_images)
+func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, []string, error) {
 	var photoFiles []string
+	var faceKeys []string
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := writeConsentTx(tx, subject, actorUserID, models.ConsentWithdrawn, meta); err != nil {
@@ -243,6 +251,14 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 			if err == nil {
 				err = deleteFaceDetectionLinks(tx, *subject.CustomerID)
 			}
+			// รูปใบหน้าที่ใช้เช็คชื่อ — ต้องหายในทรานแซกชันเดียวกัน
+			// ไม่งั้นเกิดกรณี "บันทึกว่าถอนแล้ว แต่ระบบยังจำหน้าได้อยู่"
+			//
+			// TODO (เฟส D): เคลียร์ snapshot ที่ถ่ายตอนเช็คชื่อด้วย ตอนนี้ยังไม่มี
+			// คอลัมน์ student_attendances.snapshot_key ให้เคลียร์ (แผนข้อ 3.3/8.3)
+			if err == nil {
+				faceKeys, err = DeleteCustomerFaceImages(tx, *subject.CustomerID)
+			}
 		}
 		if err != nil {
 			return err
@@ -252,9 +268,9 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return photoFiles, nil
+	return photoFiles, faceKeys, nil
 }
 
 // deleteFaceDetectionLinks ลบแถว DetectedVideo/DetectedPhoto ของนักเรียนคนนี้ทั้งหมด

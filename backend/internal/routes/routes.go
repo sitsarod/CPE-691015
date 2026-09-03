@@ -92,7 +92,8 @@ func SetupRoutes(r *gin.Engine) {
 	autoQAController := controllers.NewAutoQAController(autoQAService, cloudinaryService)
 
 	// ความยินยอมเก็บข้อมูลใบหน้า (PDPA)
-	consentService := services.NewConsentService(db)
+	// ส่ง cloudinary เข้าไปเพราะการถอนความยินยอมต้องลบไฟล์รูปใบหน้าทิ้งให้หมดจริง
+	consentService := services.NewConsentService(db, cloudinaryService)
 	consentController := controllers.NewConsentController(consentService)
 
 	evaluationService := services.NewEvaluationService(db)
@@ -103,6 +104,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	photoPostService := services.NewDetectedPhotoService(db)
 	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, db)
+
+	// การลงทะเบียนใบหน้า — ไฟล์เก็บบน Cloudinary โหมด authenticated เท่านั้น
+	faceImageService := services.NewFaceImageService(db, cloudinaryService)
+	faceImageController := controllers.NewFaceImageController(faceImageService)
 
 	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
 	attendanceService := services.NewAttendanceService(db)
@@ -283,9 +288,25 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		// --- การลงทะเบียนใบหน้าของนักเรียน ---
-		// กลุ่ม /students/face-photo เดิมถูกลบพร้อม photo_controller.go (เป็น mock ที่
-		// สุ่ม embedding และเก็บรูปใบหน้าไว้ในโฟลเดอร์สาธารณะ)
-		// ของใหม่จะมาที่ /api/face-images เก็บบน Cloudinary โหมด authenticated
+		// แทนกลุ่ม /students/face-photo เดิมที่ถูกลบพร้อม photo_controller.go
+		// (ของเดิมสุ่ม embedding และเก็บรูปใบหน้าไว้ในโฟลเดอร์สาธารณะ)
+		//
+		// ทุกเส้นอ้างตัวตนจาก JWT ส่วนเส้นที่มี :id ตรวจความเป็นเจ้าของในชั้น service
+		// (FaceImageService.findOwned) จึงไม่ต้องใช้ CheckIDOR ที่นี่
+		faceImageGroup := protected.Group("/face-images")
+		{
+			faceImageGroup.POST("", faceImageController.UploadFaceImage)
+			faceImageGroup.GET("/me", faceImageController.GetMyFaceImages)
+			faceImageGroup.GET("/:id/raw", faceImageController.GetFaceImageRaw)
+			faceImageGroup.DELETE("/:id", faceImageController.DeleteFaceImage)
+		}
+
+		// แอดมินตรวจอนุมัติรูปใบหน้า — ดูรูปจริงผ่าน /face-images/:id/raw ที่ให้สิทธิ์ admin ไว้แล้ว
+		adminFaceImageGroup := adminOnly.Group("/admin/face-images")
+		{
+			adminFaceImageGroup.GET("", faceImageController.ListFaceImagesForAdmin)
+			adminFaceImageGroup.PATCH("/:id/review", faceImageController.ReviewFaceImage)
+		}
 
 		// --- การประเมินนักเรียนโดยโค้ช ---
 		evaluationGroup := protected.Group("/evaluations")
