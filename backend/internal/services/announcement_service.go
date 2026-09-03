@@ -4,6 +4,7 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,6 +17,8 @@ var (
 	ErrUserNotFound     = errors.New("user not found")
 	ErrCategoryNotFound = errors.New("category not found")
 	ErrCategoryInUse    = errors.New("cannot delete category that is currently in use by announcements")
+	// ErrInvalidLink กันลิงก์ประเภท javascript:/data: ฯลฯ ที่อาจใช้ทำ XSS ผ่านการกดลิงก์ในหน้าประกาศ
+	ErrInvalidLink = errors.New("link must start with http:// or https://")
 )
 
 type AnnouncementService interface {
@@ -45,21 +48,50 @@ func NewAnnouncementService(db *gorm.DB) AnnouncementService {
 	return &announcementService{db: db}
 }
 
-// startOfDay / endOfDay ปรับ "วันที่" ที่ผู้ใช้เลือกให้ครอบคลุมทั้งวัน
+// bangkokLocation คืนโซนเวลาไทย (Asia/Bangkok, UTC+7) เสมอ ไม่ว่า timezone ของเซิร์ฟเวอร์
+// ที่รันจริงจะตั้งเป็นอะไร — กัน bug วันที่เริ่ม/สิ้นสุดประกาศคลาดเคลื่อนถ้าเซิร์ฟเวอร์รันที่ timezone อื่น (เช่น UTC)
+// FixedZone เป็น fallback กรณีระบบไม่มีข้อมูล tzdata (เช่น container ที่ไม่มี tzdata ติดตั้ง)
+func bangkokLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		return time.FixedZone("ICT", 7*60*60)
+	}
+	return loc
+}
+
+// startOfDay / endOfDay ปรับ "วันที่" ที่ผู้ใช้เลือกให้ครอบคลุมทั้งวัน (อิงเวลาไทยเสมอ)
 // เพื่อให้ประกาศแสดงตลอดวันที่เลือกเป็นวันสิ้นสุด แล้วค่อยหมดอายุ/ถูกลบ "เมื่อสิ้นสุดวัน"
 func startOfDay(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	loc := bangkokLocation()
+	y, m, d := t.In(loc).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, loc)
 }
 
 func endOfDay(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 23, 59, 59, 0, t.Location())
+	loc := bangkokLocation()
+	y, m, d := t.In(loc).Date()
+	return time.Date(y, m, d, 23, 59, 59, 0, loc)
+}
+
+// validateAnnouncementLink กันลิงก์ scheme อันตราย (javascript:, data: ฯลฯ) ที่จะถูก render
+// เป็น <a href> คลิกได้ตรงๆ ในหน้ารายละเอียดประกาศฝั่งลูกค้า — อนุญาตเฉพาะ http/https หรือค่าว่าง
+func validateAnnouncementLink(link string) error {
+	if link == "" {
+		return nil
+	}
+	if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+		return ErrInvalidLink
+	}
+	return nil
 }
 
 func (s *announcementService) CreateAnnouncement(userID uint, req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error) {
 	if req.StartDate.After(req.EndDate) {
 		return nil, ErrInvalidDateRange
+	}
+
+	if err := validateAnnouncementLink(req.Link); err != nil {
+		return nil, err
 	}
 
 	// Validate user existence (userID มาจาก JWT ของแอดมินที่ล็อกอิน)
@@ -155,6 +187,9 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 		announcement.ImageURL = *req.ImageURL
 	}
 	if req.Link != nil {
+		if err := validateAnnouncementLink(*req.Link); err != nil {
+			return nil, err
+		}
 		announcement.Link = *req.Link
 	}
 	if req.CategoryID != nil {

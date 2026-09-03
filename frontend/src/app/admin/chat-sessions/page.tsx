@@ -3,11 +3,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { autoQaAPI } from '../../../services/autoQaAPI';
 import { ChatSession, AutoQA } from '../../../types/autoQa';
+import { ADMIN_CHAT_VIEWED_EVENT, adminChatLastViewedKey, URGENT_WAIT_MS, formatWaitElapsed } from '../../../components/AdminTopBar';
 import {
   MessageSquare, Send, Trash2, Power, RotateCcw, Search, ArrowLeft,
   MoreVertical, Settings, X, Mail, Phone, User, Calendar, RefreshCw,
-  Paperclip, FileText, Loader2, Download,
+  Paperclip, FileText, Loader2, Download, Clock,
 } from 'lucide-react';
+
+// สถานะ "ใครทักมา / รอนานแค่ไหน" ของแต่ละห้องแชท สำหรับแสดงในรายการฝั่งซ้าย
+function sessionRowMeta(s: ChatSession): { isUnread: boolean; isUrgent: boolean; waitingMs: number } {
+  const qas = s.auto_qas || [];
+  if (qas.length === 0 || typeof window === 'undefined') return { isUnread: false, isUrgent: false, waitingMs: 0 };
+  const latest = qas.reduce((a, b) => (new Date(a.created_at).getTime() > new Date(b.created_at).getTime() ? a : b));
+  if (latest.mode === 'admin_reply') return { isUnread: false, isUrgent: false, waitingMs: 0 };
+  const lastViewedRaw = localStorage.getItem(adminChatLastViewedKey(s.id));
+  const lastViewed = lastViewedRaw ? Number(lastViewedRaw) : 0;
+  const latestTime = new Date(latest.created_at).getTime();
+  const isUnread = latestTime > lastViewed;
+  const waitingMs = s.status === 'active' ? Date.now() - latestTime : 0;
+  return { isUnread, isUrgent: s.status === 'active' && waitingMs >= URGENT_WAIT_MS, waitingMs };
+}
 
 // ── helpers ──────────────────────────────────────────────
 const initialOf = (name: string) => (name?.trim()?.charAt(0) || '?').toUpperCase();
@@ -40,6 +55,7 @@ export default function ChatSessionsManagement() {
   const [refreshing, setRefreshing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoOpenedRef = useRef(false); // กันเปิดซ้ำจาก ?session= เมื่อ loadData รันใหม่ (เช่นกด "รีเฟรชรายการ")
 
   const loadData = async () => {
     setIsLoading(true);
@@ -56,6 +72,43 @@ export default function ChatSessionsManagement() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // รีเฟรชรายการห้องแชท (ไม่กระทบ loading state ทั้งหน้า) ทุก 20 วิ เพื่อให้ badge
+  // "ใครทักมา" / "รอนาน" อัปเดตแบบไม่ต้องกดรีเฟรชเอง — ไม่แตะห้องที่กำลังเปิดดูอยู่
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const data = await autoQaAPI.getAllChatSessions();
+        setSessions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to refresh chat sessions list', err);
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // บังคับ re-render ทุก 30 วิ เพื่อให้ข้อความ "รอ X นาที" นับเวลาต่อไปเรื่อย ๆ
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick((x) => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // เปิดห้องแชทที่ระบุมาทาง query string อัตโนมัติ (มาจากคลิกแจ้งเตือนใน AdminTopBar)
+  // เช่น /admin/chat-sessions?session=12
+  useEffect(() => {
+    if (autoOpenedRef.current || isLoading) return;
+    if (typeof window === 'undefined') return;
+    const sessionParam = new URLSearchParams(window.location.search).get('session');
+    if (!sessionParam) return;
+    const id = Number(sessionParam);
+    if (!id) return;
+    autoOpenedRef.current = true;
+    viewSessionDetails(id);
+    // ล้าง query string ออกจาก URL หลังเปิดแล้ว ไม่ให้เปิดซ้ำเมื่อรีเฟรชหน้า
+    window.history.replaceState(null, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   // เลื่อนลงล่างสุดเมื่อเปิดแชทหรือมีข้อความใหม่
   useEffect(() => {
@@ -89,10 +142,21 @@ export default function ChatSessionsManagement() {
     }
   };
 
+  // จำเวลาที่แอดมิน "เปิดดู" ห้องแชทนี้ล่าสุด → ใช้คำนวณ badge จำนวนข้อความใหม่ที่ยังไม่อ่านบน Topbar
+  const markSessionViewed = (id: number) => {
+    try {
+      localStorage.setItem(adminChatLastViewedKey(id), String(Date.now()));
+      window.dispatchEvent(new CustomEvent(ADMIN_CHAT_VIEWED_EVENT));
+    } catch (err) {
+      console.error('Failed to mark chat session as viewed', err);
+    }
+  };
+
   const viewSessionDetails = async (id: number) => {
     try {
       const data = await autoQaAPI.getChatSessionById(id);
       setSelectedSession(data);
+      markSessionViewed(id);
     } catch (err) {
       console.error('Failed to fetch session details', err);
     }
@@ -105,6 +169,7 @@ export default function ChatSessionsManagement() {
     try {
       const data = await autoQaAPI.getChatSessionById(selectedSession.id);
       setSelectedSession(data);
+      markSessionViewed(selectedSession.id);
     } catch (err) {
       console.error('Failed to refresh session', err);
     } finally {
@@ -201,6 +266,7 @@ export default function ChatSessionsManagement() {
           ) : (
             filtered.map((s) => {
               const active = selectedSession?.id === s.id;
+              const { isUnread, isUrgent, waitingMs } = sessionRowMeta(s);
               return (
                 <button
                   key={s.id}
@@ -212,17 +278,24 @@ export default function ChatSessionsManagement() {
                   <div className={`relative w-12 h-12 rounded-full ${avatarColor(s.guest_name)} text-white flex items-center justify-center font-bold text-lg flex-shrink-0`}>
                     {initialOf(s.guest_name)}
                     <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${s.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    {isUnread && (
+                      <span className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${isUrgent ? 'bg-orange-500' : 'bg-[#CC0000]'}`} />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-gray-900 truncate">{s.guest_name}</span>
+                      <span className={`truncate ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>{s.guest_name}</span>
                       <span className="text-[11px] text-gray-400 flex-shrink-0">{fmtDate(s.created_at)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       <span className="text-xs text-gray-500 truncate">{s.guest_email}</span>
-                      {s.status === 'closed' && (
+                      {isUrgent ? (
+                        <span className="text-[10px] font-semibold text-orange-600 flex items-center gap-0.5 flex-shrink-0">
+                          <Clock size={10} /> {formatWaitElapsed(waitingMs)}
+                        </span>
+                      ) : s.status === 'closed' ? (
                         <span className="text-[10px] text-gray-400 flex-shrink-0">ปิดแล้ว</span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </button>

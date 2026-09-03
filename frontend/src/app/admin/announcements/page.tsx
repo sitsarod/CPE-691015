@@ -28,6 +28,8 @@ export default function AdminAnnouncementsPage() {
   });
   
   const [categoryName, setCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
   
   // Image Upload State
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -92,13 +94,24 @@ export default function AdminAnnouncementsPage() {
         return;
       }
 
+      // ลิงก์ที่แนบต้องเป็น http/https เท่านั้น — กัน scheme อันตราย เช่น "javascript:" ที่จะกลาย
+      // เป็นช่องโหว่ XSS เมื่อหน้าเว็บลูกค้าเรนเดอร์เป็น <a href={link}> (backend ตรวจซ้ำอีกชั้นด้วย)
+      const trimmedLink = formData.link.trim();
+      if (trimmedLink) {
+        const lower = trimmedLink.toLowerCase();
+        if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+          alert('ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https:// เท่านั้น');
+          return;
+        }
+      }
+
       // ไม่ส่ง user_id แล้ว — backend ดึงเจ้าของประกาศจาก JWT ของแอดมินที่ล็อกอินเอง
       // (กันการปลอมเจ้าของ และการแก้ไขประกาศจะไม่เปลี่ยนผู้เขียนเดิม)
       const payload = {
         title: formData.title,
         content: formData.content,
         image_url: formData.image_url,
-        link: formData.link.trim(),
+        link: trimmedLink,
         category_id: categoryId,
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
@@ -134,10 +147,47 @@ export default function AdminAnnouncementsPage() {
     try {
       await announcementAPI.createCategory({ name: categoryName.trim() });
       setCategoryName('');
-      setIsCategoryModalOpen(false);
       fetchData();
     } catch (error: any) {
       alert(`เกิดข้อผิดพลาดในการสร้างหมวดหมู่: ${error.message}`);
+    }
+  };
+
+  const handleStartEditCategory = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setEditingCategoryName(cat.name);
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
+  };
+
+  const handleSaveEditCategory = async (id: number) => {
+    const trimmed = editingCategoryName.trim();
+    if (!trimmed) return;
+    try {
+      await announcementAPI.updateCategory(id, { name: trimmed });
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      fetchData();
+    } catch (error: any) {
+      alert(`เกิดข้อผิดพลาดในการแก้ไขหมวดหมู่: ${error.message}`);
+    }
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    if (!window.confirm(`ต้องการลบหมวดหมู่ "${cat.name}" ใช่หรือไม่?`)) return;
+    try {
+      await announcementAPI.deleteCategory(cat.id);
+      fetchData();
+    } catch (error: any) {
+      // Backend กัน "ลบหมวดหมู่ที่มีประกาศใช้งานอยู่" ไว้อยู่แล้ว (ErrCategoryInUse)
+      // — แปลข้อความให้อ่านง่ายขึ้นแทนการโชว์ error ภาษาอังกฤษดิบ ๆ
+      const msg = typeof error?.message === 'string' && error.message.toLowerCase().includes('in use')
+        ? `ไม่สามารถลบหมวดหมู่ "${cat.name}" ได้ เนื่องจากมีประกาศที่ใช้หมวดหมู่นี้อยู่ กรุณาย้ายหรือลบประกาศเหล่านั้นก่อน`
+        : `เกิดข้อผิดพลาดในการลบหมวดหมู่: ${error.message}`;
+      alert(msg);
     }
   };
 
@@ -188,12 +238,12 @@ export default function AdminAnnouncementsPage() {
           <p className="text-gray-500 text-sm mt-1">จัดการข่าวสารสาธารณะ การแจ้งเตือน และโปรโมชั่น</p>
         </div>
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={() => setIsCategoryModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg font-medium transition-colors"
           >
             <Tag size={18} />
-            เพิ่มหมวดหมู่ใหม่
+            จัดการหมวดหมู่
           </button>
           <button 
             onClick={() => handleOpenAnnouncementModal()}
@@ -441,41 +491,108 @@ export default function AdminAnnouncementsPage() {
         </div>
       )}
 
-      {/* Create Category Modal */}
+      {/* Manage Categories Modal */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-800">เพิ่มหมวดหมู่ใหม่</h2>
-              <button onClick={() => setIsCategoryModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <h2 className="text-lg font-bold text-gray-800">จัดการหมวดหมู่</h2>
+              <button
+                onClick={() => { setIsCategoryModalOpen(false); handleCancelEditCategory(); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X size={20} />
               </button>
             </div>
-            
-            <form onSubmit={handleSaveCategory} className="p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อหมวดหมู่</label>
-              <input 
-                type="text"
-                required
-                autoFocus
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all mb-6"
-                placeholder="เช่น โปรโมชั่น"
-              />
-              <div className="flex justify-end gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setIsCategoryModalOpen(false)}
+
+            {/* รายการหมวดหมู่ที่มีอยู่ — แก้ไข/ลบได้ */}
+            <div className="px-6 pt-4 overflow-y-auto">
+              {categories.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีหมวดหมู่</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg mb-2">
+                  {categories.map((cat) => (
+                    <li key={cat.id} className="flex items-center gap-2 px-3 py-2">
+                      {editingCategoryId === cat.id ? (
+                        <>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); handleSaveEditCategory(cat.id); }
+                              if (e.key === 'Escape') handleCancelEditCategory();
+                            }}
+                            className="flex-1 px-2 py-1 border border-gray-200 rounded-md text-sm focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEditCategory(cat.id)}
+                            className="px-2 py-1 text-xs font-medium text-white bg-[#CC0000] hover:bg-[#990000] rounded-md transition-colors"
+                          >
+                            บันทึก
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditCategory}
+                            className="px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-md transition-colors"
+                          >
+                            ยกเลิก
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-sm text-gray-800">{cat.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditCategory(cat)}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            title="แก้ไข"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            title="ลบ"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveCategory} className="p-6 pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">เพิ่มหมวดหมู่ใหม่</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
+                  placeholder="เช่น โปรโมชั่น"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+                >
+                  เพิ่ม
+                </button>
+              </div>
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setIsCategoryModalOpen(false); handleCancelEditCategory(); }}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
                 >
-                  ยกเลิก
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium transition-colors"
-                >
-                  เพิ่มหมวดหมู่
+                  ปิด
                 </button>
               </div>
             </form>
