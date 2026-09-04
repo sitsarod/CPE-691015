@@ -13,3 +13,8 @@ FACE_SCAN_ATTENDANCE_PLAN.md
 # ซึ่งเป็นข้อมูลส่วนบุคคลของคนจริง ไม่ควรอยู่ในที่ที่ทุกคนที่ clone repo เห็นได้
 # และ git เก็บประวัติไว้ถาวร ลบไฟล์ทีหลังก็ยังย้อนดูของเดิมได้
 uploads/
+
+# โมเดล buffalo_l ~330MB — ถูกโหลดตอน build image ไม่ต้องเก็บลง git
+face-service/models/
+face-service/__pycache__/
+face-service/.venv/

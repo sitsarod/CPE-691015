@@ -1,0 +1,13 @@
+# ปักเวอร์ชันทุกตัว — build ซ้ำเมื่อไหร่ก็ต้องได้ผลเดิม
+# ⚠️ อัปเวอร์ชัน insightface/onnxruntime เมื่อไหร่ ต้องคำนวณ embedding ของทุกแถวใหม่
+# ถ้าค่าที่ได้เปลี่ยน (คอลัมน์ embedding_model ในตาราง face_images มีไว้เพื่อการนี้)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+insightface==0.7.3
+onnxruntime==1.20.1
+
+# headless = ไม่มี dependency ของ GUI (GTK/X11) ซึ่งไม่มีในคอนเทนเนอร์อยู่แล้ว
+opencv-python-headless==4.10.0.84
+numpy==1.26.4

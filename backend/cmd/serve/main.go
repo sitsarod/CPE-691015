@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -97,6 +98,22 @@ func startBillingOverdueJob() {
 	}()
 }
 
+// startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่รออยู่ ทุก 10 วินาที
+//
+// ⚠️ ต่างจาก job อื่นข้างบนตรงที่ใช้ ticker + context ไม่ใช่ time.Sleep
+// เพื่อให้หยุดได้ตอนปิดเซิร์ฟเวอร์ แทนที่จะค้างเป็น goroutine ผี
+//
+// ไม่ตั้งค่า face-service ไว้ worker จะไม่เริ่มเลยและ log บอก — รูปค้างที่ pending
+// ส่วนเช็คชื่อด้วย QR ยังทำงานปกติ
+func startFaceEmbeddingWorker(ctx context.Context) {
+	worker := services.NewFaceEmbeddingWorker(
+		config.DB,
+		services.NewHTTPFaceEngine(),
+		services.NewCloudinaryService(),
+	)
+	go worker.Run(ctx)
+}
+
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
 	_ = godotenv.Load("../../../.env")
@@ -144,6 +161,11 @@ func main() {
 
 	// 3.4 เลื่อนสถานะบิลค้างชำระที่เลยวันครบกำหนดเป็นเกินกำหนด (overdue) อัตโนมัติ
 	startBillingOverdueJob()
+
+	// 3.5 สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา (pending → awaiting_review/rejected)
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	startFaceEmbeddingWorker(workerCtx)
 
 	// 4. เริ่มสตาร์ทเซิร์ฟเวอร์หลัก (serve)
 	port := os.Getenv("PORT")

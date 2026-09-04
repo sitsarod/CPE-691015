@@ -217,6 +217,38 @@ npm install
 npm run dev      # http://localhost:3000
 ```
 
+### รัน face-service (จำเป็นเฉพาะตอนทดสอบระบบสแกนใบหน้า)
+
+Python service ที่แปลงรูปใบหน้าเป็น embedding — **ถ้าไม่รัน รูปที่นักเรียนอัปโหลด
+จะค้างสถานะ "กำลังประมวลผล" ตลอด** ส่วนอย่างอื่นของระบบทำงานปกติ (รวมถึงเช็คชื่อด้วย QR)
+
+**ติดตั้งครั้งแรกครั้งเดียว** (ต้องมี Homebrew)
+```bash
+brew install python@3.12 cmake
+cd face-service
+python3.12 -m venv .venv
+.venv/bin/pip install numpy==1.26.4 Cython==3.0.11   # ต้องมาก่อน insightface
+.venv/bin/pip install -r requirements.txt
+```
+รันครั้งแรกจะโหลดโมเดล buffalo_l (~330 MB) ลง `~/.insightface/` อัตโนมัติ
+
+**ตั้งค่าใน `.env` ที่ root**
+```
+FACE_SERVICE_URL=http://127.0.0.1:8099
+FACE_SERVICE_SECRET=<สุ่มด้วย openssl rand -hex 32>
+```
+
+**รันทุกครั้งที่จะทดสอบ**
+```bash
+cd face-service
+FACE_SERVICE_SECRET=$(grep ^FACE_SERVICE_SECRET= ../.env | cut -d= -f2) \
+  .venv/bin/uvicorn main:app --host 127.0.0.1 --port 8099
+```
+
+เช็คว่าขึ้นแล้ว: `curl http://127.0.0.1:8099/health`
+
+> รายละเอียด API / วิธี deploy บน Railway / ข้อจำกัดลิขสิทธิ์ของโมเดล — ดู `face-service/README.md`
+
 ### Deploy ด้วย Docker (แนะนำสำหรับขึ้น production)
 
 โปรเจกต์มีชุด Docker พร้อมใช้: `backend/Dockerfile`, `frontend/Dockerfile` และ `docker-compose.yml` ที่ root

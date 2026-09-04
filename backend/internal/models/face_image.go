@@ -2,6 +2,8 @@ package models
 
 import (
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -67,4 +69,21 @@ type FaceImage struct {
 	VerifiedBy   *uint      `json:"verified_by"` // users.id ของแอดมินที่ตรวจ
 	VerifiedAt   *time.Time `json:"verified_at"`
 	RejectReason string     `json:"reject_reason" gorm:"type:varchar(255)"`
+}
+
+// FormatEmbedding แปลง slice เป็นรูปแบบข้อความที่ pgvector รับ: "[0.01,-0.23,...]"
+//
+// ⚠️ ใช้ 'f' ห้ามใช้ 'g'/'e' — pgvector ไม่รับรูปแบบ exponent (1e-05)
+// ความละเอียด -1 = สั้นที่สุดเท่าที่อ่านกลับมาได้ค่าเดิม
+func FormatEmbedding(values []float32) string {
+	var sb strings.Builder
+	sb.WriteByte('[')
+	for i, v := range values {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(strconv.FormatFloat(float64(v), 'f', -1, 32))
+	}
+	sb.WriteByte(']')
+	return sb.String()
 }
