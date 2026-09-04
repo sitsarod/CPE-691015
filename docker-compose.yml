@@ -34,10 +34,31 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
+      # เรียก face-service ผ่านชื่อ service ใน network ภายในของ compose
+      FACE_SERVICE_URL: ${FACE_SERVICE_URL:-http://face-service:8080}
+      FACE_SERVICE_SECRET: ${FACE_SERVICE_SECRET}
     ports:
       - "8000:8000"
     volumes:
       - backend_uploads:/app/uploads
+
+  # สร้าง embedding จากรูปใบหน้า — stateless ไม่ต่อ DB ไม่เก็บไฟล์
+  #
+  # ⚠️ ไม่ map port ออกมาโดยตั้งใจ ให้เรียกได้เฉพาะจาก network ภายในของ compose
+  # (บน Railway ก็ทำแบบเดียวกัน คือไม่ผูกโดเมนสาธารณะให้ service นี้)
+  face-service:
+    build:
+      context: ./face-service
+    image: koyama-face-service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      TZ: Asia/Bangkok
+      FACE_SERVICE_SECRET: ${FACE_SERVICE_SECRET}
+      # :: = ฟังทั้ง IPv6 และ IPv4 บน Linux (ค่าเริ่มต้น bindv6only=0)
+      # Railway private network เป็น IPv6 เท่านั้นจึงต้องใช้ค่านี้
+      # ถ้าเจอปัญหาเรียกไม่เจอในบางสภาพแวดล้อม เปลี่ยนเป็น 0.0.0.0 ได้
+      HOST: "::"
 
   frontend:
     build:
