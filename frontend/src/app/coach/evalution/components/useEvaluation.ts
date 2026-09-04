@@ -15,7 +15,6 @@ export interface WeeklyEvaluation {
   id: number;
   weekLabel: string;
   comment: string;
-  score: number;
   evaluatedAt: number; // epoch ms
 }
 
@@ -66,7 +65,6 @@ function toHistory(evaluations: Evaluation[]): Record<number, WeeklyEvaluation[]
       id: ev.id,
       weekLabel: weekLabelOf(evaluatedAt),
       comment: ev.assessment,
-      score: ev.score,
       evaluatedAt,
     };
     const list = history[ev.customer_id] ?? [];
@@ -130,14 +128,13 @@ export function useEvaluation() {
     return true;
   });
 
-  const handleSave = async (studentId: number, comment: string, score: number) => {
+  const handleSave = async (studentId: number, comment: string) => {
     try {
-      const saved = await createEvaluation({ customer_id: studentId, assessment: comment, score });
+      const saved = await createEvaluation({ customer_id: studentId, assessment: comment });
       const entry: WeeklyEvaluation = {
         id: saved.id,
         weekLabel: weekLabelOf(new Date(saved.created_at).getTime()),
         comment: saved.assessment,
-        score: saved.score,
         evaluatedAt: new Date(saved.created_at).getTime(),
       };
       setHistory((prev) => {

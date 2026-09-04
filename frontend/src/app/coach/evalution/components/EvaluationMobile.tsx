@@ -19,19 +19,18 @@ function EvaluationSheet({
   current: WeeklyEvaluation | null;
   previous: WeeklyEvaluation | null;
   onClose: () => void;
-  onSave: (comment: string, score: number) => Promise<void>;
+  onSave: (comment: string) => Promise<void>;
 }) {
   const [comment, setComment] = useState(current?.comment ?? '');
-  const [score, setScore] = useState(current?.score ?? 80);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = comment.trim().length > 0 && score >= 0 && score <= 100 && !submitting;
+  const canSubmit = comment.trim().length > 0 && !submitting;
 
   const handleConfirm = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await onSave(comment.trim(), score);
+      await onSave(comment.trim());
     } finally {
       setSubmitting(false);
     }
@@ -58,21 +57,10 @@ function EvaluationSheet({
         <div className="flex-1 overflow-y-auto px-5 pb-4">
           {previous && (
             <div className="mb-4 rounded-xl bg-gray-50 p-3 text-xs text-gray-500">
-              <span className="font-semibold text-gray-600">ครั้งก่อน ({previous.score}/100): </span>
+              <span className="font-semibold text-gray-600">ครั้งก่อน: </span>
               {previous.comment}
             </div>
           )}
-
-          <label className="mb-1 block text-sm font-bold text-gray-700">คะแนน (0-100)</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={100}
-            value={score}
-            onChange={(e) => setScore(Number(e.target.value))}
-            className="mb-4 w-full rounded-xl border border-gray-200 px-3 py-3 text-base outline-none transition-all focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-          />
 
           <label className="mb-1 block text-sm font-bold text-gray-700">คอมเมนต์ประเมินผู้เรียน</label>
           <textarea
@@ -140,7 +128,7 @@ function StudentRow({
           {done ? (
             <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-emerald-600">
               <CheckCircle2 size={12} />
-              {current!.score}/100 &middot; {formatRelative(current!.evaluatedAt)}
+              ประเมินแล้ว &middot; {formatRelative(current!.evaluatedAt)}
             </p>
           ) : (
             <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-600">
@@ -266,7 +254,7 @@ export function EvaluationMobile({ manager }: { manager: EvaluationManager }) {
           current={(history[modalStudent.id] ?? []).find((e) => e.weekLabel === week.label) ?? null}
           previous={(history[modalStudent.id] ?? []).find((e) => e.weekLabel !== week.label) ?? null}
           onClose={() => setModalStudent(null)}
-          onSave={(comment, score) => handleSave(modalStudent.id, comment, score)}
+          onSave={(comment) => handleSave(modalStudent.id, comment)}
         />
       )}
 

@@ -86,7 +86,6 @@ func (s *EvaluationService) CreateEvaluation(coachUserID uint, req dto.CreateEva
 		CustomerID: req.CustomerID,
 		CoachID:    coach.ID,
 		Assessment: req.Assessment,
-		Score:      req.Score,
 		VideoURL:   req.VideoURL,
 	}
 
