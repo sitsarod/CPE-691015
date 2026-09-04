@@ -100,11 +100,15 @@ func SetupRoutes(r *gin.Engine) {
 	evaluationService := services.NewEvaluationService(db)
 	evaluationController := controllers.NewEvaluationController(evaluationService, db)
 
+	// ไฟล์รูป/วิดีโอของระบบจำแนกนักเรียน (RawPhoto/RawVideo) เก็บในเครื่องเซิร์ฟเวอร์เอง
+	// (ไม่ใช่ Cloudinary) เข้าถึงได้ผ่าน endpoint ที่เช็คสิทธิ์แล้วเท่านั้น (ดู GetVideoRaw/GetPhotoPostRaw)
+	mediaStorage := services.NewLocalMediaStorage()
+
 	videoService := services.NewDetectedVideoService(db)
-	videoController := controllers.NewVideoController(videoService, db)
+	videoController := controllers.NewVideoController(videoService, mediaStorage, db)
 
 	photoPostService := services.NewDetectedPhotoService(db)
-	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, db)
+	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, mediaStorage, db)
 
 	// การลงทะเบียนใบหน้า — ไฟล์เก็บบน Cloudinary โหมด authenticated เท่านั้น
 	faceImageService := services.NewFaceImageService(db, cloudinaryService)
@@ -179,16 +183,16 @@ func SetupRoutes(r *gin.Engine) {
 		// (coach เห็นเฉพาะของตัวเอง, admin เห็นได้ทุกคน) และ PATCH/PUT ก็ตรวจความเป็นเจ้าของกัน IDOR
 		coachGroup := protected.Group("/coaches")
 		{
-			coachGroup.GET("/me", coachController.GetMyCoach)                                   // โค้ชที่ล็อกอินอยู่ resolve coach_id ของตัวเองจาก JWT
-			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                     // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
-			coachGroup.GET("/:id", coachController.GetCoachByID)                                // เจ้าของ หรือ admin
-			coachGroup.PATCH("/:id", coachController.UpdateCoach)                               // เจ้าของ หรือ admin (บาง field)
+			coachGroup.GET("/me", coachController.GetMyCoach)                                                       // โค้ชที่ล็อกอินอยู่ resolve coach_id ของตัวเองจาก JWT
+			coachGroup.GET("/me/reviews", reviewController.GetCoachReviews)                                         // รีวิวจากลูกค้าที่รีวิวถึงโค้ชคนนี้ (resolve coach_id จาก JWT)
+			coachGroup.GET("/:id", coachController.GetCoachByID)                                                    // เจ้าของ หรือ admin
+			coachGroup.PATCH("/:id", coachController.UpdateCoach)                                                   // เจ้าของ หรือ admin (บาง field)
 			coachGroup.PATCH("/:id/bank", middlewares.SensitiveRateLimit(), coachController.UpdateCoachBankAccount) // เจ้าของเท่านั้น + ยืนยันรหัสผ่านซ้ำ + จำกัดจำนวนครั้ง
-			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)    // เจ้าของ หรือ admin
-			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability) // เจ้าของเท่านั้น (admin แก้ไม่ได้)
-			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)   // เจ้าของ หรือ admin
-			coachGroup.GET("/:id/taught-sessions", workScheduleController.GetTaughtSessionCount) // เจ้าของ หรือ admin — นับคาบที่เช็คชื่อปิดรอบจริง (คำนวณค่าจ้าง)
-			coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)               // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
+			coachGroup.GET("/:id/availability", coachAvailabilityController.GetAvailability)                        // เจ้าของ หรือ admin
+			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)                     // เจ้าของเท่านั้น (admin แก้ไม่ได้)
+			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)                       // เจ้าของ หรือ admin
+			coachGroup.GET("/:id/taught-sessions", workScheduleController.GetTaughtSessionCount)                    // เจ้าของ หรือ admin — นับคาบที่เช็คชื่อปิดรอบจริง (คำนวณค่าจ้าง)
+			coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)                                   // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
 		}
 		// เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
 		adminCoachGroup := adminOnly.Group("/coaches")
@@ -314,9 +318,9 @@ func SetupRoutes(r *gin.Engine) {
 		evaluationGroup := protected.Group("/evaluations")
 		{
 			evaluationGroup.POST("", evaluationController.CreateEvaluation)
-			evaluationGroup.GET("/students", evaluationController.GetMyStudents)          // โค้ช: รายชื่อนักเรียนของตัวเอง
+			evaluationGroup.GET("/students", evaluationController.GetMyStudents) // โค้ช: รายชื่อนักเรียนของตัวเอง
 			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
-			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations)  // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้
+			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations) // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้
 			evaluationGroup.GET("/student/:customer_id", evaluationController.GetStudentEvaluations)
 		}
 
@@ -327,6 +331,7 @@ func SetupRoutes(r *gin.Engine) {
 			videoGroup.POST("/:raw_video_id/assign", videoController.ManuallyAssignStudents)
 			videoGroup.GET("/me", videoController.GetMyDetectedVideos)
 			videoGroup.GET("/:raw_video_id/students", videoController.GetVideoDetectedStudents)
+			videoGroup.GET("/:raw_video_id/raw", videoController.GetVideoRaw)
 		}
 
 		// --- รูปโพสต์ที่โค้ชอัปโหลด (อาจมีนักเรียนหลายคนอยู่ในรูปเดียว) ---
@@ -335,6 +340,7 @@ func SetupRoutes(r *gin.Engine) {
 			photoPostGroup.POST("", photoPostController.UploadPhotoPost)
 			photoPostGroup.POST("/:raw_photo_id/assign", photoPostController.AssignStudentsToPhoto)
 			photoPostGroup.GET("/:raw_photo_id/students", photoPostController.GetPhotoDetectedStudents)
+			photoPostGroup.GET("/:raw_photo_id/raw", photoPostController.GetPhotoPostRaw)
 		}
 
 		// --- โพสต์ (รูป+วิดีโอ) รวมของนักเรียนที่ล็อกอินอยู่ — ใช้กับแท็บ Posts ในโปรไฟล์ ---

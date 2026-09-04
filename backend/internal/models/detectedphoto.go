@@ -14,5 +14,6 @@ type DetectedPhoto struct {
 	RawPhotoID uint      `json:"raw_photo_id" valid:"required~RawPhotoID is required"`
 	RawPhoto   *RawPhoto `json:"raw_photo" gorm:"foreignKey:RawPhotoID"`
 
-	PhotoURL string `json:"photoUrl" valid:"required~Photo URL is required,url~Invalid photo URL format"`
+	// path เรียกดูรูปจริง (/photo-posts/:id/raw) ไม่ใช่ URL แบบเต็ม จึงไม่มี tag "url" (ดูคอมเมนต์ใน RawPhoto)
+	PhotoURL string `json:"photoUrl" valid:"required~Photo URL is required"`
 }

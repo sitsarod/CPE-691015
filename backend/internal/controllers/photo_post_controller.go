@@ -1,13 +1,10 @@
 package controllers
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
-	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -23,13 +20,15 @@ import (
 type PhotoPostController struct {
 	photoPostService *services.DetectedPhotoService
 	videoService     *services.DetectedVideoService
+	mediaStorage     services.MediaStorage
 	db               *gorm.DB
 }
 
-func NewPhotoPostController(photoPostService *services.DetectedPhotoService, videoService *services.DetectedVideoService, db *gorm.DB) *PhotoPostController {
+func NewPhotoPostController(photoPostService *services.DetectedPhotoService, videoService *services.DetectedVideoService, mediaStorage services.MediaStorage, db *gorm.DB) *PhotoPostController {
 	return &PhotoPostController{
 		photoPostService: photoPostService,
 		videoService:     videoService,
+		mediaStorage:     mediaStorage,
 		db:               db,
 	}
 }
@@ -43,33 +42,30 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 		return
 	}
 
-	file, err := c.FormFile("photo")
+	fh, err := c.FormFile("photo")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพ (ฟิลด์ 'photo')"})
 		return
 	}
 
-	ext, err := ValidateImageUpload(file)
+	ext, err := ValidateImageUpload(fh)
 	if err != nil {
 		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	uploadDir := "./uploads/photo-posts"
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์ระบบได้"})
+	file, err := fh.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
+	defer file.Close()
 
-	filename := fmt.Sprintf("photo-%d%s", time.Now().UnixNano(), ext)
-	filePath := filepath.Join(uploadDir, filename)
-
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
+	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindPhotoPost, file, ext)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์รูปล้มเหลว"})
 		return
 	}
-
-	photoURL := "http://localhost:8000/uploads/photo-posts/" + filename
 
 	// รูปที่แอดมินอัปโหลดเองจะไม่ผูกกับโค้ชคนไหน (coachID เป็น nil)
 	var coachID *uint
@@ -80,8 +76,10 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 		}
 	}
 
-	rawPhoto, err := ctrl.photoPostService.CreateRawPhoto(photoURL, coachID)
+	rawPhoto, err := ctrl.photoPostService.CreateRawPhoto(storageKey, coachID)
 	if err != nil {
+		// เขียนแถวไม่สำเร็จ = ไฟล์ที่เพิ่งอัปไม่มีใครชี้ถึงอีกเลย ต้องลบทันที (เหมือน FaceImageService.Upload)
+		_ = ctrl.mediaStorage.Delete(c.Request.Context(), services.MediaKindPhotoPost, storageKey)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -93,6 +91,51 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 			PhotoURL:   rawPhoto.PhotoURL,
 		},
 	})
+}
+
+// GetPhotoPostRaw handles GET /api/photo-posts/:raw_photo_id/raw — เนื้อไฟล์รูปจริง
+//
+// เฉพาะแอดมิน, โค้ชเจ้าของรูปนี้, หรือนักเรียนที่ถูกแท็กอยู่ในรูปนี้เท่านั้นที่เปิดได้
+// (เหตุผลเดียวกับ FaceImageController.GetFaceImageRaw — ไฟล์เก็บแบบ private ต้อง proxy
+// ผ่าน backend ที่ตรวจสิทธิ์แล้วเท่านั้น ไม่มี URL ที่เปิดตรงได้)
+func (ctrl *PhotoPostController) GetPhotoPostRaw(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		return
+	}
+
+	rawPhotoID, ok := uintParam(c, "raw_photo_id", "รหัสรูป")
+	if !ok {
+		return
+	}
+
+	var rawPhoto models.RawPhoto
+	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		return
+	}
+
+	if err := services.VerifyCanViewRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	body, contentType, err := ctrl.mediaStorage.Open(c.Request.Context(), services.MediaKindPhotoPost, rawPhoto.StorageKey)
+	if err != nil {
+		if errors.Is(err, services.ErrMediaNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์รูปนี้แล้ว"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์รูปได้"})
+		return
+	}
+	defer body.Close()
+
+	// ห้าม cache — สิทธิ์การดูอาจถูกถอนทีหลัง สำเนาที่ค้างในเบราว์เซอร์จะกลายเป็นช่องรั่ว
+	c.Header("Cache-Control", "no-store, private")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.DataFromReader(http.StatusOK, -1, contentType, body, nil)
 }
 
 // AssignStudentsToPhoto handles POST /api/photo-posts/:raw_photo_id/assign
@@ -230,10 +273,10 @@ func (ctrl *PhotoPostController) GetMyPosts(c *gin.Context) {
 
 	posts := make([]dto.PostItem, 0, len(photos)+len(videos))
 	for _, p := range photos {
-		posts = append(posts, dto.PostItem{ID: p.ID, Type: "photo", MediaURL: p.PhotoURL, CreatedAt: p.CreatedAt})
+		posts = append(posts, dto.PostItem{ID: p.ID, Type: "photo", RawID: p.RawPhotoID, CreatedAt: p.CreatedAt})
 	}
 	for _, v := range videos {
-		posts = append(posts, dto.PostItem{ID: v.ID, Type: "video", MediaURL: v.VideoURL, CreatedAt: v.CreatedAt})
+		posts = append(posts, dto.PostItem{ID: v.ID, Type: "video", RawID: v.RawVideoID, CreatedAt: v.CreatedAt})
 	}
 	sort.Slice(posts, func(i, j int) bool { return posts[i].CreatedAt.After(posts[j].CreatedAt) })
 
