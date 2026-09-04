@@ -36,16 +36,17 @@ func SetupRoutes(r *gin.Engine) {
 	billingService := services.NewBillingService(db)
 	billingController := controllers.NewBillingController(billingService)
 
-	userService := services.NewUserService(db)
+	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
+	cloudinaryService := services.NewCloudinaryService()
+
+	// การลบสมาชิกต้องลบไฟล์รูปใบหน้าบนคลาวด์ตามไปด้วย จึงต้องรู้จัก Cloudinary
+	userService := services.NewUserService(db).WithFaceStorage(cloudinaryService)
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
 	authController := controllers.NewAuthController(authService, userService)
 
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
-
-	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
-	cloudinaryService := services.NewCloudinaryService()
 
 	expenseService := services.NewExpenseService(db)
 	expenseController := controllers.NewExpenseController(expenseService, cloudinaryService)

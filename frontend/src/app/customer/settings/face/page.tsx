@@ -6,7 +6,9 @@ import {
   Camera,
   CheckCircle2,
   Clock,
+  ImageOff,
   Loader2,
+  RotateCcw,
   ScanFace,
   ShieldAlert,
   Trash2,
@@ -44,7 +46,8 @@ export default function FaceEnrollmentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [capturingPose, setCapturingPose] = useState<FacePose | null>(null);
-  const [deletingID, setDeletingID] = useState<number | null>(null);
+  // id ของรูปที่กำลังลบหรือกำลังถ่ายใหม่อยู่ — ใช้ปิดปุ่มกันกดซ้ำ
+  const [busyID, setBusyID] = useState<number | null>(null);
 
   // ⚠️ setState ต้องอยู่หลัง await + เช็ค cancelled เสมอ
   // เรียกตรง ๆ ใน effect body จะติด rule react-hooks/set-state-in-effect
@@ -78,18 +81,41 @@ export default function FaceEnrollmentPage() {
   const handleUpload = async (pose: FacePose, photo: Blob) => {
     await uploadFaceImage(pose, photo); // ถ้า throw CaptureDialog จะโชว์ error เอง
     setCapturingPose(null);
-    setImages(await fetchMyFaceImages());
+
+    // ต้อง catch แยก — dialog ปิดไปแล้ว error ที่ throw ต่อจะไม่มีใครรับ
+    // (setState ของ component ที่ unmount แล้วเป็น no-op)
+    try {
+      setImages(await fetchMyFaceImages());
+    } catch {
+      setError("อัปโหลดสำเร็จแล้ว แต่โหลดรายการใหม่ไม่สำเร็จ กรุณารีเฟรชหน้า");
+    }
+  };
+
+  // ถ่ายใหม่ = ลบของเดิมแล้วเปิดกล้องต่อในคลิกเดียว
+  // ⚠️ ต้องลบให้สำเร็จก่อนเปิดกล้อง ไม่งั้นตอนอัปจะชน unique (customer_id, pose) → 409
+  // ทั้งที่ผู้ใช้ถ่ายรูปเสร็จแล้ว
+  const handleRetake = async (image: FaceImage) => {
+    setBusyID(image.id);
+    try {
+      await deleteFaceImage(image.id);
+      setImages(await fetchMyFaceImages());
+      setCapturingPose(image.pose);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "เริ่มถ่ายใหม่ไม่สำเร็จ");
+    } finally {
+      setBusyID(null);
+    }
   };
 
   const handleDelete = async (id: number) => {
-    setDeletingID(id);
+    setBusyID(id);
     try {
       await deleteFaceImage(id);
       setImages(await fetchMyFaceImages());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ลบรูปไม่สำเร็จ");
     } finally {
-      setDeletingID(null);
+      setBusyID(null);
     }
   };
 
@@ -164,8 +190,13 @@ export default function FaceEnrollmentPage() {
                   className="flex items-center gap-4 rounded-2xl border border-gray-200 p-4"
                 >
                   <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                    {image ? (
+                    {/* รูปที่ถูกปฏิเสธไม่มีไฟล์แล้ว ถ้ายังยิงขอจะได้ 404 ทุกครั้งที่เปิดหน้า */}
+                    {image && image.status !== "rejected" ? (
                       <FaceImageThumb id={image.id} />
+                    ) : image ? (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300">
+                        <ImageOff className="w-6 h-6" />
+                      </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300">
                         <Camera className="w-6 h-6" />
@@ -194,13 +225,27 @@ export default function FaceEnrollmentPage() {
                     )}
                   </div>
 
-                  {image ? (
+                  {image && image.status === "rejected" ? (
+                    // รูปที่ไม่ผ่านไม่มีเหตุให้เก็บไว้ ปุ่มเดียวจบ: ลบแล้วเปิดกล้องต่อเลย
+                    <button
+                      onClick={() => handleRetake(image)}
+                      disabled={busyID === image.id}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white bg-[#CC0000] hover:bg-[#a50000] disabled:opacity-50 shrink-0"
+                    >
+                      {busyID === image.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="w-4 h-4" />
+                      )}
+                      ถ่ายใหม่
+                    </button>
+                  ) : image ? (
                     <button
                       onClick={() => handleDelete(image.id)}
-                      disabled={deletingID === image.id}
+                      disabled={busyID === image.id}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 shrink-0"
                     >
-                      {deletingID === image.id ? (
+                      {busyID === image.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Trash2 className="w-4 h-4" />

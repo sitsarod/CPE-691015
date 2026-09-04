@@ -22,11 +22,24 @@ var (
 
 type UserService struct{
 	db *gorm.DB
+
+	// faceStorage ใช้ตอนลบสมาชิก เพื่อลบไฟล์รูปใบหน้าบน Cloudinary ให้หมดจริง
+	// เป็น nil ได้ — ตั้งผ่าน WithFaceStorage ตอนประกอบ service ใน routes
+	faceStorage *CloudinaryService
 }
 
 // NewUserService creates a new instance of UserService
 func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{db: db}
+}
+
+// WithFaceStorage ผูกที่เก็บไฟล์รูปใบหน้าเข้ากับ service
+//
+// แยกเป็นเมธอดแทนการเพิ่มพารามิเตอร์ใน NewUserService เพราะมีแค่เส้นทางลบสมาชิก
+// เส้นเดียวที่ต้องใช้ ที่เหลือ (cmd/createadmin ฯลฯ) ไม่ต้องรู้จัก Cloudinary
+func (s *UserService) WithFaceStorage(cld *CloudinaryService) *UserService {
+	s.faceStorage = cld
+	return s
 }
 
 // GetAllUsers retrieves all users from the database
@@ -258,21 +271,25 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 	// ถ้าลบระหว่าง transaction แล้ว rollback ทีหลัง จะได้แถวที่ยังอยู่แต่ไฟล์หายไป
 	// ซึ่งซ่อมไม่ได้ (ดูเหตุผลเต็มที่ services.RemovePhotoFiles)
 	var photoFiles []string
+	var faceKeys []string
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var files []string
+		var keys []string
 		var err error
 
 		switch user.Role {
 		case models.CustomerRole:
-			files, err = deleteCustomerData(tx, user.ID)
+			files, keys, err = deleteCustomerData(tx, user.ID)
 		case models.CoachRole:
+			// โค้ชยังลงทะเบียนใบหน้าไม่ได้ (face_images ผูกกับ customers เท่านั้น)
 			files, err = deleteCoachData(tx, user.ID)
 		}
 		if err != nil {
 			return err
 		}
 		photoFiles = files
+		faceKeys = keys
 
 		return tx.Delete(&user).Error
 	})
@@ -281,6 +298,7 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 	}
 
 	RemovePhotoFiles(photoFiles)
+	DestroyFaceImageFiles(s.faceStorage, faceKeys)
 	return nil
 }
 
@@ -324,27 +342,36 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 // deleteCustomerData ลบโปรไฟล์ผู้เรียนและข้อมูลชีวภาพของเขา
 //
 // คืนรายการ URL ของไฟล์ภาพที่ต้องลบตามหลัง transaction commit
-func deleteCustomerData(tx *gorm.DB, userID uint) ([]string, error) {
+// คืนสองรายการที่ต้องเอาไปลบ "หลัง" commit:
+// URL ของไฟล์ในเครื่อง (ตาราง photos) และ StorageKey บน Cloudinary (ตาราง face_images)
+func deleteCustomerData(tx *gorm.DB, userID uint) ([]string, []string, error) {
 	var customer models.Customer
 	if err := tx.Where("user_id = ?", userID).First(&customer).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
-	// ภาพใบหน้าและค่า face embedding เป็นข้อมูลชีวภาพ (PDPA ม.26)
+	// ภาพใบหน้าเป็นข้อมูลชีวภาพ (PDPA ม.26)
 	// เมื่อไม่มีสถานะนักเรียนแล้ว ฐานที่ใช้เก็บก็หมดไปด้วย จึงต้องลบทันที
 	photoFiles, err := DeleteCustomerPhotos(tx, customer.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// รูปที่ใช้เช็คชื่ออยู่คนละตารางกับ photos ต้องลบแยก
+	// ไม่งั้นแถวค้างถาวรโดยไม่มีเจ้าของ และไฟล์บนคลาวด์ไม่มีใครชี้ถึงอีกเลย
+	faceKeys, err := DeleteCustomerFaceImages(tx, customer.ID)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if err := tx.Delete(&customer).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return photoFiles, nil
+	return photoFiles, faceKeys, nil
 }
 
 // deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
