@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Loader2,
@@ -23,6 +23,8 @@ import {
   openSession,
   fetchSession,
   checkInByQR,
+  faceLookup,
+  faceCheckIn,
   manualCheckIn,
   closeSession,
   updateAttendanceStatus,
@@ -33,6 +35,7 @@ import type {
   AttendanceSession,
   RosterItem,
   AttendanceStatus,
+  FaceScanResult,
 } from "@/types/attendance";
 
 import QRScanner from "./components/QRScanner";
@@ -40,6 +43,7 @@ import ScanResultBanner, { type ScanOutcome } from "./components/ScanResult";
 import RosterList from "./components/RosterList";
 import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
+import FaceConfirmCard from "./components/FaceConfirmCard";
 
 
 const SCAN_COOLDOWN_SECONDS = 3;
@@ -274,6 +278,78 @@ export default function AdminAttendancePage() {
     [session, startCooldown, refreshSession]
   );
 
+  // ─── สแกนใบหน้า ─────────────────────────────────────────────────────────────
+  //
+  // ทำงานคู่ขนานกับ QR บนกล้องตัวเดียวกัน ไม่มีปุ่มสลับโหมด
+  // เจอคนที่มั่นใจพอ → หยุดสแกน → เด้งการ์ดให้แอดมินยืนยัน → ค่อยบันทึก
+
+  const [faceCandidate, setFaceCandidate] = useState<FaceScanResult | null>(null);
+  const [faceFrame, setFaceFrame] = useState<Blob | null>(null);
+  const [isConfirmingFace, setIsConfirmingFace] = useState(false);
+
+  // กันยิงซ้อน — เฟรมมาทุก 1.5 วิ แต่ backend อาจตอบช้ากว่านั้น
+  // ใช้ ref ไม่ใช่ state เพราะต้องอ่านค่าล่าสุดทันทีในรอบเดียวกัน ไม่รอ re-render
+  const faceInFlight = useRef(false);
+
+  const handleFaceFrame = useCallback(
+    async (frame: Blob) => {
+      if (!session || faceInFlight.current) return;
+
+      faceInFlight.current = true;
+      try {
+        const result = await faceLookup(session.id, frame);
+        if (result.matched) {
+          setFaceCandidate(result);
+          // เก็บเฟรมที่ทำให้แมตช์ไว้ใช้ตอนกดยืนยัน
+          // backend จะ resolve ตัวตนใหม่จากรูปนี้อีกครั้ง ไม่ได้เชื่อ enrollment_id ที่เราส่ง
+          setFaceFrame(frame);
+        }
+      } catch {
+        // ⚠️ ต้องเงียบ — เฟรมส่วนใหญ่ไม่มีหน้าคนหรือจำไม่ได้ ซึ่งเป็นเรื่องปกติ
+        // ถ้าเด้ง error ทุกครั้งจอจะกระพริบข้อความตลอดเวลาที่ไม่มีใครยืนอยู่
+        // ความล้มเหลวที่ผู้ใช้ต้องรู้คือตอน "กดยืนยันแล้วบันทึกไม่ได้" เท่านั้น
+      } finally {
+        faceInFlight.current = false;
+      }
+    },
+    [session]
+  );
+
+  const cancelFace = useCallback(() => {
+    setFaceCandidate(null);
+    setFaceFrame(null);
+  }, []);
+
+  const confirmFace = useCallback(async () => {
+    if (!session || !faceFrame) return;
+
+    setIsConfirmingFace(true);
+    setOutcome(null);
+    try {
+      const result = await faceCheckIn(session.id, faceFrame);
+      setOutcome({
+        ok: true,
+        title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
+        detail: result.is_off_schedule
+          ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
+          : `เหลือ ${result.remaining_sessions} ครั้ง`,
+      });
+    } catch (err: unknown) {
+      setOutcome({
+        ok: false,
+        title: "เช็คชื่อไม่สำเร็จ",
+        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+      });
+    } finally {
+      setIsConfirmingFace(false);
+      cancelFace();
+      // พักกล้องเหมือนหลังสแกน QR — คนเดิมยังยืนอยู่หน้ากล้อง
+      startCooldown();
+    }
+
+    await refreshSession();
+  }, [session, faceFrame, cancelFace, startCooldown, refreshSession]);
+
   // ─── เช็คชื่อให้ (manual) ───────────────────────────────────────────────────
 
   const handleManualCheckIn = async (enrollmentId: number) => {
@@ -382,13 +458,23 @@ export default function AdminAttendancePage() {
             : "โหลดข้อมูลรอบไม่สำเร็จ — ลองรีเฟรชหน้านี้"
         }
         onScan={runScan}
-        paused={isCheckingIn || cooldown > 0}
+        // หยุดสแกนตอนมีการ์ดยืนยันค้างอยู่ด้วย ไม่งั้นจะทายคนถัดไปทับการ์ดที่เปิดอยู่
+        paused={isCheckingIn || cooldown > 0 || faceCandidate !== null}
         pausedReason={
-          cooldown > 0 ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที` : "กำลังบันทึก..."
+          faceCandidate
+            ? "รอยืนยันตัวตน"
+            : cooldown > 0
+              ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที`
+              : "กำลังบันทึก..."
         }
         outcome={outcome}
         onDismissOutcome={() => setOutcome(null)}
         onExit={exitKiosk}
+        onFaceFrame={handleFaceFrame}
+        faceCandidate={faceCandidate}
+        isConfirmingFace={isConfirmingFace}
+        onConfirmFace={confirmFace}
+        onCancelFace={cancelFace}
       />
     );
   }
@@ -686,11 +772,14 @@ export default function AdminAttendancePage() {
             {useCamera ? (
               <QRScanner
                 onScan={runScan}
-                paused={isCheckingIn || cooldown > 0}
+                onFaceFrame={handleFaceFrame}
+                paused={isCheckingIn || cooldown > 0 || faceCandidate !== null}
                 pausedReason={
-                  cooldown > 0
-                    ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที`
-                    : "กำลังบันทึก..."
+                  faceCandidate
+                    ? "รอยืนยันตัวตน"
+                    : cooldown > 0
+                      ? `พร้อมสแกนคนถัดไปใน ${cooldown} วินาที`
+                      : "กำลังบันทึก..."
                 }
                 overlay={
                   outcome && (
@@ -759,6 +848,16 @@ export default function AdminAttendancePage() {
         <KioskSetupDialog
           onConfirm={enterKiosk}
           onCancel={() => setIsSettingUpKiosk(false)}
+        />
+      )}
+
+      {/* โหมดปกติก็สแกนใบหน้าได้ ไม่ใช่เฉพาะโหมดสนาม */}
+      {faceCandidate && (
+        <FaceConfirmCard
+          candidate={faceCandidate}
+          isSubmitting={isConfirmingFace}
+          onConfirm={confirmFace}
+          onCancel={cancelFace}
         />
       )}
     </div>

@@ -111,7 +111,8 @@ func SetupRoutes(r *gin.Engine) {
 	faceImageController := controllers.NewFaceImageController(faceImageService)
 
 	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
-	attendanceService := services.NewAttendanceService(db)
+	attendanceService := services.NewAttendanceService(db).
+		WithFaceEngine(services.NewHTTPFaceEngine())
 	attendanceController := controllers.NewAttendanceController(attendanceService)
 
 	// ระบบรีวิว/ให้คะแนนคอร์สและโค้ช
@@ -377,6 +378,10 @@ func SetupRoutes(r *gin.Engine) {
 			// สแกนสองจังหวะ: lookup ไม่เขียนอะไร · check-in บันทึกและหักโควตา
 			attendanceGroup.POST("/sessions/:id/lookup", attendanceController.Lookup)
 			attendanceGroup.POST("/sessions/:id/check-in", attendanceController.CheckIn)
+			// สแกนใบหน้า — สองจังหวะเหมือน QR แต่รับรูปเป็น multipart
+			// จังหวะ 2 รับรูปใหม่เสมอ ไม่รับ enrollment_id จาก lookup
+			attendanceGroup.POST("/sessions/:id/face-lookup", attendanceController.FaceLookup)
+			attendanceGroup.POST("/sessions/:id/face-check-in", attendanceController.FaceCheckIn)
 			attendanceGroup.POST("/sessions/:id/manual", attendanceController.ManualCheckIn)
 			attendanceGroup.PATCH("/sessions/:id/close", attendanceController.CloseSession)
 
