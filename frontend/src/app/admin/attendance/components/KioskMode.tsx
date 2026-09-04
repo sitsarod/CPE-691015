@@ -5,6 +5,8 @@ import Image from "next/image";
 import { Camera, CameraOff, Lock, ShieldCheck } from "lucide-react";
 import QRScanner from "./QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./ScanResult";
+import FaceConfirmCard from "./FaceConfirmCard";
+import type { FaceScanResult } from "@/types/attendance";
 
 const MIN_PIN_LENGTH = 4;
 const MAX_PIN_LENGTH = 8;
@@ -153,6 +155,13 @@ interface Props {
   onExit: () => void;
 
   notice?: string;
+
+  // ─── สแกนใบหน้า (ไม่ส่งมา = ปิดฟีเจอร์ QR ยังทำงานปกติ) ───
+  onFaceFrame?: (frame: Blob) => void;
+  faceCandidate?: FaceScanResult | null;
+  isConfirmingFace?: boolean;
+  onConfirmFace?: () => void;
+  onCancelFace?: () => void;
 }
 
 // KioskMode คือจอที่เปิดทิ้งไว้ที่สนามโดยไม่มีคนคุม
@@ -169,6 +178,11 @@ export default function KioskMode({
   onDismissOutcome,
   onExit,
   notice = "หมดเวลาเช็คชื่อของคาบนี้แล้ว",
+  onFaceFrame,
+  faceCandidate,
+  isConfirmingFace = false,
+  onConfirmFace,
+  onCancelFace,
 }: Props) {
   const [askingPin, setAskingPin] = useState(false);
   const [pinError, setPinError] = useState<string>();
@@ -238,6 +252,7 @@ export default function KioskMode({
                 paused={paused}
                 pausedReason={pausedReason}
                 frameClassName={FRAME_CLASS}
+                onFaceFrame={onFaceFrame}
               />
             </div>
           ) : canScan ? (
@@ -308,6 +323,16 @@ export default function KioskMode({
           variant="fullscreen"
           outcome={outcome}
           onDismiss={onDismissOutcome}
+        />
+      )}
+
+      {/* การ์ดยืนยันมาก่อนผลลัพธ์เสมอ — ถ้ามีทั้งคู่แปลว่ากำลังจะบันทึกรายถัดไป */}
+      {faceCandidate && onConfirmFace && onCancelFace && (
+        <FaceConfirmCard
+          candidate={faceCandidate}
+          isSubmitting={isConfirmingFace}
+          onConfirm={onConfirmFace}
+          onCancel={onCancelFace}
         />
       )}
 

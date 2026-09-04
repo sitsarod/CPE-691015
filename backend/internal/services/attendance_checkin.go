@@ -42,7 +42,7 @@ func (s *AttendanceService) LookupByQR(sessionID uint, qrCode string) (*dto.Scan
 func (s *AttendanceService) CheckInByQR(sessionID uint, qrCode string) (*dto.CheckInResultDTO, error) {
 	return s.checkIn(sessionID, func(tx *gorm.DB, session *models.AttendanceSession) (*scanContext, error) {
 		return s.resolveByQR(tx, session, qrCode)
-	}, models.CheckInMethodQRCode, "", nil)
+	}, models.CheckInMethodQRCode, "", nil, nil)
 }
 
 // ManualCheckIn บันทึกให้โดยแอดมิน สำหรับกรณีนักเรียนลืมเอา QR มา
@@ -54,7 +54,15 @@ func (s *AttendanceService) ManualCheckIn(
 ) (*dto.CheckInResultDTO, error) {
 	return s.checkIn(sessionID, func(tx *gorm.DB, session *models.AttendanceSession) (*scanContext, error) {
 		return s.resolveByEnrollment(tx, session, enrollmentID)
-	}, models.CheckInMethodManual, strings.TrimSpace(remarks), &adminUserID)
+	}, models.CheckInMethodManual, strings.TrimSpace(remarks), &adminUserID, nil)
+}
+
+// checkInExtra คือข้อมูลที่มีเฉพาะบางวิธีเช็คชื่อ
+//
+// ห่อเป็น struct แทนการเพิ่มพารามิเตอร์เรื่อย ๆ จนอ่านไม่ออกว่าค่าไหนคืออะไร
+// ตอนนี้มีฟิลด์เดียวเพราะเลือกไม่เก็บภาพ snapshot (เก็บแค่คะแนนความมั่นใจ)
+type checkInExtra struct {
+	ConfidenceScore float64
 }
 
 func (s *AttendanceService) checkIn(
@@ -63,6 +71,7 @@ func (s *AttendanceService) checkIn(
 	method models.CheckInMethod,
 	remarks string,
 	recordedBy *uint,
+	extra *checkInExtra, // nil สำหรับ QR/manual ที่ไม่มีคะแนนความมั่นใจ
 ) (*dto.CheckInResultDTO, error) {
 	var result dto.CheckInResultDTO
 
@@ -99,6 +108,11 @@ func (s *AttendanceService) checkIn(
 			UserID:              studentUserID,
 			AttendanceSessionID: &sessionIDVal,
 			RecordedByUserID:    recordedBy,
+		}
+		if extra != nil {
+			// เก็บทุกครั้งแม้ครั้งที่คะแนนไม่สูงนัก เพราะต้องใช้ calibrate threshold
+			// จากข้อมูลจริงทีหลัง (แผนข้อ 5.3)
+			record.ConfidenceScore = extra.ConfidenceScore
 		}
 
 		if err := tx.Create(&record).Error; err != nil {

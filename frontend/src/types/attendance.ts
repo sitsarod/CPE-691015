@@ -111,6 +111,16 @@ export interface ScanResult {
   reason?: string;
 }
 
+// ผลของจังหวะที่ 1 ตอนสแกนใบหน้า — ยังไม่บันทึกอะไร
+//
+// confidence = ความเหมือนของอันดับ 1 (0–1)
+// margin = อันดับ 1 นำอันดับ 2 อยู่เท่าไร · ต่ำแปลว่ามีคนหน้าคล้ายในคาบนี้
+export interface FaceScanResult extends ScanResult {
+  matched: boolean;
+  confidence: number;
+  margin: number;
+}
+
 // ผลของจังหวะที่ 2 — บันทึกแล้วและโควตาถูกหักแล้ว
 export interface CheckInResult {
   attendance_id: number;

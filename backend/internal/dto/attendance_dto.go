@@ -137,6 +137,21 @@ type ScanResultDTO struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+// FaceScanResultDTO คือผลของจังหวะที่ 1 ตอนสแกนใบหน้า (ยังไม่บันทึกอะไร)
+//
+// ต่อยอด ScanResultDTO เดิมเพราะข้อมูลที่หน้าจอต้องใช้เหมือนกันทุกอย่าง
+// เพิ่มมาแค่คะแนนที่ต้องโชว์ให้แอดมินตัดสินใจก่อนกดยืนยัน
+type FaceScanResultDTO struct {
+	ScanResultDTO
+
+	Matched bool `json:"matched"`
+
+	// Confidence = ความเหมือนของอันดับ 1 (0–1 ยิ่งสูงยิ่งมั่นใจ)
+	// Margin = อันดับ 1 นำอันดับ 2 อยู่เท่าไร — ต่ำแปลว่ามีคนหน้าคล้ายในคาบนี้
+	Confidence float64 `json:"confidence"`
+	Margin     float64 `json:"margin"`
+}
+
 type CheckInResultDTO struct {
 	AttendanceID uint   `json:"attendance_id"`
 	EnrollmentID uint   `json:"enrollment_id"`

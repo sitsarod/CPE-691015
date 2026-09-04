@@ -4,6 +4,7 @@ import type {
   OpenSessionSummary,
   AttendanceSession,
   CheckInResult,
+  FaceScanResult,
   UpdateAttendanceResult,
   AttendanceHistoryItem,
   AttendanceStatus,
@@ -58,6 +59,44 @@ export async function checkInByQR(sessionId: number, qrCode: string): Promise<Ch
     method: "POST",
     body: JSON.stringify({ qr_code: qrCode }),
   });
+  return res.data;
+}
+
+// ─── สแกนใบหน้า ───
+
+function facePhotoForm(frame: Blob): FormData {
+  const form = new FormData();
+  // ต้องมี filename ไม่งั้น c.FormFile ฝั่ง Go อ่านไม่เจอ
+  form.append("photo", frame, "frame.jpg");
+  return form;
+}
+
+/**
+ * [POST] จังหวะ 1 — ถามว่าใบหน้าในเฟรมนี้คือใคร ยังไม่บันทึกอะไร
+ *
+ * ⚠️ ถูกเรียกทุก ~1.5 วินาทีตลอดเวลาที่กล้องเปิด เฟรมส่วนใหญ่จะไม่มีหน้าคน
+ * ผู้เรียกต้องกลืน error เงียบ ๆ ไม่ใช่เด้งข้อความทุกครั้ง
+ */
+export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceScanResult> {
+  const res = await apiFetch<Envelope<FaceScanResult>>(
+    `/attendance/sessions/${sessionId}/face-lookup`,
+    { method: "POST", body: facePhotoForm(frame) }
+  );
+  return res.data;
+}
+
+/**
+ * [POST] จังหวะ 2 — บันทึกจริง + หักโควตา
+ *
+ * ⚠️ ส่ง "รูป" เท่านั้น ห้ามเพิ่ม enrollment_id ที่ได้จาก faceLookup เข้ามาใน body
+ * backend หาตัวตนใหม่จากรูปทุกครั้งและไม่อ่าน id ใด ๆ จาก client เลย
+ * (เหตุผลเดียวกับ checkInByQR ด้านบน)
+ */
+export async function faceCheckIn(sessionId: number, frame: Blob): Promise<CheckInResult> {
+  const res = await apiFetch<Envelope<CheckInResult>>(
+    `/attendance/sessions/${sessionId}/face-check-in`,
+    { method: "POST", body: facePhotoForm(frame) }
+  );
   return res.data;
 }
 

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -33,6 +34,20 @@ func mapAttendanceError(c *gin.Context, err error) {
 
 	case errors.Is(err, services.ErrInvalidStatus):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+	// สแกนใบหน้าแล้วใช้ผลไม่ได้ — คำขอถูกรูปแบบ แต่เนื้อในไปต่อไม่ได้ จึงไม่ใช่ 400
+	// หน้าเว็บใช้ 422 เป็นสัญญาณว่า "ลองใหม่หรือไปใช้ QR" ไม่ใช่ "โปรแกรมส่งมาผิด"
+	case errors.Is(err, services.ErrNoFaceInImage),
+		errors.Is(err, services.ErrMultipleFaces),
+		errors.Is(err, services.ErrFaceTooBlurry),
+		errors.Is(err, services.ErrFaceNotRecognized),
+		errors.Is(err, services.ErrFaceAmbiguous):
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+
+	// face-service ล่มหรือยังไม่ได้ตั้งค่า = ระบบยังไม่พร้อม ไม่ใช่ผู้ใช้ทำผิด
+	// ต้องแยกออกมาให้ชัดเพื่อให้หน้าเว็บบอกได้ว่า "ใช้ QR แทนไปก่อน"
+	case errors.Is(err, services.ErrFaceEngineUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 
 	// สถานะไม่เอื้อให้ทำตอนนี้
 	case errors.Is(err, services.ErrSessionClosed),
@@ -149,6 +164,92 @@ func (ctrl *AttendanceController) CheckIn(c *gin.Context) {
 	}
 
 	result, err := ctrl.service.CheckInByQR(id, req.QRCode)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
+}
+
+// ─── สแกนใบหน้า ───
+//
+// รับเป็น multipart (ฟิลด์ photo) ไม่ใช่ base64 ใน JSON เพราะ base64 ทำให้ payload
+// ใหญ่ขึ้น ~33% และใช้ ValidateFaceImageUpload ที่มีอยู่แล้วซ้ำไม่ได้
+
+// readFacePhoto อ่านรูปจาก multipart พร้อมตรวจขนาดและชนิดไฟล์
+// คืน false เมื่อตอบ error ให้ client ไปแล้ว
+func readFacePhoto(c *gin.Context) ([]byte, bool) {
+	// ตัดคำขอที่ใหญ่เกินตั้งแต่ยังไม่อ่านเข้าหน่วยความจำ (เหตุผลเดียวกับ face_image_controller)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxImageUploadBytes+(1<<20))
+
+	fh, err := c.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบภาพจากกล้อง (ฟิลด์ 'photo')"})
+		return nil, false
+	}
+	if _, err := ValidateFaceImageUpload(fh); err != nil {
+		status := UploadErrorStatus(err)
+		if errors.Is(err, ErrUploadBadType) {
+			status = http.StatusUnsupportedMediaType
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return nil, false
+	}
+
+	file, err := fh.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		return nil, false
+	}
+	defer file.Close()
+
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		return nil, false
+	}
+	return raw, true
+}
+
+// FaceLookup [POST] /api/attendance/sessions/:id/face-lookup — จังหวะ 1 ไม่เขียนอะไร
+func (ctrl *AttendanceController) FaceLookup(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+	raw, ok := readFacePhoto(c)
+	if !ok {
+		return
+	}
+
+	result, err := ctrl.service.LookupByFace(id, raw)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
+// FaceCheckIn [POST] /api/attendance/sessions/:id/face-check-in — จังหวะ 2 บันทึกจริง
+//
+// ⚠️ รับรูปใหม่เท่านั้น ไม่รับ enrollment_id จาก body — ตัวตนต้องถูก resolve ใหม่
+// จากรูปทุกครั้ง ไม่งั้นคนที่ยึด session แอดมินได้จะเช็คชื่อให้ใครก็ได้
+func (ctrl *AttendanceController) FaceCheckIn(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+	adminUserID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		return
+	}
+	raw, ok := readFacePhoto(c)
+	if !ok {
+		return
+	}
+
+	result, err := ctrl.service.CheckInByFace(id, raw, adminUserID)
 	if err != nil {
 		mapAttendanceError(c, err)
 		return

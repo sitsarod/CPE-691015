@@ -94,6 +94,15 @@ function ScanFrame({ paused }: { paused: boolean }) {
   );
 }
 
+// ทุกกี่มิลลิวินาทีจะดึงเฟรมไปให้ backend ทายว่าเป็นใคร
+//
+// 1.5 วิ เป็นจุดสมดุล: ถี่กว่านี้เปลืองแบนด์วิดท์และ CPU ของ face-service
+// โดยไม่ได้ช่วยให้เร็วขึ้นจริง (คนต้องยืนนิ่งอยู่แล้ว) ห่างกว่านี้รู้สึกหน่วง
+const FACE_FRAME_INTERVAL_MS = 1500;
+
+// ย่อด้านยาวสุดก่อนส่ง — โมเดลไม่ได้ใช้ความละเอียดเกินนี้ และลดเวลาอัปโหลดมาก
+const FACE_FRAME_MAX_EDGE = 640;
+
 interface Props {
   onScan: (code: string) => void;
 
@@ -104,6 +113,16 @@ interface Props {
   overlay?: ReactNode;
 
   frameClassName?: string;
+
+  /**
+   * รับเฟรมจากกล้องเป็นระยะเพื่อส่งไปทายใบหน้า
+   *
+   * ⚠️ ใช้ <video> ตัวเดียวกับที่ html5-qrcode เปิดไว้แล้ว ไม่เปิดกล้องซ้ำ
+   * เบราว์เซอร์ให้เปิดกล้องตัวเดียวกันพร้อมกันสองที่ไม่ได้ และผู้ใช้จะเห็นภาพซ้อน
+   *
+   * ไม่ส่ง prop นี้มา = ปิดการสแกนใบหน้า (QR ทำงานตามปกติ)
+   */
+  onFaceFrame?: (frame: Blob) => void;
 }
 
 export default function QRScanner({
@@ -112,15 +131,22 @@ export default function QRScanner({
   pausedReason,
   overlay,
   frameClassName = "aspect-[4/3] max-h-[52vh]",
+  onFaceFrame,
 }: Props) {
   const scannerRef = useRef<Html5QrcodeInstance | null>(null);
   const onScanRef = useRef(onScan);
+  const onFaceFrameRef = useRef(onFaceFrame);
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
+
+  // เก็บใน ref เพื่อไม่ให้ interval ถูกสร้างใหม่ทุกครั้งที่ผู้เรียก re-render
+  useEffect(() => {
+    onFaceFrameRef.current = onFaceFrame;
+  }, [onFaceFrame]);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,6 +226,38 @@ export default function QRScanner({
     } catch {
     }
   }, [paused, status]);
+
+  // ดึงเฟรมไปทายใบหน้าคู่ขนานกับการอ่าน QR — ไม่มีปุ่มสลับโหมด ทำสองอย่างพร้อมกัน
+  //
+  // หยุดตอน paused ด้วยเหตุผลเดียวกับที่หยุดอ่าน QR: มีการ์ดยืนยันค้างอยู่
+  // หรือกำลังบันทึก ยิงต่อไปก็มีแต่จะได้คนเดิมซ้ำ ๆ
+  useEffect(() => {
+    if (status !== "running" || paused || !onFaceFrame) return;
+
+    const timer = setInterval(() => {
+      const video = document.querySelector<HTMLVideoElement>(`#${ELEMENT_ID} video`);
+      if (!video || !video.videoWidth) return;
+
+      const scale = Math.min(1, FACE_FRAME_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) onFaceFrameRef.current?.(blob);
+        },
+        "image/jpeg",
+        0.85
+      );
+    }, FACE_FRAME_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [status, paused, onFaceFrame]);
 
   return (
     <div className="space-y-3">

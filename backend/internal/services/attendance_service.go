@@ -13,6 +13,10 @@ import (
 
 type AttendanceService struct {
 	db *gorm.DB
+
+	// faceEngine ใช้เฉพาะเส้นทางเช็คชื่อด้วยใบหน้า — เป็น nil ได้
+	// QR/manual ทำงานได้ตามปกติแม้ไม่ได้ตั้งค่า (ดู WithFaceEngine ใน attendance_face.go)
+	faceEngine FaceEngine
 }
 
 func NewAttendanceService(db *gorm.DB) *AttendanceService {
