@@ -3,6 +3,7 @@ package services
 import (
 	"CPE-691015/internal/models"
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -31,14 +32,45 @@ func VerifyCoachOwnsRawPhoto(db *gorm.DB, rawPhoto *models.RawPhoto, userID uint
 	return nil
 }
 
-// CreateRawPhoto บันทึกรูปต้นฉบับที่อัปโหลดโดยโค้ช
-// coachID เป็น nil เมื่อแอดมินเป็นคนอัปโหลดเอง (ไม่ผูกกับโค้ชคนไหน)
-func (s *DetectedPhotoService) CreateRawPhoto(photoURL string, coachID *uint) (*models.RawPhoto, error) {
-	rawPhoto := models.RawPhoto{
-		PhotoURL: photoURL,
-		CoachID:  coachID,
+// VerifyCanViewRawPhoto คืน nil ถ้าเป็นแอดมิน, โค้ชเจ้าของรูปนี้ (ผ่าน VerifyCoachOwnsRawPhoto),
+// หรือนักเรียนที่ถูกแท็กอยู่ในรูปนี้จริง (ผ่าน DetectedPhoto) — ใช้คุม endpoint ดูเนื้อไฟล์จริง
+// (GetPhotoPostRaw) ที่ผูกกับข้อมูลชีวภาพของนักเรียนตาม PDPA
+func VerifyCanViewRawPhoto(db *gorm.DB, rawPhoto *models.RawPhoto, userID uint, role string) error {
+	if err := VerifyCoachOwnsRawPhoto(db, rawPhoto, userID, role); err == nil {
+		return nil
 	}
-	if err := s.db.Create(&rawPhoto).Error; err != nil {
+
+	customerID, err := ResolveCustomerID(db, userID)
+	if err != nil {
+		return ErrRawPhotoForbidden
+	}
+
+	var count int64
+	if err := db.Model(&models.DetectedPhoto{}).
+		Where("raw_photo_id = ? AND customer_id = ?", rawPhoto.ID, customerID).
+		Count(&count).Error; err != nil || count == 0 {
+		return ErrRawPhotoForbidden
+	}
+	return nil
+}
+
+// CreateRawPhoto บันทึกรูปต้นฉบับที่อัปโหลดโดยโค้ช (storageKey มาจาก MediaStorage.Save มาแล้ว)
+// coachID เป็น nil เมื่อแอดมินเป็นคนอัปโหลดเอง (ไม่ผูกกับโค้ชคนไหน)
+//
+// PhotoURL คือ path เรียกดูรูปจริง ต้องรู้ ID ก่อนถึงคำนวณได้ จึงต้อง create แล้ว update ทีหลัง
+// ⚠️ ครอบทั้งสองขั้นด้วย transaction เดียว — ถ้า update ล้มเหลวหลัง create สำเร็จแล้ว ต้อง rollback
+// การ create ไปด้วย ไม่งั้นจะเหลือแถวกำพร้าที่ photo_url ว่างเปล่าค้างอยู่ถาวร
+func (s *DetectedPhotoService) CreateRawPhoto(storageKey string, coachID *uint) (*models.RawPhoto, error) {
+	var rawPhoto models.RawPhoto
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		rawPhoto = models.RawPhoto{StorageKey: storageKey, CoachID: coachID}
+		if err := tx.Create(&rawPhoto).Error; err != nil {
+			return err
+		}
+		rawPhoto.PhotoURL = fmt.Sprintf("/photo-posts/%d/raw", rawPhoto.ID)
+		return tx.Model(&rawPhoto).Update("photo_url", rawPhoto.PhotoURL).Error
+	})
+	if err != nil {
 		return nil, errors.New("ไม่สามารถบันทึกข้อมูลรูปต้นฉบับได้")
 	}
 	return &rawPhoto, nil

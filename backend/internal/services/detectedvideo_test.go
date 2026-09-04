@@ -49,6 +49,40 @@ func TestVerifyCoachOwnsRawVideo(t *testing.T) {
 	})
 }
 
+func TestVerifyCanViewRawVideo(t *testing.T) {
+	db := newTestDB(t, &models.Coach{}, &models.Customer{}, &models.RawVideo{}, &models.DetectedVideo{})
+
+	coachA := seedCoachFor(t, db, 100, "uid-view-video-a")
+
+	tagged := models.Customer{UserID: 300, Gender: models.GenderMale, PersonalQRCode: "qr-view-video-tagged"}
+	db.Create(&tagged)
+	untagged := models.Customer{UserID: 301, Gender: models.GenderMale, PersonalQRCode: "qr-view-video-untagged"}
+	db.Create(&untagged)
+
+	rawVideo := models.RawVideo{VideoURL: "/videos/1/raw", CoachID: &coachA}
+	db.Create(&rawVideo)
+	db.Create(&models.DetectedVideo{CustomerID: tagged.ID, RawVideoID: rawVideo.ID, VideoURL: rawVideo.VideoURL})
+
+	t.Run("นักเรียนที่ถูกแท็กอยู่ในวิดีโอดูได้", func(t *testing.T) {
+		if err := VerifyCanViewRawVideo(db, &rawVideo, tagged.UserID, "customer"); err != nil {
+			t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+		}
+	})
+
+	t.Run("นักเรียนที่ไม่ได้ถูกแท็กดูไม่ได้", func(t *testing.T) {
+		err := VerifyCanViewRawVideo(db, &rawVideo, untagged.UserID, "customer")
+		if !errors.Is(err, ErrRawVideoForbidden) {
+			t.Fatalf("ควรได้ ErrRawVideoForbidden แต่ได้: %v", err)
+		}
+	})
+
+	t.Run("โค้ชเจ้าของวิดีโอดูได้ (ไม่ต้องถูกแท็ก)", func(t *testing.T) {
+		if err := VerifyCanViewRawVideo(db, &rawVideo, 100, "coach"); err != nil {
+			t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+		}
+	})
+}
+
 func TestManuallyAssignStudentsToVideoFiltersConsent(t *testing.T) {
 	db := newTestDB(t, &models.Customer{}, &models.RawVideo{}, &models.DetectedVideo{})
 

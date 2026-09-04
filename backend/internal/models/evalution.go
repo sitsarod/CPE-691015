@@ -12,7 +12,6 @@ type Evaluation struct {
 	CoachID    		uint   			`json:"coach_id"` 
 	Coach      		*Coach     		`json:"coach"    gorm:"foreignKey:CoachID"`
 	   
-	Assessment 		string 			`json:"assessment"` 
-	Score      		int    			`json:"score"`   
+	Assessment 		string 			`json:"assessment"`
 	VideoURL        string          `json:"video_url"`
 }

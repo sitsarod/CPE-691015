@@ -1,12 +1,9 @@
 package controllers
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -17,12 +14,14 @@ import (
 
 type VideoController struct {
 	videoService *services.DetectedVideoService
+	mediaStorage services.MediaStorage
 	db           *gorm.DB
 }
 
-func NewVideoController(videoService *services.DetectedVideoService, db *gorm.DB) *VideoController {
+func NewVideoController(videoService *services.DetectedVideoService, mediaStorage services.MediaStorage, db *gorm.DB) *VideoController {
 	return &VideoController{
 		videoService: videoService,
+		mediaStorage: mediaStorage,
 		db:           db,
 	}
 }
@@ -46,45 +45,43 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	}
 
 	// 1. รับไฟล์วิดีโอ
-	file, err := c.FormFile("video")
+	fh, err := c.FormFile("video")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์วิดีโอ (ฟิลด์ 'video')"})
 		return
 	}
 
-	// ตรวจว่าเป็นวิดีโอจริงและขนาดไม่เกิน ก่อนเขียนอะไรลงดิสก์ (ดูเหตุผลใน upload.go)
-	ext, err := ValidateVideoUpload(file)
+	// ตรวจว่าเป็นวิดีโอจริงและขนาดไม่เกิน ก่อนเขียนอะไรลงที่เก็บไฟล์ (ดูเหตุผลใน upload.go)
+	ext, err := ValidateVideoUpload(fh)
 	if err != nil {
 		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	// สร้างโฟลเดอร์สำหรับเก็บวิดีโอ
-	uploadDir := "./uploads/videos"
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์ระบบได้"})
+	file, err := fh.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
+	defer file.Close()
 
-	filename := fmt.Sprintf("video-%d%s", time.Now().UnixNano(), ext)
-	filePath := filepath.Join(uploadDir, filename)
-
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
+	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindVideo, file, ext)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์วิดีโอล้มเหลว"})
 		return
 	}
 
-	videoURL := "http://localhost:8000/uploads/videos/" + filename
-
 	// 2. สร้าง RawVideo บันทึกลง DB
-	rawVideo, err := ctrl.videoService.CreateRawVideo(videoURL, coachID)
+	rawVideo, err := ctrl.videoService.CreateRawVideo(storageKey, coachID)
 	if err != nil {
+		// เขียนแถวไม่สำเร็จ = ไฟล์ที่เพิ่งอัปไม่มีใครชี้ถึงอีกเลย ต้องลบทันที (เหมือน FaceImageService.Upload)
+		_ = ctrl.mediaStorage.Delete(c.Request.Context(), services.MediaKindVideo, storageKey)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 3. รัน Mock Face Recognition
-	detectedVideos, err := ctrl.videoService.ProcessFaceDetection(rawVideo.ID, videoURL)
+	detectedVideos, err := ctrl.videoService.ProcessFaceDetection(rawVideo.ID, rawVideo.VideoURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "การวิเคราะห์สแกนใบหน้าขัดข้อง: " + err.Error()})
 		return
@@ -104,6 +101,49 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 			StudentIDs: studentIDs,
 		},
 	})
+}
+
+// GetVideoRaw handles GET /api/videos/:raw_video_id/raw — เนื้อไฟล์วิดีโอจริง
+//
+// เฉพาะแอดมิน, โค้ชเจ้าของวิดีโอนี้, หรือนักเรียนที่ถูกแท็กอยู่ในวิดีโอนี้เท่านั้นที่เปิดได้
+func (ctrl *VideoController) GetVideoRaw(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		return
+	}
+
+	rawVideoID, ok := uintParam(c, "raw_video_id", "รหัสวิดีโอ")
+	if !ok {
+		return
+	}
+
+	var rawVideo models.RawVideo
+	if err := ctrl.db.First(&rawVideo, rawVideoID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
+		return
+	}
+
+	if err := services.VerifyCanViewRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	body, contentType, err := ctrl.mediaStorage.Open(c.Request.Context(), services.MediaKindVideo, rawVideo.StorageKey)
+	if err != nil {
+		if errors.Is(err, services.ErrMediaNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์วิดีโอนี้แล้ว"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์วิดีโอได้"})
+		return
+	}
+	defer body.Close()
+
+	// ห้าม cache — สิทธิ์การดูอาจถูกถอนทีหลัง สำเนาที่ค้างในเบราว์เซอร์จะกลายเป็นช่องรั่ว
+	c.Header("Cache-Control", "no-store, private")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.DataFromReader(http.StatusOK, -1, contentType, body, nil)
 }
 
 // ManuallyAssignStudents handles POST /api/coaches/videos/:raw_video_id/assign
@@ -156,9 +196,9 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":             "อัปเดตรายชื่อนักเรียนที่มีส่วนร่วมในวิดีโอนี้สำเร็จแล้ว",
-		"student_ids":         studentIDs,
-		"skipped_no_consent":  skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
+		"message":            "อัปเดตรายชื่อนักเรียนที่มีส่วนร่วมในวิดีโอนี้สำเร็จแล้ว",
+		"student_ids":        studentIDs,
+		"skipped_no_consent": skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
 	})
 }
 

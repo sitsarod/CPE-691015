@@ -134,7 +134,6 @@ func TestCreateEvaluationRejectsUnenrolledStudent(t *testing.T) {
 	_, err := svc.CreateEvaluation(200, dto.CreateEvaluationRequest{
 		CustomerID: customerID,
 		Assessment: "ok",
-		Score:      80,
 	})
 	if !errors.Is(err, ErrCustomerNotEnrolledWithCoach) {
 		t.Fatalf("ควรได้ ErrCustomerNotEnrolledWithCoach แต่ได้: %v", err)
@@ -174,7 +173,6 @@ func TestCreateEvaluationAllowsEnrolledStudent(t *testing.T) {
 	ev, err := svc.CreateEvaluation(100, dto.CreateEvaluationRequest{
 		CustomerID: customerID,
 		Assessment: "ok",
-		Score:      80,
 	})
 	if err != nil {
 		t.Fatalf("ควรผ่าน แต่ได้: %v", err)

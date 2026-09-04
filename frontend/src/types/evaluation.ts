@@ -13,12 +13,10 @@ export interface Evaluation {
   coach_id: number;
   coach_name?: string;
   assessment: string;
-  score: number;
   created_at: string;
 }
 
 export interface CreateEvaluationInput {
   customer_id: number;
   assessment: string;
-  score: number;
 }

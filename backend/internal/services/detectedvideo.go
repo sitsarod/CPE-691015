@@ -3,6 +3,7 @@ package services
 import (
 	"CPE-691015/internal/models"
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -33,14 +34,44 @@ func VerifyCoachOwnsRawVideo(db *gorm.DB, rawVideo *models.RawVideo, userID uint
 	return nil
 }
 
-// CreateRawVideo บันทึกวิดีโอต้นฉบับที่อัปโหลดโดยโค้ช
-// coachID เป็น nil เมื่อแอดมินเป็นคนอัปโหลดเอง (ไม่ผูกกับโค้ชคนไหน)
-func (s *DetectedVideoService) CreateRawVideo(videoURL string, coachID *uint) (*models.RawVideo, error) {
-	rawVideo := models.RawVideo{
-		VideoURL: videoURL,
-		CoachID:  coachID,
+// VerifyCanViewRawVideo คืน nil ถ้าเป็นแอดมิน, โค้ชเจ้าของวิดีโอนี้ (ผ่าน VerifyCoachOwnsRawVideo),
+// หรือนักเรียนที่ถูกแท็กอยู่ในวิดีโอนี้จริง (ผ่าน DetectedVideo) — ใช้คุม endpoint ดูเนื้อไฟล์จริง
+// (GetVideoRaw) ที่ผูกกับข้อมูลชีวภาพของนักเรียนตาม PDPA
+func VerifyCanViewRawVideo(db *gorm.DB, rawVideo *models.RawVideo, userID uint, role string) error {
+	if err := VerifyCoachOwnsRawVideo(db, rawVideo, userID, role); err == nil {
+		return nil
 	}
-	if err := s.db.Create(&rawVideo).Error; err != nil {
+
+	customerID, err := ResolveCustomerID(db, userID)
+	if err != nil {
+		return ErrRawVideoForbidden
+	}
+
+	var count int64
+	if err := db.Model(&models.DetectedVideo{}).
+		Where("raw_video_id = ? AND customer_id = ?", rawVideo.ID, customerID).
+		Count(&count).Error; err != nil || count == 0 {
+		return ErrRawVideoForbidden
+	}
+	return nil
+}
+
+// CreateRawVideo บันทึกวิดีโอต้นฉบับที่อัปโหลดโดยโค้ช (storageKey มาจาก MediaStorage.Save มาแล้ว)
+// coachID เป็น nil เมื่อแอดมินเป็นคนอัปโหลดเอง (ไม่ผูกกับโค้ชคนไหน)
+//
+// ⚠️ ครอบทั้ง create และ update ด้วย transaction เดียว — ถ้า update ล้มเหลวหลัง create สำเร็จแล้ว
+// ต้อง rollback การ create ไปด้วย ไม่งั้นจะเหลือแถวกำพร้าที่ video_url ว่างเปล่าค้างอยู่ถาวร
+func (s *DetectedVideoService) CreateRawVideo(storageKey string, coachID *uint) (*models.RawVideo, error) {
+	var rawVideo models.RawVideo
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		rawVideo = models.RawVideo{StorageKey: storageKey, CoachID: coachID}
+		if err := tx.Create(&rawVideo).Error; err != nil {
+			return err
+		}
+		rawVideo.VideoURL = fmt.Sprintf("/videos/%d/raw", rawVideo.ID)
+		return tx.Model(&rawVideo).Update("video_url", rawVideo.VideoURL).Error
+	})
+	if err != nil {
 		return nil, errors.New("ไม่สามารถบันทึกข้อมูลวิดีโอต้นฉบับได้")
 	}
 	return &rawVideo, nil

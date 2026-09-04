@@ -56,7 +56,6 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 		CoachID:    evaluation.CoachID,
 		CoachName:  evaluation.Coach.User.FirstName + " " + evaluation.Coach.User.LastName,
 		Assessment: evaluation.Assessment,
-		Score:      evaluation.Score,
 		VideoURL:   evaluation.VideoURL,
 		CreatedAt:  evaluation.CreatedAt,
 	}
@@ -116,7 +115,6 @@ func (ctrl *EvaluationController) GetMyGivenEvaluations(c *gin.Context) {
 			CustomerID: ev.CustomerID,
 			CoachID:    ev.CoachID,
 			Assessment: ev.Assessment,
-			Score:      ev.Score,
 			VideoURL:   ev.VideoURL,
 			CreatedAt:  ev.CreatedAt,
 		})
@@ -155,7 +153,6 @@ func (ctrl *EvaluationController) GetMyEvaluations(c *gin.Context) {
 			CoachID:    ev.CoachID,
 			CoachName:  ev.Coach.User.FirstName + " " + ev.Coach.User.LastName,
 			Assessment: ev.Assessment,
-			Score:      ev.Score,
 			VideoURL:   ev.VideoURL,
 			CreatedAt:  ev.CreatedAt,
 		})
@@ -214,7 +211,6 @@ func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 			CoachID:    ev.CoachID,
 			CoachName:  ev.Coach.User.FirstName + " " + ev.Coach.User.LastName,
 			Assessment: ev.Assessment,
-			Score:      ev.Score,
 			VideoURL:   ev.VideoURL,
 			CreatedAt:  ev.CreatedAt,
 		})

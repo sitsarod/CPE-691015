@@ -14,6 +14,10 @@ FACE_SCAN_ATTENDANCE_PLAN.md
 # และ git เก็บประวัติไว้ถาวร ลบไฟล์ทีหลังก็ยังย้อนดูของเดิมได้
 uploads/
 
+# ไฟล์รูป/วิดีโอของระบบจำแนกนักเรียน (RawPhoto/RawVideo) ที่เก็บโลคอลผ่าน LocalMediaStorage
+# เหตุผลเดียวกับ uploads/ ด้านบน — ข้อมูลส่วนบุคคลของคนจริง ห้ามอยู่ใน git
+private-media/
+
 # โมเดล buffalo_l ~330MB — ถูกโหลดตอน build image ไม่ต้องเก็บลง git
 face-service/models/
 face-service/__pycache__/

@@ -16,9 +16,13 @@ type UploadPhotoPostResponse struct {
 }
 
 // PostItem คือรายการโพสต์ที่รวมทั้งรูปและวิดีโอเข้าด้วยกัน สำหรับแท็บ Posts ในโปรไฟล์นักเรียน
+//
+// ⚠️ ไม่มี field URL ตรงๆ ให้ใช้เป็น <img src>/<video src> ได้ เพราะเนื้อไฟล์ต้องผ่าน endpoint
+// ที่เช็คสิทธิ์ก่อนเสมอ (แนบ token) — frontend ต้องประกอบ path เองจาก type + raw_id
+// แล้ว fetch เป็น blob (ดู PostMediaThumb.tsx ฝั่ง frontend)
 type PostItem struct {
 	ID        uint      `json:"id"`
-	Type      string    `json:"type"` // "photo" หรือ "video"
-	MediaURL  string    `json:"media_url"`
+	Type      string    `json:"type"`   // "photo" หรือ "video"
+	RawID     uint      `json:"raw_id"` // raw_photo_id หรือ raw_video_id แล้วแต่ type
 	CreatedAt time.Time `json:"created_at"`
 }
