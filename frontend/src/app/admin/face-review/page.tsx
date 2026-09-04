@@ -69,6 +69,8 @@ export default function FaceReviewPage() {
   const refresh = async () => {
     try {
       setImages(await fetchFaceImagesForAdmin(filter || undefined));
+      // ไม่เคลียร์ = พลาดครั้งเดียวแล้วแบนเนอร์แดงค้างตลอด ทั้งที่ครั้งต่อ ๆ ไปสำเร็จ
+      setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     }

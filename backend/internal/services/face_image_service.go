@@ -31,6 +31,7 @@ var (
 	ErrInvalidFaceStatus      = errors.New("สถานะที่ใช้กรองไม่ถูกต้อง")
 	ErrInvalidReviewAction    = errors.New("การกระทำไม่ถูกต้อง (รองรับเฉพาะ approve หรือ reject)")
 	ErrRejectReasonRequired   = errors.New("กรุณาระบุเหตุผลที่ปฏิเสธรูปนี้")
+	ErrFaceImageFileGone      = errors.New("รูปนี้ถูกลบไฟล์ไปแล้ว ตรวจสอบไม่ได้ ต้องให้นักเรียนถ่ายใหม่")
 )
 
 type FaceImageService struct {
@@ -143,6 +144,12 @@ func (s *FaceImageService) OpenRaw(userID uint, role models.UserRole, imageID ui
 		return nil, "", err
 	}
 
+	// รูปที่ถูกปฏิเสธเหลือแต่แถว ไฟล์ถูกลบและ storage_key ว่าง
+	// ถ้าปล่อยผ่านจะไปยิง Cloudinary ด้วย public_id เปล่าแล้วได้ 500 แทนที่จะเป็น 404
+	if image.StorageKey == "" {
+		return nil, "", ErrFaceImageNotFound
+	}
+
 	body, contentType, err := s.cld.DownloadPrivateImage(context.Background(), image.StorageKey)
 	if err != nil {
 		log.Printf("ดึงรูปใบหน้า id=%d จาก Cloudinary ไม่สำเร็จ: %v", imageID, err)
@@ -228,6 +235,14 @@ func (s *FaceImageService) Review(adminUserID, imageID uint, action, reason stri
 			return nil, ErrFaceImageNotFound
 		}
 		return nil, errors.New("ไม่สามารถดึงข้อมูลรูปใบหน้าได้")
+	}
+
+	// ⚠️ ไม่มีไฟล์ = ตรวจไม่ได้ (รูปที่เคยถูกปฏิเสธ)
+	// ถ้าไม่กัน การ approve ซ้ำจะได้แถว ready ที่ไม่มีทั้งไฟล์และ embedding
+	// ซึ่ง ready คือสถานะเดียวที่เฟส D หยิบไปเทียบ = สร้างรูปอ้างอิงผี
+	// UI ซ่อนปุ่มไว้แล้ว แต่ API ต้องกันเองด้วย
+	if image.StorageKey == "" {
+		return nil, ErrFaceImageFileGone
 	}
 
 	now := time.Now()

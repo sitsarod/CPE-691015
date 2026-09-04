@@ -14,7 +14,7 @@ import (
 // newDeleteTestDB สร้าง DB พร้อมทุกตารางที่การลบสมาชิกไปแตะ
 func newDeleteTestDB(t *testing.T) *gorm.DB {
 	return newTestDB(t, &models.User{}, &models.Customer{}, &models.Coach{},
-		&models.Photo{}, &models.CoachAvailability{}, &models.WorkSchedule{})
+		&models.Photo{}, &models.FaceImage{}, &models.CoachAvailability{}, &models.WorkSchedule{})
 }
 
 // seedUser สร้างผู้ใช้หนึ่งคนตามบทบาทที่กำหนด แล้วคืน id

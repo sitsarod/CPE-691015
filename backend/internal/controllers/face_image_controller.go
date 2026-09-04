@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"CPE-691015/internal/dto"
@@ -39,7 +40,9 @@ func mapFaceImageError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrFacePoseAlreadyExists),
-		errors.Is(err, services.ErrFaceImageLimitReached):
+		errors.Is(err, services.ErrFaceImageLimitReached),
+		// ไฟล์หายไปแล้ว = สถานะปัจจุบันไม่เอื้อให้ทำ ไม่ใช่ข้อมูลที่ส่งมาผิด
+		errors.Is(err, services.ErrFaceImageFileGone):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	// ยังไม่ได้ตั้งค่าที่เก็บไฟล์ = ระบบยังไม่พร้อม ไม่ใช่ผู้ใช้ทำผิด
@@ -59,9 +62,24 @@ func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 		return
 	}
 
-	// ⚠️ ต้องครอบก่อน c.FormFile — ถ้าเช็คแค่ fh.Size ทีหลัง gin อ่านไฟล์ทั้งก้อน
+	// ⚠️ ต้องครอบก่อนอ่าน form — ถ้าเช็คแค่ fh.Size ทีหลัง gin อ่านไฟล์ทั้งก้อน
 	// เข้าหน่วยความจำไปแล้ว (เผื่อ 1 MB ให้ header ของ multipart)
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxImageUploadBytes+(1<<20))
+
+	// parse เองเพื่อให้อ่าน error ได้ — ถ้าปล่อยให้ c.PostForm เป็นตัวกระตุ้น
+	// gin จะกลืน error แล้วคืนสตริงว่าง ไฟล์ใหญ่เกินจะถูกตอบว่า "ท่าไม่ถูกต้อง" (400)
+	// แทนที่จะเป็น 413
+	if err := c.Request.ParseMultipartForm(MaxImageUploadBytes + (1 << 20)); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"error": fmt.Sprintf("%v (สูงสุด %d MB)", ErrUploadTooLarge, MaxImageUploadBytes>>20),
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "อ่านข้อมูลที่ส่งมาไม่ได้ กรุณาลองใหม่อีกครั้ง"})
+		return
+	}
 
 	pose := models.FacePose(c.PostForm("pose"))
 	if !models.IsValidFacePose(pose) {

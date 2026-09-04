@@ -139,6 +139,11 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 		status = models.FaceConsentUnknown
 	}
 
+	canUse, err := s.canUseFaceCheckIn(subject, status)
+	if err != nil {
+		return nil, err
+	}
+
 	res := &dto.FaceConsentStatusRes{
 		Status: string(status),
 		// เด้ง modal เฉพาะคนที่ยังไม่เคยตอบ — คนที่ปฏิเสธหรือถอนไปแล้วต้องไม่ถูกถามซ้ำ
@@ -146,10 +151,8 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 		//
 		// หมายเหตุสำหรับอนาคต: ถ้าแก้ข้อความประกาศจนขยับเวอร์ชัน อาจต้องขอความยินยอมใหม่
 		// จากคนที่เคยตอบ granted ตามเวอร์ชันเก่า — จุดนั้นให้เพิ่มเงื่อนไขตรงนี้
-		NeedsDecision: status == models.FaceConsentUnknown,
-		// รอบนี้ยังไม่มีระบบเก็บรูป จึงเช็คแค่สถานะความยินยอม
-		// เมื่อทำเฟสเก็บรูปแล้ว ต้องเพิ่มเงื่อนไข "มีรูปที่พร้อมใช้อย่างน้อย 1 ใบ"
-		CanUseFaceCheckIn: status == models.FaceConsentGranted,
+		NeedsDecision:     status == models.FaceConsentUnknown,
+		CanUseFaceCheckIn: canUse,
 	}
 
 	// ดึงแถวล่าสุดจากตาราง audit มาเติมรายละเอียดว่าตอบเมื่อไหร่ ตามประกาศเวอร์ชันไหน
@@ -164,6 +167,25 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 	}
 
 	return res, nil
+}
+
+// canUseFaceCheckIn = "สแกนหน้าได้จริงไหม" ไม่ใช่แค่ยินยอมแล้วหรือยัง
+// ต้องมีรูป ready อย่างน้อยหนึ่งใบ ไม่งั้นพาผู้ใช้ไปสแกนแล้วไม่มีอะไรให้เทียบ
+//
+// ⚠️ โค้ชคืน false เสมอ — face_images ไม่มี coach_id การเอา coaches.id ไป query
+// ด้วย customer_id จะไปตรงกับรูปของนักเรียนคนอื่นที่บังเอิญ id ตรงกัน
+func (s *ConsentService) canUseFaceCheckIn(subject *consentSubject, status models.FaceConsentStatus) (bool, error) {
+	if status != models.FaceConsentGranted || subject.CustomerID == nil {
+		return false, nil
+	}
+
+	var ready int64
+	if err := s.db.Model(&models.FaceImage{}).
+		Where("customer_id = ? AND status = ?", *subject.CustomerID, models.FaceImageReady).
+		Count(&ready).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจสอบรูปใบหน้าที่พร้อมใช้งานได้")
+	}
+	return ready > 0, nil
 }
 
 // Record บันทึกการยินยอม/ปฏิเสธของผู้ใช้ (รับเป็น users.id) ใช้ได้ทั้งนักเรียนและโค้ช
