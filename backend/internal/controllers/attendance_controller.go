@@ -25,7 +25,8 @@ func mapAttendanceError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrSessionNotFound),
 		errors.Is(err, services.ErrAttendanceNotFound),
 		errors.Is(err, services.ErrQRNotFound),
-		errors.Is(err, services.ErrCoachQRScanned):
+		errors.Is(err, services.ErrCoachQRScanned),
+		errors.Is(err, services.ErrCoachNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 
 	// ไม่ได้ลงทะเบียนแพ็กเกจนี้ = ไม่มีสิทธิ์ ไม่ใช่ข้อมูลผิด
@@ -292,6 +293,64 @@ func (ctrl *AttendanceController) ManualCheckIn(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
 }
 
+// ManualCoachCheckIn [POST] /api/attendance/sessions/:id/coach-manual
+//
+// แอดมินเช็คชื่อให้โค้ชที่ลืม QR — คู่ขนานกับ ManualCheckIn ของนักเรียน
+func (ctrl *AttendanceController) ManualCoachCheckIn(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	var req dto.ManualCoachCheckInReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาเลือกโค้ชที่ต้องการเช็คชื่อให้"})
+		return
+	}
+
+	result, err := ctrl.service.ManualCoachCheckIn(id, req.CoachID, adminID, req.Remarks)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อเข้าสอนสำเร็จ", "data": result})
+}
+
+// UpdateCoachAttendanceStatus [PATCH] /api/attendance/coach-records/:id
+//
+// แก้สถานะย้อนหลัง present ⟷ absent — ไม่มีโควตาให้ปรับเหมือนของนักเรียน
+func (ctrl *AttendanceController) UpdateCoachAttendanceStatus(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสบันทึกการเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	var req dto.UpdateAttendanceStatusReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุสถานะที่ต้องการแก้เป็น"})
+		return
+	}
+
+	result, err := ctrl.service.UpdateCoachAttendanceStatus(id, adminID, req)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "แก้สถานะเรียบร้อยแล้ว", "data": result})
+}
+
 // CloseSession [PATCH] /api/attendance/sessions/:id/close
 func (ctrl *AttendanceController) CloseSession(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
@@ -358,6 +417,29 @@ func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 	}
 
 	items, err := ctrl.service.GetHistory(courseID, c.Query("date"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// GetCoachHistory [GET] /api/attendance/coach-history — ประวัติเข้าสอนของโค้ช
+//
+// แยก endpoint จาก /history แทนที่จะยัดรวม เพราะฟิลด์สองฝั่งไม่ทับกัน
+// และการเปลี่ยนรูป response ของ /history จะทำให้หน้าเดิมพัง
+func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
+	var courseID uint
+	if raw := c.Query("course_id"); raw != "" {
+		parsed, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
+			return
+		}
+		courseID = uint(parsed)
+	}
+
+	items, err := ctrl.service.GetCoachHistory(courseID, c.Query("date"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

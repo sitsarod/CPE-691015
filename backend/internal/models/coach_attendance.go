@@ -19,6 +19,7 @@ type CoachAttendance struct {
 	CheckInTime   time.Time        `json:"check_in_time" valid:"required~checkInTime is required"`
 	CheckInMethod CheckInMethod    `json:"check_in_method" gorm:"type:varchar(50)"`
 	Status        AttendanceStatus `json:"status" gorm:"type:varchar(20);default:'present'"`
+	Remarks       string           `json:"remarks" gorm:"type:text"`
 
 	// IsScheduled = ตอนสแกน โค้ชมีตารางงานของคาบนี้อยู่แล้วหรือไม่
 	//
@@ -38,6 +39,12 @@ type CoachAttendance struct {
 	// ⚠️ soft delete ของ gorm.Model ยังกิน slot ของ unique index จึงยังไม่มี endpoint ลบ
 	CoachID             uint `json:"coach_id" gorm:"not null;uniqueIndex:idx_coach_attendance_session" valid:"required~coachId is required"`
 	AttendanceSessionID uint `json:"attendance_session_id" gorm:"not null;uniqueIndex:idx_coach_attendance_session"`
+
+	// RecordedByUserID = คนที่บันทึกแทน (หลักเดียวกับ StudentAttendance)
+	//
+	// null  = โค้ชสแกน QR เอง หรือระบบมาร์คขาดงานตอนปิดรอบอัตโนมัติ
+	// มีค่า = แอดมินเช็คให้ / แก้สถานะย้อนหลัง / กดปิดรอบเอง
+	RecordedByUserID *uint `json:"recorded_by_user_id"`
 
 	// Relationships
 	Coach             *Coach             `json:"coach" gorm:"foreignKey:CoachID"`

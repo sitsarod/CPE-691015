@@ -26,13 +26,17 @@ import {
   faceLookup,
   faceCheckIn,
   manualCheckIn,
+  manualCoachCheckIn,
   closeSession,
   updateAttendanceStatus,
+  updateCoachAttendanceStatus,
 } from "@/services/attendanceAPI";
+import { COACH_STATUS_LABEL } from "@/types/attendance";
 import type {
   OpenablePackage,
   OpenSessionSummary,
   AttendanceSession,
+  CoachRosterItem,
   RosterItem,
   AttendanceStatus,
   FaceScanResult,
@@ -94,6 +98,9 @@ export default function AdminAttendancePage() {
 
   const [editing, setEditing] = useState<RosterItem | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
+
+  const [editingCoach, setEditingCoach] = useState<CoachRosterItem | null>(null);
+  const [isSavingCoachStatus, setIsSavingCoachStatus] = useState(false);
 
   const [kioskPin, setKioskPin] = useState<string | null>(null);
   const [isSettingUpKiosk, setIsSettingUpKiosk] = useState(false);
@@ -390,6 +397,27 @@ export default function AdminAttendancePage() {
     }
   };
 
+  const handleCoachManualCheckIn = async (coachId: number) => {
+    if (!session) return;
+    try {
+      const result = await manualCoachCheckIn(session.id, coachId, "แอดมินเช็คชื่อให้ที่สนาม");
+      setOutcome({
+        ok: true,
+        title: `เช็คชื่อให้โค้ช${result.full_name.trim() || result.nickname} แล้ว`,
+        detail: result.is_scheduled
+          ? `บันทึกเข้าสอนคาบ ${session.course_name} แล้ว`
+          : "ยังไม่ได้ลงตารางงานคาบนี้ไว้ — เพิ่มเป็นกรณีฉุกเฉินแล้ว กรุณาไปเติมสนาม",
+      });
+      await refreshSession();
+    } catch (err: unknown) {
+      setOutcome({
+        ok: false,
+        title: "เช็คชื่อให้ไม่สำเร็จ",
+        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+      });
+    }
+  };
+
   // ─── แก้สถานะ ──────────────────────────────────────────────────────────────
 
   const handleSaveStatus = async (status: AttendanceStatus, remarks: string) => {
@@ -418,15 +446,46 @@ export default function AdminAttendancePage() {
     }
   };
 
+  const handleSaveCoachStatus = async (status: AttendanceStatus, remarks: string) => {
+    if (!editingCoach?.attendance_id) return;
+
+    setIsSavingCoachStatus(true);
+    try {
+      await updateCoachAttendanceStatus(editingCoach.attendance_id, status, remarks);
+      setOutcome({ ok: true, title: "แก้สถานะแล้ว", detail: "" });
+      setEditingCoach(null);
+      await refreshSession();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้");
+    } finally {
+      setIsSavingCoachStatus(false);
+    }
+  };
+
   // ─── ปิดรอบ ────────────────────────────────────────────────────────────────
 
   const handleClose = async () => {
     if (!session) return;
 
     const pending = session.pending_count;
+    // ปิดรอบมาร์คโค้ชที่ไม่ได้เช็คชื่อด้วย ต้องบอกก่อนกด ไม่งั้นโค้ชที่มาสอนจริง
+    // แต่ลืมสแกนจะกลายเป็น "ไม่ได้มาสอน" โดยที่แอดมินไม่รู้ตัว
+    const pendingCoaches = session.coaches.filter((c) => !c.attendance_id).length;
+
+    const lines: string[] = [];
+    if (pending > 0) {
+      lines.push(
+        `นักเรียนที่ยืนยันว่าจะมาแล้วไม่มา ${pending} คนจะถูกบันทึกเป็นขาดเรียน`,
+        "ไม่หักโควตา (ยังไม่ได้เรียน) แต่ยังถูกคิดค่าสนามด้วย เพราะสนามถูกจองเผื่อไว้แล้ว"
+      );
+    }
+    if (pendingCoaches > 0) {
+      lines.push(`โค้ช ${pendingCoaches} คนที่ยังไม่ได้เช็คชื่อจะถูกบันทึกเป็น "ไม่ได้มาสอน" (ไม่กระทบค่าจ้าง)`);
+    }
+
     const confirmed = window.confirm(
-      pending > 0
-        ? `ปิดรอบแล้วคนที่ยืนยันว่าจะมาแล้วไม่มา ${pending} คนจะถูกบันทึกเป็นขาดเรียน\n\nไม่หักโควตา (ยังไม่ได้เรียน) แต่ยังถูกคิดค่าสนามด้วย เพราะสนามถูกจองเผื่อไว้แล้ว\n\nยืนยันปิดรอบ?`
+      lines.length > 0
+        ? `${lines.join("\n\n")}\n\nยืนยันปิดรอบ?`
         : "ยืนยันปิดรอบเช็คชื่อ?"
     );
     if (!confirmed) return;
@@ -844,7 +903,12 @@ export default function AdminAttendancePage() {
 
         {/* ── ขวา: รายชื่อ ── */}
         <div className="flex min-h-0 flex-col gap-3">
-          <CoachRosterList coaches={session.coaches} />
+          <CoachRosterList
+            coaches={session.coaches}
+            canCheckIn={canScan}
+            onManualCheckIn={handleCoachManualCheckIn}
+            onEditStatus={setEditingCoach}
+          />
           <RosterList
             session={session}
             onManualCheckIn={handleManualCheckIn}
@@ -855,12 +919,30 @@ export default function AdminAttendancePage() {
 
       {editing?.attendance_id && (
         <EditStatusModal
-          studentName={editing.full_name.trim() || editing.nickname}
+          personName={editing.full_name.trim() || editing.nickname}
           currentStatus={editing.status ?? "present"}
           currentRemarks={editing.remarks}
           isSubmitting={isSavingStatus}
           onSubmit={handleSaveStatus}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {editingCoach?.attendance_id && (
+        <EditStatusModal
+          title="แก้สถานะการเข้าสอน"
+          statusLabels={COACH_STATUS_LABEL}
+          personName={`โค้ช${editingCoach.full_name.trim() || editingCoach.nickname}`}
+          currentStatus={editingCoach.status ?? "present"}
+          currentRemarks={editingCoach.remarks}
+          isSubmitting={isSavingCoachStatus}
+          // โค้ชไม่มีโควตาและไม่ถูกคิดค่าสนาม ข้อความของนักเรียนจึงใช้ไม่ได้
+          statusNote={{
+            present: "บันทึกว่ามาสอนคาบนี้",
+            absent: "บันทึกว่าไม่ได้มาสอน — ไม่กระทบค่าจ้าง",
+          }}
+          onSubmit={handleSaveCoachStatus}
+          onClose={() => setEditingCoach(null)}
         />
       )}
 

@@ -4,10 +4,12 @@ import type {
   OpenSessionSummary,
   AttendanceSession,
   CheckInResult,
+  CoachCheckInResult,
   ScanCheckIn,
   FaceScanResult,
   UpdateAttendanceResult,
   AttendanceHistoryItem,
+  CoachHistoryItem,
   AttendanceStatus,
 } from "@/types/attendance";
 
@@ -116,6 +118,31 @@ export async function manualCheckIn(
   return res.data;
 }
 
+// [POST] แอดมินเช็คชื่อให้โค้ชเอง — โค้ชลืม QR
+export async function manualCoachCheckIn(
+  sessionId: number,
+  coachId: number,
+  remarks?: string
+): Promise<CoachCheckInResult> {
+  const res = await apiFetch<Envelope<CoachCheckInResult>>(
+    `/attendance/sessions/${sessionId}/coach-manual`,
+    { method: "POST", body: JSON.stringify({ coach_id: coachId, remarks: remarks ?? "" }) }
+  );
+  return res.data;
+}
+
+// [PATCH] แก้สถานะของโค้ชย้อนหลัง — ไม่มีโควตาให้ปรับเหมือนของนักเรียน
+export async function updateCoachAttendanceStatus(
+  attendanceId: number,
+  status: AttendanceStatus,
+  remarks?: string
+): Promise<void> {
+  await apiFetch<Envelope<unknown>>(`/attendance/coach-records/${attendanceId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, remarks: remarks ?? "" }),
+  });
+}
+
 // [PATCH] ปิดรอบ — คนที่ไม่ได้เช็คชื่อจะถูกมาร์ค absent และถูกหักโควตาทันที
 export async function closeSession(sessionId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(
@@ -157,5 +184,21 @@ export async function fetchHistory(params?: {
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<AttendanceHistoryItem[]>>(`/attendance/history${suffix}`);
+  return res.data ?? [];
+}
+
+// [GET] ประวัติเข้าสอนของโค้ช — ใช้ตัวกรองชุดเดียวกับ fetchHistory
+//
+// แยก endpoint เพราะฟิลด์สองฝั่งไม่ทับกัน ผู้เรียกต้องยิงคู่กันแล้วรวมเองด้วย session_id
+export async function fetchCoachHistory(params?: {
+  courseId?: number;
+  date?: string;
+}): Promise<CoachHistoryItem[]> {
+  const qs = new URLSearchParams();
+  if (params?.courseId) qs.set("course_id", String(params.courseId));
+  if (params?.date) qs.set("date", params.date);
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const res = await apiFetch<Envelope<CoachHistoryItem[]>>(`/attendance/coach-history${suffix}`);
   return res.data ?? [];
 }

@@ -14,21 +14,30 @@ const STATUS_NOTE: Record<AttendanceStatus, string> = {
 };
 
 interface Props {
-  studentName: string;
+  personName: string;
   currentStatus: AttendanceStatus;
   currentRemarks?: string;
   isSubmitting: boolean;
   onSubmit: (status: AttendanceStatus, remarks: string) => void;
   onClose: () => void;
+
+  // ฝั่งโค้ชใช้โมดัลตัวเดียวกันแต่คำคนละชุด — โค้ชมา "สอน" ไม่ได้มา "เรียน"
+  // และผลของสถานะก็คนละเรื่อง (โค้ชไม่มีโควตา ไม่ถูกคิดค่าสนาม)
+  title?: string;
+  statusLabels?: Record<AttendanceStatus, string>;
+  statusNote?: Record<AttendanceStatus, string>;
 }
 
 export default function EditStatusModal({
-  studentName,
+  personName,
   currentStatus,
   currentRemarks,
   isSubmitting,
   onSubmit,
   onClose,
+  title = "แก้สถานะการเข้าเรียน",
+  statusLabels = STATUS_LABEL,
+  statusNote = STATUS_NOTE,
 }: Props) {
   // แถวเก่าอาจเป็น leave ซึ่งไม่มีในตัวเลือกแล้ว — absent ให้ผลกับโควตาเหมือนกัน
   const [status, setStatus] = useState<AttendanceStatus>(
@@ -41,8 +50,8 @@ export default function EditStatusModal({
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">แก้สถานะการเข้าเรียน</h3>
-            <p className="mt-0.5 text-gray-500">{studentName}</p>
+            <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+            <p className="mt-0.5 text-gray-500">{personName}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
             <X className="h-5 w-5" />
@@ -67,8 +76,8 @@ export default function EditStatusModal({
                 className="mt-1"
               />
               <div>
-                <p className="font-medium text-gray-900">{STATUS_LABEL[opt]}</p>
-                <p className="text-sm text-gray-500">{STATUS_NOTE[opt]}</p>
+                <p className="font-medium text-gray-900">{statusLabels[opt]}</p>
+                <p className="text-sm text-gray-500">{statusNote[opt]}</p>
               </div>
             </label>
           ))}

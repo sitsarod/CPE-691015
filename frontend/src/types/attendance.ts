@@ -65,6 +65,7 @@ export interface CoachRosterItem {
   status?: AttendanceStatus;
   check_in_method?: CheckInMethod;
   check_in_time: string | null;
+  remarks?: string;
 }
 
 export interface AttendanceSession {
@@ -218,6 +219,25 @@ export interface AttendanceHistoryItem {
   recorded_by_user_id: number | null;
 }
 
+// ประวัติเข้าสอนของโค้ชในหน้าประวัติของแอดมิน
+//
+// แยกลิสต์จากของนักเรียนเพราะฟิลด์ไม่ทับกัน หน้าเว็บรวมเข้ารอบเดียวกันด้วย session_id
+export interface CoachHistoryItem {
+  attendance_id: number;
+  session_id: number;
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  status: AttendanceStatus;
+  check_in_method: CheckInMethod;
+  check_in_time: string;
+  remarks?: string;
+
+  // false = ตอนเช็คชื่อยังไม่ได้ถูก assign คาบนี้
+  is_scheduled: boolean;
+}
+
 // ─── ป้ายภาษาไทยที่ใช้ร่วมกันทุกหน้า ─────────────────────────────────────────
 
 export const STATUS_LABEL: Record<AttendanceStatus, string> = {
@@ -252,6 +272,17 @@ export function displayStatus(status: string, isOffSchedule: boolean) {
     return { label: OFF_SCHEDULE_LABEL, tone: OFF_SCHEDULE_TONE };
   }
   return { label: statusLabel(status), tone: statusTone(status) };
+}
+
+// ฝั่งโค้ชใช้คำคนละชุด — โค้ชมา "สอน" ไม่ได้มา "เรียน"
+// สีใช้ร่วมกันได้ (statusTone) เพราะความหมาย มา/ไม่มา เหมือนกัน
+export const COACH_STATUS_LABEL: Record<AttendanceStatus, string> = {
+  present: "มาสอน",
+  absent: "ไม่ได้มาสอน",
+};
+
+export function coachStatusLabel(status: string): string {
+  return COACH_STATUS_LABEL[status as AttendanceStatus] ?? status;
 }
 
 export const METHOD_LABEL: Record<CheckInMethod, string> = {
