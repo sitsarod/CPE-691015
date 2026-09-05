@@ -375,6 +375,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			attendanceGroup.GET("/openable", attendanceController.GetOpenablePackages)
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
+			attendanceGroup.GET("/coach-history", attendanceController.GetCoachHistory)
 
 			// รอบที่เปิดค้างอยู่ — หน้าเช็คชื่อเรียกคู่กับ /openable ใน Promise.all
 			// ขาดเส้นนี้ = 404 แล้วล้มทั้งชุด หน้าโหลดไม่ขึ้นเลย
@@ -389,9 +390,11 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.POST("/sessions/:id/face-lookup", attendanceController.FaceLookup)
 			attendanceGroup.POST("/sessions/:id/face-check-in", attendanceController.FaceCheckIn)
 			attendanceGroup.POST("/sessions/:id/manual", attendanceController.ManualCheckIn)
+			attendanceGroup.POST("/sessions/:id/coach-manual", attendanceController.ManualCoachCheckIn)
 			attendanceGroup.PATCH("/sessions/:id/close", attendanceController.CloseSession)
 
 			attendanceGroup.PATCH("/records/:id", attendanceController.UpdateStatus)
+			attendanceGroup.PATCH("/coach-records/:id", attendanceController.UpdateCoachAttendanceStatus)
 		}
 
 		// ยอดคนที่ตอบว่าจะมาเรียน "วันนี้" — ใช้ตัดสินใจจองสนามเพิ่ม

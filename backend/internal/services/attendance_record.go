@@ -58,7 +58,11 @@ func (s *AttendanceService) closeSessionTx(
 		return ErrSessionClosed
 	}
 
-	return s.markAbsentees(tx, &session, closedBy, now)
+	if err := s.markAbsentees(tx, &session, closedBy, now); err != nil {
+		return err
+	}
+	// โค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อ ก็ถูกมาร์คขาดงานเหมือนนักเรียน
+	return s.markCoachAbsentees(tx, &session, closedBy, now)
 }
 
 // GetOpenSessions คืนรอบที่ยังเปิดค้างอยู่ทั้งหมด เรียงรอบล่าสุดขึ้นก่อน

@@ -12,9 +12,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import { fetchHistory, updateAttendanceStatus } from "@/services/attendanceAPI";
+import { fetchHistory, fetchCoachHistory, updateAttendanceStatus } from "@/services/attendanceAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
-import type { AttendanceHistoryItem, AttendanceStatus } from "@/types/attendance";
+import type { AttendanceHistoryItem, AttendanceStatus, CoachHistoryItem } from "@/types/attendance";
 import {
   STATUS_LABEL,
   STATUS_TONE,
@@ -22,6 +22,8 @@ import {
   METHOD_LABEL,
   OFF_SCHEDULE_LABEL,
   OFF_SCHEDULE_TONE,
+  coachStatusLabel,
+  statusTone,
 } from "@/types/attendance";
 import type { CourseDTO } from "@/types/course";
 
@@ -62,11 +64,12 @@ interface Round {
   counts: Record<AttendanceStatus, number>;
   offScheduleCount: number;
   items: AttendanceHistoryItem[];
+  coaches: CoachHistoryItem[];
 }
 
 // backend ส่งมาเรียง check_in_time DESC อยู่แล้ว ไล่ตามลำดับที่ได้มาก็จะได้
 // รอบที่มีคนเช็คล่าสุดขึ้นก่อนเอง ไม่ต้องเรียงใหม่
-function groupIntoRounds(items: AttendanceHistoryItem[]): Round[] {
+function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryItem[]): Round[] {
   const byKey = new Map<string, Round>();
 
   for (const item of items) {
@@ -86,6 +89,7 @@ function groupIntoRounds(items: AttendanceHistoryItem[]): Round[] {
         counts: { present: 0, absent: 0 },
         offScheduleCount: 0,
         items: [],
+        coaches: [],
       };
       byKey.set(key, round);
     }
@@ -93,6 +97,12 @@ function groupIntoRounds(items: AttendanceHistoryItem[]): Round[] {
     if (item.status in round.counts) round.counts[item.status] += 1;
     if (item.is_off_schedule && item.status === "present") round.offScheduleCount += 1;
     round.items.push(item);
+  }
+
+  // โค้ชเข้ารอบที่มีอยู่แล้วเท่านั้น — รอบที่มีแต่โค้ชไม่มีนักเรียนเลยแทบไม่เกิด
+  // และถ้าสร้างรอบใหม่จากโค้ชจะได้หัวรอบที่ไม่มีชื่อคอร์ส/เวลา เพราะข้อมูลนั้นมากับแถวนักเรียน
+  for (const c of coaches) {
+    byKey.get(`s${c.session_id}`)?.coaches.push(c);
   }
 
   return [...byKey.values()];
@@ -104,6 +114,7 @@ export default function AttendanceHistoryPage() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
 
   const [items, setItems] = useState<AttendanceHistoryItem[]>([]);
+  const [coaches, setCoaches] = useState<CoachHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,12 +141,14 @@ export default function AttendanceHistoryPage() {
 
     (async () => {
       try {
-        const data = await fetchHistory({
-          date: date || undefined,
-          courseId: courseId || undefined,
-        });
+        const filters = { date: date || undefined, courseId: courseId || undefined };
+        const [data, coachData] = await Promise.all([
+          fetchHistory(filters),
+          fetchCoachHistory(filters),
+        ]);
         if (cancelled) return;
         setItems(data);
+        setCoaches(coachData);
         setError(null);
       } catch (err: unknown) {
         if (cancelled) return;
@@ -150,7 +163,7 @@ export default function AttendanceHistoryPage() {
     };
   }, [date, courseId, refreshTick]);
 
-  const rounds = useMemo(() => groupIntoRounds(items), [items]);
+  const rounds = useMemo(() => groupIntoRounds(items, coaches), [items, coaches]);
 
   // เปลี่ยนตัวกรองแล้วคีย์เดิมจะไม่ตรงกับรอบชุดใหม่ ถ้าไม่ล้างจะพับหมดทุกอัน
   const resetOpenState = () => setOpenKeys(null);
@@ -343,6 +356,26 @@ export default function AttendanceHistoryPage() {
               {/* ── รายชื่อในรอบ ── */}
               {open && (
                 <div className="border-t border-gray-200">
+                  {/* โค้ชที่สอนรอบนี้ — อยู่บนสุดเพราะเป็นบริบทของทั้งรอบ ไม่ใช่รายการหนึ่งในนั้น */}
+                  {round.coaches.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
+                      <span className="text-sm font-semibold text-gray-600">โค้ช</span>
+                      {round.coaches.map((c) => (
+                        <span
+                          key={c.attendance_id}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${statusTone(c.status)}`}
+                          title={c.remarks || undefined}
+                        >
+                          {c.nickname || c.full_name.trim() || `#${c.coach_id}`}
+                          <span className="font-normal opacity-70">{coachStatusLabel(c.status)}</span>
+                          {!c.is_scheduled && (
+                            <span className="font-normal opacity-70">· ฉุกเฉิน</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {/* มือถือ: การ์ดต่อคน */}
                   <ul className="divide-y divide-gray-100 lg:hidden">
                     {round.items.map((item) => (
@@ -470,7 +503,7 @@ export default function AttendanceHistoryPage() {
 
       {editing && (
         <EditStatusModal
-          studentName={editing.full_name.trim() || editing.nickname}
+          personName={editing.full_name.trim() || editing.nickname}
           currentStatus={editing.status}
           currentRemarks={editing.remarks}
           isSubmitting={isSaving}

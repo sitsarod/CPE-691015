@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -13,6 +14,7 @@ var (
 	ErrCoachQRNotFound      = errors.New("ไม่พบโค้ชจากรหัส QR นี้")
 	ErrCoachAlreadyWorkedIn = errors.New("โค้ชคนนี้เช็คชื่อคาบนี้ไปแล้ว")
 	ErrCoachInactive        = errors.New("บัญชีโค้ชนี้ถูกพักงานอยู่ ไม่สามารถเช็คชื่อได้")
+	ErrCoachNotFound        = errors.New("ไม่พบโค้ชคนนี้")
 )
 
 // Coach.Status เป็น string ธรรมดา ไม่ใช่ enum
@@ -37,6 +39,20 @@ func (s *AttendanceService) findCoachByQR(code string) (*models.Coach, error) {
 func (s *AttendanceService) checkInCoach(
 	sessionID uint,
 	coach *models.Coach,
+) (*dto.CoachCheckInResultDTO, error) {
+	return s.recordCoachAttendance(sessionID, coach, models.CheckInMethodQRCode, "", nil)
+}
+
+// recordCoachAttendance คือทางเขียนบันทึกเช็คชื่อของโค้ชทางเดียวในระบบ
+//
+// ใช้ร่วมกันทั้งโค้ชสแกน QR เอง (qr_code, recordedBy=nil) และแอดมินเช็คให้ (manual, recordedBy=แอดมิน)
+// รวมไว้ที่เดียวเพื่อให้สองทางผ่านด่านเดียวกันและได้ตารางงานฉุกเฉินเหมือนกัน
+func (s *AttendanceService) recordCoachAttendance(
+	sessionID uint,
+	coach *models.Coach,
+	method models.CheckInMethod,
+	remarks string,
+	recordedBy *uint,
 ) (*dto.CoachCheckInResultDTO, error) {
 	if coach.Status == coachStatusInactive {
 		return nil, ErrCoachInactive
@@ -63,9 +79,11 @@ func (s *AttendanceService) checkInCoach(
 			AttendanceSessionID: session.ID,
 			WorkDate:            session.SessionDate,
 			CheckInTime:         nowLocal(),
-			CheckInMethod:       models.CheckInMethodQRCode,
+			CheckInMethod:       method,
 			Status:              models.AttendanceStatusPresent,
+			Remarks:             remarks,
 			IsScheduled:         scheduled,
+			RecordedByUserID:    recordedBy,
 		}
 
 		// พึ่ง unique index แทน SELECT-แล้ว-INSERT — สแกนรัวสองครั้ง
@@ -274,4 +292,172 @@ func applyCoachAttendance(item *dto.CoachRosterItemDTO, record *models.CoachAtte
 	item.Status = string(record.Status)
 	item.CheckInMethod = string(record.CheckInMethod)
 	item.CheckInTime = &at
+	item.Remarks = record.Remarks
+}
+
+// ─── แอดมินเช็คชื่อให้โค้ช ───────────────────────────────────────────────────
+
+// ManualCoachCheckIn ให้แอดมินเช็คชื่อแทนโค้ชที่ลืม QR (คู่ขนานกับ ManualCheckIn ของนักเรียน)
+//
+// รับโค้ชคนไหนก็ได้ ไม่จำกัดเฉพาะคนในรายชื่อ เพราะเรียกโค้ชมาเสริมกะทันหันเป็นเรื่องปกติ
+// ensureCoachWorkSchedule จะเพิ่มตารางงานฉุกเฉินให้เหมือนตอนสแกน QR เอง
+func (s *AttendanceService) ManualCoachCheckIn(
+	sessionID uint,
+	coachID uint,
+	adminUserID uint,
+	remarks string,
+) (*dto.CoachCheckInResultDTO, error) {
+	var coach models.Coach
+	if err := s.db.Preload("User").First(&coach, coachID).Error; err != nil {
+		return nil, ErrCoachNotFound
+	}
+	return s.recordCoachAttendance(
+		sessionID, &coach, models.CheckInMethodManual, strings.TrimSpace(remarks), &adminUserID)
+}
+
+// ─── มาร์คขาดงานตอนปิดรอบ ───────────────────────────────────────────────────
+
+// markCoachAbsentees มาร์คโค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อว่า "ขาดงาน"
+//
+// recordedBy = nil แปลว่างานปิดรอบอัตโนมัติเป็นคนมาร์ค (หลักเดียวกับ markAbsentees)
+//
+// ⚠️ ไม่กระทบค่าจ้าง — ค่าจ้างนับจาก WorkSchedule ที่ยังอยู่ครบ ไม่ใช่ตารางนี้
+// ถ้าวันหนึ่งเปลี่ยนไปคิดจากตารางนี้ ต้องกลับมาคิดเรื่องนี้ใหม่ทั้งหมด
+func (s *AttendanceService) markCoachAbsentees(
+	tx *gorm.DB,
+	session *models.AttendanceSession,
+	recordedBy *uint,
+	now time.Time,
+) error {
+	schedules, err := s.coachSchedules(tx, session)
+	if err != nil {
+		return err
+	}
+	if len(schedules) == 0 {
+		return nil
+	}
+
+	var records []models.CoachAttendance
+	if err := tx.Select("coach_id").
+		Where("attendance_session_id = ?", session.ID).Find(&records).Error; err != nil {
+		return errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อของโค้ชได้")
+	}
+	checked := make(map[uint]bool, len(records))
+	for _, r := range records {
+		checked[r.CoachID] = true
+	}
+
+	for _, w := range schedules {
+		if checked[w.CoachID] {
+			continue
+		}
+		record := models.CoachAttendance{
+			CoachID:             w.CoachID,
+			AttendanceSessionID: session.ID,
+			WorkDate:            session.SessionDate,
+			CheckInTime:         now,
+			CheckInMethod:       models.CheckInMethodSystem,
+			Status:              models.AttendanceStatusAbsent,
+			IsScheduled:         true, // อยู่ในตารางงานอยู่แล้ว ถึงได้ถูกมาร์ค
+			RecordedByUserID:    recordedBy,
+		}
+		if err := tx.Create(&record).Error; err != nil {
+			// แอดมินชิงเช็คชื่อให้พอดีระหว่างปิดรอบ = ผลลัพธ์ที่ต้องการอยู่แล้ว
+			if isUniqueViolation(err) {
+				continue
+			}
+			return errors.New("ไม่สามารถบันทึกการขาดงานของโค้ชได้")
+		}
+	}
+	return nil
+}
+
+// ─── แก้สถานะย้อนหลัง ────────────────────────────────────────────────────────
+
+// UpdateCoachAttendanceStatus สลับ present ⟷ absent ย้อนหลัง
+//
+// ง่ายกว่าของนักเรียนตรงที่ไม่มีโควตาให้หักหรือคืน จึงไม่ต้องใช้ quotaDelta
+func (s *AttendanceService) UpdateCoachAttendanceStatus(
+	attendanceID uint,
+	adminUserID uint,
+	req dto.UpdateAttendanceStatusReq,
+) (*dto.UpdateCoachAttendanceResultDTO, error) {
+	newStatus := models.AttendanceStatus(req.Status)
+	if newStatus != models.AttendanceStatusPresent && newStatus != models.AttendanceStatusAbsent {
+		return nil, ErrInvalidStatus
+	}
+
+	var record models.CoachAttendance
+	if err := s.db.First(&record, attendanceID).Error; err != nil {
+		return nil, ErrAttendanceNotFound
+	}
+
+	from := record.Status
+	updates := map[string]interface{}{
+		"status":              newStatus,
+		"recorded_by_user_id": adminUserID,
+	}
+	if remarks := strings.TrimSpace(req.Remarks); remarks != "" {
+		updates["remarks"] = remarks
+	}
+	if err := s.db.Model(&record).Updates(updates).Error; err != nil {
+		return nil, errors.New("ไม่สามารถแก้สถานะการเช็คชื่อของโค้ชได้")
+	}
+
+	return &dto.UpdateCoachAttendanceResultDTO{
+		AttendanceID: record.ID,
+		CoachID:      record.CoachID,
+		FromStatus:   string(from),
+		ToStatus:     string(newStatus),
+	}, nil
+}
+
+// ─── ประวัติของแอดมิน ────────────────────────────────────────────────────────
+
+// GetCoachHistory คืนประวัติเข้าสอนของโค้ชทุกคน ใช้ตัวกรองชุดเดียวกับ GetHistory
+// เพื่อให้สองลิสต์ครอบคลุมช่วงเดียวกันเสมอ แล้วหน้าเว็บเอาไปรวมเข้ารอบด้วย session_id
+func (s *AttendanceService) GetCoachHistory(courseID uint, date string) ([]dto.CoachHistoryItemDTO, error) {
+	query := s.db.Model(&models.CoachAttendance{}).
+		Limit(maxHistoryRows).
+		Preload("Coach.User").
+		Order("check_in_time DESC")
+
+	if date != "" {
+		from, to, err := localDayRange(date)
+		if err != nil {
+			return nil, err
+		}
+		query = query.Where("check_in_time >= ? AND check_in_time < ?", from, to)
+	}
+
+	if courseID != 0 {
+		query = query.
+			Joins("JOIN attendance_sessions ON attendance_sessions.id = coach_attendances.attendance_session_id").
+			Joins("JOIN packages ON packages.id = attendance_sessions.package_id").
+			Where("packages.course_id = ?", courseID)
+	}
+
+	var rows []models.CoachAttendance
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงประวัติการเข้าสอนของโค้ชได้")
+	}
+
+	out := make([]dto.CoachHistoryItemDTO, 0, len(rows))
+	for i := range rows {
+		r := &rows[i]
+		full, nick := coachDisplayName(r.Coach)
+		out = append(out, dto.CoachHistoryItemDTO{
+			AttendanceID:  r.ID,
+			SessionID:     r.AttendanceSessionID,
+			CoachID:       r.CoachID,
+			FullName:      full,
+			Nickname:      nick,
+			Status:        string(r.Status),
+			CheckInMethod: string(r.CheckInMethod),
+			CheckInTime:   r.CheckInTime,
+			Remarks:       r.Remarks,
+			IsScheduled:   r.IsScheduled,
+		})
+	}
+	return out, nil
 }

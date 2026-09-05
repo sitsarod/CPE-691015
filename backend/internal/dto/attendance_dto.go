@@ -190,6 +190,21 @@ type CoachRosterItemDTO struct {
 	Status        string     `json:"status,omitempty"`
 	CheckInMethod string     `json:"check_in_method,omitempty"`
 	CheckInTime   *time.Time `json:"check_in_time"`
+	Remarks       string     `json:"remarks,omitempty"`
+}
+
+// ManualCoachCheckInReq คือแอดมินเช็คชื่อให้โค้ชเอง (โค้ชลืม QR)
+type ManualCoachCheckInReq struct {
+	CoachID uint   `json:"coach_id" binding:"required"`
+	Remarks string `json:"remarks" binding:"omitempty,max=500"`
+}
+
+// UpdateCoachAttendanceResultDTO — ไม่มี quota_delta เหมือนของนักเรียน เพราะโค้ชไม่มีโควตา
+type UpdateCoachAttendanceResultDTO struct {
+	AttendanceID uint   `json:"attendance_id"`
+	CoachID      uint   `json:"coach_id"`
+	FromStatus   string `json:"from_status"`
+	ToStatus     string `json:"to_status"`
 }
 
 // CoachCheckInResultDTO — ไม่มีโควตาหรือ "มาไม่ตรงวัน" เพราะโค้ชไม่ได้ซื้อคอร์ส
@@ -205,6 +220,26 @@ type CoachCheckInResultDTO struct {
 
 	// false = ยังไม่ได้ถูก assign คาบนี้ ระบบเพิ่งสร้างตารางงานให้อัตโนมัติ
 	// หน้าคีออสต้องบอกตรงนั้นเลย เพราะแถวที่สร้างอัตโนมัติยังไม่มีสนาม
+	IsScheduled bool `json:"is_scheduled"`
+}
+
+// CoachHistoryItemDTO คือประวัติเข้าสอนของโค้ชในหน้าประวัติของแอดมิน
+//
+// แยกลิสต์จากของนักเรียนเพราะฟิลด์ไม่ทับกัน (นักเรียนมีโควตา/มาไม่ตรงวัน
+// โค้ชมีสนาม/กรณีฉุกเฉิน) หน้าเว็บเอามารวมเข้ารอบเดียวกันด้วย SessionID
+type CoachHistoryItemDTO struct {
+	AttendanceID uint   `json:"attendance_id"`
+	SessionID    uint   `json:"session_id"`
+	CoachID      uint   `json:"coach_id"`
+	FullName     string `json:"full_name"`
+	Nickname     string `json:"nickname"`
+
+	Status        string    `json:"status"`
+	CheckInMethod string    `json:"check_in_method"`
+	CheckInTime   time.Time `json:"check_in_time"`
+	Remarks       string    `json:"remarks,omitempty"`
+
+	// false = ตอนเช็คชื่อยังไม่ได้ถูก assign คาบนี้
 	IsScheduled bool `json:"is_scheduled"`
 }
 

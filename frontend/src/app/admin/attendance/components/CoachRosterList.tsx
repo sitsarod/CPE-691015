@@ -1,20 +1,41 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Pencil, UserPlus, Users } from "lucide-react";
 import type { CoachRosterItem } from "@/types/attendance";
-import { METHOD_LABEL, statusLabel, statusTone } from "@/types/attendance";
+import { METHOD_LABEL, coachStatusLabel, statusTone } from "@/types/attendance";
 
 interface Props {
   coaches: CoachRosterItem[];
+  // ปุ่มเช็คชื่อให้ผูกกับ canCheckIn ไม่ใช่แค่ status — ManualCoachCheckIn ผ่าน
+  // loadOpenSession เหมือนการสแกน ปุ่มที่กดแล้ว error ทุกครั้งไม่ควรมีให้กด
+  canCheckIn: boolean;
+  onManualCheckIn: (coachId: number) => Promise<void>;
+  onEditStatus: (item: CoachRosterItem) => void;
 }
 
 /**
  * รายชื่อโค้ชของรอบ — แยกกล่องจากนักเรียนเพราะมาคนละที่ (ตารางงาน vs enrollment)
  * ถ้ารวมตารางเดียวกันจะอธิบายไม่ได้ว่าทำไมบางแถวไม่มีโควตา
  *
- * อ่านอย่างเดียว — แอดมินเช็คชื่อให้โค้ชยังทำไม่ได้
  */
-export default function CoachRosterList({ coaches }: Props) {
+export default function CoachRosterList({
+  coaches,
+  canCheckIn,
+  onManualCheckIn,
+  onEditStatus,
+}: Props) {
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const handleCheckIn = async (coachId: number) => {
+    setBusyId(coachId);
+    try {
+      await onManualCheckIn(coachId);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (coaches.length === 0) {
     return (
       <div className="shrink-0 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-400">
@@ -71,17 +92,41 @@ export default function CoachRosterList({ coaches }: Props) {
                 )}
               </div>
 
-              {c.status ? (
-                <span
-                  className={`inline-flex shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(c.status)}`}
-                >
-                  {statusLabel(c.status)}
-                </span>
-              ) : (
-                <span className="inline-flex shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">
-                  ยังไม่เช็ค
-                </span>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {c.status ? (
+                  <>
+                    <span
+                      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(c.status)}`}
+                    >
+                      {coachStatusLabel(c.status)}
+                    </span>
+                    <button
+                      onClick={() => onEditStatus(c)}
+                      aria-label="แก้สถานะ"
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : canCheckIn ? (
+                  <button
+                    onClick={() => handleCheckIn(c.coach_id)}
+                    disabled={busyId !== null}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {busyId === c.coach_id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-3.5 w-3.5" />
+                    )}
+                    เช็คให้
+                  </button>
+                ) : (
+                  <span className="inline-flex whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">
+                    ยังไม่เช็ค
+                  </span>
+                )}
+              </div>
             </li>
           );
         })}
