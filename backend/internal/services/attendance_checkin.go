@@ -39,10 +39,30 @@ func (s *AttendanceService) LookupByQR(sessionID uint, qrCode string) (*dto.Scan
 	return result, nil
 }
 
-func (s *AttendanceService) CheckInByQR(sessionID uint, qrCode string) (*dto.CheckInResultDTO, error) {
-	return s.checkIn(sessionID, func(tx *gorm.DB, session *models.AttendanceSession) (*scanContext, error) {
+// เครื่องคีออสตัวเดียวรับ QR ทั้งนักเรียนและโค้ช — แยกทางที่นี่
+// (โค้ชไม่มี enrollment ไม่มีโควตา จึงไม่ยัดรวมเข้า checkIn ตัวเดียวกัน)
+//
+// ⚠️ ต้องถามว่าเป็น QR โค้ชไหม "ก่อน" เข้าเส้นทางนักเรียน
+// เพราะ checkIn ผ่านด่านรอบเปิด/เวลาเรียนก่อนจะไปหาว่า QR เป็นของใคร
+// ดักทีหลังจะได้ error "เลยเวลาเช็คชื่อ" ซึ่งกลบสาเหตุจริง
+func (s *AttendanceService) CheckInByQR(sessionID uint, qrCode string) (*dto.ScanCheckInDTO, error) {
+	if coach, err := s.findCoachByQR(qrCode); err == nil {
+		result, err := s.checkInCoach(sessionID, coach)
+		if err != nil {
+			return nil, err
+		}
+		return &dto.ScanCheckInDTO{Kind: dto.ScanKindCoach, Coach: result}, nil
+	} else if !errors.Is(err, ErrCoachQRNotFound) {
+		return nil, err
+	}
+
+	student, err := s.checkIn(sessionID, func(tx *gorm.DB, session *models.AttendanceSession) (*scanContext, error) {
 		return s.resolveByQR(tx, session, qrCode)
 	}, models.CheckInMethodQRCode, "", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.ScanCheckInDTO{Kind: dto.ScanKindStudent, Student: student}, nil
 }
 
 // ManualCheckIn บันทึกให้โดยแอดมิน สำหรับกรณีนักเรียนลืมเอา QR มา

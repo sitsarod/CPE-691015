@@ -76,6 +76,9 @@ type AttendanceSessionDTO struct {
 	Roster           []RosterItemDTO `json:"roster"`
 	WalkInCandidates []RosterItemDTO `json:"walk_in_candidates"`
 
+	// โค้ชที่สอนคาบนี้ — คนละชุดกับนักเรียนและมาจากคนละที่
+	Coaches []CoachRosterItemDTO `json:"coaches"`
+
 	ConfirmedCount   int `json:"confirmed_count"`
 	PresentCount     int `json:"present_count"`
 	AbsentCount      int `json:"absent_count"`
@@ -165,6 +168,53 @@ type CheckInResultDTO struct {
 
 	RemainingSessions uint `json:"remaining_sessions"`
 }
+
+// CoachRosterItemDTO คู่ขนานกับ RosterItemDTO — แต่รายชื่อมาจาก WorkSchedule
+// ไม่ใช่ enrollment เพราะโค้ชไม่ได้ลงทะเบียนเรียน แต่ถูก assign มาสอน
+type CoachRosterItemDTO struct {
+	CoachID  uint   `json:"coach_id"`
+	FullName string `json:"full_name"`
+	Nickname string `json:"nickname"`
+
+	// เว้นว่างได้ตามการออกแบบเดิม (ยังไม่ระบุสนาม)
+	CourtNumber string `json:"court_number"`
+
+	// false = ไม่ได้อยู่ในตารางงานของคาบนี้ แต่มาสแกน
+	IsScheduled bool `json:"is_scheduled"`
+
+	// null = ยังไม่เช็คชื่อ
+	AttendanceID  *uint      `json:"attendance_id"`
+	Status        string     `json:"status,omitempty"`
+	CheckInMethod string     `json:"check_in_method,omitempty"`
+	CheckInTime   *time.Time `json:"check_in_time"`
+}
+
+// CoachCheckInResultDTO — ไม่มีโควตาหรือ "มาไม่ตรงวัน" เพราะโค้ชไม่ได้ซื้อคอร์ส
+type CoachCheckInResultDTO struct {
+	AttendanceID uint   `json:"attendance_id"`
+	CoachID      uint   `json:"coach_id"`
+	FullName     string `json:"full_name"`
+	Nickname     string `json:"nickname"`
+
+	CheckInMethod string    `json:"check_in_method"`
+	CheckInTime   time.Time `json:"check_in_time"`
+	SessionDate   string    `json:"session_date"` // YYYY-MM-DD
+}
+
+// ScanCheckInDTO ห่อผลการสแกน ซึ่งรับได้ทั้ง QR นักเรียนและ QR โค้ช
+//
+// ฟิลด์สองฝั่งแทบไม่ทับกัน ถ้ารวมเป็น struct เดียวครึ่งหนึ่งจะว่างตลอด
+// แล้วคนอ่านต้องเดาเองว่าฟิลด์ไหนใช้ได้เมื่อไหร่ — Kind บอกตรง ๆ ดีกว่า
+type ScanCheckInDTO struct {
+	Kind    string                 `json:"kind"` // "student" หรือ "coach"
+	Student *CheckInResultDTO      `json:"student,omitempty"`
+	Coach   *CoachCheckInResultDTO `json:"coach,omitempty"`
+}
+
+const (
+	ScanKindStudent = "student"
+	ScanKindCoach   = "coach"
+)
 
 // ─── แก้สถานะย้อนหลัง ────────────────────────────────────────────────────────
 
