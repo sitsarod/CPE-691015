@@ -41,6 +41,7 @@ import type {
 import QRScanner from "./components/QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./components/ScanResult";
 import RosterList from "./components/RosterList";
+import CoachRosterList from "./components/CoachRosterList";
 import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
@@ -253,13 +254,25 @@ export default function AdminAttendancePage() {
       setOutcome(null);
       try {
         const result = await checkInByQR(session.id, code);
-        setOutcome({
-          ok: true,
-          title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
-          detail: result.is_off_schedule
-            ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
-            : `เหลือ ${result.remaining_sessions} ครั้ง`,
-        });
+
+        // โค้ชไม่มีโควตาให้พูดถึง
+        if (result.kind === "coach") {
+          const coach = result.coach;
+          setOutcome({
+            ok: true,
+            title: `เช็คชื่อสำเร็จ — โค้ช${coach.full_name.trim() || coach.nickname}`,
+            detail: `บันทึกเข้าสอนคาบ ${session.course_name} แล้ว`,
+          });
+        } else {
+          const student = result.student;
+          setOutcome({
+            ok: true,
+            title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
+            detail: student.is_off_schedule
+              ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${student.remaining_sessions} ครั้ง`
+              : `เหลือ ${student.remaining_sessions} ครั้ง`,
+          });
+        }
       } catch (err: unknown) {
         setOutcome({
           ok: false,
@@ -824,7 +837,8 @@ export default function AdminAttendancePage() {
         )}
 
         {/* ── ขวา: รายชื่อ ── */}
-        <div className="flex min-h-0 flex-col">
+        <div className="flex min-h-0 flex-col gap-3">
+          <CoachRosterList coaches={session.coaches} />
           <RosterList
             session={session}
             onManualCheckIn={handleManualCheckIn}

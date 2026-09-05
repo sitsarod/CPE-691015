@@ -167,6 +167,11 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		return nil, ErrSessionNotFound
 	}
 
+	coaches, err := s.buildCoachRoster(s.db, &session)
+	if err != nil {
+		return nil, err
+	}
+
 	roster, walkInCandidates, err := s.getRoster(s.db, &session)
 	if err != nil {
 		return nil, err
@@ -184,6 +189,7 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		CanScan:           canScanNow(&session, nowLocal()),
 		Roster:            roster,
 		WalkInCandidates:  walkInCandidates,
+		Coaches:           coaches,
 	}
 	if session.Package != nil && session.Package.Course != nil {
 		result.CourseName = session.Package.Course.CourseName

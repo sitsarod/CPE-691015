@@ -29,7 +29,9 @@ func mapAttendanceError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 
 	// ไม่ได้ลงทะเบียนแพ็กเกจนี้ = ไม่มีสิทธิ์ ไม่ใช่ข้อมูลผิด
-	case errors.Is(err, services.ErrNotInPackage):
+	// โค้ชที่ถูกพักงานก็เข้าข่ายเดียวกัน — ตัวตนถูก แต่ไม่มีสิทธิ์เช็คชื่อ
+	case errors.Is(err, services.ErrNotInPackage),
+		errors.Is(err, services.ErrCoachInactive):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrInvalidStatus):
@@ -55,6 +57,7 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrNotInClassTime),
 		errors.Is(err, services.ErrNoSessionsLeft),
 		errors.Is(err, services.ErrAlreadyCheckedIn),
+		errors.Is(err, services.ErrCoachAlreadyWorkedIn),
 		errors.Is(err, services.ErrAttendanceExpired):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
@@ -168,7 +171,12 @@ func (ctrl *AttendanceController) CheckIn(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
+
+	message := "เช็คชื่อสำเร็จ"
+	if result.Kind == dto.ScanKindCoach {
+		message = "เช็คชื่อเข้าสอนสำเร็จ"
+	}
+	c.JSON(http.StatusOK, gin.H{"message": message, "data": result})
 }
 
 // ─── สแกนใบหน้า ───

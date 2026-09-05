@@ -46,6 +46,24 @@ export interface RosterItem {
   remarks?: string;
 }
 
+// โค้ชหนึ่งคนในรายชื่อของรอบ — มาจากตารางงาน ไม่ใช่ enrollment เหมือนนักเรียน
+export interface CoachRosterItem {
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  court_number: string; // เว้นว่างได้ (ยังไม่ระบุสนาม)
+
+  // false = ไม่ได้อยู่ในตารางงานของคาบนี้ แต่มาสแกน
+  is_scheduled: boolean;
+
+  // null = ยังไม่เช็คชื่อ
+  attendance_id: number | null;
+  status?: AttendanceStatus;
+  check_in_method?: CheckInMethod;
+  check_in_time: string | null;
+}
+
 export interface AttendanceSession {
   id: number;
   package_id: number;
@@ -65,6 +83,8 @@ export interface AttendanceSession {
 
   roster: RosterItem[];
   walk_in_candidates: RosterItem[];
+
+  coaches: CoachRosterItem[];
 
   confirmed_count: number;
   present_count: number;
@@ -135,6 +155,23 @@ export interface CheckInResult {
 
   remaining_sessions: number;
 }
+
+// ผลของโค้ชเช็คชื่อ — ไม่มีโควตาหรือ "มาไม่ตรงวัน" เพราะโค้ชไม่ได้ซื้อคอร์ส
+export interface CoachCheckInResult {
+  attendance_id: number;
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  check_in_method: CheckInMethod;
+  check_in_time: string;
+  session_date: string; // YYYY-MM-DD
+}
+
+// kind บอกว่าฟิลด์ไหนใช้ได้ · เขียนเป็น union เพื่อให้ TS บังคับเช็คก่อนแตะฟิลด์
+export type ScanCheckIn =
+  | { kind: "student"; student: CheckInResult; coach?: undefined }
+  | { kind: "coach"; coach: CoachCheckInResult; student?: undefined };
 
 // ─── แก้สถานะย้อนหลัง ────────────────────────────────────────────────────────
 

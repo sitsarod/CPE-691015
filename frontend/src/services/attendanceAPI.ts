@@ -4,6 +4,7 @@ import type {
   OpenSessionSummary,
   AttendanceSession,
   CheckInResult,
+  ScanCheckIn,
   FaceScanResult,
   UpdateAttendanceResult,
   AttendanceHistoryItem,
@@ -52,10 +53,12 @@ export async function fetchSession(sessionId: number): Promise<AttendanceSession
 // backend หาตัวตนใหม่จาก QR ทุกครั้งและไม่อ่าน enrollment_id เลยในเส้นนี้
 // คนที่แก้ค่าใน devtools จึงเช็คชื่อให้คนอื่นไม่ได้
 //
+// รับ QR ของโค้ชด้วย ต้องดู kind ก่อน — backend เป็นคนแยกเพราะหน้าเว็บเห็นแค่สตริง QR
+//
 // หมายเหตุ: endpoint /lookup (ถามว่า QR นี้เป็นใครโดยไม่บันทึก) ยังอยู่ฝั่ง backend
 // แต่หน้าเว็บเลิกเรียกแล้วตั้งแต่ตัดขั้นให้แอดมินกดยืนยันตัวตนออก
-export async function checkInByQR(sessionId: number, qrCode: string): Promise<CheckInResult> {
-  const res = await apiFetch<Envelope<CheckInResult>>(`/attendance/sessions/${sessionId}/check-in`, {
+export async function checkInByQR(sessionId: number, qrCode: string): Promise<ScanCheckIn> {
+  const res = await apiFetch<Envelope<ScanCheckIn>>(`/attendance/sessions/${sessionId}/check-in`, {
     method: "POST",
     body: JSON.stringify({ qr_code: qrCode }),
   });
