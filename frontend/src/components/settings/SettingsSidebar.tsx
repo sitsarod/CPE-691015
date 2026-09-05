@@ -9,8 +9,8 @@ import { User, Bell, ShieldCheck, ScanFace } from "lucide-react";
  * แถบเมนูของหน้าตั้งค่า ใช้ร่วมกันทั้งฝั่งนักเรียนและฝั่งโค้ช
  *
  * เมนูเหมือนกันทั้งสองฝั่งโดยตั้งใจ ต่างกันแค่ base path เท่านั้น
- * เพราะทั้งสองบทบาทมีเรื่องให้ตั้งค่าชุดเดียวกัน คือข้อมูลติดต่อของตัวเอง
- * กับความยินยอมเก็บข้อมูลใบหน้า (โค้ชก็สแกนหน้าเช็คชื่อเข้างานเหมือนกัน)
+ * เพราะทั้งสองบทบาทมีเรื่องให้ตั้งค่าชุดเดียวกัน — ข้อมูลติดต่อ ความยินยอม
+ * และการลงทะเบียนใบหน้า (โค้ชก็สแกนหน้าเช็คชื่อเข้าสอนเหมือนกัน)
  */
 interface Props {
   /** เช่น "/customer/settings" หรือ "/coach/settings" — ไม่ต้องมี / ปิดท้าย */
@@ -34,9 +34,6 @@ export default function SettingsSidebar({ basePath }: Props) {
   const privacyHref = `${basePath}/privacy`;
   const faceHref = `${basePath}/face`;
 
-  // หน้าลงทะเบียนใบหน้ามีเฉพาะฝั่งนักเรียน — ตาราง face_images ผูกกับ customers เท่านั้น
-  // ถ้าโชว์ให้โค้ชจะกดแล้ว 404 (ต่างจากหน้าความยินยอมที่ทั้งสองบทบาทใช้ร่วมกันได้)
-  const showFaceLink = basePath.startsWith("/customer");
 
   return (
     <div className="w-80 border-r border-gray-200 p-6 hidden md:flex flex-col space-y-6 bg-white">
@@ -55,12 +52,10 @@ export default function SettingsSidebar({ basePath }: Props) {
           <span>ความเป็นส่วนตัว</span>
         </Link>
 
-        {showFaceLink && (
-          <Link href={faceHref} className={linkClass(faceHref)}>
-            <ScanFace className={iconClass(faceHref)} />
-            <span>ลงทะเบียนใบหน้า</span>
-          </Link>
-        )}
+        <Link href={faceHref} className={linkClass(faceHref)}>
+          <ScanFace className={iconClass(faceHref)} />
+          <span>ลงทะเบียนใบหน้า</span>
+        </Link>
 
         {/* ยังไม่มีหน้านี้ในระบบ — แสดงเป็น disabled ไว้ก่อน ไม่ผูก Link เพื่อไม่ให้กดแล้ว 404 */}
         <div className="flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-sm text-gray-300 cursor-not-allowed">

@@ -175,6 +175,24 @@ export interface CoachCheckInResult {
   is_scheduled: boolean;
 }
 
+// จังหวะที่ 1 ตอนโค้ชสแกนใบหน้า — ไม่มีโควตา/คอร์สเหมือนนักเรียน
+export interface CoachFaceScanResult {
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  confidence: number;
+  margin: number;
+
+  can_check_in: boolean;
+  reason?: string;
+}
+
+// กล้องตัวเดียวรับทั้งสองฝ่าย — kind บอกว่าฟิลด์ไหนใช้ได้
+export type FaceLookup =
+  | { kind: "student"; student: FaceScanResult; coach?: undefined }
+  | { kind: "coach"; coach: CoachFaceScanResult; student?: undefined };
+
 // kind บอกว่าฟิลด์ไหนใช้ได้ · เขียนเป็น union เพื่อให้ TS บังคับเช็คก่อนแตะฟิลด์
 export type ScanCheckIn =
   | { kind: "student"; student: CheckInResult; coach?: undefined }

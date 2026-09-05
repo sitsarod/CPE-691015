@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -47,6 +48,69 @@ func NewFaceImageService(db *gorm.DB, cld *CloudinaryService) *FaceImageService 
 	return &FaceImageService{db: db, cld: cld}
 }
 
+// faceSubject คือ "เจ้าของรูป" ซึ่งเป็นได้ทั้งนักเรียนและโค้ช
+//
+// เดินตามแบบ consentSubject ใน consent_service.go — resolve จาก users.id ครั้งเดียว
+// แล้วส่งต่อ ไม่ให้เมธอดแต่ละตัวไปเดาเองว่ากำลังทำงานกับใคร
+type faceSubject struct {
+	CustomerID *uint
+	CoachID    *uint
+
+	// ConsentStatus ของเจ้าตัว ณ เวลาที่ resolve — ใช้ตรวจก่อนให้อัปรูป
+	ConsentStatus models.FaceConsentStatus
+}
+
+// scope จำกัด query ให้เหลือเฉพาะแถวของเจ้าของคนนี้
+func (f *faceSubject) scope(db *gorm.DB) *gorm.DB {
+	if f.CoachID != nil {
+		return db.Where("coach_id = ?", *f.CoachID)
+	}
+	return db.Where("customer_id = ?", *f.CustomerID)
+}
+
+// owns บอกว่าแถวนี้เป็นของเจ้าของคนนี้จริงไหม
+func (f *faceSubject) owns(image *models.FaceImage) bool {
+	if f.CoachID != nil {
+		return image.CoachID != nil && *image.CoachID == *f.CoachID
+	}
+	return image.CustomerID != nil && *image.CustomerID == *f.CustomerID
+}
+
+// folder คืนโฟลเดอร์บน Cloudinary — ต้องแยกตามชนิดเจ้าของ
+// ไม่งั้นนักเรียน id 1 กับโค้ช id 1 จะใช้โฟลเดอร์เดียวกัน
+func (f *faceSubject) folder(cld *CloudinaryService) string {
+	if f.CoachID != nil {
+		return cld.FaceEnrollmentFolder("coach", *f.CoachID)
+	}
+	return cld.FaceEnrollmentFolder("customer", *f.CustomerID)
+}
+
+func (f *faceSubject) label() string {
+	if f.CoachID != nil {
+		return fmt.Sprintf("coach %d", *f.CoachID)
+	}
+	return fmt.Sprintf("customer %d", *f.CustomerID)
+}
+
+// resolveFaceSubject หาว่า users.id นี้เป็นนักเรียนหรือโค้ช
+//
+// ลองนักเรียนก่อนเพราะเป็นกรณีส่วนใหญ่ ถ้าไม่ใช่ค่อยลองโค้ช
+func (s *FaceImageService) resolveFaceSubject(userID uint) (*faceSubject, error) {
+	var customer models.Customer
+	if err := s.db.Where("user_id = ?", userID).First(&customer).Error; err == nil {
+		id := customer.ID
+		return &faceSubject{CustomerID: &id, ConsentStatus: customer.FaceConsentStatus}, nil
+	}
+
+	var coach models.Coach
+	if err := s.db.Where("user_id = ?", userID).First(&coach).Error; err == nil {
+		id := coach.ID
+		return &faceSubject{CoachID: &id, ConsentStatus: coach.FaceConsentStatus}, nil
+	}
+
+	return nil, ErrCustomerProfileNotFound
+}
+
 // Upload รับรูปใบหน้าหนึ่งท่า — ผู้เรียกต้องตรวจขนาด/magic bytes มาก่อน (controllers/upload.go)
 //
 // คืนแถวสถานะ pending เพราะ embedding สร้างแบบ async โดย worker
@@ -59,22 +123,17 @@ func (s *FaceImageService) Upload(userID uint, pose models.FacePose, file io.Rea
 		return nil, ErrInvalidFacePose
 	}
 
-	customerID, err := ResolveCustomerID(s.db, userID)
+	subject, err := s.resolveFaceSubject(userID)
 	if err != nil {
 		return nil, err
 	}
-
-	var customer models.Customer
-	if err := s.db.First(&customer, customerID).Error; err != nil {
-		return nil, ErrCustomerNotFound
-	}
-	if customer.FaceConsentStatus != models.FaceConsentGranted {
+	if subject.ConsentStatus != models.FaceConsentGranted {
 		return nil, ErrFaceConsentRequired
 	}
 
 	var existing int64
-	if err := s.db.Model(&models.FaceImage{}).
-		Where("customer_id = ?", customerID).Count(&existing).Error; err != nil {
+	if err := subject.scope(s.db.Model(&models.FaceImage{})).
+		Count(&existing).Error; err != nil {
 		return nil, errors.New("ไม่สามารถตรวจสอบรูปใบหน้าที่มีอยู่ได้")
 	}
 	if existing >= int64(MaxFaceImagesPerCustomer) {
@@ -82,8 +141,8 @@ func (s *FaceImageService) Upload(userID uint, pose models.FacePose, file io.Rea
 	}
 
 	var samePose int64
-	if err := s.db.Model(&models.FaceImage{}).
-		Where("customer_id = ? AND pose = ?", customerID, pose).Count(&samePose).Error; err != nil {
+	if err := subject.scope(s.db.Model(&models.FaceImage{})).
+		Where("pose = ?", pose).Count(&samePose).Error; err != nil {
 		return nil, errors.New("ไม่สามารถตรวจสอบรูปใบหน้าที่มีอยู่ได้")
 	}
 	if samePose > 0 {
@@ -91,14 +150,15 @@ func (s *FaceImageService) Upload(userID uint, pose models.FacePose, file io.Rea
 	}
 
 	ctx := context.Background()
-	storageKey, err := s.cld.UploadPrivateImage(ctx, file, s.cld.FaceEnrollmentFolder(customerID))
+	storageKey, err := s.cld.UploadPrivateImage(ctx, file, subject.folder(s.cld))
 	if err != nil {
-		log.Printf("อัปโหลดรูปใบหน้าขึ้น Cloudinary ไม่สำเร็จ (customer %d): %v", customerID, err)
+		log.Printf("อัปโหลดรูปใบหน้าขึ้น Cloudinary ไม่สำเร็จ (%s): %v", subject.label(), err)
 		return nil, errors.New("อัปโหลดรูปใบหน้าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")
 	}
 
 	image := models.FaceImage{
-		CustomerID: customerID,
+		CustomerID: subject.CustomerID,
+		CoachID:    subject.CoachID,
 		StorageKey: storageKey,
 		Pose:       pose,
 		Status:     models.FaceImagePending,
@@ -117,15 +177,15 @@ func (s *FaceImageService) Upload(userID uint, pose models.FacePose, file io.Rea
 	return &image, nil
 }
 
-// ListMine คืนรูปทั้งหมดของนักเรียนที่ล็อกอินอยู่ พร้อมสถานะแต่ละท่า
+// ListMine คืนรูปทั้งหมดของคนที่ล็อกอินอยู่ (นักเรียนหรือโค้ช) พร้อมสถานะแต่ละท่า
 func (s *FaceImageService) ListMine(userID uint) ([]models.FaceImage, error) {
-	customerID, err := ResolveCustomerID(s.db, userID)
+	subject, err := s.resolveFaceSubject(userID)
 	if err != nil {
 		return nil, err
 	}
 
 	var images []models.FaceImage
-	if err := s.db.Where("customer_id = ?", customerID).
+	if err := subject.scope(s.db).
 		Order("id asc").Find(&images).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงข้อมูลรูปใบหน้าได้")
 	}
@@ -190,8 +250,8 @@ func (s *FaceImageService) findOwned(userID uint, role models.UserRole, imageID 
 		return &image, nil
 	}
 
-	customerID, err := ResolveCustomerID(s.db, userID)
-	if err != nil || image.CustomerID != customerID {
+	subject, err := s.resolveFaceSubject(userID)
+	if err != nil || !subject.owns(&image) {
 		return nil, ErrFaceImageForbidden
 	}
 	return &image, nil
@@ -206,13 +266,18 @@ func (s *FaceImageService) ListForAdmin(status string) ([]dto.AdminFaceImageDTO,
 		return nil, ErrInvalidFaceStatus
 	}
 
+	// COALESCE เพราะแถวหนึ่งมีเจ้าของฝั่งเดียวเสมอ อีกฝั่งเป็น NULL
 	q := s.db.Table("face_images AS fi").
-		Select(`fi.id, fi.customer_id, c.nickname, c.member_code,
+		Select(`fi.id, fi.customer_id, fi.coach_id,
+		        COALESCE(c.nickname, co.nickname) AS nickname,
+		        COALESCE(c.member_code, co.member_code) AS member_code,
+		        CASE WHEN fi.coach_id IS NULL THEN 'customer' ELSE 'coach' END AS subject_kind,
 		        fi.pose, fi.status, fi.reject_reason,
 		        fi.quality_score, fi.liveness_score,
 		        fi.verified_by, fi.verified_at, fi.created_at,
 		        (fi.storage_key <> '') AS has_file`).
 		Joins("LEFT JOIN customers c ON c.id = fi.customer_id").
+		Joins("LEFT JOIN coaches co ON co.id = fi.coach_id").
 		Order("fi.created_at asc")
 
 	if status != "" {
@@ -307,6 +372,28 @@ func DeleteCustomerFaceImages(tx *gorm.DB, customerID uint) ([]string, error) {
 
 	// face_images ไม่มี DeletedAt อยู่แล้ว Delete จึงเป็นการลบจริงเสมอ
 	if err := tx.Where("customer_id = ?", customerID).
+		Delete(&models.FaceImage{}).Error; err != nil {
+		return nil, errors.New("ไม่สามารถลบรูปใบหน้าได้")
+	}
+	return keys, nil
+}
+
+// DeleteCoachFaceImages ทำเหมือน DeleteCustomerFaceImages แต่ของโค้ช
+//
+// จำเป็นตอนโค้ชถอนความยินยอมและตอนลบบัญชีโค้ช — เดิม DeleteCoachPhotos ลบแค่ตาราง
+// photos (ระบบรูปตัวเก่า) ไม่ได้แตะ face_images
+func DeleteCoachFaceImages(tx *gorm.DB, coachID uint) ([]string, error) {
+	var keys []string
+	if err := tx.Model(&models.FaceImage{}).
+		Where("coach_id = ?", coachID).
+		Pluck("storage_key", &keys).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายการรูปใบหน้าที่ต้องลบได้")
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	if err := tx.Where("coach_id = ?", coachID).
 		Delete(&models.FaceImage{}).Error; err != nil {
 		return nil, errors.New("ไม่สามารถลบรูปใบหน้าได้")
 	}

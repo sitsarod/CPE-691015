@@ -129,8 +129,9 @@ func (s *CloudinaryService) UploadFileToFolder(ctx context.Context, file multipa
 
 const faceRootFolder = "faces"
 
-func (s *CloudinaryService) FaceEnrollmentFolder(customerID uint) string {
-	return fmt.Sprintf("%s/%s/enrollment/%d", s.folder, faceRootFolder, customerID)
+// kind แยกโฟลเดอร์ของนักเรียนกับโค้ชออกจากกัน — id ของสองตารางชนกันได้
+func (s *CloudinaryService) FaceEnrollmentFolder(kind string, subjectID uint) string {
+	return fmt.Sprintf("%s/%s/enrollment/%s/%d", s.folder, faceRootFolder, kind, subjectID)
 }
 
 // UploadPrivateImage อัปโหลดรูปแบบ authenticated แล้วคืน public_id

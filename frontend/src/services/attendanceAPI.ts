@@ -6,7 +6,7 @@ import type {
   CheckInResult,
   CoachCheckInResult,
   ScanCheckIn,
-  FaceScanResult,
+  FaceLookup,
   UpdateAttendanceResult,
   AttendanceHistoryItem,
   CoachHistoryItem,
@@ -82,8 +82,8 @@ function facePhotoForm(frame: Blob): FormData {
  * ⚠️ ถูกเรียกทุก ~1.5 วินาทีตลอดเวลาที่กล้องเปิด เฟรมส่วนใหญ่จะไม่มีหน้าคน
  * ผู้เรียกต้องกลืน error เงียบ ๆ ไม่ใช่เด้งข้อความทุกครั้ง
  */
-export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceScanResult> {
-  const res = await apiFetch<Envelope<FaceScanResult>>(
+export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceLookup> {
+  const res = await apiFetch<Envelope<FaceLookup>>(
     `/attendance/sessions/${sessionId}/face-lookup`,
     { method: "POST", body: facePhotoForm(frame) }
   );
@@ -97,8 +97,8 @@ export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceSc
  * backend หาตัวตนใหม่จากรูปทุกครั้งและไม่อ่าน id ใด ๆ จาก client เลย
  * (เหตุผลเดียวกับ checkInByQR ด้านบน)
  */
-export async function faceCheckIn(sessionId: number, frame: Blob): Promise<CheckInResult> {
-  const res = await apiFetch<Envelope<CheckInResult>>(
+export async function faceCheckIn(sessionId: number, frame: Blob): Promise<ScanCheckIn> {
+  const res = await apiFetch<Envelope<ScanCheckIn>>(
     `/attendance/sessions/${sessionId}/face-check-in`,
     { method: "POST", body: facePhotoForm(frame) }
   );

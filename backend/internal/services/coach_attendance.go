@@ -18,7 +18,10 @@ var (
 )
 
 // Coach.Status เป็น string ธรรมดา ไม่ใช่ enum
-const coachStatusInactive = "inactive"
+const (
+	coachStatusInactive = "inactive"
+	coachStatusActive   = "active"
+)
 
 // findCoachByQR หาโค้ชจาก QR ประจำตัว — CheckInByQR ต้องรู้ก่อนเข้าเส้นทางนักเรียน
 func (s *AttendanceService) findCoachByQR(code string) (*models.Coach, error) {
