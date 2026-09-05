@@ -10,7 +10,8 @@
 | Method | Path | หมายเหตุ |
 |---|---|---|
 | `GET` | `/health` | บอกว่าโมเดลโหลดเสร็จแล้ว ไม่ใช่แค่พอร์ตเปิด |
-| `POST` | `/embed` | ต้องมี header `X-Service-Key` |
+| `POST` | `/embed` | ใบหน้าที่ใหญ่ที่สุดใบเดียว (เช็คชื่อ) · ต้องมี header `X-Service-Key` |
+| `POST` | `/embed-all` | ทุกใบหน้าในรูป (แท็กนักเรียนในรูปหมู่) · ต้องมี header `X-Service-Key` |
 
 ```jsonc
 // POST /embed
@@ -26,6 +27,19 @@
   "model": "buffalo_l"      // เก็บลงทุกแถว เพราะ embedding ข้ามโมเดลเทียบกันไม่ได้
 }
 ```
+
+```jsonc
+// POST /embed-all — body เหมือน /embed ทุกอย่าง
+// 200
+{
+  "face_count": 3,
+  "faces": [                // เรียงตามที่โมเดลเจอ ไม่ได้เรียงตามคุณภาพ
+    { "embedding": [/* 512 ตัว */], "quality": 0.91, "bbox": [x1, y1, x2, y2] }
+  ],
+  "model": "buffalo_l"
+}
+```
+รูปที่ไม่มีใบหน้าเลยตอบ 200 พร้อม `face_count: 0` และ `faces: []` (ไม่ใช่ error)
 
 รหัสตอบกลับอื่น: `401` key ผิด · `413` รูปใหญ่เกิน 8 MB · `400` base64 หรือรูปเสีย
 

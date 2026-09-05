@@ -10,9 +10,22 @@ type DetectedPhotoResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// DetectedStudentSuggestion คือนักเรียนที่ระบบเดาว่าอยู่ในรูป — ยังไม่ได้บันทึกอะไรทั้งสิ้น
+// โค้ชต้องตรวจทานแล้วกดยืนยันผ่าน /photo-posts/:id/assign อีกทีถึงจะถูกแท็กจริง
+type DetectedStudentSuggestion struct {
+	CustomerID uint    `json:"customer_id"`
+	Nickname   string  `json:"nickname"`
+	Confidence float64 `json:"confidence"` // เปอร์เซ็นต์ (0–100) ให้หน้าเว็บเอาไปโชว์ได้ตรง ๆ
+}
+
 type UploadPhotoPostResponse struct {
 	RawPhotoID uint   `json:"raw_photo_id"`
 	PhotoURL   string `json:"photo_url"`
+
+	// FaceCount คือจำนวนใบหน้าทั้งหมดที่เจอในรูป (รวมที่จับคู่กับนักเรียนไม่ได้)
+	// ใช้บอกโค้ชว่า "เจอ 5 หน้า จับคู่ได้ 3 คน" จะได้รู้ว่าต้องแท็กเองอีกกี่คน
+	FaceCount int                         `json:"face_count"`
+	Students  []DetectedStudentSuggestion `json:"students"`
 }
 
 // PostItem คือรายการโพสต์ที่รวมทั้งรูปและวิดีโอเข้าด้วยกัน สำหรับแท็บ Posts ในโปรไฟล์นักเรียน

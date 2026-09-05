@@ -103,25 +103,53 @@ func (s *EvaluationService) CreateEvaluation(coachUserID uint, req dto.CreateEva
 
 // GetMyStudents ดึงรายชื่อนักเรียนที่ลงทะเบียนเรียนกับโค้ชคนนี้อยู่จริง (สำหรับให้เลือกประเมิน)
 // ใช้ enrolledEvaluableStatuses ชุดเดียวกับตอนสร้าง/ดูการประเมิน เพื่อให้รายชื่อตรงกับสิทธิ์จริง
-func (s *EvaluationService) GetMyStudents(coachUserID uint) ([]models.Customer, error) {
+//
+// courseID = nil คือทุกคอร์สที่โค้ชคนนี้สอนอยู่รวมกัน (พฤติกรรมเดิม) — ระบุมาเพื่อกรองเฉพาะคอร์สเดียว
+// เช่นตอนแท็กนักเรียนในรูป/วิดีโอที่ผูกกับคาบเรียนคาบเดียว ไม่อยากให้รายชื่อปนกันทุกคอร์ส
+func (s *EvaluationService) GetMyStudents(coachUserID uint, courseID *uint) ([]models.Customer, error) {
 	coachID, err := resolveCoachIDByUser(s.db, coachUserID)
 	if err != nil {
 		return nil, errors.New("ไม่พบข้อมูลโค้ช")
 	}
 
-	var customers []models.Customer
-	err = s.db.
+	query := s.db.
 		Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
 		Joins("JOIN packages ON packages.id = enrollments.package_id").
 		Joins("JOIN work_schedules ON work_schedules.course_id = packages.course_id AND work_schedules.deleted_at IS NULL").
 		Where("work_schedules.coach_id = ?", coachID).
-		Where("enrollments.status IN ?", enrolledEvaluableStatuses).
-		Group("customers.id").
-		Find(&customers).Error
-	if err != nil {
+		Where("enrollments.status IN ?", enrolledEvaluableStatuses)
+
+	if courseID != nil {
+		// packages.course_id ต้องตรงกับที่ขอมา "และ" ยังอยู่ในเงื่อนไข work_schedules.coach_id = coachID
+		// ด้านบนด้วย จึงขอรายชื่อคอร์สที่ตัวเองไม่ได้สอนไม่ได้ (กัน IDOR โดยตัว query เอง)
+		query = query.Where("packages.course_id = ?", *courseID)
+	}
+
+	var customers []models.Customer
+	if err := query.Group("customers.id").Find(&customers).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายชื่อนักเรียนได้")
 	}
 	return customers, nil
+}
+
+// GetMyCourses คืนคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง (ผ่าน work_schedules) — ใช้ให้เลือกก่อนดูรายชื่อ
+// นักเรียนแยกตามคอร์ส (เช่นตอนแท็กนักเรียนในรูป/วิดีโอ) กันรายชื่อทุกคอร์สปนกันเป็นก้อนเดียว
+func (s *EvaluationService) GetMyCourses(coachUserID uint) ([]models.Course, error) {
+	coachID, err := resolveCoachIDByUser(s.db, coachUserID)
+	if err != nil {
+		return nil, errors.New("ไม่พบข้อมูลโค้ช")
+	}
+
+	var courses []models.Course
+	err = s.db.
+		Joins("JOIN work_schedules ON work_schedules.course_id = courses.id AND work_schedules.deleted_at IS NULL").
+		Where("work_schedules.coach_id = ?", coachID).
+		Group("courses.id").
+		Find(&courses).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อคอร์สได้")
+	}
+	return courses, nil
 }
 
 // GetEvaluationsByStudentID ดึงข้อมูลการประเมินของนักเรียนคนนั้นๆ (CustomerID)

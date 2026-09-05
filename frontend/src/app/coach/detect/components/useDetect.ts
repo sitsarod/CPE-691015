@@ -1,138 +1,369 @@
-import { useState, useRef } from 'react';
-import { MOCK_STUDENTS } from '../../_mock/students';
+import { useEffect, useRef, useState } from 'react';
+import { fetchMyCourses, fetchMyStudents } from '@/services/evaluationAPI';
+import {
+  assignPhotoStudents,
+  assignVideoStudents,
+  uploadDetectPhoto,
+  uploadDetectVideo,
+} from '@/services/detectAPI';
 
 export type DetectionStatus = 'pending' | 'confirmed' | 'edited';
+
+export interface DetectStudent {
+  id: number;
+  nickname: string;
+}
+
+export interface DetectCourse {
+  id: number;
+  name: string;
+}
 
 export interface Detection {
   uid: string;
   predictedNickname: string | null; // ชื่อที่ AI คาดเดา (null = โค้ชเพิ่มเองภายหลัง)
-  confidence: number | null; // ความมั่นใจของ AI (%) — null ถ้าเพิ่มเอง
+  confidence: number | null; // ระบบจริงยังไม่มีคะแนนความมั่นใจ (mock ฝั่ง backend) จึงเป็น null เสมอตอนนี้
   studentId: number | ''; // ผู้เรียนที่ผูกไว้ตอนนี้ (หลังยืนยัน/แก้ไข)
   status: DetectionStatus;
+}
+
+// MAX_BATCH_FILES จำกัดจำนวนไฟล์ต่อการอัปโหลดหนึ่งครั้ง — วิเคราะห์ทีละไฟล์ผ่าน face-service
+// ซึ่งกินเวลา 1-3 วิ/ไฟล์ ถ้าไม่จำกัดโค้ชเลือกทีละหลายสิบไฟล์แล้วเครื่อง (โดยเฉพาะโน้ตบุ๊คที่ไม่แรง)
+// จะค้างรอนานเกินไป
+export const MAX_BATCH_FILES = 10;
+
+// AUTO_CONFIRM_THRESHOLD — ผลจำแนกที่มั่นใจตั้งแต่ % นี้ขึ้นไปจะ "ยืนยันให้อัตโนมัติ" โดยไม่ต้องกด
+// (ลดงานกดของโค้ชในเคสที่ชัดเจน) ที่เหลือ (ต่ำกว่านี้ หรือวิดีโอที่ไม่มีคะแนนความมั่นใจเลย)
+// ยังต้องตรวจทานเองอยู่ — เป็นค่าเริ่มต้นที่ยังไม่เคย calibrate จากข้อมูลจริง ปรับได้ถ้าเดาพลาดบ่อยไป
+export const AUTO_CONFIRM_THRESHOLD = 85;
+
+// BatchItem คือไฟล์หนึ่งไฟล์ในชุดที่เลือกมาพร้อมกัน — แต่ละไฟล์มีสถานะ/ผลวิเคราะห์/การยืนยันแยกจากกัน
+// ทุกไฟล์ในชุดเดียวกันใช้ "คอร์สเดียวกัน" ที่เลือกไว้ตอนอัปโหลด (ยังไม่รองรับคนละคอร์สในชุดเดียว —
+// ถ้าโค้ชถ่ายมาจากหลายคาบ/หลายคอร์ส ต้องอัปโหลดแยกชุดตามคอร์ส)
+export interface BatchItem {
+  uid: string;
+  file: File;
+  isVideo: boolean;
+  analyzing: boolean;
+  detections: Detection[] | null; // null = ยังไม่ได้วิเคราะห์
+  rawId: number | null; // raw_photo_id หรือ raw_video_id — ได้มาหลังวิเคราะห์สำเร็จ
+  error: string | null;
+  saving: boolean;
+  savedAt: number | null;
+  skippedCount: number;
+  faceCount: number;
 }
 
 let uidCounter = 0;
 const nextUid = () => `d-${++uidCounter}`;
 
-// สุ่มผลลัพธ์การจำแนกจำลอง — ของจริงจะมาจาก API วิเคราะห์ภาพ/วิดีโอ
-function mockDetect(): Detection[] {
-  const picks = [MOCK_STUDENTS[0], MOCK_STUDENTS[2], MOCK_STUDENTS[3]];
-  const confidences = [96, 58, 84];
-  return picks.map((s, i) => ({
+function isItemReviewed(item: BatchItem): boolean {
+  return !!item.detections && item.detections.length > 0 && item.detections.every((d) => d.status !== 'pending');
+}
+
+function newBatchItem(file: File): BatchItem {
+  return {
     uid: nextUid(),
-    predictedNickname: s.nickname,
-    confidence: confidences[i],
-    studentId: s.id,
-    status: 'pending' as DetectionStatus,
-  }));
+    file,
+    isVideo: file.type.startsWith('video/'),
+    analyzing: false,
+    detections: null,
+    rawId: null,
+    error: null,
+    saving: false,
+    savedAt: null,
+    skippedCount: 0,
+    faceCount: 0,
+  };
 }
 
 export function useDetect() {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [file, setFile] = useState<File | null>(null);
+  const [courses, setCourses] = useState<DetectCourse[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  // ต้องเลือกคอร์สก่อนถึงจะเห็นรายชื่อนักเรียน — กันรายชื่อทุกคอร์สที่โค้ชสอนปนกันเป็นก้อนเดียว
+  // จนหาชื่อไม่เจอเวลาโค้ชสอนหลายคอร์ส (รูป/วิดีโอหนึ่งไฟล์ผูกกับคาบเดียวอยู่แล้วโดยธรรมชาติ)
+  const [selectedCourseId, setSelectedCourseId] = useState<number | ''>('');
+
+  const [students, setStudents] = useState<DetectStudent[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+
+  const [items, setItems] = useState<BatchItem[]>([]);
   const [dragActive, setDragActive] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [detections, setDetections] = useState<Detection[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [analyzingAll, setAnalyzingAll] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
 
-  const isVideo = file?.type.startsWith('video/');
+  // คอร์สที่โค้ชคนนี้สอนอยู่ — ให้เลือกก่อนถึงจะโหลดรายชื่อนักเรียนของคอร์สนั้น
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyCourses()
+      .then((list) => {
+        if (cancelled) return;
+        setCourses(list.map((c) => ({ id: c.course_id, name: c.course_name })));
+      })
+      .catch(() => {
+        // เงียบไว้พอ — โหลดไม่สำเร็จแค่ทำให้เลือกคอร์สไม่ได้ชั่วคราว ไม่ควรบล็อกทั้งหน้า
+      })
+      .finally(() => {
+        if (!cancelled) setCoursesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const pickFile = (f: File | null) => {
-    setDetections(null);
-    setSavedAt(null);
-    if (!f) {
-      setFile(null);
+  // รายชื่อผู้เรียนของ "คอร์สที่เลือก" เท่านั้น — โหลดใหม่ทุกครั้งที่เปลี่ยนคอร์ส
+  useEffect(() => {
+    if (selectedCourseId === '') {
+      setStudents([]);
       return;
     }
-    if (!f.type.startsWith('video/') && !f.type.startsWith('image/')) {
-      alert('กรุณาเลือกไฟล์รูปภาพหรือวิดีโอเท่านั้น');
-      return;
+
+    let cancelled = false;
+    setStudentsLoading(true);
+    fetchMyStudents(selectedCourseId)
+      .then((list) => {
+        if (cancelled) return;
+        setStudents(list.map((s) => ({ id: s.customer_id, nickname: s.nickname })));
+      })
+      .catch(() => {
+        // เงียบไว้พอ — โหลดไม่สำเร็จแค่ทำให้ dropdown ว่างชั่วคราว ไม่ควรบล็อกการอัปโหลด/วิเคราะห์
+      })
+      .finally(() => {
+        if (!cancelled) setStudentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourseId]);
+
+  const updateItem = (uid: string, patch: Partial<BatchItem>) => {
+    setItems((prev) => prev.map((item) => (item.uid === uid ? { ...item, ...patch } : item)));
+  };
+
+  // pickFiles รับไฟล์ใหม่มาต่อท้ายชุดเดิม (ไม่ใช่แทนที่) เพราะโค้ชอาจลากเพิ่มทีละน้อยหลายรอบ
+  const pickFiles = (fileList: FileList | File[] | null) => {
+    if (!fileList) return;
+    setBatchError(null);
+
+    const incoming = Array.from(fileList);
+    const rejected = incoming.filter((f) => !f.type.startsWith('video/') && !f.type.startsWith('image/'));
+    const valid = incoming.filter((f) => f.type.startsWith('video/') || f.type.startsWith('image/'));
+
+    if (rejected.length > 0) {
+      alert('มีไฟล์ที่ไม่ใช่รูปภาพหรือวิดีโอถูกข้ามไป กรุณาเลือกเฉพาะรูปภาพ/วิดีโอเท่านั้น');
     }
-    setFile(f);
+
+    setItems((prev) => {
+      const room = MAX_BATCH_FILES - prev.length;
+      if (room <= 0) {
+        setBatchError(`อัปโหลดได้สูงสุด ${MAX_BATCH_FILES} ไฟล์ต่อครั้ง กรุณาลบไฟล์เดิมออกก่อนเพิ่มใหม่`);
+        return prev;
+      }
+      if (valid.length > room) {
+        setBatchError(`เลือกได้อีกแค่ ${room} ไฟล์ (สูงสุด ${MAX_BATCH_FILES} ไฟล์ต่อครั้ง) — เพิ่มมาแค่ ${room} ไฟล์แรกให้`);
+      }
+      return [...prev, ...valid.slice(0, room).map(newBatchItem)];
+    });
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
-    pickFile(e.dataTransfer.files?.[0] ?? null);
+    pickFiles(e.dataTransfer.files);
   };
 
-  const handleAnalyze = () => {
-    if (!file || analyzing) return;
-    setAnalyzing(true);
-    setDetections(null);
-    setSavedAt(null);
-    // จำลองการวิเคราะห์ฝั่งไคลเอนต์ — ของจริงจะยิงไปยัง API จำแนกผู้เรียนภายหลัง
-    setTimeout(() => {
-      setAnalyzing(false);
-      setDetections(mockDetect());
-    }, 1800);
+  const removeItem = (uid: string) => {
+    setItems((prev) => prev.filter((item) => item.uid !== uid));
   };
 
-  const clearFile = () => {
-    setFile(null);
-    setDetections(null);
-    setSavedAt(null);
+  const clearAll = () => {
+    setItems([]);
+    setBatchError(null);
     if (inputRef.current) inputRef.current.value = '';
   };
 
-  const confirmDetection = (uid: string) => {
-    setDetections((prev) =>
-      prev ? prev.map((d) => (d.uid === uid ? { ...d, status: 'confirmed' } : d)) : prev
+  // วิเคราะห์ทุกไฟล์ที่ยังไม่เคยวิเคราะห์ "ทีละไฟล์ตามลำดับ" (ไม่ขนาน) — เพราะ face-service
+  // รันบนเครื่องที่อาจไม่แรง ยิงพร้อมกันหลายไฟล์เสี่ยงค้างทั้งหมดพร้อมกันแทนที่จะทยอยเสร็จ
+  const analyzeAll = async () => {
+    if (analyzingAll || selectedCourseId === '') return;
+    const pending = items.filter((item) => item.detections === null && !item.analyzing);
+    if (pending.length === 0) return;
+
+    setAnalyzingAll(true);
+    for (const item of pending) {
+      updateItem(item.uid, { analyzing: true, error: null });
+      try {
+        if (item.isVideo) {
+          const result = await uploadDetectVideo(item.file);
+          updateItem(item.uid, {
+            analyzing: false,
+            rawId: result.raw_video_id,
+            faceCount: 0,
+            detections: result.student_ids.map((id) => {
+              const match = students.find((s) => s.id === id);
+              return {
+                uid: nextUid(),
+                predictedNickname: match?.nickname ?? `ผู้เรียน #${id} (ไม่อยู่ในรายชื่อของคุณ)`,
+                confidence: null,
+                studentId: id,
+                status: 'pending' as DetectionStatus,
+              };
+            }),
+          });
+        } else {
+          const result = await uploadDetectPhoto(item.file, selectedCourseId);
+          updateItem(item.uid, {
+            analyzing: false,
+            rawId: result.raw_photo_id,
+            faceCount: result.face_count,
+            detections: result.students.map((s) => {
+              const confidence = Math.round(s.confidence);
+              return {
+                uid: nextUid(),
+                predictedNickname: s.nickname,
+                confidence,
+                studentId: s.customer_id,
+                // มั่นใจสูงพอ = ยืนยันให้เลยอัตโนมัติ ไม่ต้องรอโค้ชกด (ยังกดแก้ไข/ลบทีหลังได้เหมือนเดิม)
+                status: (confidence >= AUTO_CONFIRM_THRESHOLD ? 'confirmed' : 'pending') as DetectionStatus,
+              };
+            }),
+          });
+        }
+      } catch (err) {
+        updateItem(item.uid, {
+          analyzing: false,
+          error: err instanceof Error ? err.message : 'วิเคราะห์ไม่สำเร็จ กรุณาลองใหม่',
+        });
+      }
+    }
+    setAnalyzingAll(false);
+  };
+
+  const confirmDetection = (itemUid: string, detectionUid: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.uid !== itemUid || !item.detections
+          ? item
+          : {
+              ...item,
+              detections: item.detections.map((d) => (d.uid === detectionUid ? { ...d, status: 'confirmed' } : d)),
+            }
+      )
     );
   };
 
-  const reassignDetection = (uid: string, studentId: number) => {
-    setDetections((prev) =>
-      prev ? prev.map((d) => (d.uid === uid ? { ...d, studentId, status: 'edited' } : d)) : prev
+  // ยืนยันทุกรายการที่ยังค้าง "รอตรวจสอบ" ในไฟล์นี้พร้อมกันทีเดียว — ลดจากกด N ครั้งเหลือกดครั้งเดียว
+  // ไม่แตะรายการที่แก้ไข (edited) หรือยืนยันแล้ว (confirmed) อยู่แล้ว เพราะโค้ชตัดสินใจไปแล้วรอบหนึ่ง
+  const confirmAllPending = (itemUid: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.uid !== itemUid || !item.detections
+          ? item
+          : {
+              ...item,
+              detections: item.detections.map((d) => (d.status === 'pending' ? { ...d, status: 'confirmed' } : d)),
+            }
+      )
     );
   };
 
-  const removeDetection = (uid: string) => {
-    setDetections((prev) => (prev ? prev.filter((d) => d.uid !== uid) : prev));
+  const reassignDetection = (itemUid: string, detectionUid: string, studentId: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.uid !== itemUid || !item.detections
+          ? item
+          : {
+              ...item,
+              detections: item.detections.map((d) =>
+                d.uid === detectionUid ? { ...d, studentId, status: 'edited' } : d
+              ),
+            }
+      )
+    );
   };
 
-  const addMissedStudent = () => {
-    setDetections((prev) => [
-      ...(prev ?? []),
-      { uid: nextUid(), predictedNickname: null, confidence: null, studentId: '', status: 'pending' },
-    ]);
+  const removeDetection = (itemUid: string, detectionUid: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.uid !== itemUid || !item.detections
+          ? item
+          : { ...item, detections: item.detections.filter((d) => d.uid !== detectionUid) }
+      )
+    );
   };
 
-  const allReviewed = !!detections && detections.length > 0 && detections.every((d) => d.status !== 'pending');
-
-  const handleConfirmAll = () => {
-    if (!allReviewed || saving) return;
-    setSaving(true);
-    // จำลองการบันทึกผลการจำแนก — ของจริงจะยิงไปยัง API ภายหลัง
-    setTimeout(() => {
-      setSaving(false);
-      setSavedAt(Date.now());
-    }, 900);
+  const addMissedStudent = (itemUid: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.uid !== itemUid
+          ? item
+          : {
+              ...item,
+              detections: [
+                ...(item.detections ?? []),
+                {
+                  uid: nextUid(),
+                  predictedNickname: null,
+                  confidence: null,
+                  studentId: '' as const,
+                  status: 'pending' as DetectionStatus,
+                },
+              ],
+            }
+      )
+    );
   };
+
+  // บันทึกผลของไฟล์เดียว — แต่ละไฟล์ยืนยันแยกจากกัน ไม่ผูกกับไฟล์อื่นในชุดเดียวกัน
+  const saveItem = async (itemUid: string) => {
+    const item = items.find((it) => it.uid === itemUid);
+    if (!item || !item.detections || item.saving || item.rawId == null || !isItemReviewed(item)) return;
+
+    updateItem(itemUid, { saving: true, error: null });
+    try {
+      const studentIds = item.detections.map((d) => d.studentId).filter((id): id is number => id !== '');
+      const result = item.isVideo
+        ? await assignVideoStudents(item.rawId, studentIds)
+        : await assignPhotoStudents(item.rawId, studentIds);
+      updateItem(itemUid, { saving: false, savedAt: Date.now(), skippedCount: result.skipped_no_consent.length });
+    } catch (err) {
+      updateItem(itemUid, {
+        saving: false,
+        error: err instanceof Error ? err.message : 'บันทึกผลลัพธ์ไม่สำเร็จ กรุณาลองใหม่',
+      });
+    }
+  };
+
+  const readyToAnalyzeCount = items.filter((item) => item.detections === null && !item.analyzing).length;
 
   return {
     inputRef,
-    file,
+    courses,
+    coursesLoading,
+    selectedCourseId,
+    setSelectedCourseId,
+    students,
+    studentsLoading,
+    items,
     dragActive,
     setDragActive,
-    analyzing,
-    detections,
-    saving,
-    savedAt,
-    isVideo,
-    pickFile,
+    analyzingAll,
+    batchError,
+    readyToAnalyzeCount,
+    pickFiles,
     handleDrop,
-    handleAnalyze,
-    clearFile,
+    removeItem,
+    clearAll,
+    analyzeAll,
     confirmDetection,
+    confirmAllPending,
     reassignDetection,
     removeDetection,
     addMissedStudent,
-    allReviewed,
-    handleConfirmAll,
+    saveItem,
+    isItemReviewed,
   };
 }
 

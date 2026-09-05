@@ -19,3 +19,29 @@ export async function fetchPostObjectURL(type: PostType, rawId: number): Promise
   const blob = await apiFetchBlob(path);
   return URL.createObjectURL(blob);
 }
+
+const EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
+
+/**
+ * ดาวน์โหลดโพสต์ลงเครื่องผู้ใช้ — โพสต์จะถูกลบอัตโนมัติหลังผ่านไป 7 วัน
+ * ต้องดึงเป็น blob ก่อนเสมอ (เหตุผลเดียวกับ fetchPostObjectURL) แล้วค่อยจำลองคลิกลิงก์ดาวน์โหลด
+ */
+export async function downloadPost(type: PostType, rawId: number): Promise<void> {
+  const path = type === "video" ? `/videos/${rawId}/raw` : `/photo-posts/${rawId}/raw`;
+  const blob = await apiFetchBlob(path);
+  const ext = EXT_BY_MIME[blob.type] ?? (type === "video" ? "mp4" : "jpg");
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `post-${rawId}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

@@ -7,6 +7,12 @@ export interface EvaluableStudent {
   profile_picture?: string;
 }
 
+/** คอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง */
+export interface EvaluableCourse {
+  course_id: number;
+  course_name: string;
+}
+
 export interface Evaluation {
   id: number;
   customer_id: number;

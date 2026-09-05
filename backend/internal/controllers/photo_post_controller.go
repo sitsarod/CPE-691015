@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -20,21 +23,31 @@ import (
 type PhotoPostController struct {
 	photoPostService *services.DetectedPhotoService
 	videoService     *services.DetectedVideoService
+	taggingService   *services.PhotoTaggingService
 	mediaStorage     services.MediaStorage
 	db               *gorm.DB
 }
 
-func NewPhotoPostController(photoPostService *services.DetectedPhotoService, videoService *services.DetectedVideoService, mediaStorage services.MediaStorage, db *gorm.DB) *PhotoPostController {
+func NewPhotoPostController(
+	photoPostService *services.DetectedPhotoService,
+	videoService *services.DetectedVideoService,
+	taggingService *services.PhotoTaggingService,
+	mediaStorage services.MediaStorage,
+	db *gorm.DB,
+) *PhotoPostController {
 	return &PhotoPostController{
 		photoPostService: photoPostService,
 		videoService:     videoService,
+		taggingService:   taggingService,
 		mediaStorage:     mediaStorage,
 		db:               db,
 	}
 }
 
 // UploadPhotoPost handles POST /api/photo-posts
-// โค้ช/แอดมินอัปโหลดรูป (ยังไม่ระบุว่าใครอยู่ในรูปบ้าง — ระบุทีหลังผ่าน AssignStudentsToPhoto)
+//
+// โค้ช/แอดมินอัปโหลดรูป แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในรูปบ้าง (ถ้าส่ง course_id มา)
+// ⚠️ ผลที่คืนไปเป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง — ต้องผ่าน AssignStudentsToPhoto อีกที
 func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
@@ -54,6 +67,17 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 		return
 	}
 
+	// course_id ไม่บังคับ — ไม่ส่งมาก็อัปโหลดได้ปกติ แค่ไม่มีการจำแนกให้
+	var courseID uint
+	if raw := c.PostForm("course_id"); raw != "" {
+		id, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
+			return
+		}
+		courseID = uint(id)
+	}
+
 	file, err := fh.Open()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
@@ -61,7 +85,15 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	}
 	defer file.Close()
 
-	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindPhotoPost, file, ext)
+	// อ่านเข้าหน่วยความจำครั้งเดียวแล้วใช้สองต่อ (เก็บไฟล์ + ส่งให้โมเดลจำแนก)
+	// ปลอดภัยเพราะ ValidateImageUpload คุมขนาดไว้ที่ MaxImageUploadBytes มาแล้ว
+	raw, err := io.ReadAll(io.LimitReader(file, MaxImageUploadBytes))
+	if err != nil || len(raw) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		return
+	}
+
+	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindPhotoPost, bytes.NewReader(raw), ext)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์รูปล้มเหลว"})
 		return
@@ -84,13 +116,31 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "อัปโหลดรูปสำเร็จ",
-		"data": dto.UploadPhotoPostResponse{
-			RawPhotoID: rawPhoto.ID,
-			PhotoURL:   rawPhoto.PhotoURL,
-		},
-	})
+	resp := dto.UploadPhotoPostResponse{
+		RawPhotoID: rawPhoto.ID,
+		PhotoURL:   rawPhoto.PhotoURL,
+		Students:   []dto.DetectedStudentSuggestion{},
+	}
+
+	// จำแนกใบหน้าแบบ best-effort — face-service ล่มหรือยังไม่ตั้งค่า ต้องไม่ทำให้อัปโหลดล้มเหลว
+	// (หลักการเดียวกับเช็คชื่อที่ยังใช้ QR ต่อได้เมื่อระบบใบหน้าใช้ไม่ได้) โค้ชแท็กเองได้อยู่แล้ว
+	if courseID != 0 && role == "coach" {
+		matches, faceCount, err := ctrl.taggingService.DetectStudentsInPhoto(c.Request.Context(), userID, courseID, raw)
+		if err != nil {
+			log.Printf("จำแนกใบหน้าในรูป raw_photo=%d ไม่สำเร็จ: %v", rawPhoto.ID, err)
+		} else {
+			resp.FaceCount = faceCount
+			for _, m := range matches {
+				resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
+					CustomerID: m.CustomerID,
+					Nickname:   m.Nickname,
+					Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
+				})
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "อัปโหลดรูปสำเร็จ", "data": resp})
 }
 
 // GetPhotoPostRaw handles GET /api/photo-posts/:raw_photo_id/raw — เนื้อไฟล์รูปจริง
