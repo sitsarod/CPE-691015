@@ -148,9 +148,6 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 		Status: string(status),
 		// เด้ง modal เฉพาะคนที่ยังไม่เคยตอบ — คนที่ปฏิเสธหรือถอนไปแล้วต้องไม่ถูกถามซ้ำ
 		// เพราะการถามย้ำจนกว่าจะยอมถือเป็นการบีบให้ยินยอม ซึ่งขัดหลักความยินยอมโดยอิสระ
-		//
-		// หมายเหตุสำหรับอนาคต: ถ้าแก้ข้อความประกาศจนขยับเวอร์ชัน อาจต้องขอความยินยอมใหม่
-		// จากคนที่เคยตอบ granted ตามเวอร์ชันเก่า — จุดนั้นให้เพิ่มเงื่อนไขตรงนี้
 		NeedsDecision:     status == models.FaceConsentUnknown,
 		CanUseFaceCheckIn: canUse,
 	}
@@ -164,6 +161,20 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 		res.ActedAt = &actedAt
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
+	}
+
+	// ⚠️ ยินยอมไว้ตามประกาศฉบับเก่า = ต้องขอใหม่
+	//
+	// ความยินยอมผูกกับ "ข้อความที่เจ้าของข้อมูลได้อ่าน" ไม่ใช่กับการกดปุ่ม
+	// พอข้อความเปลี่ยน ของเดิมจึงไม่ครอบคลุมสิ่งที่ระบบทำอยู่จริงอีกต่อไป
+	//
+	// เฉพาะคนที่เคยตอบ granted เท่านั้น — คนที่ปฏิเสธหรือถอนไปแล้วไม่ต้องถามซ้ำ
+	// (เหตุผลเดียวกับข้างบน) และระหว่างที่ยังไม่ยินยอมใหม่ ต้องปิดการสแกนใบหน้าไปก่อน
+	// เพราะเท่ากับประมวลผลโดยไม่มีความยินยอมที่ใช้ได้ · QR ยังใช้ได้ตามปกติ
+	if status == models.FaceConsentGranted && res.PolicyVersion != models.FaceConsentPolicyVersion {
+		res.NeedsDecision = true
+		res.CanUseFaceCheckIn = false
+		res.PolicyOutdated = true
 	}
 
 	return res, nil

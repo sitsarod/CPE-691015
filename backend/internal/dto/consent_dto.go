@@ -25,6 +25,12 @@ type FaceConsentStatusRes struct {
 	// NeedsDecision บอกหน้าเว็บว่าต้องเด้ง modal ขอความยินยอมหรือไม่
 	NeedsDecision bool `json:"needs_decision"`
 
+	// PolicyOutdated = เคยยินยอมไว้ แต่ตามประกาศฉบับเก่า จึงต้องยินยอมใหม่
+	//
+	// แยกจาก NeedsDecision เพราะข้อความที่ควรขึ้นคนละแบบ — คนกลุ่มนี้ไม่ใช่ผู้ใช้ใหม่
+	// ต้องบอกว่า "ประกาศมีการแก้ไข" ไม่ใช่ถามเหมือนไม่เคยเจอกัน
+	PolicyOutdated bool `json:"policy_outdated"`
+
 	// CanUseFaceCheckIn บอกว่าตอนนี้ใช้การเช็คชื่อด้วยใบหน้าได้หรือยัง
 	//
 	// รอบนี้ = (status == granted) เท่านั้น เพราะยังไม่มีระบบเก็บรูป
