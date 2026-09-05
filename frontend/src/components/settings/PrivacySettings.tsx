@@ -161,6 +161,19 @@ export default function PrivacySettings({ role }: Props) {
               />
             </div>
 
+            {/* ประกาศถูกแก้หลังจากที่ผู้ใช้กดยินยอม — ต้องบอกว่าเกิดอะไรขึ้น
+                ไม่ใช่ปล่อยให้เห็นแค่ว่าสแกนใบหน้าใช้ไม่ได้เฉย ๆ */}
+            {consent?.policy_outdated && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <p className="leading-relaxed">
+                  ประกาศการเก็บข้อมูลใบหน้ามีการแก้ไขหลังจากที่ท่านให้ความยินยอมไว้
+                  กรุณาอ่านและยืนยันใหม่อีกครั้ง — ระหว่างนี้ระบบปิดการสแกนใบหน้าไว้
+                  ท่านยังเช็คชื่อด้วย QR code ได้ตามปกติ
+                </p>
+              </div>
+            )}
+
             {consent?.acted_at && (
               <p className="text-xs text-gray-400 mt-3">
                 ตอบล่าสุดเมื่อ{" "}

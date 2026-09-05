@@ -9,8 +9,10 @@ export interface FaceConsentStatus {
   status: FaceConsentStatusValue;
   policy_version: string;
   acted_at: string | null;
-  /** true = ยังไม่เคยตอบ ต้องเด้ง modal ขอความยินยอม */
+  /** true = ยังไม่เคยตอบ หรือเคยตอบตามประกาศฉบับเก่า — ต้องเด้ง modal */
   needs_decision: boolean;
+  /** true = เคยยินยอมไว้แต่ประกาศถูกแก้ ต้องยินยอมใหม่ · สแกนใบหน้าปิดไว้ระหว่างนี้ */
+  policy_outdated: boolean;
   can_use_face_check_in: boolean;
 }
 
