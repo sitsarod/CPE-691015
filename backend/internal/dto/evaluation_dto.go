@@ -24,3 +24,9 @@ type EvaluableStudentResponse struct {
 	Nickname       string `json:"nickname"`
 	ProfilePicture string `json:"profile_picture,omitempty"`
 }
+
+// EvaluableCourseResponse คือคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง
+type EvaluableCourseResponse struct {
+	CourseID   uint   `json:"course_id"`
+	CourseName string `json:"course_name"`
+}

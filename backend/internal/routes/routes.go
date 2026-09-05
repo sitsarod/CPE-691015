@@ -106,11 +106,16 @@ func SetupRoutes(r *gin.Engine) {
 	// (ไม่ใช่ Cloudinary) เข้าถึงได้ผ่าน endpoint ที่เช็คสิทธิ์แล้วเท่านั้น (ดู GetVideoRaw/GetPhotoPostRaw)
 	mediaStorage := services.NewLocalMediaStorage()
 
+	// ตัวแปลงรูปเป็น embedding (face-service) — ใช้ร่วมกันทั้งเช็คชื่อด้วยใบหน้าและจำแนกคนในรูปโพสต์
+	faceEngine := services.NewHTTPFaceEngine()
+
 	videoService := services.NewDetectedVideoService(db)
 	videoController := controllers.NewVideoController(videoService, mediaStorage, db)
 
 	photoPostService := services.NewDetectedPhotoService(db)
-	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, mediaStorage, db)
+	// จำแนกนักเรียนในรูปที่โค้ชอัปโหลด — ใช้ roster ของ evaluationService เป็นกติกาว่าเทียบกับใครได้บ้าง
+	photoTaggingService := services.NewPhotoTaggingService(db, faceEngine, evaluationService)
+	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, photoTaggingService, mediaStorage, db)
 
 	// การลงทะเบียนใบหน้า — ไฟล์เก็บบน Cloudinary โหมด authenticated เท่านั้น
 	faceImageService := services.NewFaceImageService(db, cloudinaryService)
@@ -118,7 +123,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	// เช็คชื่อเข้าเรียน — แอดมินเปิดรอบที่สนาม นักเรียนเอา QR ประจำตัวมาสแกน
 	attendanceService := services.NewAttendanceService(db).
-		WithFaceEngine(services.NewHTTPFaceEngine())
+		WithFaceEngine(faceEngine)
 	attendanceController := controllers.NewAttendanceController(attendanceService)
 
 	// ระบบรีวิว/ให้คะแนนคอร์สและโค้ช
@@ -320,7 +325,8 @@ func SetupRoutes(r *gin.Engine) {
 		evaluationGroup := protected.Group("/evaluations")
 		{
 			evaluationGroup.POST("", evaluationController.CreateEvaluation)
-			evaluationGroup.GET("/students", evaluationController.GetMyStudents) // โค้ช: รายชื่อนักเรียนของตัวเอง
+			evaluationGroup.GET("/students", evaluationController.GetMyStudents) // โค้ช: รายชื่อนักเรียนของตัวเอง (?course_id= กรองเฉพาะคอร์ส)
+			evaluationGroup.GET("/courses", evaluationController.GetMyCourses)   // โค้ช: รายชื่อคอร์สที่ตัวเองสอน
 			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
 			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations) // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้
 			evaluationGroup.GET("/student/:customer_id", evaluationController.GetStudentEvaluations)

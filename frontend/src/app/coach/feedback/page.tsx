@@ -43,7 +43,7 @@ export default function CoachFeedbackPage() {
     fetchReviews();
   }, []);
 
-  const fetchReviews = async () => {
+  async function fetchReviews() {
     try {
       setLoading(true);
       const data = await reviewAPI.getCoachReviews();

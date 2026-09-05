@@ -53,7 +53,7 @@ export default function CustomerDashboardPage() {
     setShowWelcome(false);
   };
 
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       setLoading(true);
       const [annData, catData] = await Promise.all([

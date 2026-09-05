@@ -1,10 +1,18 @@
 // frontend/src/services/evaluationAPI.ts
 import { apiFetch } from "@/services/apiClient";
-import type { CreateEvaluationInput, EvaluableStudent, Evaluation } from "@/types/evaluation";
+import type { CreateEvaluationInput, EvaluableCourse, EvaluableStudent, Evaluation } from "@/types/evaluation";
 
 // [GET] รายชื่อนักเรียนที่ลงทะเบียนเรียนกับโค้ชที่ล็อกอินอยู่ (เฉพาะ role coach)
-export async function fetchMyStudents(): Promise<EvaluableStudent[]> {
-  const res = await apiFetch<{ data: EvaluableStudent[] }>("/evaluations/students");
+// courseId ไม่ใส่ = รวมทุกคอร์สเหมือนเดิม ใส่มา = กรองเฉพาะนักเรียนของคอร์สนั้น
+export async function fetchMyStudents(courseId?: number): Promise<EvaluableStudent[]> {
+  const qs = courseId != null ? `?course_id=${courseId}` : "";
+  const res = await apiFetch<{ data: EvaluableStudent[] }>(`/evaluations/students${qs}`);
+  return res.data ?? [];
+}
+
+// [GET] รายชื่อคอร์สที่โค้ชที่ล็อกอินอยู่มีตารางสอนอยู่จริง (เฉพาะ role coach)
+export async function fetchMyCourses(): Promise<EvaluableCourse[]> {
+  const res = await apiFetch<{ data: EvaluableCourse[] }>("/evaluations/courses");
   return res.data ?? [];
 }
 

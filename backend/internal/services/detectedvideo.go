@@ -2,8 +2,10 @@ package services
 
 import (
 	"CPE-691015/internal/models"
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -11,11 +13,18 @@ import (
 )
 
 type DetectedVideoService struct {
-	db *gorm.DB
+	db           *gorm.DB
+	mediaStorage MediaStorage
 }
 
 func NewDetectedVideoService(db *gorm.DB) *DetectedVideoService {
 	return &DetectedVideoService{db: db}
+}
+
+// WithMediaStorage ผูกที่เก็บไฟล์เข้ากับ service — ต้องเรียกก่อนใช้ DeleteOldRawVideos เท่านั้น
+func (s *DetectedVideoService) WithMediaStorage(ms MediaStorage) *DetectedVideoService {
+	s.mediaStorage = ms
+	return s
 }
 
 // ErrRawVideoForbidden ใช้เมื่อโค้ชพยายามจัดการ/ดูวิดีโอที่ไม่ใช่ของตัวเอง (กัน IDOR)
@@ -192,4 +201,36 @@ func (s *DetectedVideoService) GetDetectedVideosByRawVideoID(rawVideoID uint) ([
 		Preload("Customer.User").
 		Find(&list).Error
 	return list, err
+}
+
+// DeleteOldRawVideos ลบวิดีโอที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
+// เหตุผล/ลำดับการลบเหมือน DeletedPhotoService.DeleteOldRawPhotos ทุกอย่าง
+func (s *DetectedVideoService) DeleteOldRawVideos(olderThan time.Duration) (int64, error) {
+	if s.mediaStorage == nil {
+		return 0, nil
+	}
+
+	cutoff := time.Now().Add(-olderThan)
+
+	var videos []models.RawVideo
+	if err := s.db.Where("created_at < ?", cutoff).Find(&videos).Error; err != nil {
+		return 0, err
+	}
+
+	var deleted int64
+	for _, video := range videos {
+		if err := s.db.Unscoped().Where("raw_video_id = ?", video.ID).Delete(&models.DetectedVideo{}).Error; err != nil {
+			log.Printf("ลบแท็กของวิดีโอ id=%d ไม่สำเร็จ (ข้ามไปก่อน ลองใหม่รอบหน้า): %v", video.ID, err)
+			continue
+		}
+		if err := s.db.Unscoped().Delete(&models.RawVideo{}, video.ID).Error; err != nil {
+			log.Printf("ลบวิดีโอ id=%d ไม่สำเร็จ (ข้ามไปก่อน ลองใหม่รอบหน้า): %v", video.ID, err)
+			continue
+		}
+		if err := s.mediaStorage.Delete(context.Background(), MediaKindVideo, video.StorageKey); err != nil {
+			log.Printf("ลบไฟล์วิดีโอ id=%d ไม่สำเร็จ (แถวถูกลบไปแล้ว ต้องตามลบไฟล์ด้วยมือ): %v", video.ID, err)
+		}
+		deleted++
+	}
+	return deleted, nil
 }

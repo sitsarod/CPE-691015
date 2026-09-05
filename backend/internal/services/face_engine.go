@@ -31,9 +31,27 @@ type FaceEmbedResult struct {
 	Model     string
 }
 
+// FaceEmbedAllResult คือผลจากการวิเคราะห์ "ทุกใบหน้า" ในรูปหนึ่งใบ
+//
+// ใช้ตอนแท็กนักเรียนในรูปหมู่ที่มีหลายคน — ต่างจาก Embed ที่คืนใบหน้าเดียว
+// (ใบที่ใหญ่ที่สุด) ซึ่งออกแบบมาสำหรับเช็คชื่อทีละคน
+type FaceEmbedAllResult struct {
+	FaceCount int
+	Faces     []DetectedFaceEmbedding
+	Model     string
+}
+
+// DetectedFaceEmbedding คือหนึ่งใบหน้าที่เจอในรูป — ยังไม่รู้ว่าเป็นใคร
+type DetectedFaceEmbedding struct {
+	Embedding []float32
+	Quality   float64
+}
+
 type FaceEngine interface {
 	// Embed รับ "เนื้อไฟล์รูป" ดิบ ๆ (ไม่ใช่ base64 — ตัว implementation จัดการเอง)
 	Embed(ctx context.Context, image []byte) (*FaceEmbedResult, error)
+	// EmbedAll คืนทุกใบหน้าที่เจอในรูป (ไม่ใช่แค่ใบที่ใหญ่ที่สุดเหมือน Embed)
+	EmbedAll(ctx context.Context, image []byte) (*FaceEmbedAllResult, error)
 	// Enabled บอกว่าตั้งค่าครบพร้อมใช้งานไหม
 	Enabled() bool
 }
@@ -92,36 +110,54 @@ type embedResponse struct {
 	Model     string    `json:"model"`
 }
 
-func (e *HTTPFaceEngine) Embed(ctx context.Context, image []byte) (*FaceEmbedResult, error) {
+type embedAllResponse struct {
+	FaceCount int    `json:"face_count"`
+	Model     string `json:"model"`
+	Faces     []struct {
+		Embedding []float32 `json:"embedding"`
+		Quality   float64   `json:"quality"`
+	} `json:"faces"`
+}
+
+// postJSON ยิงรูปไปที่ path ที่กำหนดแล้ว decode ผลลงใน out
+// (ใช้ร่วมกันทั้ง /embed และ /embed-all — ต่างกันแค่ path กับรูปแบบผลลัพธ์)
+func (e *HTTPFaceEngine) postJSON(ctx context.Context, path string, image []byte, out any) error {
 	if !e.Enabled() {
-		return nil, ErrFaceEngineDisabled
+		return ErrFaceEngineDisabled
 	}
 
 	body, err := json.Marshal(embedRequest{Image: base64.StdEncoding.EncodeToString(image)})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+"/embed", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Service-Key", e.secret)
 
 	resp, err := e.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("เรียก face-service ไม่สำเร็จ: %w", err)
+		return fmt.Errorf("เรียก face-service ไม่สำเร็จ: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("face-service ตอบ HTTP %d", resp.StatusCode)
+		return fmt.Errorf("face-service ตอบ HTTP %d", resp.StatusCode)
 	}
 
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("%w: อ่าน response ไม่ได้", ErrFaceEngineBadResult)
+	}
+	return nil
+}
+
+func (e *HTTPFaceEngine) Embed(ctx context.Context, image []byte) (*FaceEmbedResult, error) {
 	var out embedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("%w: อ่าน response ไม่ได้", ErrFaceEngineBadResult)
+	if err := e.postJSON(ctx, "/embed", image, &out); err != nil {
+		return nil, err
 	}
 
 	// ตรวจสัญญาก่อนส่งต่อ — ถ้าโมเดลถูกเปลี่ยนแล้วคืนมิติไม่ตรง
@@ -137,6 +173,32 @@ func (e *HTTPFaceEngine) Embed(ctx context.Context, image []byte) (*FaceEmbedRes
 		FaceCount: out.FaceCount,
 		Embedding: out.Embedding,
 		Quality:   out.Quality,
+		Model:     out.Model,
+	}, nil
+}
+
+// EmbedAll คืนทุกใบหน้าที่เจอในรูป
+//
+// ⚠️ หน้าที่มิติไม่ตรงจะถูก "ข้าม" ไม่ใช่ทำให้ทั้งรูปล้มเหลว — ต่างจาก Embed ที่ผลลัพธ์
+// มีใบเดียวจึงต้องล้มทั้งคำขอ ที่นี่รูปหนึ่งใบมีหลายหน้า การทิ้งทั้งรูปเพราะหน้าเดียวเพี้ยน
+// ทำให้โค้ชแท็กคนที่เหลือไม่ได้เลยทั้งที่ข้อมูลใช้ได้
+func (e *HTTPFaceEngine) EmbedAll(ctx context.Context, image []byte) (*FaceEmbedAllResult, error) {
+	var out embedAllResponse
+	if err := e.postJSON(ctx, "/embed-all", image, &out); err != nil {
+		return nil, err
+	}
+
+	faces := make([]DetectedFaceEmbedding, 0, len(out.Faces))
+	for _, f := range out.Faces {
+		if len(f.Embedding) != faceEmbedDimensions {
+			continue
+		}
+		faces = append(faces, DetectedFaceEmbedding{Embedding: f.Embedding, Quality: f.Quality})
+	}
+
+	return &FaceEmbedAllResult{
+		FaceCount: out.FaceCount,
+		Faces:     faces,
 		Model:     out.Model,
 	}, nil
 }

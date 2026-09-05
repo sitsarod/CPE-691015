@@ -12,8 +12,8 @@ import (
 )
 
 type EvaluationController struct {
-	evalService    *services.EvaluationService
-	db             *gorm.DB
+	evalService *services.EvaluationService
+	db          *gorm.DB
 }
 
 func NewEvaluationController(evalService *services.EvaluationService, db *gorm.DB) *EvaluationController {
@@ -68,6 +68,8 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 
 // GetMyStudents handles GET /api/evaluations/students
 // โค้ชดึงรายชื่อนักเรียนที่ลงทะเบียนเรียนกับตัวเองอยู่จริง สำหรับเลือกไปประเมิน
+//
+// query ?course_id= (ไม่บังคับ) กรองเฉพาะนักเรียนของคอร์สนั้น — ไม่ใส่ = รวมทุกคอร์สเหมือนเดิม
 func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || role != "coach" {
@@ -75,7 +77,18 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 		return
 	}
 
-	students, err := ctrl.evalService.GetMyStudents(userID)
+	var courseID *uint
+	if raw := c.Query("course_id"); raw != "" {
+		id, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
+			return
+		}
+		cid := uint(id)
+		courseID = &cid
+	}
+
+	students, err := ctrl.evalService.GetMyStudents(userID, courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -87,6 +100,32 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 			CustomerID:     s.ID,
 			Nickname:       s.Nickname,
 			ProfilePicture: s.ProfilePicture,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// GetMyCourses handles GET /api/evaluations/courses
+// โค้ชดึงรายชื่อคอร์สที่ตัวเองมีตารางสอนอยู่จริง — ใช้เลือกก่อนดูรายชื่อนักเรียนแยกตามคอร์ส
+func (ctrl *EvaluationController) GetMyCourses(c *gin.Context) {
+	userID, role, ok := GetAuthContext(c)
+	if !ok || role != "coach" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อคอร์สของตัวเองได้"})
+		return
+	}
+
+	courses, err := ctrl.evalService.GetMyCourses(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	responses := make([]dto.EvaluableCourseResponse, 0, len(courses))
+	for _, course := range courses {
+		responses = append(responses, dto.EvaluableCourseResponse{
+			CourseID:   course.ID,
+			CourseName: course.CourseName,
 		})
 	}
 

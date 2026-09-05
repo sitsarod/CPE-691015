@@ -1,8 +1,11 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"CPE-691015/internal/models"
 )
@@ -81,6 +84,69 @@ func TestVerifyCanViewRawVideo(t *testing.T) {
 			t.Fatalf("ควรผ่าน แต่ได้: %v", err)
 		}
 	})
+}
+
+// วิดีโอที่อัปโหลดมาเกิน 7 วันต้องถูกลบถาวรทั้งแถว+แท็ก+ไฟล์จริง ส่วนที่เพิ่งอัปโหลดต้องไม่โดนหางเลข
+func TestDeleteOldRawVideos(t *testing.T) {
+	db := newTestDB(t, &models.RawVideo{}, &models.DetectedVideo{}, &models.Customer{})
+	cleanupPrivateMediaRoot(t)
+
+	storage := NewLocalMediaStorage()
+	svc := NewDetectedVideoService(db).WithMediaStorage(storage)
+	ctx := context.Background()
+
+	oldKey, err := storage.Save(ctx, MediaKindVideo, bytes.NewReader([]byte("old")), ".mp4")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์เก่าไม่สำเร็จ: %v", err)
+	}
+	newKey, err := storage.Save(ctx, MediaKindVideo, bytes.NewReader([]byte("new")), ".mp4")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์ใหม่ไม่สำเร็จ: %v", err)
+	}
+
+	oldVideo := models.RawVideo{StorageKey: oldKey, VideoURL: "/videos/1/raw"}
+	if err := db.Create(&oldVideo).Error; err != nil {
+		t.Fatalf("สร้างวิดีโอเก่าไม่สำเร็จ: %v", err)
+	}
+	if err := db.Model(&oldVideo).UpdateColumn("created_at", time.Now().Add(-10*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่ย้อนหลังไม่สำเร็จ: %v", err)
+	}
+
+	newVideo := models.RawVideo{StorageKey: newKey, VideoURL: "/videos/2/raw"}
+	if err := db.Create(&newVideo).Error; err != nil {
+		t.Fatalf("สร้างวิดีโอใหม่ไม่สำเร็จ: %v", err)
+	}
+
+	customer := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-video-retention"}
+	db.Create(&customer)
+	db.Create(&models.DetectedVideo{CustomerID: customer.ID, RawVideoID: oldVideo.ID, VideoURL: oldVideo.VideoURL})
+
+	deleted, err := svc.DeleteOldRawVideos(7 * 24 * time.Hour)
+	if err != nil {
+		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("ควรลบไป 1 วิดีโอ แต่ลบไป %d", deleted)
+	}
+
+	var remainingVideos int64
+	db.Model(&models.RawVideo{}).Count(&remainingVideos)
+	if remainingVideos != 1 {
+		t.Fatalf("ควรเหลือวิดีโอใหม่ 1 คลิป แต่เหลือ %d", remainingVideos)
+	}
+
+	var remainingTags int64
+	db.Model(&models.DetectedVideo{}).Count(&remainingTags)
+	if remainingTags != 0 {
+		t.Fatalf("แท็กของวิดีโอเก่าต้องถูกลบไปด้วย แต่ยังเหลือ %d", remainingTags)
+	}
+
+	if _, _, err := storage.Open(ctx, MediaKindVideo, oldKey); !errors.Is(err, ErrMediaNotFound) {
+		t.Fatalf("ไฟล์เก่าควรถูกลบไปจริง แต่ได้: %v", err)
+	}
+	if _, _, err := storage.Open(ctx, MediaKindVideo, newKey); err != nil {
+		t.Fatalf("ไฟล์ใหม่ไม่ควรถูกลบ แต่ได้: %v", err)
+	}
 }
 
 func TestManuallyAssignStudentsToVideoFiltersConsent(t *testing.T) {

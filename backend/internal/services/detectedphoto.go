@@ -2,18 +2,29 @@ package services
 
 import (
 	"CPE-691015/internal/models"
+	"context"
 	"errors"
 	"fmt"
+	"log"
+	"time"
 
 	"gorm.io/gorm"
 )
 
 type DetectedPhotoService struct {
-	db *gorm.DB
+	db           *gorm.DB
+	mediaStorage MediaStorage
 }
 
 func NewDetectedPhotoService(db *gorm.DB) *DetectedPhotoService {
 	return &DetectedPhotoService{db: db}
+}
+
+// WithMediaStorage ผูกที่เก็บไฟล์เข้ากับ service — ต้องเรียกก่อนใช้ DeleteOldRawPhotos เท่านั้น
+// (การอัปโหลด/ดูรูปปกติไม่ต้องใช้ ผ่าน MediaStorage ที่ controller ถืออยู่แล้วโดยตรง)
+func (s *DetectedPhotoService) WithMediaStorage(ms MediaStorage) *DetectedPhotoService {
+	s.mediaStorage = ms
+	return s
 }
 
 // ErrRawPhotoForbidden ใช้เมื่อโค้ชพยายามจัดการ/ดูรูปที่ไม่ใช่ของตัวเอง (กัน IDOR)
@@ -135,4 +146,44 @@ func (s *DetectedPhotoService) GetDetectedPhotosByRawPhotoID(rawPhotoID uint) ([
 		Preload("Customer.User").
 		Find(&list).Error
 	return list, err
+}
+
+// DeleteOldRawPhotos ลบรูปโพสต์ที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
+//
+// เรียกจาก background job รายวัน — ให้เวลาผู้ถูกแท็กดาวน์โหลดเก็บไว้เองก่อนถูกลบถาวร
+// (ปุ่มดาวน์โหลดอยู่ที่แท็บ Posts ในโปรไฟล์)
+//
+// ⚠️ ลบ DetectedPhoto (แท็ก) ก่อนเสมอ แล้วค่อยลบ RawPhoto — ถ้าสลับลำดับแล้วลบไฟล์/แถว
+// RawPhoto ไปก่อน DetectedPhoto ที่ยังชี้ถึงมันจะกลายเป็นแถวกำพร้าค้างอยู่ถาวร
+//
+// เป็น hard delete (Unscoped) เหมือนรูปใบหน้าอ้างอิง — เหตุผลเดียวกันคือเป็นรูปของคนจริง
+// ลบแล้วต้องหายจริง ไม่ใช่แค่ซ่อนจาก query ปกติ
+func (s *DetectedPhotoService) DeleteOldRawPhotos(olderThan time.Duration) (int64, error) {
+	if s.mediaStorage == nil {
+		return 0, nil // ยังไม่ได้ผูกที่เก็บไฟล์ไว้ ข้ามไปเงียบๆ เหมือน worker อื่นที่พึ่งพา dependency ภายนอก
+	}
+
+	cutoff := time.Now().Add(-olderThan)
+
+	var photos []models.RawPhoto
+	if err := s.db.Where("created_at < ?", cutoff).Find(&photos).Error; err != nil {
+		return 0, err
+	}
+
+	var deleted int64
+	for _, photo := range photos {
+		if err := s.db.Unscoped().Where("raw_photo_id = ?", photo.ID).Delete(&models.DetectedPhoto{}).Error; err != nil {
+			log.Printf("ลบแท็กของรูป id=%d ไม่สำเร็จ (ข้ามไปก่อน ลองใหม่รอบหน้า): %v", photo.ID, err)
+			continue
+		}
+		if err := s.db.Unscoped().Delete(&models.RawPhoto{}, photo.ID).Error; err != nil {
+			log.Printf("ลบรูป id=%d ไม่สำเร็จ (ข้ามไปก่อน ลองใหม่รอบหน้า): %v", photo.ID, err)
+			continue
+		}
+		if err := s.mediaStorage.Delete(context.Background(), MediaKindPhotoPost, photo.StorageKey); err != nil {
+			log.Printf("ลบไฟล์รูป id=%d ไม่สำเร็จ (แถวถูกลบไปแล้ว ต้องตามลบไฟล์ด้วยมือ): %v", photo.ID, err)
+		}
+		deleted++
+	}
+	return deleted, nil
 }

@@ -153,12 +153,78 @@ func TestGetMyStudents(t *testing.T) {
 	otherPkgID := seedCourseTaughtBy(t, db, 999) // สอนโดยโค้ชคนละคน
 	seedEnrolledCustomer(t, db, otherPkgID, models.EnrollmentStatusActive, "qr-other-coach")
 
-	students, err := svc.GetMyStudents(100)
+	students, err := svc.GetMyStudents(100, nil)
 	if err != nil {
 		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
 	}
 	if len(students) != 1 || students[0].ID != activeID {
 		t.Fatalf("ควรได้นักเรียนที่ active เท่านั้น 1 คน (id=%d) แต่ได้ %+v", activeID, students)
+	}
+}
+
+// เมื่อโค้ชสอนหลายคอร์ส course_id ต้องกรองให้เหลือแค่นักเรียนของคอร์สที่ระบุ ไม่ปนกันทุกคอร์ส
+// (แก้ปัญหา dropdown แท็กนักเรียนในหน้า detect ที่เจอชื่อจากทุกคอร์สปนกันมั่วไปหมด)
+func TestGetMyStudentsFiltersByCourse(t *testing.T) {
+	db := evalTestDB(t)
+	svc := NewEvaluationService(db)
+
+	coachA := seedCoachFor(t, db, 100, "uid-eval-course-filter")
+
+	pkgID1 := seedCourseTaughtBy(t, db, coachA)
+	pkgID2 := seedCourseTaughtBy(t, db, coachA) // อีกคอร์สที่โค้ชคนเดียวกันสอนด้วย
+
+	var pkg1 models.Package
+	if err := db.First(&pkg1, pkgID1).Error; err != nil {
+		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
+	}
+
+	studentA := seedEnrolledCustomer(t, db, pkgID1, models.EnrollmentStatusActive, "qr-course-a")
+	studentB := seedEnrolledCustomer(t, db, pkgID2, models.EnrollmentStatusActive, "qr-course-b")
+
+	t.Run("ไม่ระบุ course_id ได้นักเรียนทุกคอร์สรวมกัน", func(t *testing.T) {
+		students, err := svc.GetMyStudents(100, nil)
+		if err != nil {
+			t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+		}
+		ids := map[uint]bool{}
+		for _, s := range students {
+			ids[s.ID] = true
+		}
+		if len(students) != 2 || !ids[studentA] || !ids[studentB] {
+			t.Fatalf("ควรได้นักเรียนทั้งสองคอร์ส (id=%d,%d) แต่ได้ %+v", studentA, studentB, students)
+		}
+	})
+
+	t.Run("ระบุ course_id กรองเหลือแค่คอร์สนั้น", func(t *testing.T) {
+		courseID := pkg1.CourseID
+		students, err := svc.GetMyStudents(100, &courseID)
+		if err != nil {
+			t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+		}
+		if len(students) != 1 || students[0].ID != studentA {
+			t.Fatalf("ควรได้แค่นักเรียนของคอร์สที่ระบุ 1 คน (id=%d) แต่ได้ %+v", studentA, students)
+		}
+	})
+}
+
+// ต้องได้เฉพาะคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง ไม่ปนคอร์สของโค้ชคนอื่น
+func TestGetMyCourses(t *testing.T) {
+	db := evalTestDB(t)
+	svc := NewEvaluationService(db)
+
+	coachA := seedCoachFor(t, db, 100, "uid-eval-courses")
+	coachB := seedCoachFor(t, db, 200, "uid-eval-courses-b")
+
+	seedCourseTaughtBy(t, db, coachA)
+	seedCourseTaughtBy(t, db, coachA)
+	seedCourseTaughtBy(t, db, coachB) // คอร์สของโค้ชคนอื่น ไม่ควรติดมาด้วย
+
+	courses, err := svc.GetMyCourses(100)
+	if err != nil {
+		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+	}
+	if len(courses) != 2 {
+		t.Fatalf("ควรได้ 2 คอร์สที่โค้ชคนนี้สอน แต่ได้ %d", len(courses))
 	}
 }
 
