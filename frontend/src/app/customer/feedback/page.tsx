@@ -106,7 +106,7 @@ export default function CustomerFeedbackPage() {
     };
   }, [courseId]);
 
-  const loadData = async () => {
+  async function loadData() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
