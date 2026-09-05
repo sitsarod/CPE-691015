@@ -2,14 +2,21 @@ package dto
 
 import "time"
 
-// AdminFaceImageDTO คือรูปหนึ่งใบในมุมของแอดมิน — แนบชื่อ/รหัสนักเรียนมาด้วย
-// จะได้ไม่ต้องยิงถามทีละคน
+// AdminFaceImageDTO คือรูปหนึ่งใบในมุมของแอดมิน — แนบชื่อ/รหัสเจ้าของมาด้วย
+// จะได้ไม่ต้องยิงถามทีละคน · เจ้าของเป็นได้ทั้งนักเรียนและโค้ช
 //
 // ⚠️ ไม่มี StorageKey และ Embedding — ข้อมูลชีวภาพห้ามหลุดออก API
 // การดูรูปต้องผ่าน GET /api/face-images/:id/raw ที่ตรวจสิทธิ์ทุกครั้ง
 type AdminFaceImageDTO struct {
-	ID         uint   `json:"id"`
-	CustomerID uint   `json:"customer_id"`
+	ID uint `json:"id"`
+
+	// มีค่าแค่ช่องเดียวเสมอ — SubjectKind บอกว่าช่องไหน
+	CustomerID *uint `json:"customer_id"`
+	CoachID    *uint `json:"coach_id"`
+
+	// "customer" หรือ "coach" — หน้าเว็บใช้เลือกป้ายกำกับ
+	SubjectKind string `json:"subject_kind"`
+
 	Nickname   string `json:"nickname"`
 	MemberCode string `json:"member_code"`
 

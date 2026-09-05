@@ -39,7 +39,7 @@ import type {
   CoachRosterItem,
   RosterItem,
   AttendanceStatus,
-  FaceScanResult,
+  FaceLookup,
 } from "@/types/attendance";
 
 import QRScanner from "./components/QRScanner";
@@ -307,7 +307,7 @@ export default function AdminAttendancePage() {
   // ทำงานคู่ขนานกับ QR บนกล้องตัวเดียวกัน ไม่มีปุ่มสลับโหมด
   // เจอคนที่มั่นใจพอ → หยุดสแกน → เด้งการ์ดให้แอดมินยืนยัน → ค่อยบันทึก
 
-  const [faceCandidate, setFaceCandidate] = useState<FaceScanResult | null>(null);
+  const [faceCandidate, setFaceCandidate] = useState<FaceLookup | null>(null);
   const [faceFrame, setFaceFrame] = useState<Blob | null>(null);
   const [isConfirmingFace, setIsConfirmingFace] = useState(false);
 
@@ -322,12 +322,10 @@ export default function AdminAttendancePage() {
       faceInFlight.current = true;
       try {
         const result = await faceLookup(session.id, frame);
-        if (result.matched) {
-          setFaceCandidate(result);
-          // เก็บเฟรมที่ทำให้แมตช์ไว้ใช้ตอนกดยืนยัน
-          // backend จะ resolve ตัวตนใหม่จากรูปนี้อีกครั้ง ไม่ได้เชื่อ enrollment_id ที่เราส่ง
-          setFaceFrame(frame);
-        }
+        setFaceCandidate(result);
+        // เก็บเฟรมที่ทำให้แมตช์ไว้ใช้ตอนกดยืนยัน
+        // backend จะ resolve ตัวตนใหม่จากรูปนี้อีกครั้ง ไม่ได้เชื่อ id ที่เราส่ง
+        setFaceFrame(frame);
       } catch {
         // ⚠️ ต้องเงียบ — เฟรมส่วนใหญ่ไม่มีหน้าคนหรือจำไม่ได้ ซึ่งเป็นเรื่องปกติ
         // ถ้าเด้ง error ทุกครั้งจอจะกระพริบข้อความตลอดเวลาที่ไม่มีใครยืนอยู่
@@ -351,13 +349,25 @@ export default function AdminAttendancePage() {
     setOutcome(null);
     try {
       const result = await faceCheckIn(session.id, faceFrame);
-      setOutcome({
-        ok: true,
-        title: `เช็คชื่อสำเร็จ — ${result.full_name.trim() || result.nickname}`,
-        detail: result.is_off_schedule
-          ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
-          : `เหลือ ${result.remaining_sessions} ครั้ง`,
-      });
+      if (result.kind === "coach") {
+        const coach = result.coach;
+        setOutcome({
+          ok: true,
+          title: `เช็คชื่อสำเร็จ — โค้ช${coach.full_name.trim() || coach.nickname}`,
+          detail: coach.is_scheduled
+            ? `บันทึกเข้าสอนคาบ ${session.course_name} แล้ว`
+            : "ยังไม่ได้ลงตารางงานคาบนี้ไว้ — เพิ่มเป็นกรณีฉุกเฉินแล้ว กรุณาไปเติมสนาม",
+        });
+      } else {
+        const student = result.student;
+        setOutcome({
+          ok: true,
+          title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
+          detail: student.is_off_schedule
+            ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${student.remaining_sessions} ครั้ง`
+            : `เหลือ ${student.remaining_sessions} ครั้ง`,
+        });
+      }
     } catch (err: unknown) {
       setOutcome({
         ok: false,

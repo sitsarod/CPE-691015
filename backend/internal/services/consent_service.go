@@ -182,18 +182,23 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 
 // canUseFaceCheckIn = "สแกนหน้าได้จริงไหม" ไม่ใช่แค่ยินยอมแล้วหรือยัง
 // ต้องมีรูป ready อย่างน้อยหนึ่งใบ ไม่งั้นพาผู้ใช้ไปสแกนแล้วไม่มีอะไรให้เทียบ
-//
-// ⚠️ โค้ชคืน false เสมอ — face_images ไม่มี coach_id การเอา coaches.id ไป query
-// ด้วย customer_id จะไปตรงกับรูปของนักเรียนคนอื่นที่บังเอิญ id ตรงกัน
 func (s *ConsentService) canUseFaceCheckIn(subject *consentSubject, status models.FaceConsentStatus) (bool, error) {
-	if status != models.FaceConsentGranted || subject.CustomerID == nil {
+	if status != models.FaceConsentGranted {
+		return false, nil
+	}
+
+	q := s.db.Model(&models.FaceImage{}).Where("status = ?", models.FaceImageReady)
+	switch {
+	case subject.CoachID != nil:
+		q = q.Where("coach_id = ?", *subject.CoachID)
+	case subject.CustomerID != nil:
+		q = q.Where("customer_id = ?", *subject.CustomerID)
+	default:
 		return false, nil
 	}
 
 	var ready int64
-	if err := s.db.Model(&models.FaceImage{}).
-		Where("customer_id = ? AND status = ?", *subject.CustomerID, models.FaceImageReady).
-		Count(&ready).Error; err != nil {
+	if err := q.Count(&ready).Error; err != nil {
 		return false, errors.New("ไม่สามารถตรวจสอบรูปใบหน้าที่พร้อมใช้งานได้")
 	}
 	return ready > 0, nil
@@ -279,6 +284,11 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 		var err error
 		if subject.CoachID != nil {
 			files, err = DeleteCoachPhotos(tx, *subject.CoachID)
+			// รูปใบหน้าของโค้ชต้องหายด้วย — DeleteCoachPhotos แตะแค่ตาราง photos
+			// (ระบบรูปตัวเก่า) ถ้าไม่ลบตรงนี้จะเกิด "ถอนแล้วแต่ระบบยังจำหน้าได้"
+			if err == nil {
+				faceKeys, err = DeleteCoachFaceImages(tx, *subject.CoachID)
+			}
 		} else {
 			files, err = DeleteCustomerPhotos(tx, *subject.CustomerID)
 			if err == nil {

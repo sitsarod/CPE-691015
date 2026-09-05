@@ -6,7 +6,7 @@ import { Camera, CameraOff, Lock, ShieldCheck } from "lucide-react";
 import QRScanner from "./QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./ScanResult";
 import FaceConfirmCard from "./FaceConfirmCard";
-import type { CoachRosterItem, FaceScanResult } from "@/types/attendance";
+import type { CoachRosterItem, FaceLookup } from "@/types/attendance";
 
 const MIN_PIN_LENGTH = 4;
 const MAX_PIN_LENGTH = 8;
@@ -195,7 +195,7 @@ interface Props {
 
   // ─── สแกนใบหน้า (ไม่ส่งมา = ปิดฟีเจอร์ QR ยังทำงานปกติ) ───
   onFaceFrame?: (frame: Blob) => void;
-  faceCandidate?: FaceScanResult | null;
+  faceCandidate?: FaceLookup | null;
   isConfirmingFace?: boolean;
   onConfirmFace?: () => void;
   onCancelFace?: () => void;

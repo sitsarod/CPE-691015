@@ -155,6 +155,29 @@ type FaceScanResultDTO struct {
 	Margin     float64 `json:"margin"`
 }
 
+// CoachFaceScanResultDTO คือผลของจังหวะที่ 1 ตอนโค้ชสแกนใบหน้า
+//
+// ไม่มีโควตา/คอร์สเหมือนของนักเรียน แต่ยังต้องบอกล่วงหน้าว่ากดยืนยันแล้วจะติดอะไร
+type CoachFaceScanResultDTO struct {
+	CoachID  uint   `json:"coach_id"`
+	FullName string `json:"full_name"`
+	Nickname string `json:"nickname"`
+
+	Confidence float64 `json:"confidence"`
+	Margin     float64 `json:"margin"`
+
+	CanCheckIn bool   `json:"can_check_in"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// FaceLookupDTO ห่อผลการสแกนใบหน้าจังหวะที่ 1 ซึ่งเป็นได้ทั้งนักเรียนและโค้ช
+// (เหตุผลเดียวกับ ScanCheckInDTO — ฟิลด์สองฝั่งไม่ทับกัน)
+type FaceLookupDTO struct {
+	Kind    string                  `json:"kind"`
+	Student *FaceScanResultDTO      `json:"student,omitempty"`
+	Coach   *CoachFaceScanResultDTO `json:"coach,omitempty"`
+}
+
 type CheckInResultDTO struct {
 	AttendanceID uint   `json:"attendance_id"`
 	EnrollmentID uint   `json:"enrollment_id"`

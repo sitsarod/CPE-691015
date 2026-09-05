@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Loader2, ScanFace, X } from "lucide-react";
-import type { FaceScanResult } from "@/types/attendance";
+import type { FaceLookup } from "@/types/attendance";
 
 /**
  * การ์ดยืนยันตัวตนหลังระบบทายว่าเป็นใคร
@@ -13,7 +13,7 @@ import type { FaceScanResult } from "@/types/attendance";
  * โควตาที่จ่ายเงินมา ส่วนอีกคนได้เรียนฟรี ซึ่งย้อนกลับยาก — คนต้องเป็นด่านสุดท้ายเสมอ
  */
 interface Props {
-  candidate: FaceScanResult;
+  candidate: FaceLookup;
   isSubmitting: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -25,7 +25,18 @@ export default function FaceConfirmCard({
   onConfirm,
   onCancel,
 }: Props) {
-  const name = candidate.full_name.trim() || candidate.nickname;
+  // ดึงออกมาก่อน จะได้ไม่ต้องเช็ค kind ซ้ำทุกบรรทัดใน JSX
+  const isCoach = candidate.kind === "coach";
+  const person = isCoach ? candidate.coach : candidate.student;
+
+  const fullName = person.full_name.trim();
+  const nickname = person.nickname;
+  const name = fullName || nickname;
+
+  // โค้ชไม่มีคอร์สและโควตา บอกแค่บทบาทแทน
+  const subtitle = isCoach
+    ? "โค้ชผู้สอน"
+    : `${candidate.student.course_name} · เหลือ ${candidate.student.remaining_sessions} ครั้ง`;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
@@ -37,25 +48,21 @@ export default function FaceConfirmCard({
 
           <p className="mt-4 text-sm text-gray-500">ระบบคิดว่าเป็น</p>
           <h2 className="mt-1 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            {candidate.nickname || name}
+            {isCoach ? `โค้ช${nickname || name}` : nickname || name}
           </h2>
-          {candidate.full_name.trim() && (
-            <p className="mt-1 text-base text-gray-500">{candidate.full_name.trim()}</p>
-          )}
+          {fullName && <p className="mt-1 text-base text-gray-500">{fullName}</p>}
 
-          <p className="mt-3 text-sm text-gray-500">
-            {candidate.course_name} · เหลือ {candidate.remaining_sessions} ครั้ง
-          </p>
+          <p className="mt-3 text-sm text-gray-500">{subtitle}</p>
 
           {/* โชว์คะแนนให้แอดมินใช้ประกอบการตัดสินใจ ไม่ใช่ให้ระบบตัดสินแทน */}
           <p className="mt-2 text-xs text-gray-400">
-            ความมั่นใจ {(candidate.confidence * 100).toFixed(0)}%
-            {" · "}นำอันดับสอง {(candidate.margin * 100).toFixed(0)}%
+            ความมั่นใจ {(person.confidence * 100).toFixed(0)}%
+            {" · "}นำอันดับสอง {(person.margin * 100).toFixed(0)}%
           </p>
 
-          {!candidate.can_check_in && candidate.reason && (
+          {!person.can_check_in && person.reason && (
             <p className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm text-[#CC0000]">
-              {candidate.reason}
+              {person.reason}
             </p>
           )}
         </div>
@@ -71,7 +78,7 @@ export default function FaceConfirmCard({
           </button>
           <button
             onClick={onConfirm}
-            disabled={isSubmitting || !candidate.can_check_in}
+            disabled={isSubmitting || !person.can_check_in}
             className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#CC0000] text-lg font-bold text-white shadow-lg shadow-[#CC0000]/20 transition hover:bg-[#A30A0E] disabled:opacity-40"
           >
             {isSubmitting ? (

@@ -263,7 +263,12 @@ func (ctrl *AttendanceController) FaceCheckIn(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
+
+	message := "เช็คชื่อสำเร็จ"
+	if result.Kind == dto.ScanKindCoach {
+		message = "เช็คชื่อเข้าสอนสำเร็จ"
+	}
+	c.JSON(http.StatusOK, gin.H{"message": message, "data": result})
 }
 
 // ManualCheckIn [POST] /api/attendance/sessions/:id/manual

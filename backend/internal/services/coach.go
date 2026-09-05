@@ -12,6 +12,16 @@ import (
 
 type CoachService struct {
 	db *gorm.DB
+
+	// faceStorage ใช้ตอนลบโค้ช เพื่อลบไฟล์รูปใบหน้าบน Cloudinary ให้หมดจริง
+	// เป็น nil ได้ — ตั้งผ่าน WithFaceStorage ตอนประกอบ service ใน routes
+	faceStorage *CloudinaryService
+}
+
+// WithFaceStorage ผูกที่เก็บไฟล์รูปใบหน้าเข้ากับ service (แพตเทิร์นเดียวกับ UserService)
+func (s *CoachService) WithFaceStorage(cld *CloudinaryService) *CoachService {
+	s.faceStorage = cld
+	return s
 }
 
 // NewCoachService creates a new instance of CoachService
@@ -337,11 +347,21 @@ func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*m
 //     ทำให้เวลาว่าง/คาบสอนของโค้ชที่ลบแล้วยังค้างอยู่ในตาราง
 //   - ทำใน transaction เดียว ถ้าพลาดกลางทางจะ rollback ทั้งหมด ไม่เหลือสภาพครึ่ง ๆ กลาง ๆ
 func (s *CoachService) Delete(id uint) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	// เก็บ key ไว้ลบไฟล์ "หลัง commit" — Cloudinary rollback ไม่ได้
+	var faceKeys []string
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var coach models.Coach
 		if err := tx.First(&coach, id).Error; err != nil {
 			return err
 		}
+
+		// รูปใบหน้าเป็นข้อมูลชีวภาพ ต้องลบจริงพร้อมไฟล์ ไม่ใช่แค่แถว
+		keys, err := DeleteCoachFaceImages(tx, id)
+		if err != nil {
+			return err
+		}
+		faceKeys = keys
 
 		// 1) ลบข้อมูลที่ผูกกับโค้ช (Unscoped = ลบจริง ไม่ใช่ soft delete)
 		related := []interface{}{
@@ -369,4 +389,10 @@ func (s *CoachService) Delete(id uint) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	DestroyFaceImageFiles(s.faceStorage, faceKeys)
+	return nil
 }

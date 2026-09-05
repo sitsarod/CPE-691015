@@ -34,25 +34,33 @@ func IsValidFacePose(p FacePose) bool {
 	return slices.Contains(AllFacePoses, p)
 }
 
-// FaceImage คือรูปใบหน้าอ้างอิงของนักเรียนหนึ่งใบ พร้อม embedding ที่คำนวณจากรูปนั้น
+// FaceImage คือรูปใบหน้าอ้างอิงหนึ่งใบ พร้อม embedding ที่คำนวณจากรูปนั้น
+//
+// เจ้าของเป็นได้ทั้งนักเรียนและโค้ช — เดินตามแบบ BiometricConsent คือถือ id ทั้งสองช่อง
+// แบบ nullable แล้วบังคับด้วย CHECK ว่าต้องมีค่าแค่ช่องเดียว
 //
 // ⚠️ เป็นข้อมูลชีวภาพตาม PDPA ม.26 จึงไม่ใช้ gorm.Model โดยตั้งใจ เพื่อไม่ให้มี DeletedAt:
-// PDPA ต้องการการลบจริง และแถวที่ soft delete ยังกิน slot ของ unique (customer_id, pose)
+// PDPA ต้องการการลบจริง และแถวที่ soft delete ยังกิน slot ของ unique (เจ้าของ, pose)
 // ทำให้คนที่ถอนความยินยอมแล้วกลับมาถ่ายท่าเดิมใหม่ไม่ได้
 type FaceImage struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	CustomerID uint      `json:"customer_id" gorm:"not null;index;uniqueIndex:idx_face_customer_pose"`
+	// ⚠️ ต้องมีค่าแค่ช่องเดียวเสมอ CHECK เป็นด่านสุดท้ายที่โค้ดพลาดแล้วยังกันได้
+	CustomerID *uint     `json:"customer_id" gorm:"index;uniqueIndex:idx_face_customer_pose;check:chk_face_image_subject,(customer_id IS NULL) <> (coach_id IS NULL)"`
 	Customer   *Customer `json:"-" gorm:"foreignKey:CustomerID"`
+
+	CoachID *uint  `json:"coach_id" gorm:"index;uniqueIndex:idx_face_coach_pose"`
+	Coach   *Coach `json:"-" gorm:"foreignKey:CoachID"`
 
 	// public_id ของ Cloudinary (โหมด authenticated) ไม่ใช่ URL ที่เปิดตรงได้
 	// ห้ามส่งออก JSON — การดูรูปต้องผ่าน endpoint ที่ตรวจสิทธิ์แล้ว proxy ให้
 	StorageKey string `json:"-" gorm:"type:varchar(255);not null"`
 
-	// unique (customer_id, pose) — กันอัปซ้ำท่าเดิม และกันใช้เป็นที่ฝากไฟล์ไม่จำกัด
-	Pose   FacePose        `json:"pose" gorm:"type:varchar(10);not null;uniqueIndex:idx_face_customer_pose"`
+	// unique (เจ้าของ, pose) — กันอัปซ้ำท่าเดิม และกันใช้เป็นที่ฝากไฟล์ไม่จำกัด
+	// postgres ถือว่า NULL ไม่ซ้ำกัน แถวของโค้ชจึงไม่ไปชน index ของนักเรียนและกลับกัน
+	Pose   FacePose        `json:"pose" gorm:"type:varchar(10);not null;uniqueIndex:idx_face_customer_pose;uniqueIndex:idx_face_coach_pose"`
 	Status FaceImageStatus `json:"status" gorm:"type:varchar(20);not null;index;default:'pending'"`
 
 	// รูปแบบข้อความของ pgvector: "[0.01,-0.23,...]" 512 ตัว (ห้ามใช้ exponent)

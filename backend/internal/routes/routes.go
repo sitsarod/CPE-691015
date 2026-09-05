@@ -14,9 +14,14 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	db := config.DB
 
+	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
+	// ต้องสร้างก่อน service ที่ต้องใช้ลบไฟล์ตอนลบสมาชิก/โค้ช
+	cloudinaryService := services.NewCloudinaryService()
+
 	// Initialize services and controllers
 	// แก้จาก NewCoachService() เป็น NewCoachService(db) เพราะ struct เปลี่ยนไปใช้ DI pattern แล้ว
-	coachService := services.NewCoachService(db)
+	// ลบโค้ชต้องลบไฟล์รูปใบหน้าบนคลาวด์ตามไปด้วย จึงต้องรู้จัก Cloudinary
+	coachService := services.NewCoachService(db).WithFaceStorage(cloudinaryService)
 	coachController := controllers.NewCoachController(coachService)
 
 	// เพิ่มใหม่: CoachAvailability และ WorkSchedule ที่ยังไม่เคย wire เข้า router
@@ -35,9 +40,6 @@ func SetupRoutes(r *gin.Engine) {
 
 	billingService := services.NewBillingService(db)
 	billingController := controllers.NewBillingController(billingService)
-
-	// Cloudinary สำหรับเก็บไฟล์อัปโหลดบนคลาวด์ (nil = ยังไม่ตั้งค่า จะ fallback เก็บในเครื่อง)
-	cloudinaryService := services.NewCloudinaryService()
 
 	// การลบสมาชิกต้องลบไฟล์รูปใบหน้าบนคลาวด์ตามไปด้วย จึงต้องรู้จัก Cloudinary
 	userService := services.NewUserService(db).WithFaceStorage(cloudinaryService)
