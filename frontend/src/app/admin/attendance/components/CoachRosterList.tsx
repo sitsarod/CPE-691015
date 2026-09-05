@@ -53,9 +53,15 @@ export default function CoachRosterList({ coaches }: Props) {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-gray-800">
                   {c.full_name.trim() || c.nickname || `โค้ช #${c.coach_id}`}
-                  {/* มาสแกนทั้งที่ไม่ได้ถูก assign = ตารางงานไม่ตรงกับความจริง */}
-                  {!c.is_scheduled && (
+                  {/* สองสถานะคนละเรื่องกัน — is_emergency คือมอบหมายนอกกฎปกติ
+                      ส่วน !is_scheduled คือตารางถูกลบทีหลังจนบันทึกกลายเป็นกำพร้า */}
+                  {c.is_emergency && (
                     <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
+                      กรณีฉุกเฉิน
+                    </span>
+                  )}
+                  {!c.is_scheduled && (
+                    <span className="ml-2 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-semibold text-gray-600">
                       ไม่อยู่ในตารางงาน
                     </span>
                   )}

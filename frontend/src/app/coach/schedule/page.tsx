@@ -324,6 +324,13 @@ export default function CoachSchedulePage() {
               <DetailRow icon={BookOpen} label="คอร์ส" value={detail.course?.course_name || "-"} />
               <DetailRow icon={MapPin} label="สนาม" value={detail.court_number || "ไม่ระบุสนาม"} />
               <DetailRow icon={FileText} label="รายละเอียด" value={detail.description || "-"} />
+              {/* บอกโค้ชว่าทำไมคาบนี้ไม่มีสนาม — ไม่ใช่ข้อมูลหาย แต่ยังไม่มีใครกรอก */}
+              {detail.is_emergency && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  คาบนี้เป็นกรณีฉุกเฉิน
+                  {!detail.court_number && " — รอแอดมินระบุสนาม"}
+                </p>
+              )}
             </div>
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end">
               <button onClick={() => setDetail(null)} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">ปิด</button>

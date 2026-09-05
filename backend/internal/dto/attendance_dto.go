@@ -179,7 +179,10 @@ type CoachRosterItemDTO struct {
 	// เว้นว่างได้ตามการออกแบบเดิม (ยังไม่ระบุสนาม)
 	CourtNumber string `json:"court_number"`
 
-	// false = ไม่ได้อยู่ในตารางงานของคาบนี้ แต่มาสแกน
+	// true = ตารางงานแถวนี้เป็นกรณีฉุกเฉิน (สแกนเองหน้างาน หรือแอดมินติ๊กไว้)
+	IsEmergency bool `json:"is_emergency"`
+
+	// false = ตอนนี้ไม่มีตารางงานของคาบนี้แล้ว แต่มีบันทึกเช็คชื่อค้างอยู่
 	IsScheduled bool `json:"is_scheduled"`
 
 	// null = ยังไม่เช็คชื่อ
@@ -199,6 +202,10 @@ type CoachCheckInResultDTO struct {
 	CheckInMethod string    `json:"check_in_method"`
 	CheckInTime   time.Time `json:"check_in_time"`
 	SessionDate   string    `json:"session_date"` // YYYY-MM-DD
+
+	// false = ยังไม่ได้ถูก assign คาบนี้ ระบบเพิ่งสร้างตารางงานให้อัตโนมัติ
+	// หน้าคีออสต้องบอกตรงนั้นเลย เพราะแถวที่สร้างอัตโนมัติยังไม่มีสนาม
+	IsScheduled bool `json:"is_scheduled"`
 }
 
 // ScanCheckInDTO ห่อผลการสแกน ซึ่งรับได้ทั้ง QR นักเรียนและ QR โค้ช
