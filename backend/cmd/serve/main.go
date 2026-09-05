@@ -98,6 +98,34 @@ func startBillingOverdueJob() {
 	}()
 }
 
+// photoPostRetention คือระยะเวลาที่รูป/วิดีโอโพสต์ (RawPhoto/RawVideo) จะถูกเก็บไว้ก่อนลบถาวร
+// ให้เวลาผู้ถูกแท็กดาวน์โหลดเก็บไว้เองก่อน (ปุ่มดาวน์โหลดอยู่ที่แท็บ Posts ในโปรไฟล์)
+const photoPostRetention = 7 * 24 * time.Hour
+
+// startPhotoPostCleanupJob ลบรูป/วิดีโอโพสต์ที่เกิน photoPostRetention อัตโนมัติ
+// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง (ความถี่เดียวกับลบห้องแชทเก่า)
+func startPhotoPostCleanupJob() {
+	mediaStorage := services.NewLocalMediaStorage()
+	photoService := services.NewDetectedPhotoService(config.DB).WithMediaStorage(mediaStorage)
+	videoService := services.NewDetectedVideoService(config.DB).WithMediaStorage(mediaStorage)
+
+	go func() {
+		for {
+			if n, err := photoService.DeleteOldRawPhotos(photoPostRetention); err != nil {
+				log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติ %d รูป", n)
+			}
+			if n, err := videoService.DeleteOldRawVideos(photoPostRetention); err != nil {
+				log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติ %d คลิป", n)
+			}
+			time.Sleep(6 * time.Hour)
+		}
+	}()
+}
+
 // startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่รออยู่ ทุก 10 วินาที
 //
 // ⚠️ ต่างจาก job อื่นข้างบนตรงที่ใช้ ticker + context ไม่ใช่ time.Sleep
@@ -161,6 +189,9 @@ func main() {
 
 	// 3.4 เลื่อนสถานะบิลค้างชำระที่เลยวันครบกำหนดเป็นเกินกำหนด (overdue) อัตโนมัติ
 	startBillingOverdueJob()
+
+	// 3.4.1 ลบรูป/วิดีโอโพสต์ที่เกิน 7 วันอัตโนมัติ
+	startPhotoPostCleanupJob()
 
 	// 3.5 สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา (pending → awaiting_review/rejected)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
