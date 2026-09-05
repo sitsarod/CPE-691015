@@ -54,7 +54,10 @@ export interface CoachRosterItem {
 
   court_number: string; // เว้นว่างได้ (ยังไม่ระบุสนาม)
 
-  // false = ไม่ได้อยู่ในตารางงานของคาบนี้ แต่มาสแกน
+  // true = กรณีฉุกเฉิน — สแกนเองหน้างาน หรือแอดมินติ๊กไว้ตอน assign
+  is_emergency: boolean;
+
+  // false = ตอนนี้ไม่มีตารางงานของคาบนี้แล้ว แต่มีบันทึกเช็คชื่อค้างอยู่
   is_scheduled: boolean;
 
   // null = ยังไม่เช็คชื่อ
@@ -166,6 +169,9 @@ export interface CoachCheckInResult {
   check_in_method: CheckInMethod;
   check_in_time: string;
   session_date: string; // YYYY-MM-DD
+
+  // false = ยังไม่ได้ถูก assign คาบนี้ ระบบสร้างตารางงานให้อัตโนมัติตอนสแกน
+  is_scheduled: boolean;
 }
 
 // kind บอกว่าฟิลด์ไหนใช้ได้ · เขียนเป็น union เพื่อให้ TS บังคับเช็คก่อนแตะฟิลด์

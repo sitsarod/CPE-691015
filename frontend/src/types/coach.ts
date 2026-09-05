@@ -92,6 +92,8 @@ export interface WorkScheduleItem {
   course?: {
     course_name: string;
   };
+  /** กรณีฉุกเฉิน — โค้ชสแกนเองหน้างาน หรือแอดมินติ๊กไว้ตอนมอบหมาย */
+  is_emergency: boolean;
 }
 
 export interface CoachWageEntry {

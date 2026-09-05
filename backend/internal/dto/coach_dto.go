@@ -165,6 +165,9 @@ type WeekSessionCoach struct {
 	CoachID        uint   `json:"coach_id"`
 	CoachName      string `json:"coach_name"`
 	CourtNumber    string `json:"court_number"`
+
+	// true = มอบหมายนอกกฎปกติ (แอดมินติ๊กฉุกเฉิน หรือโค้ชสแกนเองหน้างาน)
+	IsEmergency bool `json:"is_emergency"`
 }
 
 type WeekSessionResponse struct {

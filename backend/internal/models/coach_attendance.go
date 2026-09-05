@@ -20,6 +20,15 @@ type CoachAttendance struct {
 	CheckInMethod CheckInMethod    `json:"check_in_method" gorm:"type:varchar(50)"`
 	Status        AttendanceStatus `json:"status" gorm:"type:varchar(20);default:'present'"`
 
+	// IsScheduled = ตอนสแกน โค้ชมีตารางงานของคาบนี้อยู่แล้วหรือไม่
+	//
+	// เป็นสแนปช็อต ณ เวลาที่สแกน (หลักเดียวกับ AttendanceSession.ScheduleStartTime)
+	// แอดมินแก้ตารางทีหลังค่านี้ต้องไม่เปลี่ยนตาม
+	//
+	// ⚠️ ห้ามใส่ default: — GORM ตัดฟิลด์ที่เป็น false ออกจาก INSERT เมื่อมี default tag
+	// แล้วปล่อยให้ฐานเติมให้ ผลคือแถวที่ควรเป็น false กลายเป็น true ทุกแถว
+	IsScheduled bool `json:"is_scheduled" gorm:"not null"`
+
 	// เตรียมไว้ให้การสแกนใบหน้าของโค้ช ยังไม่มีใครเขียนลง
 	SnapshotURL     string  `json:"snapshot_url" gorm:"type:varchar(255)"`
 	ConfidenceScore float64 `json:"confidence_score"`

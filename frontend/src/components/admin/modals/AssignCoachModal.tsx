@@ -187,6 +187,12 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                       <div className="min-w-0">
                         <span className="text-base font-semibold text-slate-800">{a.coach_name || `โค้ช #${a.coach_id}`}</span>
                         <span className="text-sm text-slate-400 ml-3">{a.court_number ? `สนาม ${a.court_number}` : "ไม่ระบุสนาม"}</span>
+                        {/* แถวฉุกเฉินไม่ผ่านกฎครบ ต้องเด่นพอให้แอดมินเห็นแล้วกดแก้ */}
+                        {a.is_emergency && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            กรณีฉุกเฉิน{!a.court_number && " — ยังไม่ได้ระบุสนาม"}
+                          </p>
+                        )}
                       </div>
 
                       {!isPast && (

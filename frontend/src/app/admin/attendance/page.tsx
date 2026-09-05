@@ -261,7 +261,11 @@ export default function AdminAttendancePage() {
           setOutcome({
             ok: true,
             title: `เช็คชื่อสำเร็จ — โค้ช${coach.full_name.trim() || coach.nickname}`,
-            detail: `บันทึกเข้าสอนคาบ ${session.course_name} แล้ว`,
+            // เตือนตรงหน้าเครื่องเลย เพราะตารางงานที่ระบบสร้างให้ยังไม่มีสนาม
+            // ถ้าไม่บอกตอนนี้จะไม่มีใครรู้ว่าต้องกลับไปเติม
+            detail: coach.is_scheduled
+              ? `บันทึกเข้าสอนคาบ ${session.course_name} แล้ว`
+              : "ยังไม่ได้ลงตารางงานคาบนี้ไว้ — เพิ่มให้อัตโนมัติแล้ว กรุณาไปเติมสนาม",
           });
         } else {
           const student = result.student;
@@ -471,6 +475,8 @@ export default function AdminAttendancePage() {
             : "โหลดข้อมูลรอบไม่สำเร็จ — ลองรีเฟรชหน้านี้"
         }
         onScan={runScan}
+        // session อาจเป็น null ตอนกู้โหมดสนามแล้วโหลดรอบไม่สำเร็จ — ล็อกต้องอยู่ต่อ
+        coaches={session?.coaches ?? []}
         // หยุดสแกนตอนมีการ์ดยืนยันค้างอยู่ด้วย ไม่งั้นจะทายคนถัดไปทับการ์ดที่เปิดอยู่
         paused={isCheckingIn || cooldown > 0 || faceCandidate !== null}
         pausedReason={

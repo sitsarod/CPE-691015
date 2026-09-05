@@ -35,6 +35,8 @@ export interface WeekSessionCoach {
   coach_id: number;
   coach_name: string;
   court_number: string;
+  /** มอบหมายนอกกฎปกติ — แอดมินติ๊กฉุกเฉิน หรือโค้ชสแกนเองหน้างาน */
+  is_emergency: boolean;
 }
 
 // คาบเรียน 1 คาบในสัปดาห์ (ขยายจาก PackageSchedule เป็นวันที่จริง)

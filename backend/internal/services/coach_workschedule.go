@@ -174,6 +174,7 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 			CourseID:          req.CourseID,
 			PackageID:         req.PackageID,
 			PackageScheduleID: req.PackageScheduleID,
+			IsEmergency:       req.IgnoreAvailability,
 		}
 		return tx.Create(&work).Error
 	})
@@ -291,6 +292,8 @@ func (s *workScheduleService) Update(id uint, req dto.CreateWorkScheduleRequest)
 			return err
 		}
 
+		// ไม่มี is_emergency โดยตั้งใจ — เป็นบันทึกว่าคาบนี้เคยถูกมอบหมายนอกกฎ
+		// การเติมสนามทีหลังไม่ได้ลบข้อเท็จจริงนั้นทิ้ง
 		updateData := map[string]interface{}{
 			"date":         req.Date,
 			"start_time":   req.StartTime,
@@ -469,6 +472,7 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 				CoachID:        w.CoachID,
 				CoachName:      name,
 				CourtNumber:    w.Courtnumber,
+				IsEmergency:    w.IsEmergency,
 			})
 		}
 		sess.AssignedCoaches = coaches

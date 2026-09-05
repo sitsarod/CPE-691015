@@ -6,7 +6,7 @@ import { Camera, CameraOff, Lock, ShieldCheck } from "lucide-react";
 import QRScanner from "./QRScanner";
 import ScanResultBanner, { type ScanOutcome } from "./ScanResult";
 import FaceConfirmCard from "./FaceConfirmCard";
-import type { FaceScanResult } from "@/types/attendance";
+import type { CoachRosterItem, FaceScanResult } from "@/types/attendance";
 
 const MIN_PIN_LENGTH = 4;
 const MAX_PIN_LENGTH = 8;
@@ -144,6 +144,41 @@ function Clock() {
   return <span className="text-2xl font-semibold tabular-nums text-gray-400">{now}</span>;
 }
 
+// CoachStrip บอกว่าโค้ชคนไหนเช็คชื่อแล้ว/ยัง
+//
+// จอนี้ตั้งใจให้โล่ง แต่คนคุมเครื่องต้องตอบได้ว่าใครยังไม่มา
+// จึงย่อเหลือชิปชื่อเล่นแถวเดียว ไม่ใช่ยกรายชื่อเต็มมาวาง
+function CoachStrip({ coaches }: { coaches: CoachRosterItem[] }) {
+  if (coaches.length === 0) return null;
+
+  const checkedIn = coaches.filter((c) => c.status === "present").length;
+
+  return (
+    <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-2 px-6 pb-3 text-sm">
+      <span className="font-medium text-gray-400">
+        โค้ช {checkedIn}/{coaches.length}
+      </span>
+      {coaches.map((c) => {
+        const present = c.status === "present";
+        return (
+          <span
+            key={c.coach_id}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ${
+              present ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full ${present ? "bg-green-500" : "bg-gray-400"}`}
+            />
+            {c.nickname || c.full_name.trim() || `#${c.coach_id}`}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 interface Props {
   pin: string;
   canScan: boolean;
@@ -153,6 +188,8 @@ interface Props {
   outcome: ScanOutcome | null;
   onDismissOutcome: () => void;
   onExit: () => void;
+
+  coaches: CoachRosterItem[];
 
   notice?: string;
 
@@ -177,6 +214,7 @@ export default function KioskMode({
   outcome,
   onDismissOutcome,
   onExit,
+  coaches,
   notice = "หมดเวลาเช็คชื่อของคาบนี้แล้ว",
   onFaceFrame,
   faceCandidate,
@@ -291,6 +329,8 @@ export default function KioskMode({
             </FrameCard>
           )}
         </main>
+
+        <CoachStrip coaches={coaches} />
 
         <footer className="relative flex shrink-0 items-center justify-between gap-3 px-6 pb-5 sm:px-10">
           {canScan ? (
