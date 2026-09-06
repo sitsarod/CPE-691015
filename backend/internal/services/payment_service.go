@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"CPE-691015/internal/models"
 )
 
@@ -32,6 +33,19 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 		return nil, errors.New("กรุณาระบุรายการบิลอย่างน้อย 1 รายการ")
 	}
 
+	// ตัดบิล ID ที่ซ้ำออกก่อน กันยอดถูกคิดซ้ำและ PaymentItem ซ้ำ
+	// (เดิมวน billingIDs ตรง ๆ ถ้า client ส่ง [5,5] มา ยอดจะเป็น 2 เท่าและได้ item ชี้บิลเดิมสองอัน)
+	seen := make(map[uint]struct{}, len(billingIDs))
+	uniqueBillingIDs := make([]uint, 0, len(billingIDs))
+	for _, id := range billingIDs {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueBillingIDs = append(uniqueBillingIDs, id)
+	}
+	billingIDs = uniqueBillingIDs
+
 	var invoice models.Invoice
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -40,7 +54,9 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 
 		for _, billingID := range billingIDs {
 			var billing models.Billing
-			if err := tx.First(&billing, billingID).Error; err != nil {
+			// ล็อกแถวบิล (FOR UPDATE) เพื่อให้คำขอสร้างใบแจ้งหนี้สำหรับบิลเดียวกันที่เข้ามาพร้อมกัน
+			// ถูกจัดคิวทีละอัน ไม่งั้นสองคำขอจะอ่านสถานะเดิมพร้อมกันแล้วสร้างใบซ้อนได้ (race)
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&billing, billingID).Error; err != nil {
 				return errors.New("ไม่พบข้อมูลบิล")
 			}
 
@@ -49,9 +65,26 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 				return errors.New("บิลนี้ไม่ใช่ของลูกค้าท่านนี้")
 			}
 
-			// ตรวจสอบสถานะว่าบิลถูกจ่ายไปแล้วหรือไม่
-			if billing.Status == models.StatusPaid {
+			// ออกใบแจ้งหนี้ได้เฉพาะบิลที่ยังไม่ได้เริ่มชำระเท่านั้น
+			// paid = จ่ายแล้ว, waitcheck = แนบสลิปรอตรวจอยู่ (ผ่านใบแจ้งหนี้อื่น) → ห้ามออกซ้อน
+			switch billing.Status {
+			case models.StatusPaid:
 				return errors.New("บิลนี้ชำระเงินเรียบร้อยแล้ว")
+			case models.StatusWaitCheck:
+				return errors.New("บิลนี้มีสลิปรอตรวจสอบการชำระเงินอยู่แล้ว")
+			}
+
+			// กันบิลถูกออกใบแจ้งหนี้ซ้อนกับใบที่ยัง active (pending) อยู่
+			// ปิดช่องกรณีสร้างใบแจ้งหนี้ใหม่ก่อนที่ใบเดิมจะถูกแนบสลิป (บิลยังเป็น unfunded อยู่)
+			var activeInvoiceCount int64
+			if err := tx.Model(&models.PaymentItem{}).
+				Joins("JOIN invoices ON invoices.id = payment_items.invoice_id").
+				Where("payment_items.billing_id = ? AND invoices.status = ?", billingID, models.InvoicePending).
+				Count(&activeInvoiceCount).Error; err != nil {
+				return err
+			}
+			if activeInvoiceCount > 0 {
+				return errors.New("บิลนี้มีใบแจ้งหนี้ที่รอดำเนินการอยู่แล้ว กรุณาชำระหรือยกเลิกใบเดิมก่อน")
 			}
 
 			totalAmount += billing.Amount
