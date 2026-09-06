@@ -303,6 +303,24 @@ export function coachStatusLabel(status: string): string {
   return COACH_STATUS_LABEL[status as AttendanceStatus] ?? status;
 }
 
+/**
+ * คำอธิบายผลของแต่ละสถานะฝั่งโค้ช — แสดงในโมดัลแก้สถานะก่อนแอดมินกดยืนยัน
+ *
+ * ⚠️ ข้อความนี้พูดเรื่องเงิน ต้องตรงกับ backend เสมอ
+ *
+ * เดิมเขียนว่า "ไม่กระทบค่าจ้าง" ซึ่งตรงกับพฤติกรรมสมัยนั้นจริง (การนับคาบ
+ * ไม่ได้ดูสถานะเช็คชื่อเลย โค้ชขาดงานก็ยังได้เงินเต็ม) แต่ตอนนี้แก้แล้ว
+ * คาบที่มีสถานะ absent จะไม่ถูกนับ ข้อความเดิมจึงกลายเป็นการบอกแอดมินผิด
+ * ในเรื่องที่เป็นเงินจริง
+ *
+ * เก็บไว้ที่เดียวให้ทุกหน้าดึงไปใช้ จะได้ไม่มีหน้าไหนตกค้างเป็นข้อความเก่า
+ * (ดู services/coach_workschedule.go — taughtScheduleScope)
+ */
+export const COACH_STATUS_NOTE: Record<AttendanceStatus, string> = {
+  present: "บันทึกว่ามาสอนคาบนี้ · นับเป็นคาบที่ได้ค่าจ้าง",
+  absent: "บันทึกว่าไม่ได้มาสอน · คาบนี้จะไม่ถูกนับค่าจ้าง",
+};
+
 export const METHOD_LABEL: Record<CheckInMethod, string> = {
   qr_code: "สแกน QR",
   manual: "แอดมินเช็คให้",

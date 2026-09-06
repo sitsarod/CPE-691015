@@ -97,6 +97,11 @@ func main() {
 		log.Fatalf("สร้าง index ของ embedding ใบหน้าไม่สำเร็จ: %v", err)
 	}
 
+	// อีเมลกับเลขบัตรประชาชนห้ามซ้ำ "เฉพาะคนที่ยังไม่ถูกลบ" (ดูเหตุผลในฟังก์ชัน)
+	if err := services.EnsureSoftDeleteUniqueIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของอีเมล/เลขบัตรประชาชนไม่สำเร็จ: %v", err)
+	}
+
 	seedBillingTypes(db)
 	seedAdmins(db)
 	seedCoaches(db)

@@ -63,7 +63,7 @@ export default function ImageCropModal({ src, onCancel, onConfirm, aspect = 1, m
     return { px: e.clientX - r.left, py: e.clientY - r.top };
   };
 
-  const startDrag = (kind: Drag["kind"]) => (e: React.PointerEvent) => {
+  const startDrag = (e: React.PointerEvent, kind: Drag["kind"]) => {
     e.stopPropagation();
     areaRef.current?.setPointerCapture(e.pointerId);
     const { px, py } = pos(e);
@@ -179,7 +179,7 @@ export default function ImageCropModal({ src, onCancel, onConfirm, aspect = 1, m
             {/* กรอบครอป — มืดนอกกรอบด้วยเงา, ลากตัวกรอบเพื่อเลื่อน */}
             {box.w > 0 && (
               <div
-                onPointerDown={startDrag("move")}
+                onPointerDown={(e) => startDrag(e, "move")}
                 className={`absolute cursor-move ${round ? "rounded-full" : "rounded"}`}
                 style={{
                   left: box.x,
@@ -194,7 +194,7 @@ export default function ImageCropModal({ src, onCancel, onConfirm, aspect = 1, m
                 {corners.map(({ c, cls }) => (
                   <span
                     key={c}
-                    onPointerDown={startDrag(c)}
+                    onPointerDown={(e) => startDrag(e, c)}
                     className={`absolute h-6 w-6 border-white ${cls} ${
                       c === "nw" || c === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"
                     }`}

@@ -95,6 +95,13 @@ func main() {
 		log.Fatalf("สร้าง index ของ embedding ใบหน้าไม่สำเร็จ: %v", err)
 	}
 
+	// อีเมลกับเลขบัตรประชาชนห้ามซ้ำ "เฉพาะคนที่ยังไม่ถูกลบ"
+	// ขั้นนี้รื้อ unique constraint เก่าที่ AutoMigrate เคยสร้างไว้ด้วย
+	// ถ้าล้มต้องหยุด เพราะแปลว่าตอนนี้ไม่มีอะไรกันอีเมลซ้ำเลย
+	if err := services.EnsureSoftDeleteUniqueIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของอีเมล/เลขบัตรประชาชนไม่สำเร็จ: %v", err)
+	}
+
 	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
 	if err := services.CleanupLegacyFacePhotos(db); err != nil {
 		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type CoachController struct {
@@ -287,18 +288,41 @@ func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 	c.JSON(http.StatusOK, toCoachResponse(coach))
 }
 
-// DeleteCoach handles DELETE /api/coaches/:id
+// DeleteCoach handles DELETE /api/coaches/:id (admin เท่านั้น — คุมที่ชั้น route)
+//
+// ลบแบบ soft delete: โปรไฟล์โค้ชกับบัญชีผู้ใช้หายจากระบบ เวลาว่างและคาบสอนในอนาคต
+// ถูกถอดออกจากปฏิทิน ส่วนประวัติเช็คชื่อ คาบสอนที่ผ่านมาแล้ว และเอกสารการเงิน
+// ยังอยู่ครบเพราะใช้คิดค่าจ้างย้อนหลัง (นโยบายเต็มอยู่ที่ services.DeleteUserAccount)
 func (ctrl *CoachController) DeleteCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสโค้ชไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
-	if err := ctrl.service.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete coach: " + err.Error()})
+	// ต้องรู้ว่าใครกดลบ เพื่อส่งต่อให้ด่านกันลบบัญชีตัวเองใน DeleteUserAccount
+	actorUserID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "coach deleted"})
+	if err := ctrl.service.Delete(uint(id), actorUserID); err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ต้องการลบ"})
+		// 409 Conflict — คำขอถูกต้อง แต่ขัดกับสถานะปัจจุบันของระบบ ไม่ใช่ 400 ที่แปลว่าส่งข้อมูลมาผิด
+		case errors.Is(err, services.ErrDeleteSelf),
+			errors.Is(err, services.ErrLastAdmin),
+			errors.Is(err, services.ErrCoachNoAccount):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			// ไม่ส่ง err.Error() กลับไป — error ของ GORM มักติดชื่อตาราง ชื่อคอลัมน์
+			// และบางครั้งมีเศษ SQL ไปด้วย ซึ่งช่วยคนที่กำลังสำรวจระบบมากกว่าช่วยผู้ใช้
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลโค้ชได้"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ลบข้อมูลโค้ชสำเร็จแล้ว"})
 }
