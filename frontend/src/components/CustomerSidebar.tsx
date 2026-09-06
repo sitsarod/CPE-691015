@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 
 const navItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -20,6 +20,11 @@ const primaryItems = [
   { href: "/customer/overview", icon: <LayoutDashboard />, label: "แดชบอร์ด" },
   { href: "/customer/payment", icon: <Wallet />, label: "การเงิน" },
   { href: "/customer/enrollment", icon: <ClipboardList />, label: "คอร์ส" },
+];
+
+const settingsItems = [
+  { href: "/customer/settings/privacy", icon: ShieldCheck, label: "ความเป็นส่วนตัว" },
+  { href: "/customer/settings/face", icon: ScanFace, label: "ลงทะเบียนใบหน้า" },
 ];
 
 export default function CustomerSidebar() {
@@ -149,6 +154,30 @@ export default function CustomerSidebar() {
                       <span className={`text-xs font-semibold leading-tight ${active ? "text-[#CC0000]" : "text-gray-700"}`}>
                         {item.label}
                       </span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex flex-col gap-2">
+                <span className="px-1 text-xs font-bold text-gray-500">การตั้งค่า</span>
+
+                {settingsItems.map(({ href, icon: Icon, label }) => {
+                  const active = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition-colors ${
+                        active ? "border-[#CC0000] bg-[#FFF0F0]" : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Icon className="h-6 w-6 flex-shrink-0 text-[#CC0000]" />
+                      <span className={`flex-1 text-sm font-semibold ${active ? "text-[#CC0000]" : "text-gray-700"}`}>
+                        {label}
+                      </span>
+                      <ChevronRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
                     </Link>
                   );
                 })}

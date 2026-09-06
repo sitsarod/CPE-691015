@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Settings, User, LogOut, ShieldCheck } from "lucide-react";
+import { Settings, User, LogOut, ShieldCheck, ScanFace } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function CoachTopbar() {
@@ -79,8 +79,6 @@ export default function CoachTopbar() {
                 โปรไฟล์ของฉัน
               </Link>
 
-              {/* ทางลัดไปหน้าความยินยอม PDPA — ตาม ม.19 วรรคห้า การถอนความยินยอม
-                  ต้องทำได้ง่ายเท่ากับตอนให้ ถ้าซ่อนลึกจะถือว่าไม่ได้จัดให้ถอนได้โดยง่าย */}
               <Link
                 href="/coach/settings/privacy"
                 onClick={() => setIsSettingsOpen(false)}
@@ -88,6 +86,15 @@ export default function CoachTopbar() {
               >
                 <ShieldCheck className="w-5 h-5" />
                 ความเป็นส่วนตัว
+              </Link>
+
+              <Link
+                href="/coach/settings/face"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
+              >
+                <ScanFace className="w-5 h-5" />
+                ลงทะเบียนใบหน้า
               </Link>
 
               <hr className="my-1 border-gray-100" />

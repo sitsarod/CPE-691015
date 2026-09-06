@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Loader2, RotateCcw, X, Check } from "lucide-react";
+import { Loader2, RotateCcw, X, Check } from "lucide-react";
 import { FacePose, POSE_HINT, POSE_LABEL } from "@/types/faceImage";
 
 /** ย่อรูปให้ด้านยาวสุดไม่เกินค่านี้ก่อนส่ง — พอสำหรับโมเดลและไม่กินแบนด์วิดท์ */
@@ -199,41 +199,67 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
           </div>
         )}
 
-        <div className="px-5 py-4 flex gap-3 justify-end">
+        <div className="grid grid-cols-3 items-center px-5 py-5">
           {preview ? (
             <>
-              <button
-                onClick={handleRetake}
-                disabled={isUploading}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                <RotateCcw className="w-4 h-4" />
-                ถ่ายใหม่
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={isUploading}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white bg-[#CC0000] hover:bg-[#a50000] disabled:opacity-50"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
-                ใช้รูปนี้
-              </button>
+              <div className="justify-self-start">
+                <button
+                  onClick={handleRetake}
+                  disabled={isUploading}
+                  aria-label="ถ่ายใหม่"
+                  className="grid h-12 w-12 place-items-center rounded-full border border-gray-300 text-gray-600 transition hover:bg-gray-50 active:scale-95 disabled:opacity-40"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="justify-self-center">
+                <button
+                  onClick={handleConfirm}
+                  disabled={isUploading}
+                  aria-label="ใช้รูปนี้"
+                  className="grid h-20 w-20 place-items-center rounded-full border-4 border-gray-200 transition active:scale-95 disabled:opacity-40"
+                >
+                  <span className="grid h-[3.75rem] w-[3.75rem] place-items-center rounded-full bg-[#CC0000] text-white">
+                    {isUploading ? (
+                      <Loader2 className="h-7 w-7 animate-spin" />
+                    ) : (
+                      <Check className="h-8 w-8" strokeWidth={2.5} />
+                    )}
+                  </span>
+                </button>
+              </div>
+
+              <span className="justify-self-end text-xs text-gray-400">
+                {isUploading ? "กำลังอัปโหลด..." : "ใช้รูปนี้"}
+              </span>
             </>
           ) : (
-            <button
-              onClick={() => setCountdown(COUNTDOWN_SECONDS)}
-              disabled={!!cameraError || countdown !== null}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white bg-[#CC0000] hover:bg-[#a50000] disabled:opacity-50"
-            >
-              <Camera className="w-4 h-4" />
-              {countdown !== null ? "กำลังนับถอยหลัง..." : "ถ่ายรูป"}
-            </button>
+            <>
+              <span />
+
+              <div className="justify-self-center">
+                <button
+                  onClick={() => setCountdown(COUNTDOWN_SECONDS)}
+                  disabled={!!cameraError || countdown !== null}
+                  aria-label="ถ่ายรูป"
+                  className="grid h-20 w-20 place-items-center rounded-full border-4 border-gray-300 transition active:scale-95 disabled:opacity-40"
+                >
+                  <span
+                    className={`rounded-full bg-[#CC0000] transition-all duration-200 ${
+                      countdown !== null ? "h-10 w-10" : "h-[3.75rem] w-[3.75rem]"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <span className="justify-self-end text-xs text-gray-400">
+                {countdown !== null ? "กำลังนับ..." : "แตะเพื่อถ่าย"}
+              </span>
+            </>
           )}
         </div>
+
       </div>
     </div>
   );

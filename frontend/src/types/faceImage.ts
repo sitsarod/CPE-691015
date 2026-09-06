@@ -36,10 +36,14 @@ export const POSE_HINT: Record<FacePose, string> = {
   right: "หันหน้าไปทางขวาประมาณ 20 องศา ตายังมองกล้อง",
 };
 
-/** รูปหนึ่งใบในมุมของแอดมิน — แนบชื่อเจ้าของมาด้วย (ตรงกับ dto.AdminFaceImageDTO) */
+/** รูปหนึ่งใบในมุมของแอดมิน — เจ้าของเป็นได้ทั้งนักเรียนและโค้ช (ตรงกับ dto.AdminFaceImageDTO) */
 export interface AdminFaceImage {
   id: number;
-  customer_id: number;
+
+  customer_id: number | null;
+  coach_id: number | null;
+  subject_kind: "customer" | "coach";
+
   nickname: string;
   member_code: string;
   pose: FacePose;

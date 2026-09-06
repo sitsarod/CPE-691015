@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { MessageCircleMore, Settings, User, LogOut } from "lucide-react";
+import { MessageCircleMore, Settings, User, LogOut, ShieldCheck, ScanFace } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { OPEN_CHAT_EVENT, chatOwner, chatSessionKey, chatLastViewedKey } from "@/components/ChatWidget";
 import { autoQaAPI } from "@/services/autoQaAPI";
@@ -136,7 +136,25 @@ export default function CustomerTopbar() {
                 <User className="w-5 h-5" />
                 ตั้งค่าโปรไฟล์
               </Link>
-              
+
+              <Link
+                href="/customer/settings/privacy"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                ความเป็นส่วนตัว
+              </Link>
+
+              <Link
+                href="/customer/settings/face"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2.5 text-gray-700 hover:bg-[#FFF0F0] hover:text-[#CC0000] flex items-center gap-3 transition-colors font-medium"
+              >
+                <ScanFace className="w-5 h-5" />
+                ลงทะเบียนใบหน้า
+              </Link>
+
               <hr className="my-1 border-gray-100" />
               
               <button
