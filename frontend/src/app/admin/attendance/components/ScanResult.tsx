@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 
-const AUTO_DISMISS_MS = 3000;
+const AUTO_DISMISS_MS = 2000;
 
 export type ScanOutcome = {
   ok: boolean;

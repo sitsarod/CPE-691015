@@ -51,7 +51,7 @@ import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
 
 
-const SCAN_COOLDOWN_SECONDS = 3;
+const SCAN_COOLDOWN_SECONDS = 5;
 
 // จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
 const KIOSK_STORAGE_KEY = "attendance_kiosk";
@@ -113,7 +113,7 @@ export default function AdminAttendancePage() {
   // QR ใบเดิมยังอยู่ในกรอบหลังบันทึกเสร็จ ถ้าอ่านต่อทันทีจะอ่านซ้ำแล้วโดนด่านกันซ้ำ
   // ปฏิเสธ — แถบแดงจะขึ้นทับแถบเขียวที่เพิ่งสำเร็จไป
   //
-  // สามวินาทีพอให้เดินออกจากกรอบ และพอให้อ่านผลบนแถบสีทันก่อนจอเปลี่ยน
+  // ห้าวินาทีพอให้เดินออกจากกรอบ และพอให้อ่านผลบนแถบสีทันก่อนจอเปลี่ยน
   const [cooldown, setCooldown] = useState(0);
 
   // นับถอยหลังทีละวินาที — setState อยู่ใน callback ของ setTimeout ไม่ใช่ในตัว effect
@@ -279,9 +279,7 @@ export default function AdminAttendancePage() {
           setOutcome({
             ok: true,
             title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
-            detail: student.is_off_schedule
-              ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${student.remaining_sessions} ครั้ง`
-              : `เหลือ ${student.remaining_sessions} ครั้ง`,
+            detail: `เหลือ ${student.remaining_sessions} ครั้ง`,
           });
         }
       } catch (err: unknown) {
@@ -322,6 +320,21 @@ export default function AdminAttendancePage() {
       faceInFlight.current = true;
       try {
         const result = await faceLookup(session.id, frame);
+        const person = result.kind === "coach" ? result.coach : result.student;
+
+        // คนที่เช็คชื่อไปแล้วกดยืนยันไม่ได้อยู่แล้ว (ปุ่มในการ์ดถูก disable ตาม can_check_in)
+        // การ์ดเต็มจอที่มีปุ่มเดียวให้กดคือ "ไม่ใช่" จึงไม่ได้ช่วยอะไร
+        // ขึ้นแถบเล็กแบบเดียวกับตอนยื่น QR ซ้ำแทน แล้วพักกล้องไว้เหมือนกัน
+        if (!person.can_check_in) {
+          setOutcome({
+            ok: false,
+            title: person.full_name.trim() || person.nickname,
+            detail: person.reason || "เช็คชื่อในรอบนี้ไปแล้ว",
+          });
+          startCooldown();
+          return;
+        }
+
         setFaceCandidate(result);
         // เก็บเฟรมที่ทำให้แมตช์ไว้ใช้ตอนกดยืนยัน
         // backend จะ resolve ตัวตนใหม่จากรูปนี้อีกครั้ง ไม่ได้เชื่อ id ที่เราส่ง
@@ -334,7 +347,7 @@ export default function AdminAttendancePage() {
         faceInFlight.current = false;
       }
     },
-    [session]
+    [session, startCooldown]
   );
 
   const cancelFace = useCallback(() => {
@@ -363,9 +376,7 @@ export default function AdminAttendancePage() {
         setOutcome({
           ok: true,
           title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
-          detail: student.is_off_schedule
-            ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${student.remaining_sessions} ครั้ง`
-            : `เหลือ ${student.remaining_sessions} ครั้ง`,
+          detail: `เหลือ ${student.remaining_sessions} ครั้ง`,
         });
       }
     } catch (err: unknown) {
@@ -393,9 +404,7 @@ export default function AdminAttendancePage() {
       setOutcome({
         ok: true,
         title: `เช็คชื่อให้ ${result.full_name.trim() || result.nickname} แล้ว`,
-        detail: result.is_off_schedule
-          ? `ไม่ได้ยืนยันว่าจะมาคาบนี้ — บันทึกเป็น "มาไม่ตรงวัน" · เหลือ ${result.remaining_sessions} ครั้ง`
-          : `เหลือ ${result.remaining_sessions} ครั้ง`,
+        detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
       });
       await refreshSession();
     } catch (err: unknown) {

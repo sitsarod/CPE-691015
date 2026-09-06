@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  CheckCheck,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -83,13 +84,25 @@ export default function FaceReviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyID, setBusyID] = useState<number | null>(null);
-  const [rejecting, setRejecting] = useState<AdminFaceImage | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // เก็บเป็นลิสต์เสมอ ปฏิเสธรูปเดียวคือลิสต์ที่มีสมาชิกตัวเดียว
+  // ทั้งสองทางจึงผ่านช่องกรอกเหตุผลอันเดียวกัน ไม่ต้องมี modal สองชุด
+  const [rejectTargets, setRejectTargets] = useState<AdminFaceImage[] | null>(null);
   const [reason, setReason] = useState("");
 
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const folders = useMemo(() => groupByOwner(images), [images]);
   const openFolder = folders.find((f) => f.key === openKey) ?? null;
+
+  // อนุมัติทั้งหมดจงใจข้ามรูปที่ยัง "กำลังประมวลผล"
+  //
+  // รูปสถานะนั้นยังไม่มี embedding และ worker หยิบเฉพาะแถว pending พอกดอนุมัติ
+  // สถานะกลายเป็น ready แล้ว worker จะไม่มาเก็บอีกเลย ได้รูปที่ขึ้นว่าพร้อมใช้งาน
+  // แต่สแกนหน้าไม่มีวันเจอ และแก้ไม่ได้นอกจากลบทิ้งถ่ายใหม่
+  // กดทีละใบยังพลาดแบบนั้นได้เหมือนเดิม แต่ปุ่มชุดไม่ควรทำให้พลาดทีเดียวหลายใบ
+  const approvable = openFolder?.images.filter((i) => i.status === "awaiting_review") ?? [];
+  const rejectable = openFolder?.images.filter((i) => i.status !== "rejected") ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -134,19 +147,37 @@ export default function FaceReviewPage() {
     }
   };
 
-  const handleReject = async () => {
-    if (!rejecting) return;
-    setBusyID(rejecting.id);
-    try {
-      await reviewFaceImage(rejecting.id, "reject", reason);
-      setRejecting(null);
-      setReason("");
-      await refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "ปฏิเสธไม่สำเร็จ");
-    } finally {
-      setBusyID(null);
+  // ยิงทีละรูปเพราะ backend ไม่มี endpoint แบบชุด — ทำทีละใบทำให้รู้ว่าใบไหนพลาด
+  // แล้วรายงานเป็นจำนวน แทนที่จะล้มทั้งชุดเพราะใบเดียว
+  const runBulk = async (
+    targets: AdminFaceImage[],
+    action: "approve" | "reject",
+    why?: string
+  ) => {
+    setBulkBusy(true);
+    let failed = 0;
+    for (const image of targets) {
+      try {
+        await reviewFaceImage(image.id, action, why);
+      } catch {
+        failed++;
+      }
     }
+    await refresh();
+    // ต้องตั้งหลัง refresh เพราะ refresh เคลียร์ error เป็น null เมื่อโหลดสำเร็จ
+    if (failed > 0) {
+      setError(`ทำรายการไม่สำเร็จ ${failed} จาก ${targets.length} รูป`);
+    }
+    setBulkBusy(false);
+  };
+
+  const handleReject = async () => {
+    if (!rejectTargets) return;
+    const targets = rejectTargets;
+    const why = reason;
+    setRejectTargets(null);
+    setReason("");
+    await runBulk(targets, "reject", why);
   };
 
   return (
@@ -171,9 +202,44 @@ export default function FaceReviewPage() {
               <span className="text-base font-normal text-gray-400">{openFolder.memberCode}</span>
             )}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {openFolder.kind === "coach" ? "โค้ช" : "นักเรียน"} · {openFolder.images.length} รูป
-          </p>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-gray-500">
+              {openFolder.kind === "coach" ? "โค้ช" : "นักเรียน"} · {openFolder.images.length} รูป
+            </p>
+
+            {(approvable.length > 0 || rejectable.length > 0) && (
+              <div className="flex gap-2">
+                {approvable.length > 0 && (
+                  <button
+                    onClick={() => runBulk(approvable, "approve")}
+                    disabled={bulkBusy || busyID !== null}
+                    className="flex items-center gap-1.5 rounded-xl bg-green-700 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-green-800 disabled:opacity-40"
+                  >
+                    {bulkBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCheck className="h-4 w-4" />
+                    )}
+                    อนุมัติทั้งหมด ({approvable.length})
+                  </button>
+                )}
+
+                {rejectable.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setRejectTargets(rejectable);
+                      setReason("");
+                    }}
+                    disabled={bulkBusy || busyID !== null}
+                    className="flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-[#CC0000] transition-colors hover:bg-red-100 disabled:opacity-40"
+                  >
+                    <X className="h-4 w-4" />
+                    ปฏิเสธทั้งหมด ({rejectable.length})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <>
@@ -318,7 +384,7 @@ export default function FaceReviewPage() {
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={() => handleApprove(image)}
-                        disabled={busyID === image.id || image.status === "ready"}
+                        disabled={busyID === image.id || bulkBusy || image.status === "ready"}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-white bg-green-700 hover:bg-green-800 disabled:opacity-40"
                       >
                         {busyID === image.id ? (
@@ -330,10 +396,10 @@ export default function FaceReviewPage() {
                       </button>
                       <button
                         onClick={() => {
-                          setRejecting(image);
+                          setRejectTargets([image]);
                           setReason("");
                         }}
-                        disabled={busyID === image.id}
+                        disabled={busyID === image.id || bulkBusy}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-[#CC0000] bg-red-50 hover:bg-red-100 disabled:opacity-40"
                       >
                         <X className="w-4 h-4" />
@@ -348,15 +414,26 @@ export default function FaceReviewPage() {
         </div>
       )}
 
-      {rejecting && (
+      {rejectTargets && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5">
             <h2 className="font-bold text-gray-900 mb-1">
-              ปฏิเสธรูปของ {rejecting.nickname || (rejecting.subject_kind === "coach" ? "โค้ช" : "นักเรียน")}
+              {rejectTargets.length > 1
+                ? `ปฏิเสธ ${rejectTargets.length} รูปของ ${rejectTargets[0].nickname || "คนนี้"}`
+                : `ปฏิเสธรูปของ ${
+                    rejectTargets[0].nickname ||
+                    (rejectTargets[0].subject_kind === "coach" ? "โค้ช" : "นักเรียน")
+                  }`}
             </h2>
             <p className="text-xs text-gray-500 mb-4">
               ไฟล์รูปจะถูกลบออกจากระบบทันที เหลือไว้แต่เหตุผลให้เจ้าตัวเห็นเพื่อถ่ายใหม่
+              {rejectTargets.some((i) => i.status === "ready") &&
+                " · มีรูปที่ใช้เช็คชื่ออยู่ตอนนี้รวมอยู่ด้วย ปฏิเสธแล้วจะสแกนหน้าไม่ได้จนกว่าจะถ่ายใหม่"}
             </p>
+
+            {rejectTargets.length > 1 && (
+              <p className="mb-3 text-xs text-gray-500">เหตุผลนี้จะถูกใช้กับทุกรูปที่เลือก</p>
+            )}
 
             <textarea
               value={reason}
@@ -368,17 +445,17 @@ export default function FaceReviewPage() {
 
             <div className="flex gap-3 justify-end mt-4">
               <button
-                onClick={() => setRejecting(null)}
+                onClick={() => setRejectTargets(null)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleReject}
-                disabled={!reason.trim() || busyID === rejecting.id}
+                disabled={!reason.trim() || bulkBusy}
                 className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-[#CC0000] hover:bg-[#a50000] disabled:opacity-40"
               >
-                ยืนยันปฏิเสธ
+                {rejectTargets.length > 1 ? `ยืนยันปฏิเสธ ${rejectTargets.length} รูป` : "ยืนยันปฏิเสธ"}
               </button>
             </div>
           </div>
