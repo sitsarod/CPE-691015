@@ -836,7 +836,7 @@ export default function AdminAttendancePage() {
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/มาไม่ตรงวัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/นอกเหนือจากยืนยัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
           <div className="flex items-baseline gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-500">เช็คแล้ว</span>
             <span className="text-2xl font-bold leading-none text-gray-900">

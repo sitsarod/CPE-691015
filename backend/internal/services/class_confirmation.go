@@ -68,10 +68,11 @@ func classConfirmDeadline(classDate time.Time, startTime string) time.Time {
 type confirmKey struct {
 	enrollmentID uint
 	date         string
+	start        string
 }
 
-func keyOf(enrollmentID uint, date time.Time) confirmKey {
-	return confirmKey{enrollmentID: enrollmentID, date: date.Format("2006-01-02")}
+func keyOf(enrollmentID uint, date time.Time, startTime string) confirmKey {
+	return confirmKey{enrollmentID: enrollmentID, date: date.Format("2006-01-02"), start: startTime}
 }
 
 // horizonDates คืนวันที่ทั้งหมดในช่วงที่เปิดให้ยืนยัน เริ่มจากวันนี้
@@ -123,6 +124,7 @@ func (s *ClassConfirmationService) GetMyUpcoming(userID uint) ([]dto.UpcomingCla
 		Preload("Package.Course").
 		Preload("Package.Schedules").
 		Where("customer_id = ? AND status = ?", customerID, models.EnrollmentStatusActive).
+		Order("id ASC").
 		Find(&enrollments).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงข้อมูลคอร์สของคุณได้")
 	}
@@ -143,7 +145,18 @@ func (s *ClassConfirmationService) GetMyUpcoming(userID uint) ([]dto.UpcomingCla
 		return nil, err
 	}
 
-	result := make([]dto.UpcomingClassDTO, 0)
+	//
+	//
+	type classKey struct {
+		date       string
+		courseID   uint
+		start, end string
+	}
+
+	grouped := make(map[classKey]*dto.UpcomingClassDTO)
+	order := make([]classKey, 0)
+	members := make(map[classKey][]*models.Enrollment)
+
 	for _, date := range dates {
 		weekday := date.Weekday().String()
 
@@ -158,31 +171,49 @@ func (s *ClassConfirmationService) GetMyUpcoming(userID uint) ([]dto.UpcomingCla
 					continue
 				}
 
-				status := dto.ConfirmationStatusPending
-				if s, ok := answered[keyOf(e.ID, date)]; ok {
-					status = string(s)
+				key := classKey{
+					date:     date.Format("2006-01-02"),
+					courseID: e.Package.CourseID,
+					start:    sch.StartTime,
+					end:      sch.EndTime,
+				}
+				members[key] = append(members[key], e)
+
+				if _, seen := grouped[key]; !seen {
+					deadline := classConfirmDeadline(date, sch.StartTime)
+					courseName := ""
+					if e.Package.Course != nil {
+						courseName = e.Package.Course.CourseName
+					}
+					grouped[key] = &dto.UpcomingClassDTO{
+						CourseName:      courseName,
+						ClassDate:       key.date,
+						DayOfWeek:       weekday,
+						StartTime:       sch.StartTime,
+						EndTime:         sch.EndTime,
+						Status:          dto.ConfirmationStatusPending,
+						ConfirmDeadline: deadline.Format(time.RFC3339),
+						IsOpen:          now.Before(deadline),
+					}
+					order = append(order, key)
 				}
 
-				deadline := classConfirmDeadline(date, sch.StartTime)
-				courseName := ""
-				if e.Package.Course != nil {
-					courseName = e.Package.Course.CourseName
+				if st, ok := answered[keyOf(e.ID, date, sch.StartTime)]; ok && st == models.ClassConfirmationGoing {
+					grouped[key].Status = string(st)
 				}
-
-				result = append(result, dto.UpcomingClassDTO{
-					EnrollmentID:    e.ID,
-					PackageID:       e.PackageID,
-					CourseName:      courseName,
-					ClassDate:       date.Format("2006-01-02"),
-					DayOfWeek:       weekday,
-					StartTime:       sch.StartTime,
-					EndTime:         sch.EndTime,
-					Status:          status,
-					ConfirmDeadline: deadline.Format(time.RFC3339),
-					IsOpen:          now.Before(deadline),
-				})
 			}
 		}
+	}
+
+	result := make([]dto.UpcomingClassDTO, 0, len(order))
+	for _, key := range order {
+		item := grouped[key]
+
+		rep := pickUsableEnrollmentPtr(members[key])
+		item.EnrollmentID = rep.ID
+		item.PackageID = rep.PackageID
+
+		result = append(result, *item)
 	}
 
 	sortClasses(result)
@@ -204,7 +235,7 @@ func (s *ClassConfirmationService) loadAnswers(enrollmentIDs []uint, from, to ti
 	}
 
 	for _, r := range rows {
-		out[keyOf(r.EnrollmentID, r.ClassDate)] = r.Status
+		out[keyOf(r.EnrollmentID, r.ClassDate, r.ScheduleStartTime)] = r.Status
 	}
 	return out, nil
 }
@@ -315,8 +346,25 @@ func (s *ClassConfirmationService) CancelConfirmation(userID uint, req dto.Cance
 		return nil, err
 	}
 
+	//
+	targets := []uint{enrollment.ID}
+	if enrollment.Package != nil {
+		ids, err := classPackageIDs(s.db, enrollment.Package.CourseID,
+			classDate.Weekday().String(), sch.StartTime, sch.EndTime)
+		if err != nil {
+			return nil, err
+		}
+		if siblings, err := customerClassEnrollments(s.db, enrollment.CustomerID, ids, false); err == nil {
+			targets = targets[:0]
+			for i := range siblings {
+				targets = append(targets, siblings[i].ID)
+			}
+		}
+	}
+
 	if err := s.db.Unscoped().
-		Where("enrollment_id = ? AND class_date = ?", enrollment.ID, classDate).
+		Where("enrollment_id IN ? AND class_date = ? AND schedule_start_time = ?",
+			targets, classDate, sch.StartTime).
 		Delete(&models.ClassConfirmation{}).Error; err != nil {
 		return nil, errors.New("ไม่สามารถยกเลิกการยืนยันได้")
 	}
@@ -352,10 +400,9 @@ func (s *ClassConfirmationService) Confirm(userID uint, req dto.ConfirmClassReq)
 	// ยืนยันซ้ำ = UPDATE แถวเดิม ให้ฐานตัดสินด้วย ON CONFLICT แทนอ่านก่อนแล้วเขียน
 	// เพราะกดรัว ๆ พร้อมกันจะอ่านเจอ "ยังไม่มีแถว" ได้ทั้งคู่แล้ว insert ชนกัน
 	if err := s.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "enrollment_id"}, {Name: "class_date"}},
+		Columns: []clause.Column{{Name: "enrollment_id"}, {Name: "class_date"}, {Name: "schedule_start_time"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"status", "responded_at", "updated_at",
-			"schedule_start_time", "schedule_end_time",
+			"status", "responded_at", "updated_at", "schedule_end_time",
 		}),
 	}).Create(&row).Error; err != nil {
 		return nil, errors.New("ไม่สามารถบันทึกการยืนยันได้")
@@ -419,7 +466,22 @@ func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, err
 		return nil, err
 	}
 
-	result := make([]dto.ClassHeadcountDTO, 0)
+	type slotKey struct {
+		date       string
+		courseID   uint
+		start, end string
+	}
+	type slot struct {
+		anchor  *models.Package
+		sch     models.PackageSchedule
+		weekday string
+		people  map[uint]bool
+		going   map[uint]bool
+	}
+
+	slots := make(map[slotKey]*slot)
+	order := make([]slotKey, 0)
+
 	for _, date := range dates {
 		weekday := date.Weekday().String()
 
@@ -431,32 +493,54 @@ func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, err
 				continue
 			}
 
-			var going, total int
+			key := slotKey{date.Format("2006-01-02"), pkg.CourseID, sch.StartTime, sch.EndTime}
+			sl, seen := slots[key]
+			if !seen {
+				sl = &slot{anchor: pkg, sch: sch, weekday: weekday,
+					people: map[uint]bool{}, going: map[uint]bool{}}
+				slots[key] = sl
+				order = append(order, key)
+			}
+			if pkg.ID < sl.anchor.ID {
+				sl.anchor = pkg
+			}
+
 			for _, e := range byPackage[pkg.ID] {
 				if !canAttend(e, date) {
 					continue
 				}
-				total++
-				if answered[keyOf(e.ID, date)] == models.ClassConfirmationGoing {
-					going++
+				sl.people[e.CustomerID] = true
+				if answered[keyOf(e.ID, date, sch.StartTime)] == models.ClassConfirmationGoing {
+					sl.going[e.CustomerID] = true
 				}
 			}
+		}
+	}
 
-			if total == 0 {
-				continue
-			}
+	result := make([]dto.ClassHeadcountDTO, 0, len(order))
+	for _, key := range order {
+		sl := slots[key]
+
+		total, going := len(sl.people), len(sl.going)
+		if total == 0 {
+			continue
+		}
+
+		{
+			pkg, sch, date := sl.anchor, sl.sch, key.date
+			classDate, _ := time.ParseInLocation("2006-01-02", date, appLocation())
 
 			item := dto.ClassHeadcountDTO{
 				PackageID: pkg.ID,
 				CourseID:  pkg.CourseID,
-				ClassDate: date.Format("2006-01-02"),
-				DayOfWeek: weekday,
+				ClassDate: date,
+				DayOfWeek: sl.weekday,
 				StartTime: sch.StartTime,
 				EndTime:   sch.EndTime,
 				Total:     total,
 				Going:     going,
 				Pending:   total - going,
-				IsClosed:  !now.Before(classConfirmDeadline(date, sch.StartTime)),
+				IsClosed:  !now.Before(classConfirmDeadline(sessionDateValue(classDate), sch.StartTime)),
 			}
 			if pkg.Course != nil {
 				item.CourseName = pkg.Course.CourseName
@@ -498,12 +582,22 @@ func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string
 		return nil, ErrClassNotFound
 	}
 
+	classIDs, err := classPackageIDs(s.db, pkg.CourseID,
+		classDate.Weekday().String(), sch.StartTime, sch.EndTime)
+	if err != nil {
+		return nil, err
+	}
+	if len(classIDs) == 0 {
+		classIDs = []uint{packageID}
+	}
+
 	// ต้อง preload Customer.User ด้วย ไม่งั้นชื่อ-นามสกุลว่างทั้งรายการ
 	var enrollments []models.Enrollment
 	if err := s.db.
 		Preload("Customer").
 		Preload("Customer.User").
-		Where("package_id = ? AND status = ?", packageID, models.EnrollmentStatusActive).
+		Where("package_id IN ? AND status = ?", classIDs, models.EnrollmentStatusActive).
+		Order("id ASC").
 		Find(&enrollments).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายชื่อผู้เรียนได้")
 	}
@@ -516,7 +610,8 @@ func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string
 	var rows []models.ClassConfirmation
 	if len(enrollmentIDs) > 0 {
 		if err := s.db.
-			Where("enrollment_id IN ? AND class_date = ?", enrollmentIDs, classDate).
+			Where("enrollment_id IN ? AND class_date = ? AND schedule_start_time = ?",
+				enrollmentIDs, classDate, sch.StartTime).
 			Find(&rows).Error; err != nil {
 			return nil, errors.New("ไม่สามารถดึงสถานะการยืนยันได้")
 		}
@@ -541,13 +636,16 @@ func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string
 		out.CourseName = pkg.Course.CourseName
 	}
 
+	// เกณฑ์เดียวกับที่ใช้นับยอด
+	usable := make([]models.Enrollment, 0, len(enrollments))
 	for i := range enrollments {
-		e := &enrollments[i]
-
-		// เกณฑ์เดียวกับที่ใช้นับยอด
-		if !canAttend(e, classDate) {
-			continue
+		if canAttend(&enrollments[i], classDate) {
+			usable = append(usable, enrollments[i])
 		}
+	}
+
+	for _, group := range groupEnrollmentsByCustomer(usable) {
+		e := pickUsableEnrollmentPtr(group)
 
 		item := dto.ClassRosterItemDTO{
 			EnrollmentID: e.ID,
@@ -562,8 +660,11 @@ func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string
 			}
 		}
 
-		if conf, ok := answered[e.ID]; ok {
-			item.Status = string(conf.Status)
+		for _, cand := range group {
+			if conf, ok := answered[cand.ID]; ok && conf.Status == models.ClassConfirmationGoing {
+				item.Status = string(conf.Status)
+				break
+			}
 		}
 
 		if item.Status == dto.ConfirmationStatusGoing {

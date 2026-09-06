@@ -311,7 +311,7 @@ export const STATUS_TONE: Record<AttendanceStatus, string> = {
   absent: "bg-red-100 text-red-700",
 };
 
-export const OFF_SCHEDULE_LABEL = "มาไม่ตรงวัน";
+export const OFF_SCHEDULE_LABEL = "นอกเหนือจากยืนยัน";
 export const OFF_SCHEDULE_TONE = "bg-amber-100 text-amber-700";
 
 // สถานะเก่าที่ถอดออกแล้วแต่ยังมีแถวค้างอยู่ในฐานข้อมูล

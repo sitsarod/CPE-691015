@@ -562,7 +562,7 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 			return nil, err
 		}
 		for _, c := range confs {
-			goingSet[keyOf(c.EnrollmentID, sessionDateValue(c.ClassDate))] = true
+			goingSet[keyOf(c.EnrollmentID, sessionDateValue(c.ClassDate), c.ScheduleStartTime)] = true
 		}
 	}
 
@@ -615,7 +615,7 @@ func (s *workScheduleService) GetWeekSessions(weekStart string) ([]dto.WeekSessi
 					continue
 				}
 				entry.TotalCount++
-				if goingSet[keyOf(e.ID, classDate)] {
+				if goingSet[keyOf(e.ID, classDate, sch.StartTime)] {
 					entry.GoingCount++
 				}
 			}
