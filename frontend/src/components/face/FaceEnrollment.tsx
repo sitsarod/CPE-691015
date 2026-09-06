@@ -35,10 +35,16 @@ import FaceImageThumb from "./FaceImageThumb";
 
 const STATUS_STYLE: Record<FaceImageStatus, { icon: typeof Clock; className: string }> = {
   pending: { icon: Clock, className: "text-amber-600 bg-amber-50" },
-  awaiting_review: { icon: Clock, className: "text-blue-600 bg-blue-50" },
+  awaiting_review: { icon: Clock, className: "text-amber-600 bg-amber-50" },
   ready: { icon: CheckCircle2, className: "text-green-700 bg-green-50" },
   rejected: { icon: XCircle, className: "text-[#CC0000] bg-red-50" },
 };
+
+function userStatusLabel(status: FaceImageStatus): string {
+  return status === "pending" || status === "awaiting_review"
+    ? "รอแอดมินตรวจสอบ"
+    : STATUS_LABEL[status];
+}
 
 /**
  * หน้าลงทะเบียนใบหน้า — ใช้ร่วมกันทั้งนักเรียนและโค้ช
@@ -223,7 +229,7 @@ export default function FaceEnrollment({ privacyHref }: Props) {
                           className={`inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-lg text-xs font-medium ${style!.className}`}
                         >
                           {StatusIcon && <StatusIcon className="w-3 h-3" />}
-                          {STATUS_LABEL[image.status]}
+                          {userStatusLabel(image.status)}
                         </span>
                         {image.status === "rejected" && image.reject_reason && (
                           <p className="text-xs text-gray-500 mt-1">

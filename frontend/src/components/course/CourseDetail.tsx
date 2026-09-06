@@ -136,16 +136,23 @@ export default function CourseDetail({
           คอร์สนี้ยังไม่มีแพ็กเกจเปิดรับสมัคร
         </p>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div
+          className="-mx-1 flex snap-x snap-mandatory gap-6 overflow-x-auto px-1 pb-2
+                     [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {packages.map((pkg) => (
-            <PackageCard
+            <div
               key={`pkg-${pkg.id}`}
-              pkg={pkg}
-              ctaLabel={ctaLabel}
-              onSelect={
-                onSelectPackage ? (p) => onSelectPackage(p, course) : undefined
-              }
-            />
+              className="w-[min(20rem,82vw)] shrink-0 snap-start"
+            >
+              <PackageCard
+                pkg={pkg}
+                ctaLabel={ctaLabel}
+                onSelect={
+                  onSelectPackage ? (p) => onSelectPackage(p, course) : undefined
+                }
+              />
+            </div>
           ))}
         </div>
       )}

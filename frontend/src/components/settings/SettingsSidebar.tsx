@@ -30,39 +30,60 @@ export default function SettingsSidebar({ basePath }: Props) {
   const iconClass = (href: string) =>
     `w-4 h-4 ${pathname === href ? "text-[#CC0000]" : "text-gray-400"}`;
 
-  const profileHref = `${basePath}/profile`;
-  const privacyHref = `${basePath}/privacy`;
-  const faceHref = `${basePath}/face`;
+  const items = [
+    { href: `${basePath}/profile`, icon: User, label: "แก้ไขโปรไฟล์" },
+    { href: `${basePath}/privacy`, icon: ShieldCheck, label: "ความเป็นส่วนตัว" },
+    { href: `${basePath}/face`, icon: ScanFace, label: "ลงทะเบียนใบหน้า" },
+  ];
 
 
   return (
-    <div className="w-80 border-r border-gray-200 p-6 hidden md:flex flex-col space-y-6 bg-white">
-      <h2 className="text-2xl font-bold px-2">ตั้งค่า</h2>
+    <>
+      <div className="w-80 border-r border-gray-200 p-6 hidden md:flex flex-col space-y-6 bg-white">
+        <h2 className="text-2xl font-bold px-2">ตั้งค่า</h2>
 
-      <div className="flex flex-col space-y-1">
-        <span className="text-xs font-bold text-gray-500 px-2 pb-2">บัญชีของฉัน</span>
+        <div className="flex flex-col space-y-1">
+          <span className="text-xs font-bold text-gray-500 px-2 pb-2">บัญชีของฉัน</span>
 
-        <Link href={profileHref} className={linkClass(profileHref)}>
-          <User className={iconClass(profileHref)} />
-          <span>แก้ไขโปรไฟล์</span>
-        </Link>
+          {items.map(({ href, icon: Icon, label }) => (
+            <Link key={href} href={href} className={linkClass(href)}>
+              <Icon className={iconClass(href)} />
+              <span>{label}</span>
+            </Link>
+          ))}
 
-        <Link href={privacyHref} className={linkClass(privacyHref)}>
-          <ShieldCheck className={iconClass(privacyHref)} />
-          <span>ความเป็นส่วนตัว</span>
-        </Link>
-
-        <Link href={faceHref} className={linkClass(faceHref)}>
-          <ScanFace className={iconClass(faceHref)} />
-          <span>ลงทะเบียนใบหน้า</span>
-        </Link>
-
-        {/* ยังไม่มีหน้านี้ในระบบ — แสดงเป็น disabled ไว้ก่อน ไม่ผูก Link เพื่อไม่ให้กดแล้ว 404 */}
-        <div className="flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-sm text-gray-300 cursor-not-allowed">
-          <Bell className="w-4 h-4 text-gray-300" />
-          <span>การแจ้งเตือน</span>
+          {/* ยังไม่มีหน้านี้ในระบบ — แสดงเป็น disabled ไว้ก่อน ไม่ผูก Link เพื่อไม่ให้กดแล้ว 404 */}
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-sm text-gray-300 cursor-not-allowed">
+            <Bell className="w-4 h-4 text-gray-300" />
+            <span>การแจ้งเตือน</span>
+          </div>
         </div>
       </div>
-    </div>
+
+      <nav
+        aria-label="เมนูตั้งค่า"
+        className="md:hidden sticky top-0 z-20 flex gap-2 overflow-x-auto border-b border-gray-200 bg-white px-4 py-3
+                   [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map(({ href, icon: Icon, label }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
+                active
+                  ? "border-[#CC0000] bg-[#FFF0F0] font-bold text-[#CC0000]"
+                  : "border-gray-200 font-medium text-gray-600"
+              }`}
+            >
+              <Icon className={`h-4 w-4 ${active ? "text-[#CC0000]" : "text-gray-400"}`} />
+              <span className="whitespace-nowrap">{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }

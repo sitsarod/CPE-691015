@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   Check,
   CheckCircle2,
+  ChevronRight,
   Clock,
+  Folder,
   ImageOff,
   Loader2,
   ScanFace,
   ShieldAlert,
+  User,
+  Users,
   X,
   XCircle,
 } from "lucide-react";
@@ -36,6 +41,42 @@ const FILTERS: { value: FaceImageStatus | ""; label: string }[] = [
   { value: "rejected", label: "ไม่ผ่าน" },
 ];
 
+interface Folder {
+  key: string;
+  kind: "customer" | "coach";
+  nickname: string;
+  memberCode: string;
+  images: AdminFaceImage[];
+  counts: Partial<Record<FaceImageStatus, number>>;
+}
+
+function groupByOwner(images: AdminFaceImage[]): Folder[] {
+  const map = new Map<string, Folder>();
+
+  for (const img of images) {
+    const key = `${img.subject_kind}-${img.coach_id ?? img.customer_id}`;
+    let f = map.get(key);
+    if (!f) {
+      f = {
+        key,
+        kind: img.subject_kind,
+        nickname: img.nickname || "ไม่ทราบชื่อ",
+        memberCode: img.member_code,
+        images: [],
+        counts: {},
+      };
+      map.set(key, f);
+    }
+    f.images.push(img);
+    f.counts[img.status] = (f.counts[img.status] ?? 0) + 1;
+  }
+
+  const waiting = (f: Folder) => (f.counts.awaiting_review ?? 0) + (f.counts.pending ?? 0);
+  return [...map.values()].sort(
+    (a, b) => waiting(b) - waiting(a) || a.nickname.localeCompare(b.nickname, "th")
+  );
+}
+
 export default function FaceReviewPage() {
   const [images, setImages] = useState<AdminFaceImage[]>([]);
   const [filter, setFilter] = useState<FaceImageStatus | "">("");
@@ -44,6 +85,11 @@ export default function FaceReviewPage() {
   const [busyID, setBusyID] = useState<number | null>(null);
   const [rejecting, setRejecting] = useState<AdminFaceImage | null>(null);
   const [reason, setReason] = useState("");
+
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  const folders = useMemo(() => groupByOwner(images), [images]);
+  const openFolder = folders.find((f) => f.key === openKey) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -105,16 +151,47 @@ export default function FaceReviewPage() {
 
   return (
     <div className="p-6 md:p-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">ตรวจสอบรูปใบหน้า</h1>
-      <p className="text-gray-500 text-sm mb-6">
-        ตรวจว่ารูปที่นักเรียนอัปโหลดเป็นใบหน้าของเจ้าตัวจริง ก่อนอนุญาตให้ใช้เช็คชื่อ
-      </p>
+      {openFolder ? (
+        <div className="mb-6">
+          <button
+            onClick={() => setOpenKey(null)}
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            แฟ้มทั้งหมด
+          </button>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+            {openFolder.kind === "coach" ? (
+              <Users className="h-6 w-6 text-[#CC0000]" />
+            ) : (
+              <User className="h-6 w-6 text-[#CC0000]" />
+            )}
+            {openFolder.nickname}
+            {openFolder.memberCode && (
+              <span className="text-base font-normal text-gray-400">{openFolder.memberCode}</span>
+            )}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {openFolder.kind === "coach" ? "โค้ช" : "นักเรียน"} · {openFolder.images.length} รูป
+          </p>
+        </div>
+      ) : (
+        <>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">ตรวจสอบรูปใบหน้า</h1>
+          <p className="text-gray-500 text-sm mb-6">
+            รวมรูปเป็นแฟ้มรายคน กดเข้าไปเพื่อดูและตรวจทีละรูป
+          </p>
+        </>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <button
             key={f.value || "all"}
-            onClick={() => setFilter(f.value)}
+            onClick={() => {
+              setFilter(f.value);
+              setOpenKey(null);
+            }}
             className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
               filter === f.value
                 ? "bg-[#CC0000] text-white"
@@ -142,9 +219,62 @@ export default function FaceReviewPage() {
           <ScanFace className="w-8 h-8 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm">ไม่มีรูปในสถานะนี้</p>
         </div>
+      ) : !openFolder ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {folders.map((f) => {
+            const waiting = (f.counts.awaiting_review ?? 0) + (f.counts.pending ?? 0);
+            return (
+              <button
+                key={f.key}
+                onClick={() => setOpenKey(f.key)}
+                className="flex items-center gap-4 rounded-2xl border border-gray-200 p-4 text-left transition-colors hover:border-gray-300 hover:bg-gray-50"
+              >
+                <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gray-100">
+                  <Folder className="h-6 w-6 text-gray-400" />
+                  {waiting > 0 && (
+                    <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#CC0000] px-1 text-[11px] font-bold text-white">
+                      {waiting}
+                    </span>
+                  )}
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    {f.kind === "coach" ? (
+                      <Users className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    ) : (
+                      <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    )}
+                    <span className="truncate font-bold text-gray-900">{f.nickname}</span>
+                    {f.memberCode && (
+                      <span className="shrink-0 text-xs font-normal text-gray-400">
+                        {f.memberCode}
+                      </span>
+                    )}
+                  </span>
+
+                  <span className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(Object.keys(STATUS_STYLE) as FaceImageStatus[])
+                      .filter((st) => f.counts[st])
+                      .map((st) => (
+                        <span
+                          key={st}
+                          className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${STATUS_STYLE[st].className}`}
+                        >
+                          {STATUS_LABEL[st]} {f.counts[st]}
+                        </span>
+                      ))}
+                  </span>
+                </span>
+
+                <ChevronRight className="h-5 w-5 shrink-0 text-gray-300" />
+              </button>
+            );
+          })}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {images.map((image) => {
+          {openFolder.images.map((image) => {
             const style = STATUS_STYLE[image.status];
             const StatusIcon = style.icon;
             const canReview = image.status !== "rejected";
@@ -222,10 +352,10 @@ export default function FaceReviewPage() {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-5">
             <h2 className="font-bold text-gray-900 mb-1">
-              ปฏิเสธรูปของ {rejecting.nickname || "นักเรียน"}
+              ปฏิเสธรูปของ {rejecting.nickname || (rejecting.subject_kind === "coach" ? "โค้ช" : "นักเรียน")}
             </h2>
             <p className="text-xs text-gray-500 mb-4">
-              ไฟล์รูปจะถูกลบออกจากระบบทันที เหลือไว้แต่เหตุผลให้นักเรียนเห็นเพื่อถ่ายใหม่
+              ไฟล์รูปจะถูกลบออกจากระบบทันที เหลือไว้แต่เหตุผลให้เจ้าตัวเห็นเพื่อถ่ายใหม่
             </p>
 
             <textarea
