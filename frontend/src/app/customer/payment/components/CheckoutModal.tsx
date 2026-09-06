@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { 
   X, 
   CreditCard, 
@@ -43,7 +43,6 @@ export default function CheckoutModal({
   isSubmittingPayment,
   triggerToast
 }: CheckoutModalProps) {
-  const [activePaymentMethod, setActivePaymentMethod] = useState<"qr" | "bank_transfer">("qr");
   const [copySuccess, setCopySuccess] = useState<Record<number, boolean>>({});
 
   if (!isOpen) return null;
@@ -66,7 +65,8 @@ export default function CheckoutModal({
       triggerToast("กรุณาอัปโหลดรูปภาพสลิปหลักฐานการโอนเงิน", "error");
       return;
     }
-    onSubmitCheckout(activePaymentMethod);
+    // รวม QR พร้อมเพย์และโอนบัญชีธนาคารไว้ด้วยกัน — ถ้ามีเลขพร้อมเพย์ให้บันทึกเป็น qr ไม่งั้นเป็นการโอนบัญชี
+    onSubmitCheckout(promptPayID ? "qr" : "bank_transfer");
   };
 
   return (
@@ -102,116 +102,97 @@ export default function CheckoutModal({
             </span>
           </div>
 
-          {/* Payment Method Switcher */}
-          {mode === "create" && (
-            <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setActivePaymentMethod("qr")}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  activePaymentMethod === "qr"
-                    ? "bg-white text-[#CC0000] shadow-sm"
-                    : "text-gray-600 hover:text-black"
-                }`}
-              >
-                <QrCode className="w-4 h-4" />
-                PromptPay QR
-              </button>
-              <button
-                type="button"
-                onClick={() => setActivePaymentMethod("bank_transfer")}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  activePaymentMethod === "bank_transfer"
-                    ? "bg-white text-[#CC0000] shadow-sm"
-                    : "text-gray-600 hover:text-black"
-                }`}
-              >
-                <Building2 className="w-4 h-4" />
-                โอนบัญชีธนาคาร
-              </button>
-            </div>
-          )}
-
-          {/* Payment Details Container */}
+          {/* Payment Details Container — รวม QR พร้อมเพย์ และ บัญชีธนาคาร ไว้ด้วยกัน */}
           <div className="space-y-4">
-            {activePaymentMethod === "qr" ? (
-              // PromptPay Mode
-              <div className="flex flex-col items-center space-y-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-inner">
-                <span className="text-xs font-bold text-gray-500">สแกนจ่ายเงินสะดวกผ่านพร้อมเพย์ QR Code</span>
-                
-                {promptPayID ? (
-                  <div className="relative p-2 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`https://promptpay.io/${promptPayID}/${amount}.png`}
-                      alt="PromptPay QR Code"
-                      className="w-48 h-48 object-contain"
-                    />
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      ระบุยอดเงิน ฿{amount.toLocaleString("th-TH")}
-                    </div>
+            {/* PromptPay QR */}
+            <div className="flex flex-col items-center space-y-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-inner">
+              <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-[#CC0000]" />
+                สแกนจ่ายผ่านพร้อมเพย์ QR Code
+              </span>
+
+              {promptPayID ? (
+                <div className="relative p-2 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://promptpay.io/${promptPayID}/${amount}.png`}
+                    alt="PromptPay QR Code"
+                    className="w-48 h-48 object-contain"
+                  />
+                  <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    ระบุยอดเงิน ฿{amount.toLocaleString("th-TH")}
                   </div>
-                ) : (
-                  <div className="text-center py-6 text-xs text-gray-500">
-                    <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2 animate-bounce" />
-                    บัญชีนี้ยังไม่ได้ตั้งค่าเลขพร้อมเพย์ กรุณาใช้วิธีโอนเงินธนาคาร
-                  </div>
-                )}
-                
-                <div className="text-[11px] text-gray-500 text-center space-y-1">
-                  <p className="font-bold text-gray-800">
-                    พร้อมเพย์: {activeBankAccount?.account_name || "สโมสรแบดมินตัน"}
-                  </p>
-                  <p>เปิดแอปธนาคารของคุณ เลือก &quot;สแกนจ่าย/Scan&quot; เพื่อดำเนินการ</p>
                 </div>
+              ) : (
+                <div className="text-center py-6 text-xs text-gray-500">
+                  <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2 animate-bounce" />
+                  บัญชีนี้ยังไม่ได้ตั้งค่าเลขพร้อมเพย์ กรุณาใช้วิธีโอนเงินธนาคารด้านล่าง
+                </div>
+              )}
+
+              <div className="text-[11px] text-gray-500 text-center space-y-1">
+                <p className="font-bold text-gray-800">
+                  พร้อมเพย์: {activeBankAccount?.account_name || "สโมสรแบดมินตัน"}
+                </p>
+                <p>เปิดแอปธนาคารของคุณ เลือก &quot;สแกนจ่าย/Scan&quot; เพื่อดำเนินการ</p>
               </div>
-            ) : (
-              // Bank Transfer Mode
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-600 block">บัญชีสำหรับโอนเงินธนาคาร:</span>
-                {bankAccounts.filter(b => b.is_active).length === 0 ? (
-                  <div className="text-center py-6 text-xs text-gray-500 border border-gray-200 rounded-2xl">
-                    ไม่พบบัญชีธนาคารสโมสร กรุณาติดต่อผู้ดูแลระบบ
-                  </div>
-                ) : (
-                  bankAccounts.filter(b => b.is_active).map((acc) => {
-                    const bank = getBankVisual(acc.bank_name);
-                    return (
-                    <div key={`bank-acc-${acc.ID}`} className="p-4 border border-gray-200 rounded-xl bg-white flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 leading-none text-center"
-                          style={{ backgroundColor: bank.bg, color: bank.fg }}
-                        >
-                          {bank.code}
-                        </div>
-                        <div>
-                          <h5 className="font-bold text-gray-800 text-sm">{acc.bank_name}</h5>
-                          <p className="text-xs text-gray-500 mt-0.5">ชื่อบัญชี: {acc.account_name}</p>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <code className="font-mono text-xs font-bold text-gray-900">{acc.account_no}</code>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText(acc.account_no, acc.ID)}
-                              className="p-1 text-gray-400 hover:text-black hover:bg-gray-200 rounded cursor-pointer"
-                              title="คัดลอกเลขบัญชี"
-                            >
-                              {copySuccess[acc.ID] ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
+            </div>
+
+            {/* ตัวคั่น */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-[11px] font-bold text-gray-400">หรือ โอนผ่านบัญชีธนาคาร</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
+            {/* Bank Transfer */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-[#CC0000]" />
+                บัญชีสำหรับโอนเงินธนาคาร
+              </span>
+              {bankAccounts.filter(b => b.is_active).length === 0 ? (
+                <div className="text-center py-6 text-xs text-gray-500 border border-gray-200 rounded-2xl">
+                  ไม่พบบัญชีธนาคารสโมสร กรุณาติดต่อผู้ดูแลระบบ
+                </div>
+              ) : (
+                bankAccounts.filter(b => b.is_active).map((acc) => {
+                  const bank = getBankVisual(acc.bank_name);
+                  return (
+                  <div key={`bank-acc-${acc.ID}`} className="p-4 border border-gray-200 rounded-xl bg-white flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 leading-none text-center"
+                        style={{ backgroundColor: bank.bg, color: bank.fg }}
+                      >
+                        {bank.code}
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-gray-800 text-sm">{acc.bank_name}</h5>
+                        <p className="text-xs text-gray-500 mt-0.5">ชื่อบัญชี: {acc.account_name}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <code className="font-mono text-xs font-bold text-gray-900">{acc.account_no}</code>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(acc.account_no, acc.ID)}
+                            className="p-1 text-gray-400 hover:text-black hover:bg-gray-200 rounded cursor-pointer"
+                            title="คัดลอกเลขบัญชี"
+                          >
+                            {copySuccess[acc.ID] ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
+                  </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {/* Slip Uploader Section */}
