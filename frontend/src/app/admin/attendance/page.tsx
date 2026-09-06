@@ -50,7 +50,6 @@ import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
 
-
 const SCAN_COOLDOWN_SECONDS = 5;
 
 // จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
@@ -125,7 +124,6 @@ export default function AdminAttendancePage() {
   }, [cooldown]);
 
   const startCooldown = useCallback(() => setCooldown(SCAN_COOLDOWN_SECONDS), []);
-
 
   // เครื่องที่สนามถูกรีโหลดระหว่างคาบได้ ต้องกลับเข้าโหมดเอง
   useEffect(() => {
@@ -703,7 +701,7 @@ export default function AdminAttendancePage() {
                         <Users className="h-4 w-4" />
                         ยืนยันแล้ว {pkg.confirmed_count} / {pkg.student_count} คน
                       </span>
-                      <span>{pkg.sessions_count} ครั้ง/แพ็กเกจ</span>
+                      <span>{pkg.package_count} แพ็กเกจ</span>
                     </div>
                   </div>
 

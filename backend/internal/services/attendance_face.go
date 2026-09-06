@@ -122,6 +122,11 @@ func (s *AttendanceService) matchFaceSubject(
 ) (*faceMatch, error) {
 	expireStaleEnrollments(tx)
 
+	packageIDs, err := s.siblingPackageIDs(tx, session)
+	if err != nil {
+		return nil, err
+	}
+
 	var rows []faceCandidate
 	// MIN(distance) ต่อคน = เอาท่าที่ตรงที่สุดของคนนั้น (หนึ่งคนมีได้ 3 ท่า)
 	// LIMIT 2 เพราะต้องใช้อันดับ 2 (ซึ่งเป็น "คนละคน" แน่นอน) มาคำนวณ margin
@@ -133,7 +138,7 @@ func (s *AttendanceService) matchFaceSubject(
 			JOIN enrollments e ON e.customer_id = fi.customer_id
 			WHERE fi.status = ?
 			  AND fi.embedding IS NOT NULL
-			  AND e.package_id = ?
+			  AND e.package_id IN ?
 			  AND e.status = ?
 			  AND e.deleted_at IS NULL
 
@@ -151,7 +156,7 @@ func (s *AttendanceService) matchFaceSubject(
 		ORDER BY distance ASC
 		LIMIT 2
 	`,
-		probe.Vector, models.FaceImageReady, session.PackageID, models.EnrollmentStatusActive,
+		probe.Vector, models.FaceImageReady, packageIDs, models.EnrollmentStatusActive,
 		probe.Vector, models.FaceImageReady, coachStatusActive,
 	).Scan(&rows).Error; err != nil {
 		return nil, errors.New("ค้นหาใบหน้าไม่สำเร็จ")
@@ -195,14 +200,7 @@ func (s *AttendanceService) resolveStudentByFace(
 	session *models.AttendanceSession,
 	customerID uint,
 ) (*scanContext, error) {
-	var enrollment models.Enrollment
-	if err := tx.Preload("Customer").Preload("Customer.User").
-		Where("customer_id = ? AND package_id = ? AND status = ?",
-			customerID, session.PackageID, models.EnrollmentStatusActive).
-		First(&enrollment).Error; err != nil {
-		return nil, ErrNotInPackage
-	}
-	return s.buildContext(tx, session, &enrollment, enrollment.Customer), nil
+	return s.resolveClassEnrollment(tx, session, customerID, nil, true)
 }
 
 // LookupByFace จังหวะที่ 1 — ถามว่าใคร ไม่เขียนอะไรลงฐาน

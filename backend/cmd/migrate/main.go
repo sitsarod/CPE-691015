@@ -102,6 +102,10 @@ func main() {
 		log.Fatalf("สร้าง index ของอีเมล/เลขบัตรประชาชนไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {
+		log.Fatalf("ปรับแพ็กเกจของตารางงานโค้ชไม่สำเร็จ: %v", err)
+	}
+
 	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
 	if err := services.CleanupLegacyFacePhotos(db); err != nil {
 		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)

@@ -11,7 +11,7 @@ export interface OpenablePackage {
   course_id: number;
   course_name: string;
 
-  sessions_count: number;
+  package_count: number;
   student_count: number;
   confirmed_count: number;
 
