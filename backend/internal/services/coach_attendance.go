@@ -181,6 +181,9 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 		PackageID:         &session.PackageID,
 		PackageScheduleID: packageScheduleID,
 		IsEmergency:       true,
+
+		// แถวนี้เกิดตอนโค้ชสแกน = ตอนที่งานเกิดขึ้นจริง เรตปัจจุบันจึงเป็นเรตที่ถูกต้อง
+		PayRateSnapshot: coachPayRateSnapshot(tx, coachID),
 	}
 	if err := tx.Create(&schedule).Error; err != nil {
 		return false, errors.New("ไม่สามารถเพิ่มตารางงานให้โค้ชได้")

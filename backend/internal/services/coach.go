@@ -64,7 +64,7 @@ var (
 // isValidPaymentType เช็คว่าค่า payment_type ที่รับมาอยู่ในชุดที่ระบบรองรับหรือไม่
 // โค้ชแต่ละคนมีวิธีจ่ายเดียว (per_session = รายครั้ง, monthly = รายเดือน) ไม่ให้มีค่าอื่นหลุดเข้ามา
 func isValidPaymentType(v string) bool {
-	return v == "per_session" || v == "monthly"
+	return v == PaymentTypePerSession || v == PaymentTypeMonthly
 }
 
 // resolveCoachIDByUser ดึง coaches.id จาก users.id (JWT) — ใช้ร่วมกันในการตรวจสิทธิ์

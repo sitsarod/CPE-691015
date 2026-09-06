@@ -15,6 +15,7 @@ import {
   CameraOff,
   AlertTriangle,
   Maximize,
+  CalendarX,
 } from "lucide-react";
 
 import {
@@ -30,6 +31,7 @@ import {
   closeSession,
   updateAttendanceStatus,
   updateCoachAttendanceStatus,
+  fetchMissedClasses,
 } from "@/services/attendanceAPI";
 import { COACH_STATUS_LABEL, COACH_STATUS_NOTE } from "@/types/attendance";
 import type {
@@ -169,6 +171,26 @@ export default function AdminAttendancePage() {
   }, []);
 
   const [refreshTick, setRefreshTick] = useState(0);
+
+  // จำนวนคลาสที่สอนไปแล้วแต่ไม่มีรอบเช็คชื่อ = ค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+  //
+  // โหลดแยกจากรายการหลักโดยตั้งใจ — เป็นตัวเลขประกอบ ถ้าดึงไม่ได้ก็ไม่ควร
+  // ทำให้หน้าเช็คชื่อทั้งหน้าขึ้น error จนเปิดรอบไม่ได้
+  const [missedCount, setMissedCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMissedClasses()
+      .then((list) => {
+        if (!cancelled) setMissedCount(list.length);
+      })
+      .catch(() => {
+        /* ตัวเลขประกอบ ล้มเหลวได้เงียบ ๆ */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -588,6 +610,24 @@ export default function AdminAttendancePage() {
           </div>
 
           <div className="flex shrink-0 gap-2">
+            {/* คาบที่ไม่มีรอบเช็คชื่อ = ค่าจ้างที่โค้ชยังไม่ได้รับ
+                ต้องอยู่ตรงนี้ ไม่ใช่ซ่อนในเมนู เพราะไม่มีใครไปหาสิ่งที่ไม่รู้ว่ามีอยู่ */}
+            <Link
+              href="/admin/attendance/missed"
+              className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2 font-medium transition sm:flex-none ${
+                missedCount > 0
+                  ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                  : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <CalendarX className="h-4 w-4" />
+              คาบค้าง
+              {missedCount > 0 && (
+                <span className="rounded-full bg-amber-600 px-1.5 text-xs font-semibold text-white">
+                  {missedCount}
+                </span>
+              )}
+            </Link>
             <Link
               href="/admin/attendance/history"
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 sm:flex-none"

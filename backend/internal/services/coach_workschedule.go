@@ -24,6 +24,7 @@ type WorkScheduleService interface {
 	GetAll() ([]models.WorkSchedule, error)
 	GetByCoachID(coachID uint, userID uint, role string) ([]models.WorkSchedule, error)
 	TaughtSessionDates(coachID uint, userID uint, role string) ([]string, error)
+	UnresolvedSessionDates(coachID uint, userID uint, role string) ([]string, error)
 	GetByID(id uint) (*models.WorkSchedule, error)
 	Update(id uint, req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error)
 	Delete(id uint) error
@@ -192,6 +193,9 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 			PackageID:         packageID,
 			PackageScheduleID: req.PackageScheduleID,
 			IsEmergency:       req.IgnoreAvailability,
+
+			// สแนปช็อตเรตตอนมอบหมาย — ปรับค่าจ้างทีหลังต้องไม่ย้อนไปเปลี่ยนคาบนี้
+			PayRateSnapshot: coachPayRateSnapshot(tx, req.CoachID),
 		}
 		return tx.Create(&work).Error
 	})
@@ -292,21 +296,87 @@ func (s *workScheduleService) TaughtSessionDates(coachID uint, userID uint, role
 //     postgres (sqlite ที่ใช้ในเทสไม่มี) ส่วน to_char เป็นแค่การจัดรูปแบบวันที่
 //     ไม่ใช่ตรรกะที่ต้องเทส
 //
-// ใช้ NOT EXISTS แทน LEFT JOIN แล้วเช็ค NULL โดยตั้งใจ — LEFT JOIN ทำให้จำนวนแถว
-// ผลลัพธ์ขึ้นกับตารางที่ join เข้ามา ซึ่งเสี่ยงไปกระทบการนับคาบ (= จำนวนเงิน)
-// ส่วน NOT EXISTS เป็นแค่ตัวกรอง ไม่เพิ่มไม่ลดแถว
+// ─── นิยาม "คลาสเดียวกัน" ต้องตรงกับ classScheduleScope เสมอ ───
+//
+// จับคู่ตารางงานกับรอบเช็คชื่อด้วย course + วันที่ + เวลาเริ่ม-จบ ไม่ใช่ package_id
+// เพราะคอร์สเดียวขายได้หลาย package (8 ครั้ง / 12 ครั้ง) ที่เรียนพร้อมกัน
+// package เป็นแค่โควตาจำนวนครั้งของนักเรียน ไม่ใช่ตัวแยกคลาส
+//
+// ⚠️ เดิมจับคู่ด้วย package_id ซึ่งพังเมื่อ "แพ็กเกจตัวแทน" ของคลาสเปลี่ยน
+// ตัวแทนคือแพ็กเกจ id ต่ำสุดที่ยังไม่ถูกลบ (ดู classAnchorPackageID) พอแอดมิน
+// เลิกขายแพ็กเกจตัวแทน ตัวแทนจะเลื่อนไปตัวถัดไป แต่ตารางงานที่มอบหมายไว้แล้ว
+// ยังชี้ตัวเก่า → จับคู่ไม่เจอ → โค้ชได้เงิน 0 ทั้งที่สอนจริง และไม่มี error ให้เห็น
+// (เทส TestPayrollSurvivesAnchorPackageDeletion ตรึงเคสนี้ไว้)
+//
+// เงื่อนไข OR ท่อนหลังเป็นทางถอยสำหรับรอบเช็คชื่อรุ่นเก่าที่ยังไม่มีสแนปช็อตเวลา
+// (schedule_start_time/end_time ว่าง) ซึ่งเทียบเวลาไม่ได้ จึงกลับไปใช้ package_id
+//
+// ─── ทำไมเป็น EXISTS ไม่ใช่ JOIN ───
+//
+// คลาสหนึ่งอาจมีรอบเช็คชื่อค้างอยู่มากกว่าหนึ่งรอบในข้อมูลเก่า (ก่อนระบบยุบรอบ
+// ให้เหลือรอบเดียวต่อคลาส) ถ้าใช้ JOIN ตารางงานแถวเดียวจะถูกจับคู่หลายครั้ง
+// แล้วกลายเป็นนับหลายคาบ = จ่ายเงินหลายเท่า
+//
+// EXISTS ตอบแค่ว่า "มีรอบที่เข้าเงื่อนไขอยู่ไหม" จำนวนแถวผลลัพธ์จึงเท่ากับ
+// จำนวนตารางงานเสมอ ไม่ขึ้นกับว่ามีรอบกี่รอบ — 1 แถวตารางงาน = เงิน 1 หน่วย
+//
+// ส่วน NOT EXISTS ชั้นในตัดคาบที่โค้ชถูกมาร์คว่าขาดงานออก
+// closedSessionForScheduleSQL คือ subquery "คลาสของตารางงานแถวนี้ มีรอบเช็คชื่อที่ปิดแล้วอยู่ไหม"
+//
+// ⚠️ นี่คือนิยาม "คลาสเดียวกัน" ฉบับที่ใช้กับเรื่องเงิน — ต้องมีชุดเดียวในระบบ
+//
+// ประวัติของไฟล์นี้บอกว่าทุกครั้งที่มีนิยามชุดที่สองเกิดขึ้น จะกลายเป็นบั๊กเรื่องเงินเสมอ
+// ข้อ 20: หน้าจัดตารางรวมคลาสแต่หน้าเปิดรอบไม่รวม → จ่าย 2 เท่า
+// ข้อ 21: classScheduleScope ใช้ course+เวลา แต่ตัวคิดเงินยังใช้ package_id → จ่าย 0
+//
+// จึงดึงออกมาเป็นค่าคงที่ให้ทั้งสองฝั่งใช้ร่วมกัน:
+//   - taughtScheduleScope     ใช้แบบ EXISTS      = คาบนี้เคลียร์แล้วและนับเงินได้
+//   - unresolvedScheduleScope ใช้แบบ NOT EXISTS  = คาบนี้ยังไม่มีรอบ ค้างอยู่ไม่ได้เงิน
+//
+// สองอันนี้เป็นด้านตรงข้ามกันของเงื่อนไขเดียว ถ้าแยกกันเขียนเมื่อไหร่ จะมีคาบที่
+// "ไม่ถูกนับเงิน แต่ก็ไม่โผล่ในรายการค้าง" = เงินหายโดยไม่มีใครเห็น
+//
+// รับพารามิเตอร์ ? ตัวเดียว = สถานะ closed
+//
+// เงื่อนไข OR ท่อนหลังเป็นทางถอยสำหรับรอบเช็คชื่อรุ่นเก่าที่ยังไม่มีสแนปช็อตเวลา
+// (schedule_start_time/end_time ว่าง) ซึ่งเทียบเวลาไม่ได้ จึงกลับไปใช้ package_id
+const closedSessionForScheduleSQL = `
+			SELECT 1
+			FROM attendance_sessions a
+			WHERE a.deleted_at IS NULL
+			  AND a.status = ?
+			  AND a.session_date = work_schedules.date
+			  AND (
+			        (
+			          COALESCE(a.schedule_start_time, '') <> ''
+			          AND COALESCE(a.schedule_end_time, '') <> ''
+			          AND a.schedule_start_time = work_schedules.start_time
+			          AND a.schedule_end_time   = work_schedules.end_time
+			          AND EXISTS (
+			                SELECT 1 FROM packages p
+			                WHERE p.id = a.package_id
+			                  AND p.course_id = work_schedules.course_id
+			              )
+			        )
+			        OR
+			        (
+			          (COALESCE(a.schedule_start_time, '') = '' OR COALESCE(a.schedule_end_time, '') = '')
+			          AND a.package_id = work_schedules.package_id
+			        )
+			      )`
+
 func taughtScheduleScope(db *gorm.DB, coachID uint) *gorm.DB {
 	return db.Model(&models.WorkSchedule{}).
-		Joins("JOIN attendance_sessions a ON a.package_id = work_schedules.package_id AND a.session_date = work_schedules.date AND a.deleted_at IS NULL").
-		Where("work_schedules.coach_id = ? AND work_schedules.package_id IS NOT NULL AND a.status = ?",
-			coachID, models.AttendanceSessionClosed).
-		Where(`NOT EXISTS (
-			SELECT 1 FROM coach_attendances ca
-			WHERE ca.coach_id = work_schedules.coach_id
-			  AND ca.attendance_session_id = a.id
-			  AND ca.status = ?
-			  AND ca.deleted_at IS NULL
-		)`, models.AttendanceStatusAbsent)
+		Where("work_schedules.coach_id = ? AND work_schedules.package_id IS NOT NULL", coachID).
+		Where("EXISTS ("+closedSessionForScheduleSQL+`
+			  AND NOT EXISTS (
+			        SELECT 1 FROM coach_attendances ca
+			        WHERE ca.coach_id = work_schedules.coach_id
+			          AND ca.attendance_session_id = a.id
+			          AND ca.status = ?
+			          AND ca.deleted_at IS NULL
+			      )
+		)`, models.AttendanceSessionClosed, models.AttendanceStatusAbsent)
 }
 
 // taughtSessionDates เป็น query จริง (ไม่เช็คสิทธิ์) — ให้ public method ข้างบนเรียกหลังตรวจสิทธิ์แล้ว
@@ -334,6 +404,35 @@ func (s *workScheduleService) taughtSessionDates(coachID uint) ([]string, error)
 	}
 
 	return append(attended, legacy...), nil
+}
+
+// UnresolvedSessionDates คืนวันที่ของคาบที่ "สอนไปแล้วแต่ยังไม่มีรอบเช็คชื่อ" ของโค้ชคนหนึ่ง
+//
+// ⚠️ คู่กับ TaughtSessionDates เสมอ — ตัวนั้นคือคาบที่ได้เงินแล้ว ตัวนี้คือคาบที่ยังไม่ได้
+// หน้าเว็บที่แสดงยอดค่าจ้างต้องแสดงตัวนี้ด้วย ไม่งั้นคาบที่ค้างจะหายไปจากสายตา
+// ซึ่งคือบั๊กที่ ResolveMissedClass ถูกเขียนขึ้นมาแก้ (ดู coach_missed_class.go)
+func (s *workScheduleService) UnresolvedSessionDates(coachID uint, userID uint, role string) ([]string, error) {
+	if err := VerifyCoachOwnership(s.db, coachID, userID, role); err != nil {
+		return nil, err
+	}
+	return s.unresolvedSessionDates(coachID)
+}
+
+func (s *workScheduleService) unresolvedSessionDates(coachID uint) ([]string, error) {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		loc = time.Local
+	}
+	todayStr := time.Now().In(loc).Format("2006-01-02")
+
+	var dates []string
+	if err := unresolvedScheduleScope(s.db, todayStr).
+		Where("work_schedules.coach_id = ?", coachID).
+		Order("work_schedules.date ASC, work_schedules.start_time ASC").
+		Pluck("to_char(work_schedules.date, 'YYYY-MM-DD')", &dates).Error; err != nil {
+		return nil, err
+	}
+	return dates, nil
 }
 
 // GetByID ดึงตารางงาน 1 รายการ
@@ -374,6 +473,13 @@ func (s *workScheduleService) Update(id uint, req dto.CreateWorkScheduleRequest)
 
 		if anchor := anchorPackageForSlot(tx, req); anchor != nil {
 			updateData["package_id"] = *anchor
+		}
+
+		// ⚠️ แตะสแนปช็อตเรตเฉพาะตอนเปลี่ยนตัวโค้ชเท่านั้น
+		// ถ้าเขียนทับทุกครั้งที่แก้ (เช่น แอดมินมาเติมเลขสนามทีหลัง) เรตปัจจุบัน
+		// จะไหลย้อนไปทับคาบเก่า ซึ่งคือบั๊ก "ปรับเรตแล้วอดีตเพี้ยน" ที่เพิ่งแก้ไป
+		if schedule.CoachID != req.CoachID {
+			updateData["pay_rate_snapshot"] = coachPayRateSnapshot(tx, req.CoachID)
 		}
 
 		if err := tx.Model(&schedule).Updates(updateData).Error; err != nil {
