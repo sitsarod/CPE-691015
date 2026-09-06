@@ -25,6 +25,9 @@ export interface Detection {
   confidence: number | null; // ระบบจริงยังไม่มีคะแนนความมั่นใจ (mock ฝั่ง backend) จึงเป็น null เสมอตอนนี้
   studentId: number | ''; // ผู้เรียนที่ผูกไว้ตอนนี้ (หลังยืนยัน/แก้ไข)
   status: DetectionStatus;
+  /** กรอบใบหน้าบนรูปต้นฉบับ [x1, y1, x2, y2] พิกเซล — ใช้วาดกรอบ/ชื่อทับตอนตรวจทานเท่านั้น
+   * ไม่มีถ้าเป็นวิดีโอ (ยังไม่มี bbox) หรือโค้ชเพิ่มเอง */
+  bbox: [number, number, number, number] | null;
 }
 
 // MAX_BATCH_FILES จำกัดจำนวนไฟล์ต่อการอัปโหลดหนึ่งครั้ง — วิเคราะห์ทีละไฟล์ผ่าน face-service
@@ -35,7 +38,7 @@ export const MAX_BATCH_FILES = 10;
 // AUTO_CONFIRM_THRESHOLD — ผลจำแนกที่มั่นใจตั้งแต่ % นี้ขึ้นไปจะ "ยืนยันให้อัตโนมัติ" โดยไม่ต้องกด
 // (ลดงานกดของโค้ชในเคสที่ชัดเจน) ที่เหลือ (ต่ำกว่านี้ หรือวิดีโอที่ไม่มีคะแนนความมั่นใจเลย)
 // ยังต้องตรวจทานเองอยู่ — เป็นค่าเริ่มต้นที่ยังไม่เคย calibrate จากข้อมูลจริง ปรับได้ถ้าเดาพลาดบ่อยไป
-export const AUTO_CONFIRM_THRESHOLD = 85;
+export const AUTO_CONFIRM_THRESHOLD = 65;
 
 // BatchItem คือไฟล์หนึ่งไฟล์ในชุดที่เลือกมาพร้อมกัน — แต่ละไฟล์มีสถานะ/ผลวิเคราะห์/การยืนยันแยกจากกัน
 // ทุกไฟล์ในชุดเดียวกันใช้ "คอร์สเดียวกัน" ที่เลือกไว้ตอนอัปโหลด (ยังไม่รองรับคนละคอร์สในชุดเดียว —
@@ -92,6 +95,7 @@ export function useDetect() {
   const [items, setItems] = useState<BatchItem[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [analyzingAll, setAnalyzingAll] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
 
   // คอร์สที่โค้ชคนนี้สอนอยู่ — ให้เลือกก่อนถึงจะโหลดรายชื่อนักเรียนของคอร์สนั้น
@@ -209,6 +213,7 @@ export function useDetect() {
                 confidence: null,
                 studentId: id,
                 status: 'pending' as DetectionStatus,
+                bbox: null,
               };
             }),
           });
@@ -227,6 +232,7 @@ export function useDetect() {
                 studentId: s.customer_id,
                 // มั่นใจสูงพอ = ยืนยันให้เลยอัตโนมัติ ไม่ต้องรอโค้ชกด (ยังกดแก้ไข/ลบทีหลังได้เหมือนเดิม)
                 status: (confidence >= AUTO_CONFIRM_THRESHOLD ? 'confirmed' : 'pending') as DetectionStatus,
+                bbox: s.bbox ?? null,
               };
             }),
           });
@@ -309,6 +315,7 @@ export function useDetect() {
                   confidence: null,
                   studentId: '' as const,
                   status: 'pending' as DetectionStatus,
+                  bbox: null,
                 },
               ],
             }
@@ -316,24 +323,59 @@ export function useDetect() {
     );
   };
 
-  // บันทึกผลของไฟล์เดียว — แต่ละไฟล์ยืนยันแยกจากกัน ไม่ผูกกับไฟล์อื่นในชุดเดียวกัน
-  const saveItem = async (itemUid: string) => {
-    const item = items.find((it) => it.uid === itemUid);
-    if (!item || !item.detections || item.saving || item.rawId == null || !isItemReviewed(item)) return;
-
-    updateItem(itemUid, { saving: true, error: null });
+  // ยิง assign จริงของไฟล์หนึ่งไฟล์ — แยกออกมาให้ saveItem (ทีละไฟล์) และ confirmAndSaveAll
+  // (ทั้งชุดคลิกเดียว) เรียกใช้ร่วมกัน ไม่ต้องเขียนตรรกะ assign ซ้ำสองที่
+  const saveItemNow = async (item: BatchItem) => {
+    if (!item.detections || item.rawId == null) return;
+    updateItem(item.uid, { saving: true, error: null });
     try {
       const studentIds = item.detections.map((d) => d.studentId).filter((id): id is number => id !== '');
       const result = item.isVideo
         ? await assignVideoStudents(item.rawId, studentIds)
         : await assignPhotoStudents(item.rawId, studentIds);
-      updateItem(itemUid, { saving: false, savedAt: Date.now(), skippedCount: result.skipped_no_consent.length });
+      updateItem(item.uid, { saving: false, savedAt: Date.now(), skippedCount: result.skipped_no_consent?.length ?? 0 });
     } catch (err) {
-      updateItem(itemUid, {
+      updateItem(item.uid, {
         saving: false,
         error: err instanceof Error ? err.message : 'บันทึกผลลัพธ์ไม่สำเร็จ กรุณาลองใหม่',
       });
     }
+  };
+
+  // บันทึกผลของไฟล์เดียว — แต่ละไฟล์ยืนยันแยกจากกัน ไม่ผูกกับไฟล์อื่นในชุดเดียวกัน
+  const saveItem = async (itemUid: string) => {
+    const item = items.find((it) => it.uid === itemUid);
+    if (!item || !item.detections || item.saving || item.rawId == null || !isItemReviewed(item)) return;
+    await saveItemNow(item);
+  };
+
+  // ยืนยันรายการ "รอตรวจสอบ" ที่เหลือของทุกไฟล์ในชุด แล้วบันทึกทีเดียวทั้งหมด
+  // ให้โค้ชที่มั่นใจผลของ AI แล้วกดจบงานครั้งเดียว ไม่ต้องไล่ยืนยัน+บันทึกทีละไฟล์
+  const confirmAndSaveAll = async () => {
+    if (savingAll) return;
+
+    // ยืนยันของทุกไฟล์พร้อมกันก่อนในสเตทเดียว จะได้ไม่เจอปัญหา state ที่ยังไม่อัปเดตทัน
+    // ตอนเช็ค isItemReviewed ต่อ (setState เป็น async)
+    const confirmed = items.map((item) =>
+      !item.detections
+        ? item
+        : {
+            ...item,
+            detections: item.detections.map((d) =>
+              d.status === 'pending' ? { ...d, status: 'confirmed' as DetectionStatus } : d
+            ),
+          }
+    );
+    setItems(confirmed);
+
+    const toSave = confirmed.filter(
+      (item) => item.detections && item.rawId != null && !item.saving && !item.savedAt && isItemReviewed(item)
+    );
+    if (toSave.length === 0) return;
+
+    setSavingAll(true);
+    await Promise.all(toSave.map((item) => saveItemNow(item)));
+    setSavingAll(false);
   };
 
   const readyToAnalyzeCount = items.filter((item) => item.detections === null && !item.analyzing).length;
@@ -350,6 +392,7 @@ export function useDetect() {
     dragActive,
     setDragActive,
     analyzingAll,
+    savingAll,
     batchError,
     readyToAnalyzeCount,
     pickFiles,
@@ -363,6 +406,7 @@ export function useDetect() {
     removeDetection,
     addMissedStudent,
     saveItem,
+    confirmAndSaveAll,
     isItemReviewed,
   };
 }

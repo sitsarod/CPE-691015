@@ -11,6 +11,8 @@ export interface DetectedStudentSuggestion {
   customer_id: number;
   nickname: string;
   confidence: number; // เปอร์เซ็นต์ 0–100
+  /** กรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซลของรูปต้นฉบับ — ไม่มีถ้าจับคู่ไม่ได้ตำแหน่งใบหน้า */
+  bbox?: [number, number, number, number];
 }
 
 export interface UploadPhotoPostResult {
@@ -23,5 +25,5 @@ export interface UploadPhotoPostResult {
 
 export interface AssignResult {
   student_ids: number[];
-  skipped_no_consent: number[]; // ถูกข้ามเพราะยังไม่ได้ยินยอมเก็บข้อมูลใบหน้า
+  skipped_no_consent: number[] | null; // ถูกข้ามเพราะยังไม่ได้ยินยอมเก็บข้อมูลใบหน้า (null ถ้าไม่มีใครถูกข้าม)
 }

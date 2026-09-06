@@ -160,6 +160,60 @@ func TestDeleteOldRawPhotosSkipsWhenMediaStorageMissing(t *testing.T) {
 	}
 }
 
+// ลบแท็กของตัวเองต้องไม่กระทบรูปต้นฉบับหรือแท็กของนักเรียนคนอื่นในรูปกลุ่มเดียวกัน
+func TestDeleteMyPhotoTag(t *testing.T) {
+	db := newTestDB(t, &models.Customer{}, &models.RawPhoto{}, &models.DetectedPhoto{})
+	svc := NewDetectedPhotoService(db)
+
+	me := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-tag-me"}
+	db.Create(&me)
+	other := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-tag-other"}
+	db.Create(&other)
+
+	rawPhoto := models.RawPhoto{PhotoURL: "/photo-posts/1/raw"}
+	db.Create(&rawPhoto)
+	db.Create(&models.DetectedPhoto{CustomerID: me.ID, RawPhotoID: rawPhoto.ID, PhotoURL: rawPhoto.PhotoURL})
+	db.Create(&models.DetectedPhoto{CustomerID: other.ID, RawPhotoID: rawPhoto.ID, PhotoURL: rawPhoto.PhotoURL})
+
+	if err := svc.DeleteMyPhotoTag(me.ID, rawPhoto.ID); err != nil {
+		t.Fatalf("ควรลบผ่าน แต่ได้: %v", err)
+	}
+
+	var myRemaining int64
+	db.Model(&models.DetectedPhoto{}).Where("customer_id = ? AND raw_photo_id = ?", me.ID, rawPhoto.ID).Count(&myRemaining)
+	if myRemaining != 0 {
+		t.Fatalf("แท็กของตัวเองต้องถูกลบไป แต่ยังเหลือ %d", myRemaining)
+	}
+
+	var otherRemaining int64
+	db.Model(&models.DetectedPhoto{}).Where("customer_id = ? AND raw_photo_id = ?", other.ID, rawPhoto.ID).Count(&otherRemaining)
+	if otherRemaining != 1 {
+		t.Fatalf("แท็กของนักเรียนคนอื่นไม่ควรถูกกระทบ แต่เหลือ %d", otherRemaining)
+	}
+
+	var remainingPhotos int64
+	db.Model(&models.RawPhoto{}).Count(&remainingPhotos)
+	if remainingPhotos != 1 {
+		t.Fatalf("รูปต้นฉบับไม่ควรถูกลบ แต่เหลือ %d", remainingPhotos)
+	}
+}
+
+// ลบโพสต์ที่ตัวเองไม่ได้ถูกแท็กอยู่ (คนละ raw_photo_id หรือคนละ customer) ต้องได้ ErrPostNotFound กันเดา ID ของคนอื่นมาลบ
+func TestDeleteMyPhotoTagNotFound(t *testing.T) {
+	db := newTestDB(t, &models.Customer{}, &models.RawPhoto{}, &models.DetectedPhoto{})
+	svc := NewDetectedPhotoService(db)
+
+	me := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-tag-missing"}
+	db.Create(&me)
+	rawPhoto := models.RawPhoto{PhotoURL: "/photo-posts/1/raw"}
+	db.Create(&rawPhoto)
+
+	err := svc.DeleteMyPhotoTag(me.ID, rawPhoto.ID)
+	if !errors.Is(err, ErrPostNotFound) {
+		t.Fatalf("ควรได้ ErrPostNotFound แต่ได้: %v", err)
+	}
+}
+
 func TestAssignStudentsToPhotoFiltersConsent(t *testing.T) {
 	db := newTestDB(t, &models.Customer{}, &models.RawPhoto{}, &models.DetectedPhoto{})
 
