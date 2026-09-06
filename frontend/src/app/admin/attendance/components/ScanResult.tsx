@@ -100,16 +100,16 @@ export default function ScanResultBanner({
     <button
       onClick={onDismiss}
       aria-live="assertive"
-      className={`flex w-full items-center gap-3 rounded-2xl border-b-4 p-4 text-left text-white transition sm:gap-4 sm:p-6 ${tone} ${
+      className={`flex w-full items-center gap-3 rounded-xl border-b-2 px-4 py-3 text-left text-white transition ${tone} ${
         outcome.ok ? "border-green-700" : "border-red-700"
       }`}
     >
-      <Icon className="h-10 w-10 shrink-0 sm:h-12 sm:w-12" />
+      <Icon className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" />
 
       <div className="min-w-0">
-        <p className="truncate text-xl font-bold leading-tight sm:text-3xl">{outcome.title}</p>
+        <p className="truncate text-base font-bold leading-snug sm:text-lg">{outcome.title}</p>
         {outcome.detail && (
-          <p className="mt-1 text-base text-white/90 sm:text-lg">{outcome.detail}</p>
+          <p className="truncate text-sm text-white/90">{outcome.detail}</p>
         )}
       </div>
     </button>
