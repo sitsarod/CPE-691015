@@ -256,6 +256,49 @@ export interface CoachHistoryItem {
   is_scheduled: boolean;
 }
 
+// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
+//
+// ค่าจ้างของโค้ชนับจากคาบที่ "มีรอบเช็คชื่อปิดแล้ว" เท่านั้น
+// ถ้าแอดมินลืมเปิดรอบ หรือเปิดไม่ทันช่วงที่ระบบอนุญาต (คาบ ±30 นาที)
+// คาบนั้นจะไม่มีทางถูกนับเป็นเงินได้อีกเลย โดยไม่มี error ให้ใครเห็น
+//
+// รายการนี้คือ "เงินที่ยังไม่ถูกนับให้โค้ช" ไม่ใช่รายงานเชิงสถิติ
+
+export interface MissedClassCoach {
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  // true = คาบนี้ถูกมอบหมายนอกกฎ (แอดมินติ๊กฉุกเฉิน หรือระบบสร้างให้ตอนโค้ชสแกน)
+  is_emergency: boolean;
+}
+
+// หนึ่งรายการ = หนึ่ง "คลาส" ไม่ใช่หนึ่งโค้ช — คลาสเดียวมีโค้ชหลายคนได้
+// และต้องตัดสินใจพร้อมกันทั้งคลาส เพราะการสร้างรอบขึ้นมาหนึ่งรอบ
+// มีผลกับค่าจ้างของทุกคนในคลาสนั้นทันที
+export interface MissedClass {
+  work_schedule_id: number; // ตัวแทนของคลาส ใช้ส่งกลับตอนเคลียร์
+  course_id: number;
+  course_name: string;
+
+  date: string; // YYYY-MM-DD
+  start_time: string;
+  end_time: string;
+
+  coaches: MissedClassCoach[];
+}
+
+export interface ResolveMissedClassResult {
+  session_id: number;
+  package_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+
+  present_coach_ids: number[];
+  absent_coach_ids: number[];
+}
+
 // ─── ป้ายภาษาไทยที่ใช้ร่วมกันทุกหน้า ─────────────────────────────────────────
 
 export const STATUS_LABEL: Record<AttendanceStatus, string> = {

@@ -201,7 +201,9 @@ func SetupRoutes(r *gin.Engine) {
 			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)                     // เจ้าของเท่านั้น (admin แก้ไม่ได้)
 			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)                       // เจ้าของ หรือ admin
 			coachGroup.GET("/:id/taught-sessions", workScheduleController.GetTaughtSessionCount)                    // เจ้าของ หรือ admin — นับคาบที่เช็คชื่อปิดรอบจริง (คำนวณค่าจ้าง)
+			coachGroup.GET("/:id/unresolved-sessions", workScheduleController.GetUnresolvedSessions)                // เจ้าของ หรือ admin — คาบที่สอนแล้วแต่ยังไม่มีรอบเช็คชื่อ (ยังไม่ได้เงิน)
 			coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)                                   // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
+			coachGroup.GET("/:id/payroll", expenseController.GetCoachPayroll)                                       // เจ้าของ หรือ admin — ยอดค่าจ้างที่ backend คำนวณให้ (แหล่งเดียว)
 		}
 		// เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
 		adminCoachGroup := adminOnly.Group("/coaches")
@@ -387,6 +389,11 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.GET("/openable", attendanceController.GetOpenablePackages)
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
 			attendanceGroup.GET("/coach-history", attendanceController.GetCoachHistory)
+
+			// คาบที่ผ่านไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ = ค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+			// resolve สร้างรอบย้อนหลัง + บันทึกว่าใครมาสอน (ดู coach_missed_class.go)
+			attendanceGroup.GET("/missed-classes", attendanceController.GetMissedClasses)
+			attendanceGroup.POST("/missed-classes/resolve", attendanceController.ResolveMissedClass)
 
 			// รอบที่เปิดค้างอยู่ — หน้าเช็คชื่อเรียกคู่กับ /openable ใน Promise.all
 			// ขาดเส้นนี้ = 404 แล้วล้มทั้งชุด หน้าโหลดไม่ขึ้นเลย

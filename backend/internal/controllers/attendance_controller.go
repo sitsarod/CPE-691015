@@ -26,7 +26,8 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrAttendanceNotFound),
 		errors.Is(err, services.ErrQRNotFound),
 		errors.Is(err, services.ErrCoachQRScanned),
-		errors.Is(err, services.ErrCoachNotFound):
+		errors.Is(err, services.ErrCoachNotFound),
+		errors.Is(err, services.ErrMissedClassNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 
 	// ไม่ได้ลงทะเบียนแพ็กเกจนี้ = ไม่มีสิทธิ์ ไม่ใช่ข้อมูลผิด
@@ -35,7 +36,10 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrCoachInactive):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 
-	case errors.Is(err, services.ErrInvalidStatus):
+	case errors.Is(err, services.ErrInvalidStatus),
+		errors.Is(err, services.ErrMissedClassCoachSet),
+		errors.Is(err, services.ErrMissedClassLegacy),
+		errors.Is(err, services.ErrScheduleInvalid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	// สแกนใบหน้าแล้วใช้ผลไม่ได้ — คำขอถูกรูปแบบ แต่เนื้อในไปต่อไม่ได้ จึงไม่ใช่ 400
@@ -59,7 +63,10 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrNoSessionsLeft),
 		errors.Is(err, services.ErrAlreadyCheckedIn),
 		errors.Is(err, services.ErrCoachAlreadyWorkedIn),
-		errors.Is(err, services.ErrAttendanceExpired):
+		errors.Is(err, services.ErrAttendanceExpired),
+		errors.Is(err, services.ErrMissedClassResolved),
+		errors.Is(err, services.ErrMissedClassOpen),
+		errors.Is(err, services.ErrMissedClassNotDue):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
@@ -450,4 +457,45 @@ func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
+
+// GetMissedClasses [GET] /api/attendance/missed-classes
+//
+// คาบที่โค้ชถูกมอบหมาย ผ่านวันมาแล้ว แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
+// ทุกคาบในรายการนี้คือค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+func (ctrl *AttendanceController) GetMissedClasses(c *gin.Context) {
+	items, err := ctrl.service.ListMissedClasses()
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// ResolveMissedClass [POST] /api/attendance/missed-classes/resolve
+//
+// ⚠️ กระทบค่าจ้างโดยตรง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าโค้ชคนไหนมาสอนบ้าง
+// ต้องส่งสถานะมาให้ครบทุกคนของคาบนั้น (ดูเหตุผลที่ dto.ResolveMissedClassRequest)
+func (ctrl *AttendanceController) ResolveMissedClass(c *gin.Context) {
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	var req dto.ResolveMissedClassRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "กรุณาระบุคาบที่ต้องการเคลียร์ และสถานะของโค้ชทุกคนในคาบนั้น (present หรือ absent)"})
+		return
+	}
+
+	result, err := ctrl.service.ResolveMissedClass(req, adminID)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "บันทึกการสอนย้อนหลังเรียบร้อยแล้ว", "data": result})
 }

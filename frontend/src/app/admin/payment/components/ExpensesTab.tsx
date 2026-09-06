@@ -5,7 +5,8 @@ import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import { createExpense, deleteExpense } from "@/services/paymentAPI";
-import { fetchCoachById, fetchCoachTaughtSessions } from "@/services/coachAPI";
+import { fetchCoachById, fetchCoachPayroll } from "@/services/coachAPI";
+import type { CoachPayrollLine } from "@/services/coachAPI";
 import { CreateExpenseReq } from "@/types/payment";
 
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
@@ -18,6 +19,18 @@ interface CoachWageInfo {
   expected: number;     // ค่าจ้างที่ควรได้ทั้งหมด = sessionsDone * payRate (รายครั้ง) หรือ = payRate เต็มจำนวน (รายเดือน)
   alreadyPaid: number;  // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว (รายครั้ง = สะสมทั้งหมด, รายเดือน = เฉพาะเดือนนี้)
   unpaid: number;       // ยอดที่เติมลงช่องจำนวนเงินให้อัตโนมัติ
+
+  // จำนวนคาบที่สอนไปแล้วแต่ยังไม่มีรอบเช็คชื่อ จึงยังไม่ถูกนับรวมใน sessionsDone
+  //
+  // ⚠️ ตัวเลขนี้คือเงินที่ยังไม่ได้อยู่ในยอดข้างบน ไม่ใช่ข้อมูลประกอบ
+  // ถ้าไม่แสดง แอดมินจะจ่ายตามยอดที่ขาดไปโดยไม่รู้ตัว
+  // เคลียร์ได้ที่ /admin/attendance/missed
+  unresolvedSessions?: number;
+  unresolvedAmount?: number;
+
+  // "8 คาบ × ฿300" + "4 คาบ × ฿400" — ทำให้แอดมินตรวจได้ว่ายอดรวมมาจากไหน
+  rateBreakdown?: CoachPayrollLine[];
+  periodNote?: string;
   // ข้อมูลบัญชีรับเงินของโค้ช — ไว้สร้าง QR พร้อมเพย์ + แสดงเลขบัญชีให้แอดมินโอน
   promptPay?: string;
   bankName?: string;    // ชื่อธนาคาร (คอลัมน์ bank_account)
@@ -88,7 +101,16 @@ export default function ExpensesTab({
     }
   };
 
-  // คำนวณค่าจ้างค้างจ่ายของโค้ชที่เลือก แล้วเติมยอดลงช่องจำนวนเงินแบบ fix
+  // ดึงยอดค่าจ้างที่ backend คำนวณให้ แล้วเติมลงช่องจำนวนเงิน
+  //
+  // ⚠️ ห้ามคำนวณยอดเองที่นี่อีก
+  //
+  // เดิมฟังก์ชันนี้คิดเองทั้งหมด: expected = sessionsDone × payRate แล้วลบด้วย
+  // ยอดที่จ่ายไปแล้ว ซึ่งพังสองทาง — backend ไม่เคยตรวจว่ายอดที่ส่งมาถูกไหม
+  // และการคูณด้วย "เรตปัจจุบัน" ทำให้วันที่ขึ้นค่าจ้าง หนี้ย้อนหลังโผล่มาเป็นก้อน
+  //
+  // ตอนนี้แหล่งความจริงเดียวคือ GET /coaches/:id/payroll
+  // (backend: services/coach_payroll.go — คิดจากสแนปช็อตเรตของแต่ละคาบ)
   const loadCoachWage = async (coachIdStr: string) => {
     if (!coachIdStr) {
       setWageInfo(null);
@@ -99,48 +121,30 @@ export default function ExpensesTab({
     setWageInfo({ loading: true, paymentType: 'per_session', payRate: 0, sessionsDone: 0, expected: 0, alreadyPaid: 0, unpaid: 0 });
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const [coach, taughtSessions] = await Promise.all([
+
+      // payroll = ตัวเลขเรื่องเงินทั้งหมด · coach = ข้อมูลบัญชีรับเงินสำหรับสร้าง QR
+      const [payroll, coach] = await Promise.all([
+        fetchCoachPayroll(coachId, token || ""),
         fetchCoachById(coachId, token || ""),
-        fetchCoachTaughtSessions(coachId, token || ""),
       ]);
 
-      const paymentType = coach.payment_type || 'per_session';
-      const payRate = coach.pay_rate || 0;
-      // ข้อมูลบัญชีรับเงินของโค้ช (ใช้สร้าง QR + แสดงเลขบัญชี)
-      const promptPay = coach.prompt_pay || '';
-      const bankName = coach.bank_account || '';
-      const accountNo = coach.payment_info || '';
-
-      if (paymentType === 'monthly') {
-        // โค้ชรายเดือน: ยอดค้างจ่าย = เงินเดือน − ค่าจ้างที่จ่ายไปแล้ว "ในเดือนนี้" (กันจ่ายซ้ำในเดือนเดียว)
-        const now = new Date();
-        const y = now.getFullYear();
-        const mo = now.getMonth();
-        const alreadyPaid = expenses
-          .filter(e => {
-            if (e.coach_id !== coachId || e.expensetype !== 'coach_wages' || !e.expensedate) return false;
-            const d = new Date(e.expensedate);
-            return d.getFullYear() === y && d.getMonth() === mo;
-          })
-          .reduce((sum, e) => sum + e.expenseamount, 0);
-        const unpaid = Math.max(payRate - alreadyPaid, 0);
-        setWageInfo({ loading: false, paymentType, payRate, sessionsDone: 0, expected: payRate, alreadyPaid, unpaid, promptPay, bankName, accountNo });
-        setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
-        return;
-      }
-
-      // นับ "คาบที่สอนจริง" จาก backend = คาบที่มีรอบเช็คชื่อปิดรอบแล้ว (attendance-based)
-      // แทนการนับ "คาบในอดีตที่ยังไม่ถูกลบ" ซึ่งไม่การันตีว่าคาบเกิดขึ้นจริง
-      const sessionsDone = taughtSessions;
-      const expected = sessionsDone * payRate;
-      // ค่าจ้างที่จ่ายให้โค้ชคนนี้ไปแล้ว (จากรายการค่าใช้จ่ายประเภทค่าจ้างโค้ชที่มีอยู่)
-      const alreadyPaid = expenses
-        .filter(e => e.coach_id === coachId && e.expensetype === 'coach_wages')
-        .reduce((sum, e) => sum + e.expenseamount, 0);
-      const unpaid = Math.max(expected - alreadyPaid, 0);
-
-      setWageInfo({ loading: false, paymentType, payRate, sessionsDone, expected, alreadyPaid, unpaid, promptPay, bankName, accountNo });
-      setExpenseForm(prev => ({ ...prev, expenseamount: String(unpaid) }));
+      setWageInfo({
+        loading: false,
+        paymentType: payroll.payment_type,
+        payRate: payroll.pay_rate,
+        sessionsDone: payroll.sessions_done,
+        expected: payroll.expected,
+        alreadyPaid: payroll.already_paid,
+        unpaid: payroll.unpaid,
+        unresolvedSessions: payroll.unresolved_sessions,
+        unresolvedAmount: payroll.unresolved_amount,
+        rateBreakdown: payroll.rate_breakdown,
+        periodNote: payroll.period_note,
+        promptPay: coach.prompt_pay || '',
+        bankName: coach.bank_account || '',
+        accountNo: coach.payment_info || '',
+      });
+      setExpenseForm(prev => ({ ...prev, expenseamount: String(payroll.unpaid) }));
     } catch (err: unknown) {
       setWageInfo({
         loading: false,
@@ -349,10 +353,23 @@ export default function ExpensesTab({
                 </div>
               ) : (
                 <div className="text-[11px] text-slate-600 space-y-0.5">
-                  <div className="flex justify-between">
-                    <span>คาบที่สอนจริง × ค่าจ้างต่อคาบ</span>
-                    <span className="font-semibold text-slate-800">{wageInfo.sessionsDone} × ฿{wageInfo.payRate.toLocaleString()}</span>
-                  </div>
+                  {/* แยกตามอัตราที่บันทึกไว้ในแต่ละคาบ ไม่ใช่ "จำนวนคาบ × เรตปัจจุบัน"
+                      โค้ชที่เคยถูกปรับค่าจ้างจะเห็นหลายบรรทัด และตรวจย้อนได้ว่ายอดมาจากไหน */}
+                  {(wageInfo.rateBreakdown?.length ?? 0) > 0 ? (
+                    wageInfo.rateBreakdown!.map(line => (
+                      <div key={line.pay_rate} className="flex justify-between">
+                        <span>คาบที่สอนจริง × ค่าจ้างต่อคาบ</span>
+                        <span className="font-semibold text-slate-800">
+                          {line.sessions} × ฿{line.pay_rate.toLocaleString()}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex justify-between">
+                      <span>คาบที่สอนจริง</span>
+                      <span className="font-semibold text-slate-800">{wageInfo.sessionsDone} คาบ</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span>ค่าจ้างที่ควรได้ทั้งหมด</span>
                     <span className="font-semibold text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
@@ -366,8 +383,25 @@ export default function ExpensesTab({
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
                   <p className="text-[10px] text-slate-400 pt-0.5">
-                    นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)
+                    {wageInfo.periodNote ?? 'นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)'}
                   </p>
+                  {/* คาบที่ไม่มีรอบเช็คชื่อจะไม่ถูกนับในยอดข้างบนเลย
+                      ถ้าไม่เตือนตรงนี้ แอดมินจะจ่ายตามยอดที่ขาดไปโดยไม่รู้ตัว */}
+                  {(wageInfo.unresolvedSessions ?? 0) > 0 && (
+                    <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5">
+                      <p className="text-[10px] font-semibold text-amber-800">
+                        ยังมีอีก {wageInfo.unresolvedSessions} คาบที่ไม่มีรอบเช็คชื่อ
+                        {(wageInfo.unresolvedAmount ?? 0) > 0 && ` (฿${wageInfo.unresolvedAmount!.toLocaleString()})`}
+                        {' '}จึงยังไม่ถูกนับในยอดนี้
+                      </p>
+                      <a
+                        href="/admin/attendance/missed"
+                        className="text-[10px] font-medium text-amber-900 underline"
+                      >
+                        เคลียร์คาบที่ค้างก่อนจ่าย
+                      </a>
+                    </div>
+                  )}
                   {wageInfo.payRate === 0 && (
                     <p className="text-[10px] text-amber-600 pt-1">
                       ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบของโค้ชคนนี้ ยอดจึงเป็น 0

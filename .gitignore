@@ -24,3 +24,11 @@ private-media/
 face-service/models/
 face-service/__pycache__/
 face-service/.venv/
+
+# เอกสารตรวจสอบ/สรุปงานภายใน — เขียนไว้คุยกันในทีม ไม่ใช่ส่วนหนึ่งของโปรแกรม
+# มีรายละเอียดช่องโหว่ที่ยังไม่ได้แก้ จึงไม่ควรอยู่ใน repo สาธารณะ
+COACH_SYSTEM_REVIEW.md
+COACH_DONE.md
+
+# เครื่องมือตรวจข้อมูลในฐานจริงแบบใช้ครั้งคราว (อ่านอย่างเดียว) ไม่ใช่ส่วนของระบบ
+backend/cmd/checkcoach/

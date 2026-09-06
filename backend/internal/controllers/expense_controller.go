@@ -32,7 +32,18 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 
 	expense, err := ctrl.service.CreateExpense(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		// ยอดไม่ผ่านด่านตรวจค่าจ้าง = คำขอผิดกฎธุรกิจ ไม่ใช่ระบบพัง
+		case errors.Is(err, services.ErrPayrollExceeds),
+			errors.Is(err, services.ErrPayrollNoUnpaid):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrPayrollNeedsCoach):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCoachNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -52,6 +63,38 @@ func (ctrl *ExpenseController) GetAllExpenses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"data": dto.ToExpenseDTOs(expenses),
 	})
+}
+
+// GetCoachPayroll handles GET /api/coaches/:id/payroll
+//
+// ⚠️ นี่คือแหล่งเดียวของยอดค่าจ้าง หน้าเว็บต้องใช้ตัวเลขจาก endpoint นี้
+// ห้ามคำนวณเองที่ฝั่ง client อีก (ดู services/coach_payroll.go)
+func (ctrl *ExpenseController) GetCoachPayroll(c *gin.Context) {
+	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	payroll, err := ctrl.service.GetCoachPayroll(uint(coachID), userID, role)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrCoachForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCoachNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถคำนวณค่าจ้างของโค้ชได้"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": payroll})
 }
 
 // GetExpensesByCoach handles GET /api/coaches/:id/expenses
