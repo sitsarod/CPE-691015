@@ -203,6 +203,19 @@ func (s *DetectedVideoService) GetDetectedVideosByRawVideoID(rawVideoID uint) ([
 	return list, err
 }
 
+// DeleteMyVideoTag ให้นักเรียนลบตัวเองออกจากวิดีโอนี้ (soft delete แท็กของตัวเองเท่านั้น)
+// เหตุผล/ความหมายเดียวกับ DetectedPhotoService.DeleteMyPhotoTag ทุกอย่าง
+func (s *DetectedVideoService) DeleteMyVideoTag(customerID, rawVideoID uint) error {
+	result := s.db.Where("raw_video_id = ? AND customer_id = ?", rawVideoID, customerID).Delete(&models.DetectedVideo{})
+	if result.Error != nil {
+		return errors.New("ไม่สามารถลบโพสต์นี้ได้")
+	}
+	if result.RowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
+}
+
 // DeleteOldRawVideos ลบวิดีโอที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
 // เหตุผล/ลำดับการลบเหมือน DeletedPhotoService.DeleteOldRawPhotos ทุกอย่าง
 func (s *DetectedVideoService) DeleteOldRawVideos(olderThan time.Duration) (int64, error) {

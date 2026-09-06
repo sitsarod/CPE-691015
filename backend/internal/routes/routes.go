@@ -355,6 +355,7 @@ func SetupRoutes(r *gin.Engine) {
 		studentPostsGroup := protected.Group("/students/posts")
 		{
 			studentPostsGroup.GET("/me", photoPostController.GetMyPosts)
+			studentPostsGroup.DELETE("/:type/:raw_id", photoPostController.DeleteMyPost)
 		}
 
 		enrollmentGroup := protected.Group("/enrollments")

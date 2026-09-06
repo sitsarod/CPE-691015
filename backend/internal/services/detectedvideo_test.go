@@ -149,6 +149,60 @@ func TestDeleteOldRawVideos(t *testing.T) {
 	}
 }
 
+// ลบแท็กของตัวเองต้องไม่กระทบวิดีโอต้นฉบับหรือแท็กของนักเรียนคนอื่นในวิดีโอเดียวกัน
+func TestDeleteMyVideoTag(t *testing.T) {
+	db := newTestDB(t, &models.Customer{}, &models.RawVideo{}, &models.DetectedVideo{})
+	svc := NewDetectedVideoService(db)
+
+	me := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-video-tag-me"}
+	db.Create(&me)
+	other := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-video-tag-other"}
+	db.Create(&other)
+
+	rawVideo := models.RawVideo{VideoURL: "/videos/1/raw"}
+	db.Create(&rawVideo)
+	db.Create(&models.DetectedVideo{CustomerID: me.ID, RawVideoID: rawVideo.ID, VideoURL: rawVideo.VideoURL})
+	db.Create(&models.DetectedVideo{CustomerID: other.ID, RawVideoID: rawVideo.ID, VideoURL: rawVideo.VideoURL})
+
+	if err := svc.DeleteMyVideoTag(me.ID, rawVideo.ID); err != nil {
+		t.Fatalf("ควรลบผ่าน แต่ได้: %v", err)
+	}
+
+	var myRemaining int64
+	db.Model(&models.DetectedVideo{}).Where("customer_id = ? AND raw_video_id = ?", me.ID, rawVideo.ID).Count(&myRemaining)
+	if myRemaining != 0 {
+		t.Fatalf("แท็กของตัวเองต้องถูกลบไป แต่ยังเหลือ %d", myRemaining)
+	}
+
+	var otherRemaining int64
+	db.Model(&models.DetectedVideo{}).Where("customer_id = ? AND raw_video_id = ?", other.ID, rawVideo.ID).Count(&otherRemaining)
+	if otherRemaining != 1 {
+		t.Fatalf("แท็กของนักเรียนคนอื่นไม่ควรถูกกระทบ แต่เหลือ %d", otherRemaining)
+	}
+
+	var remainingVideos int64
+	db.Model(&models.RawVideo{}).Count(&remainingVideos)
+	if remainingVideos != 1 {
+		t.Fatalf("วิดีโอต้นฉบับไม่ควรถูกลบ แต่เหลือ %d", remainingVideos)
+	}
+}
+
+// ลบโพสต์ที่ตัวเองไม่ได้ถูกแท็กอยู่ต้องได้ ErrPostNotFound กันเดา ID ของคนอื่นมาลบ
+func TestDeleteMyVideoTagNotFound(t *testing.T) {
+	db := newTestDB(t, &models.Customer{}, &models.RawVideo{}, &models.DetectedVideo{})
+	svc := NewDetectedVideoService(db)
+
+	me := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-delete-video-tag-missing"}
+	db.Create(&me)
+	rawVideo := models.RawVideo{VideoURL: "/videos/1/raw"}
+	db.Create(&rawVideo)
+
+	err := svc.DeleteMyVideoTag(me.ID, rawVideo.ID)
+	if !errors.Is(err, ErrPostNotFound) {
+		t.Fatalf("ควรได้ ErrPostNotFound แต่ได้: %v", err)
+	}
+}
+
 func TestManuallyAssignStudentsToVideoFiltersConsent(t *testing.T) {
 	db := newTestDB(t, &models.Customer{}, &models.RawVideo{}, &models.DetectedVideo{})
 
