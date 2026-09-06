@@ -37,6 +37,7 @@ const emptyEditForm: EditCoachForm = {
   payment_type: "per_session",
   pay_rate: 0,
   bio: "",
+  home_image: "",
 };
 
 /**
@@ -123,6 +124,7 @@ export function useCoachManagement() {
       payment_type: d.payment_type ?? "per_session",
       pay_rate: d.pay_rate ?? 0,
       bio: d.bio ?? "",
+      home_image: d.home_image ?? "",
     });
     base.setFormError(null);
     base.setModalMode("edit");
@@ -167,14 +169,28 @@ export function useCoachManagement() {
           payment_type: editForm.payment_type,
           pay_rate: editForm.pay_rate,
           bio: editForm.bio.trim(),
+          home_image: editForm.home_image,
         },
       });
     }, "ไม่สามารถบันทึกการแก้ไขได้");
   };
 
+  /**
+   * ลบโปรไฟล์โค้ช
+   *
+   * ข้อความยืนยันบอกให้ครบว่าอะไรหายอะไรอยู่ เพราะการลบไม่ได้กวาดทุกอย่างทิ้ง
+   * ประวัติการทำงานถูกเก็บไว้โดยตั้งใจ (ใช้คิดค่าจ้างย้อนหลังและตรวจสอบภายหลัง)
+   * และเลขบัตรประชาชนกับอีเมลจะยังถูกจองไว้ ใช้สมัครใหม่ด้วยเลขเดิมไม่ได้
+   * ถ้าแค่ต้องการให้โค้ชหยุดรับงานชั่วคราว ให้ใช้ปุ่มพักงานแทน
+   */
   const handleDelete = (item: CoachListItem) =>
     base.confirmAndRun(
-      `ต้องการลบโปรไฟล์โค้ช "${item.firstName} ${item.lastName}" ใช่หรือไม่?`,
+      `ต้องการลบโปรไฟล์โค้ช "${item.firstName} ${item.lastName}" ใช่หรือไม่?\n\n` +
+        `• บัญชีจะเข้าสู่ระบบไม่ได้อีก และหายจากรายชื่อโค้ช\n` +
+        `• เวลาว่างและคาบสอนที่ยังไม่ถึงกำหนดจะถูกถอดออกจากตาราง\n` +
+        `• ประวัติเช็คชื่อ คาบที่สอนไปแล้ว และรายการจ่ายค่าจ้างยังเก็บไว้\n` +
+        `• เลขบัตรประชาชนและอีเมลเดิมจะใช้สมัครใหม่ไม่ได้\n\n` +
+        `ถ้าต้องการแค่ให้หยุดรับงานชั่วคราว ให้ใช้ปุ่มพักงานแทน`,
       () => deleteCoachAPI(item.id).then(() => undefined),
       "ไม่สามารถลบข้อมูลได้",
     );

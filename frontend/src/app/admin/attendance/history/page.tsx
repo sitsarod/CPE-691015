@@ -12,7 +12,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import { fetchHistory, fetchCoachHistory, updateAttendanceStatus } from "@/services/attendanceAPI";
+import {
+  fetchHistory,
+  fetchCoachHistory,
+  updateAttendanceStatus,
+  updateCoachAttendanceStatus,
+} from "@/services/attendanceAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
 import type { AttendanceHistoryItem, AttendanceStatus, CoachHistoryItem } from "@/types/attendance";
 import {
@@ -22,6 +27,8 @@ import {
   METHOD_LABEL,
   OFF_SCHEDULE_LABEL,
   OFF_SCHEDULE_TONE,
+  COACH_STATUS_LABEL,
+  COACH_STATUS_NOTE,
   coachStatusLabel,
   statusTone,
 } from "@/types/attendance";
@@ -121,6 +128,15 @@ export default function AttendanceHistoryPage() {
   const [editing, setEditing] = useState<AttendanceHistoryItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // แก้สถานะโค้ชย้อนหลังต้องทำได้จากหน้านี้ ไม่ใช่แค่หน้ารอบที่เปิดอยู่
+  //
+  // เหตุผล: ระบบมาร์ค "ไม่ได้มาสอน" ให้อัตโนมัติตอน "ปิดรอบ" และพอปิดแล้ว
+  // รอบจะหายจากหน้าเช็คชื่อทันที (หน้านั้นดึงเฉพาะรอบที่ status = open)
+  // ถ้าหน้านี้แก้ไม่ได้ด้วย สถานะขาดงานที่ระบบมาร์คให้จะไม่มีทางแก้ในเว็บเลย
+  // ซึ่งตอนนี้แปลว่าโค้ชที่มาสอนจริงแต่ลืมสแกนจะไม่ได้เงินโดยไม่มีทางแก้
+  const [editingCoach, setEditingCoach] = useState<CoachHistoryItem | null>(null);
+  const [isSavingCoach, setIsSavingCoach] = useState(false);
+
   // null = ยังไม่ได้กดพับ/กางอะไรเลย ให้กางรอบแรกไว้ให้
   // (ใช้ null แทนการ setState ตอนข้อมูลมาถึง ซึ่งผิดกฎ react-hooks/set-state-in-effect)
   const [openKeys, setOpenKeys] = useState<Set<string> | null>(null);
@@ -209,6 +225,32 @@ export default function AttendanceHistoryPage() {
       alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /**
+   * แก้สถานะการเข้าสอนของโค้ชย้อนหลัง
+   *
+   * ต่างจากของนักเรียนตรงที่ไม่มีโควตาให้คืน แต่มีผลกับค่าจ้างแทน
+   * จึงบอกผลเรื่องเงินไปในข้อความยืนยันด้วย เพื่อให้แอดมินเห็นว่าเพิ่งทำอะไรลงไป
+   */
+  const handleSaveCoach = async (status: AttendanceStatus, remarks: string) => {
+    if (!editingCoach) return;
+
+    setIsSavingCoach(true);
+    try {
+      await updateCoachAttendanceStatus(editingCoach.attendance_id, status, remarks);
+      alert(
+        status === "present"
+          ? "แก้สถานะเรียบร้อย — นับคาบนี้เป็นคาบที่ได้ค่าจ้างแล้ว"
+          : "แก้สถานะเรียบร้อย — คาบนี้จะไม่ถูกนับค่าจ้าง"
+      );
+      setEditingCoach(null);
+      load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะของโค้ชได้");
+    } finally {
+      setIsSavingCoach(false);
     }
   };
 
@@ -360,18 +402,23 @@ export default function AttendanceHistoryPage() {
                   {round.coaches.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
                       <span className="text-sm font-semibold text-gray-600">โค้ช</span>
+                      {/* กดที่ชิปเพื่อแก้สถานะย้อนหลัง — สถานะนี้มีผลกับค่าจ้าง
+                          และตัวที่ระบบมาร์คให้ตอนปิดรอบก็แก้ได้จากตรงนี้ที่เดียว */}
                       {round.coaches.map((c) => (
-                        <span
+                        <button
                           key={c.attendance_id}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${statusTone(c.status)}`}
-                          title={c.remarks || undefined}
+                          onClick={() => setEditingCoach(c)}
+                          title={c.remarks || "กดเพื่อแก้สถานะการเข้าสอน"}
+                          aria-label={`แก้สถานะการเข้าสอนของ ${c.nickname || c.full_name.trim()}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition hover:ring-2 hover:ring-gray-300 ${statusTone(c.status)}`}
                         >
                           {c.nickname || c.full_name.trim() || `#${c.coach_id}`}
                           <span className="font-normal opacity-70">{coachStatusLabel(c.status)}</span>
                           {!c.is_scheduled && (
                             <span className="font-normal opacity-70">· ฉุกเฉิน</span>
                           )}
-                        </span>
+                          <Pencil className="h-3 w-3 opacity-50" />
+                        </button>
                       ))}
                     </div>
                   )}
@@ -509,6 +556,22 @@ export default function AttendanceHistoryPage() {
           isSubmitting={isSaving}
           onSubmit={handleSave}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {/* ใช้โมดัลตัวเดียวกับนักเรียนแต่เปลี่ยนคำ — โค้ชมา "สอน" ไม่ได้มา "เรียน"
+          และผลของสถานะเป็นเรื่องค่าจ้าง ไม่ใช่โควตา */}
+      {editingCoach && (
+        <EditStatusModal
+          title="แก้สถานะการเข้าสอน"
+          statusLabels={COACH_STATUS_LABEL}
+          statusNote={COACH_STATUS_NOTE}
+          personName={`โค้ช${editingCoach.full_name.trim() || editingCoach.nickname}`}
+          currentStatus={editingCoach.status}
+          currentRemarks={editingCoach.remarks}
+          isSubmitting={isSavingCoach}
+          onSubmit={handleSaveCoach}
+          onClose={() => setEditingCoach(null)}
         />
       )}
     </div>

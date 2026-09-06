@@ -13,7 +13,13 @@ type Coach struct {
 	// LineID / Facebook เป็นช่องทางติดต่อเสริม ไม่บังคับกรอก
 	LineID         string `json:"lineId" gorm:"type:varchar(100)"`
 	Facebook       string `json:"facebook" gorm:"type:varchar(255)"`
-	Uid            string `json:"uid" gorm:"type:varchar(255);unique" valid:"required~uid is required"`
+	// Uid = เลขบัตรประชาชนของโค้ช
+	//
+	// ⚠️ ไม่มีแท็ก unique โดยตั้งใจ ด้วยเหตุผลเดียวกับ User.Email
+	// กติกา "ห้ามเลขบัตรซ้ำ" อยู่ที่ services.EnsureSoftDeleteUniqueIndexes
+	// ซึ่งเป็น partial index ที่ไม่นับแถวที่ถูก soft delete ไปแล้ว
+	// ห้ามใส่แท็ก unique กลับเข้ามา
+	Uid            string `json:"uid" gorm:"type:varchar(255)" valid:"required~uid is required"`
 	Address        string `json:"address" gorm:"type:varchar(255)" valid:"required~address is required"`
 	BirthDate      string `json:"birth_date" gorm:"type:date" valid:"required~birthDate is required"` // ปรับเป็น type:date เพื่อมาตรฐานข้อมูล
 	Nickname       string `json:"nickname" gorm:"type:varchar(100)" valid:"required~nickname is required"`
@@ -34,6 +40,10 @@ type Coach struct {
 	// Bio = รายละเอียดเพิ่มเติม/แนะนำตัวของโค้ช (ประวัติ ความเชี่ยวชาญ ผลงาน)
 	// แสดงตอนผู้เยี่ยมชมคลิกโค้ชในส่วนบุคลากรหน้าแรก — แอดมินเป็นผู้กรอกให้ ไม่บังคับ
 	Bio string `json:"bio" gorm:"type:text"`
+
+	// HomeImage = รูปที่ใช้โชว์ในการ์ดโค้ชหน้าแรก (แยกจาก ProfilePicture ที่โค้ชแก้เอง)
+	// ⚠️ เฉพาะแอดมินเท่านั้นที่ตั้ง/แก้ได้ โค้ชไม่มีสิทธิ์แตะฟิลด์นี้
+	HomeImage string `json:"home_image" gorm:"type:varchar(255)"`
 
 	// PersonalQRCode คือ QR ประจำตัวถาวรของโค้ช ใช้สแกนเช็คชื่อเข้างาน
 	//

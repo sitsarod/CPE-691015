@@ -110,6 +110,7 @@ type CoachDetailResponse struct {
 	PaymentType    string  `json:"payment_type"` // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 	PayRate        float64 `json:"pay_rate"`     // แสดงได้ (read-only) แต่แก้ผ่าน endpoint นี้ไม่ได้
 	Bio            string  `json:"bio"`          // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
+	HomeImage      string  `json:"home_image"`   // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเอง) — ใช้ prefill ฟอร์มแก้ไข
 
 	// PersonalQRCode คือ QR ประจำตัวไว้สแกนเช็คชื่อเข้างาน
 	//

@@ -31,7 +31,7 @@ import {
   updateAttendanceStatus,
   updateCoachAttendanceStatus,
 } from "@/services/attendanceAPI";
-import { COACH_STATUS_LABEL } from "@/types/attendance";
+import { COACH_STATUS_LABEL, COACH_STATUS_NOTE } from "@/types/attendance";
 import type {
   OpenablePackage,
   OpenSessionSummary,
@@ -956,10 +956,7 @@ export default function AdminAttendancePage() {
           currentRemarks={editingCoach.remarks}
           isSubmitting={isSavingCoachStatus}
           // โค้ชไม่มีโควตาและไม่ถูกคิดค่าสนาม ข้อความของนักเรียนจึงใช้ไม่ได้
-          statusNote={{
-            present: "บันทึกว่ามาสอนคาบนี้",
-            absent: "บันทึกว่าไม่ได้มาสอน — ไม่กระทบค่าจ้าง",
-          }}
+          statusNote={COACH_STATUS_NOTE}
           onSubmit={handleSaveCoachStatus}
           onClose={() => setEditingCoach(null)}
         />

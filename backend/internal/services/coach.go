@@ -55,6 +55,10 @@ var (
 	ErrCoachDuplicateUID  = errors.New("uid นี้ถูกใช้งานแล้ว")
 	// ErrCoachInvalidPaymentType ใช้เมื่อ payment_type ที่ส่งมาไม่ใช่ "per_session" หรือ "monthly"
 	ErrCoachInvalidPaymentType = errors.New("payment_type ต้องเป็น per_session หรือ monthly เท่านั้น")
+
+	// ErrCoachNoAccount ใช้ตอนลบ เมื่อโปรไฟล์โค้ชไม่มี user_id ผูกอยู่
+	// เป็นข้อมูลเสียที่ต้องให้คนไปแก้ ไม่ใช่เคสที่ควรลบผ่านไปเงียบ ๆ (ดู CoachService.Delete)
+	ErrCoachNoAccount = errors.New("โปรไฟล์โค้ชนี้ไม่มีบัญชีผู้ใช้ผูกอยู่ กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบข้อมูล")
 )
 
 // isValidPaymentType เช็คว่าค่า payment_type ที่รับมาอยู่ในชุดที่ระบบรองรับหรือไม่
@@ -340,59 +344,40 @@ func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*m
 	return &coach, nil
 }
 
-// Delete ลบโค้ชแบบถาวร (hard delete) พร้อมกวาดข้อมูลที่ผูกกันทิ้งให้หมด กันข้อมูลค้าง
+// Delete ลบโค้ชจากหน้าจัดการโค้ช (DELETE /api/coaches/:id) โดยส่งต่อให้
+// DeleteUserAccount เป็นคนลบจริง ไม่ได้ลบเอง
 //
-// เหตุที่ต้องลบเองทีละตาราง (ไม่พึ่ง soft delete ของ gorm.Model):
-//   - soft delete แค่ตั้ง deleted_at ไม่ trigger FK ON DELETE CASCADE จริง
-//     ทำให้เวลาว่าง/คาบสอนของโค้ชที่ลบแล้วยังค้างอยู่ในตาราง
-//   - ทำใน transaction เดียว ถ้าพลาดกลางทางจะ rollback ทั้งหมด ไม่เหลือสภาพครึ่ง ๆ กลาง ๆ
-func (s *CoachService) Delete(id uint) error {
-	// เก็บ key ไว้ลบไฟล์ "หลัง commit" — Cloudinary rollback ไม่ได้
-	var faceKeys []string
-
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var coach models.Coach
-		if err := tx.First(&coach, id).Error; err != nil {
-			return err
-		}
-
-		// รูปใบหน้าเป็นข้อมูลชีวภาพ ต้องลบจริงพร้อมไฟล์ ไม่ใช่แค่แถว
-		keys, err := DeleteCoachFaceImages(tx, id)
-		if err != nil {
-			return err
-		}
-		faceKeys = keys
-
-		// 1) ลบข้อมูลที่ผูกกับโค้ช (Unscoped = ลบจริง ไม่ใช่ soft delete)
-		related := []interface{}{
-			&models.CoachAvailability{},
-			&models.WorkSchedule{},
-			&models.Photo{},
-			&models.CoachAttendance{},
-		}
-		for _, m := range related {
-			if err := tx.Unscoped().Where("coach_id = ?", id).Delete(m).Error; err != nil {
-				return err
-			}
-		}
-
-		// 2) ลบโปรไฟล์โค้ชแบบถาวร
-		if err := tx.Unscoped().Delete(&models.Coach{}, id).Error; err != nil {
-			return err
-		}
-
-		// 3) ลบบัญชีผู้ใช้ที่ผูกกับโค้ชด้วย กัน user กำพร้า (login ได้แต่ไม่มีโปรไฟล์)
-		if coach.UserID != 0 {
-			if err := tx.Unscoped().Delete(&models.User{}, coach.UserID).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
+// actorUserID คือ users.id ของแอดมินที่กดปุ่ม ส่งต่อไปให้ด่านกันลบตัวเองใช้
+//
+// ─── ทำไมเมธอดนี้ถึงไม่ลบอะไรเองเลย ───
+//
+// ของเดิมตรงนี้เขียนลำดับลบขึ้นมาเองอีกชุด แล้วใช้ tx.Unscoped() ลบจริงทุกตาราง
+// รวมถึง work_schedules กับ coach_attendances ซึ่งเป็น "ตารางที่ห้ามลบ" ตามที่
+// services/user.go เขียนกำกับไว้ชัดเจนว่าเก็บไว้ใช้คิดค่าจ้างย้อนหลัง
+//
+// ผลคือระบบมีทางลบโค้ชสองทางที่นโยบายสวนกัน และทางที่แอดมินกดจริงคือทางที่
+// ทำลายข้อมูล — กดครั้งเดียวประวัติเช็คชื่อกับตารางงานย้อนหลังหายถาวร (hard delete
+// จึง rollback ไม่ได้), แถว expenses ชี้ไปหาโค้ชที่ไม่มีตัวตนแล้วทำให้รายงานการเงิน
+// join ไม่เจอชื่อ, และแถว biometric_consents กลายเป็นแถวกำพร้าทั้งที่มีไว้พิสูจน์
+// ความชอบด้วยกฎหมายของการเก็บข้อมูลใบหน้าในอดีต
+//
+// ตอนนี้จึงเหลือทางเดียว: เส้นนี้แปลง coaches.id → users.id แล้วเรียกแกนกลางตัวเดียวกัน
+// กับที่ DELETE /api/users/:id ใช้ ได้ soft delete + เก็บบันทึกการทำงาน + ลบเฉพาะ
+// คาบในอนาคต + ลบข้อมูลชีวภาพ เหมือนกันทุกประการ
+//
+// ⚠️ อย่าเขียนลำดับลบขึ้นมาใหม่ในนี้อีก ถ้าต้องแก้นโยบายให้ไปแก้ที่ DeleteUserAccount
+// ที่เดียว ไม่งั้นจะกลับไปมีสองนโยบายเหมือนเดิม
+func (s *CoachService) Delete(id uint, actorUserID uint) error {
+	var coach models.Coach
+	if err := s.db.First(&coach, id).Error; err != nil {
 		return err
 	}
 
-	DestroyFaceImageFiles(s.faceStorage, faceKeys)
-	return nil
+	// โปรไฟล์โค้ชที่ไม่มีบัญชีผูกอยู่ถือเป็นข้อมูลเสีย — ไม่ลบครึ่ง ๆ กลาง ๆ ให้
+	// แต่ตอบกลับไปตรง ๆ เพื่อให้คนแก้ที่ต้นเหตุ (ปกติเกิดไม่ได้ เพราะ Create บังคับ user_id)
+	if coach.UserID == 0 {
+		return ErrCoachNoAccount
+	}
+
+	return DeleteUserAccount(s.db, s.faceStorage, coach.UserID, actorUserID)
 }

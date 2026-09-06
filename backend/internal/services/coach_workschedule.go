@@ -222,12 +222,36 @@ func (s *workScheduleService) GetByCoachID(coachID uint, userID uint, role strin
 // ใช้คำนวณค่าจ้าง (นับจำนวน) และให้ frontend จัดกลุ่มรายเดือนได้ด้วยเกณฑ์เดียวกันทั้งระบบ
 //
 // นิยาม "สอนจริง" = คาบสอน (WorkSchedule) ที่มีรอบเช็คชื่อ (AttendanceSession) ของ
-// package เดียวกันในวันเดียวกัน และรอบนั้น "ปิดแล้ว" (status = closed)
+// package เดียวกันในวันเดียวกัน รอบนั้น "ปิดแล้ว" (status = closed)
+// และโค้ชคนนั้น "ไม่ได้ถูกมาร์คว่าขาดงาน" ในรอบนั้น
 // การปิดรอบเช็คชื่อคือหลักฐานว่าคาบนั้นเกิดขึ้นจริง (ไม่ใช่แค่มีตารางในอดีต)
 //
 // ผลที่ได้:
 //   - คาบที่ถูกยกเลิก (ลบตารางทิ้ง = soft delete) ไม่ถูกนับอยู่แล้ว
 //   - คาบในอดีตที่ไม่เคยเปิด/ปิดรอบเช็คชื่อ (โค้ชไม่มา/ไม่ได้สอน) ก็ไม่ถูกนับ
+//   - คาบที่โค้ชถูกมาร์ค absent ไม่ถูกนับ
+//
+// ─── เงื่อนไข "ไม่ขาดงาน" ใช้เกณฑ์แบบผ่อนปรน ───
+//
+// ตัดออกเฉพาะเมื่อ "มีแถว coach_attendances ที่บอกว่า absent ชัดเจน" เท่านั้น
+// ไม่ใช่ "ต้องมีแถว present ถึงจะได้เงิน" — สองแบบนี้ต่างกันตรงแถวที่หายไป
+//
+// เลือกแบบผ่อนปรนเพราะ:
+//
+//  1. สำหรับข้อมูลใหม่ ให้ผลเหมือนแบบเข้มงวดทุกประการอยู่แล้ว เนื่องจาก
+//     markCoachAbsentees สร้างแถว absent ให้โค้ชทุกคนที่มีตารางแต่ไม่ได้สแกน
+//     ตอนปิดรอบ และจับคู่ด้วยคีย์ชุดเดียวกับ query นี้ (package_id + date)
+//     หลังปิดรอบจึงไม่มีคาบไหนที่ "ไม่มีแถว" หลงเหลือ
+//
+//  2. แต่กับข้อมูลเก่าที่ปิดรอบไปก่อนระบบเช็คชื่อโค้ชจะมีผลบังคับ ยังไม่มีแถวเลย
+//     ถ้าใช้เกณฑ์เข้มงวด คาบเหล่านั้นจะกลายเป็นศูนย์ยกแผง แล้วยอดค่าจ้าง
+//     ย้อนหลังทั้งระบบจะเปลี่ยนทันทีที่ deploy โดยไม่มีใครตั้งใจ
+//
+// สรุปคือ "ไม่มีข้อมูล" ไม่ได้แปลว่า "ขาดงาน" — ต้องมีคนหรือระบบมาร์คไว้จริงเท่านั้น
+//
+// ⚠️ ถ้าโค้ชมาสอนจริงแต่ลืมสแกน ระบบจะมาร์ค absent ให้ตอนปิดรอบและโค้ชจะไม่ได้เงิน
+// ทางแก้คือให้แอดมินแก้สถานะย้อนหลังผ่าน UpdateCoachAttendanceStatus
+// (หน้ารอบที่เปิดอยู่ และหน้าประวัติเช็คชื่อ ทั้งสองหน้ามีปุ่มแก้ให้แล้ว)
 //
 // Fallback สำหรับคาบแบบเก่า (package_id = NULL) ที่จับคู่ attendance ไม่ได้:
 // ใช้เกณฑ์เดิม = คาบที่วันสอนผ่านไปแล้ว (date < วันนี้) และยังไม่ถูกลบ
@@ -239,14 +263,41 @@ func (s *workScheduleService) TaughtSessionDates(coachID uint, userID uint, role
 	return s.taughtSessionDates(coachID)
 }
 
+// taughtScheduleScope จำกัดผลลัพธ์ให้เหลือเฉพาะคาบที่ "นับว่าสอนจริง" ของโค้ชคนหนึ่ง
+// (เฉพาะคาบใหม่ที่มี package_id — คาบเก่าใช้เกณฑ์อื่น ดู taughtSessionDates)
+//
+// แยกออกมาเป็นฟังก์ชันของตัวเองด้วยสองเหตุผล:
+//
+//  1. นี่คือกติกาที่ตัดสินว่าโค้ชได้เงินกี่คาบ ควรมีที่มาที่เดียวและมีชื่อเรียก
+//     ไม่ใช่เงื่อนไขที่ฝังอยู่กลาง query จนคนอ่านไม่ทันสังเกตว่าแตะเงิน
+//
+//  2. เทสยิงเข้ามาที่นี่ได้ตรง ๆ โดยไม่ต้องผ่าน to_char ซึ่งเป็นฟังก์ชันเฉพาะของ
+//     postgres (sqlite ที่ใช้ในเทสไม่มี) ส่วน to_char เป็นแค่การจัดรูปแบบวันที่
+//     ไม่ใช่ตรรกะที่ต้องเทส
+//
+// ใช้ NOT EXISTS แทน LEFT JOIN แล้วเช็ค NULL โดยตั้งใจ — LEFT JOIN ทำให้จำนวนแถว
+// ผลลัพธ์ขึ้นกับตารางที่ join เข้ามา ซึ่งเสี่ยงไปกระทบการนับคาบ (= จำนวนเงิน)
+// ส่วน NOT EXISTS เป็นแค่ตัวกรอง ไม่เพิ่มไม่ลดแถว
+func taughtScheduleScope(db *gorm.DB, coachID uint) *gorm.DB {
+	return db.Model(&models.WorkSchedule{}).
+		Joins("JOIN attendance_sessions a ON a.package_id = work_schedules.package_id AND a.session_date = work_schedules.date AND a.deleted_at IS NULL").
+		Where("work_schedules.coach_id = ? AND work_schedules.package_id IS NOT NULL AND a.status = ?",
+			coachID, models.AttendanceSessionClosed).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM coach_attendances ca
+			WHERE ca.coach_id = work_schedules.coach_id
+			  AND ca.attendance_session_id = a.id
+			  AND ca.status = ?
+			  AND ca.deleted_at IS NULL
+		)`, models.AttendanceStatusAbsent)
+}
+
 // taughtSessionDates เป็น query จริง (ไม่เช็คสิทธิ์) — ให้ public method ข้างบนเรียกหลังตรวจสิทธิ์แล้ว
 // คืนวันที่แบบ YYYY-MM-DD ผ่าน to_char เพื่อกัน format วันที่เพี้ยนจากชนิด time.Time ของ driver
 func (s *workScheduleService) taughtSessionDates(coachID uint) ([]string, error) {
-	// คาบใหม่ (มี package_id): เอาเฉพาะที่มีรอบเช็คชื่อปิดแล้วจริง
+	// คาบใหม่ (มี package_id): เอาเฉพาะที่มีรอบเช็คชื่อปิดแล้วจริง และโค้ชไม่ได้ถูกมาร์คว่าขาด
 	var attended []string
-	if err := s.db.Model(&models.WorkSchedule{}).
-		Joins("JOIN attendance_sessions a ON a.package_id = work_schedules.package_id AND a.session_date = work_schedules.date AND a.deleted_at IS NULL").
-		Where("work_schedules.coach_id = ? AND work_schedules.package_id IS NOT NULL AND a.status = ?", coachID, models.AttendanceSessionClosed).
+	if err := taughtScheduleScope(s.db, coachID).
 		Pluck("to_char(work_schedules.date, 'YYYY-MM-DD')", &attended).Error; err != nil {
 		return nil, err
 	}

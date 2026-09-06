@@ -6,6 +6,7 @@ import SelectField from "@/components/SelectField";
 import { FormError, DetailItem } from "@/components/admin/ManagementUI";
 import { CoachProfile, COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, CoachPaymentType, BANK_OPTIONS } from "@/types/coach";
 import { formatDate } from "@/lib/format";
+import AvatarUploader from "@/components/AvatarUploader";
 
 // ข้อมูลที่แก้ไขได้ (ผ่าน PATCH /coaches/:id + /coaches/:id/level)
 export interface EditCoachForm {
@@ -22,6 +23,7 @@ export interface EditCoachForm {
   payment_type: CoachPaymentType;
   pay_rate: number;
   bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก (ไม่บังคับ)
+  home_image: string; // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเอง — โค้ชแก้ไม่ได้)
 }
 
 interface Props {
@@ -69,6 +71,21 @@ export function EditCoachModal({
             </dl>
           </div>
         )}
+
+        {/* รูปการ์ดโค้ชหน้าแรก — เฉพาะแอดมินตั้งได้ (crop + ยืนยันเหมือนอัปโหลดโปรไฟล์) */}
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="mb-2 text-sm font-semibold text-gray-700">
+            รูปการ์ดโค้ชหน้าแรก <span className="font-normal text-gray-400">(แสดงในหน้าแรก · เฉพาะแอดมินตั้งได้)</span>
+          </p>
+          <AvatarUploader
+            currentUrl={editForm.home_image}
+            initials={(editForm.nickname?.[0] || "C").toUpperCase()}
+            folder="home"
+            shape="square"
+            cropAspect={3 / 4}
+            onUploaded={(url) => setEditForm({ ...editForm, home_image: url })}
+          />
+        </div>
 
         {/* ข้อมูลที่แก้ไขได้ */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
