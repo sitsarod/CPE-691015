@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image as ImageIcon,
   Video,
@@ -13,6 +13,8 @@ import {
   BadgeCheck,
   PencilLine,
   CircleAlert,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { DetectManager, DetectStudent, Detection, BatchItem, MAX_BATCH_FILES, AUTO_CONFIRM_THRESHOLD } from './useDetect';
 
@@ -28,6 +30,7 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
     dragActive,
     setDragActive,
     analyzingAll,
+    savingAll,
     batchError,
     readyToAnalyzeCount,
     pickFiles,
@@ -41,8 +44,64 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
     removeDetection,
     addMissedStudent,
     saveItem,
+    confirmAndSaveAll,
     isItemReviewed,
   } = manager;
+
+  // เฉพาะไฟล์ที่วิเคราะห์เสร็จแล้วเท่านั้นที่โชว์ในสไลด์ตรวจทาน — ที่เหลือยังอยู่ในคิวรออัปโหลด/วิเคราะห์
+  const analyzedItems = items.filter((item) => item.detections !== null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    setActiveIndex((i) => Math.min(i, Math.max(0, analyzedItems.length - 1)));
+  }, [analyzedItems.length]);
+
+  const goPrev = () => setActiveIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setActiveIndex((i) => Math.min(analyzedItems.length - 1, i + 1));
+
+  // เลื่อนด้วยลูกศรซ้าย/ขวาบนแป้นพิมพ์ — ข้ามถ้าโฟกัสอยู่ในช่องกรอกข้อมูล/dropdown อยู่แล้ว
+  // (ไม่งั้นจะแย่ง arrow key จากตอนกำลังเลือก option ในเมนู)
+  useEffect(() => {
+    if (analyzedItems.length <= 1) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [analyzedItems.length]);
+
+  // ลากด้วยเมาส์/นิ้วเพื่อเลื่อนรูป — ตามเมาส์แบบ real-time ระหว่างลาก แล้วค่อยตัดสินว่าจะ
+  // เปลี่ยนรูปหรือเด้งกลับตอนปล่อย (เกินสัดส่วนที่กำหนดของความกว้างการ์ดถึงจะเปลี่ยนรูป)
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dragStartXRef = useRef(0);
+  const [isSlideDragging, setIsSlideDragging] = useState(false);
+  const [slideDragOffset, setSlideDragOffset] = useState(0);
+
+  const handleSlidePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (analyzedItems.length <= 1) return;
+    // ไม่แย่งลากถ้ากดโดนปุ่ม/dropdown/ลิงก์ ให้มันทำงานปกติของมันไป
+    if ((e.target as HTMLElement).closest('button, select, input, a, textarea')) return;
+    setIsSlideDragging(true);
+    dragStartXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleSlidePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isSlideDragging) return;
+    setSlideDragOffset(e.clientX - dragStartXRef.current);
+  };
+
+  const endSlideDrag = () => {
+    if (!isSlideDragging) return;
+    setIsSlideDragging(false);
+    const width = viewportRef.current?.offsetWidth || 1;
+    const threshold = width * 0.15; // ลากผ่าน 15% ของความกว้างการ์ดถึงจะเปลี่ยนรูป
+    if (slideDragOffset < -threshold) goNext();
+    else if (slideDragOffset > threshold) goPrev();
+    setSlideDragOffset(0);
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
@@ -186,31 +245,82 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
         </div>
       </div>
 
-      {/* ผลการจำแนกของแต่ละไฟล์ */}
-      {items.map(
-        (item) =>
-          item.detections !== null && (
-            <ItemReviewPanel
-              key={item.uid}
-              item={item}
-              students={students}
-              onConfirm={(detectionUid) => confirmDetection(item.uid, detectionUid)}
-              onConfirmAllPending={() => confirmAllPending(item.uid)}
-              onReassign={(detectionUid, studentId) => reassignDetection(item.uid, detectionUid, studentId)}
-              onRemove={(detectionUid) => removeDetection(item.uid, detectionUid)}
-              onAddMissed={() => addMissedStudent(item.uid)}
-              onSave={() => saveItem(item.uid)}
-              allReviewed={isItemReviewed(item)}
-            />
-          )
+      {/* ผลการจำแนกของแต่ละไฟล์ — เลื่อนดูทีละรูป + ยืนยัน/บันทึกทั้งชุดในคลิกเดียว */}
+      {analyzedItems.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={activeIndex === 0}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="min-w-[72px] text-center text-sm font-bold text-gray-600">
+                รูปที่ {activeIndex + 1} / {analyzedItems.length}
+              </span>
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={activeIndex === analyzedItems.length - 1}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+
+            {/* ยืนยันรายการที่ยังค้าง "รอตรวจสอบ" ของทุกไฟล์ในชุด แล้วบันทึกให้ทีเดียวจบ */}
+            <button
+              type="button"
+              onClick={confirmAndSaveAll}
+              disabled={savingAll}
+              className="flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingAll ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {savingAll ? 'กำลังยืนยัน+บันทึก...' : `ยืนยัน + บันทึกทั้งหมด (${analyzedItems.length} ไฟล์)`}
+            </button>
+          </div>
+
+          <div ref={viewportRef} className="overflow-hidden">
+            <div
+              className={`flex cursor-grab touch-pan-y select-none active:cursor-grabbing ${
+                isSlideDragging ? '' : 'transition-transform duration-300 ease-out'
+              }`}
+              style={{ transform: `translateX(calc(-${activeIndex * 100}% + ${slideDragOffset}px))` }}
+              onPointerDown={handleSlidePointerDown}
+              onPointerMove={handleSlidePointerMove}
+              onPointerUp={endSlideDrag}
+              onPointerLeave={endSlideDrag}
+              onPointerCancel={endSlideDrag}
+            >
+              {analyzedItems.map((item) => (
+                <div key={item.uid} className="w-full flex-shrink-0">
+                  <ItemReviewPanel
+                    item={item}
+                    students={students}
+                    onConfirm={(detectionUid) => confirmDetection(item.uid, detectionUid)}
+                    onConfirmAllPending={() => confirmAllPending(item.uid)}
+                    onReassign={(detectionUid, studentId) => reassignDetection(item.uid, detectionUid, studentId)}
+                    onRemove={(detectionUid) => removeDetection(item.uid, detectionUid)}
+                    onAddMissed={() => addMissedStudent(item.uid)}
+                    onSave={() => saveItem(item.uid)}
+                    allReviewed={isItemReviewed(item)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
-      {items.every((item) => item.detections === null) && (
+      {analyzedItems.length === 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 p-5 text-sm text-gray-500">
           <UploadCloud size={18} className="mt-0.5 flex-shrink-0 text-gray-400" />
           <p>
             หลังวิเคราะห์เสร็จ ระบบจะแสดงรายชื่อผู้เรียนที่ตรวจพบให้ตรวจทานทีละคน หากมีคนอื่นที่ AI มองข้าม
-            หรือจำแนกผิด สามารถแก้ไข/เพิ่มเองได้ก่อนยืนยันผลลัพธ์ (แต่ละไฟล์ยืนยันแยกกัน)
+            หรือจำแนกผิด สามารถแก้ไข/เพิ่มเองได้ก่อนยืนยันผลลัพธ์ (เลื่อนดูได้ทีละรูป ยืนยันทีละไฟล์หรือทั้งชุดพร้อมกันก็ได้)
           </p>
         </div>
       )}
@@ -281,6 +391,9 @@ function ItemReviewPanel({
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{item.error}</div>
       )}
 
+      {/* รูปที่อัปโหลดพร้อมกรอบ+ชื่อทับใบหน้าที่ตรวจพบ — ไว้ตรวจทานเท่านั้น ตัวไฟล์จริงไม่ถูกแก้ */}
+      {!item.isVideo && <PhotoPreviewWithMarks file={item.file} detections={detections} />}
+
       <div className="mt-5 flex flex-col gap-3">
         {detections.map((d) => (
           <DetectionRow
@@ -335,6 +448,64 @@ function ItemReviewPanel({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ==================== รูปพร้อมกรอบ+ชื่อทับใบหน้า (เฉพาะตอนตรวจทาน) ====================
+// bbox ที่ backend ส่งมาเป็นพิกเซลของรูปต้นฉบับ — แปลงเป็น % ของขนาดจริง (naturalWidth/Height)
+// เพื่อวางกรอบให้ตรงตำแหน่งไม่ว่ารูปจะถูกย่อแสดงผลเล็กแค่ไหนบนจอ
+function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: Detection[] }) {
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const marked = detections.filter((d): d is Detection & { bbox: [number, number, number, number] } => !!d.bbox);
+
+  return (
+    <div className="relative mt-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+      {/* ⚠️ ห้ามใส่ max-height/object-contain ตรงนี้ — ถ้ากล่องรูปเล็กกว่ารูปจริงจะเกิดขอบว่าง
+          (letterbox) ทำให้กรอบ % เพี้ยนไปจากใบหน้าจริง ต้องปล่อยให้รูปเต็มความกว้างเสมอ
+          เพื่อให้กล่องที่ห่อรูปมีขนาดเท่ารูปที่แสดงผลจริงพอดี ตำแหน่ง % จะได้ตรงเป๊ะ */}
+      <img
+        src={previewUrl}
+        alt=""
+        className="block w-full"
+        onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+      />
+      {naturalSize &&
+        marked.map((d) => {
+          // bbox จาก face-service แนบไปกับใบหน้าเป๊ะ (คิ้วถึงคาง) ขยายออกอีกหน่อยให้วงคลุม
+          // ทั้งหน้ารวมผมด้วย ไม่งั้นวงจะรัดแน่นจนดูเหมือนเล็งผิดตำแหน่ง
+          const [bx1, by1, bx2, by2] = d.bbox;
+          const padX = (bx2 - bx1) * 0.35;
+          const padY = (by2 - by1) * 0.15;
+          const x1 = Math.max(0, bx1 - padX);
+          const y1 = Math.max(0, by1 - padY);
+          const x2 = Math.min(naturalSize.w, bx2 + padX);
+          const y2 = Math.min(naturalSize.h, by2 + padY);
+
+          return (
+            <div
+              key={d.uid}
+              className="absolute"
+              style={{
+                left: `${(x1 / naturalSize.w) * 100}%`,
+                top: `${(y1 / naturalSize.h) * 100}%`,
+                width: `${((x2 - x1) / naturalSize.w) * 100}%`,
+                height: `${((y2 - y1) / naturalSize.h) * 100}%`,
+              }}
+            >
+              {/* กรอบล้อมใบหน้า — สี่เหลี่ยมสีแดงของธีมเว็บ ไล่ตามสัดส่วนกรอบหน้าที่ตรวจพบ */}
+              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
+              {/* ป้ายชื่อไว้ด้านล่างกรอบแทนด้านบน — กันชนขอบบนของรูปเวลาใบหน้าอยู่ริมภาพ */}
+              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2.5 py-1 text-sm font-black text-white shadow-md">
+                {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
+              </span>
+            </div>
+          );
+        })}
     </div>
   );
 }
