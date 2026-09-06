@@ -83,39 +83,41 @@ export default function Home() {
           {coaches.length === 0 ? (
             <p className="mt-12 text-center text-gray-400">เร็วๆ นี้</p>
           ) : (
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {coaches.map((coach) => {
-                const name =
-                  coach.nickname ||
-                  [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
-                  `โค้ช #${coach.id}`;
-                return (
-                  <button
-                    key={coach.id}
-                    type="button"
-                    onClick={() => setSelectedCoach(coach)}
-                    className="group flex flex-col items-center text-center focus:outline-none"
-                  >
-                    {coach.profile_picture ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coach.profile_picture} alt={name}
-                        className="w-40 h-40 rounded-full object-cover shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40" />
-                    ) : (
-                      <div className="w-40 h-40 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40">
-                        <UserRound className="w-16 h-16" />
-                      </div>
-                    )}
-                    <h3 className="mt-5 text-xl font-bold text-gray-900">{name}</h3>
-                    {coach.specialization && (
-                      <p className="mt-1 text-sm text-[#CC0000] font-medium">{coach.specialization}</p>
-                    )}
-                    {coach.bio?.trim() && (
-                      <p className="mt-2 line-clamp-3 max-w-[15rem] text-sm text-gray-500">{coach.bio}</p>
-                    )}
-                    <span className="mt-2 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูเพิ่มเติม</span>
-                  </button>
-                );
-              })}
+            <div className="mt-12 -mx-6 md:-mx-12 lg:-mx-24 overflow-x-auto">
+              <div className="flex gap-8 w-max mx-auto px-6 md:px-12 lg:px-24 pt-6 pb-4 items-start">
+                {coaches.map((coach) => {
+                  const name =
+                    coach.nickname ||
+                    [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
+                    `โค้ช #${coach.id}`;
+                  return (
+                    <button
+                      key={coach.id}
+                      type="button"
+                      onClick={() => setSelectedCoach(coach)}
+                      className="group flex w-72 shrink-0 flex-col items-center text-center focus:outline-none"
+                    >
+                      {coach.profile_picture ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coach.profile_picture} alt={name}
+                          className="w-40 h-40 rounded-full object-cover shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40" />
+                      ) : (
+                        <div className="w-40 h-40 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40">
+                          <UserRound className="w-16 h-16" />
+                        </div>
+                      )}
+                      <h3 className="mt-5 text-xl font-bold text-gray-900">{name}</h3>
+                      {coach.specialization && (
+                        <p className="mt-1 text-sm text-[#CC0000] font-medium">{coach.specialization}</p>
+                      )}
+                      {coach.bio?.trim() && (
+                        <p className="mt-2 w-full whitespace-pre-line text-sm leading-relaxed text-gray-500">{coach.bio}</p>
+                      )}
+                      <span className="mt-3 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูเพิ่มเติม</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
