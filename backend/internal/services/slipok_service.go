@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -168,25 +167,26 @@ func digitsOnly(s string) string {
 	return b.String()
 }
 
-// loadSlipImage โหลดไฟล์สลิป โดยอ่านจากดิสก์โดยตรงถ้าเป็นไฟล์ที่อยู่ใน ./uploads ของระบบเอง
-// (กันปัญหากรณี URL เป็น localhost ที่ SlipOK เข้าถึงจากภายนอกไม่ได้) ถ้าไม่ใช่ก็ค่อย fallback ไป fetch ผ่าน HTTP
+// loadSlipImage โหลดไฟล์สลิปจากดิสก์ของระบบเอง (โฟลเดอร์ ./uploads)
+//
+// ⚠️ ตั้งใจไม่ fetch URL ภายนอกตามอำเภอใจ เพราะ slip_url มาจาก client ได้โดยตรง
+// ถ้าเอาไป http.Get ตรง ๆ ผู้ใช้จะชี้ไปยังปลายทางภายใน (เช่น metadata endpoint / บริการหลังบ้าน)
+// แล้วให้เซิร์ฟเวอร์ยิงแทนได้ = ช่องโหว่ SSRF สลิปทุกใบถูกอัปโหลดเข้ามาที่ /uploads/ อยู่แล้ว
+// จึงอ่านจากดิสก์ได้เสมอ URL ที่ไม่มี /uploads/ ถือว่าไม่ถูกต้อง
 func loadSlipImage(slipURL string) ([]byte, string, error) {
-	if _, relative, found := strings.Cut(slipURL, "/uploads/"); found {
-		localPath := filepath.Join("uploads", relative)
-		if data, err := os.ReadFile(localPath); err == nil {
-			return data, filepath.Base(localPath), nil
-		}
+	_, relative, found := strings.Cut(slipURL, "/uploads/")
+	if !found {
+		return nil, "", errors.New("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดในระบบเท่านั้น")
 	}
 
-	resp, err := http.Get(slipURL)
-	if err != nil {
-		return nil, "", errors.New("ไม่สามารถดึงรูปสลิปเพื่อตรวจสอบได้")
-	}
-	defer resp.Body.Close()
+	// filepath.Clean บนพาธที่ขึ้นต้นด้วย "/" จะ resolve ../ ทั้งหมดแล้วบังคับให้อยู่ใต้ราก
+	// กัน path traversal ไต่ออกนอก uploads (เช่น /uploads/../../.env)
+	relative = filepath.Clean("/" + relative)
+	localPath := filepath.Join("uploads", relative)
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := os.ReadFile(localPath)
 	if err != nil {
 		return nil, "", errors.New("ไม่สามารถอ่านรูปสลิปเพื่อตรวจสอบได้")
 	}
-	return data, "slip.jpg", nil
+	return data, filepath.Base(localPath), nil
 }
