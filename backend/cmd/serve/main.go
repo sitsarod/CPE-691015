@@ -105,7 +105,7 @@ const photoPostRetention = 7 * 24 * time.Hour
 // startPhotoPostCleanupJob ลบรูป/วิดีโอโพสต์ที่เกิน photoPostRetention อัตโนมัติ
 // รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง (ความถี่เดียวกับลบห้องแชทเก่า)
 func startPhotoPostCleanupJob() {
-	mediaStorage := services.NewLocalMediaStorage()
+	mediaStorage := services.NewMediaStorage()
 	photoService := services.NewDetectedPhotoService(config.DB).WithMediaStorage(mediaStorage)
 	videoService := services.NewDetectedVideoService(config.DB).WithMediaStorage(mediaStorage)
 
