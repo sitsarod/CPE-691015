@@ -18,7 +18,7 @@ export default function Home() {
   const [home, setHome] = useState<PublicHome | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // โค้ชที่ถูกคลิกในหน้าแรก → เปิด modal
+  const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // คลิกการ์ดโค้ช → เปิด modal รายละเอียด
 
   useEffect(() => {
     const loadData = async () => {
@@ -83,41 +83,42 @@ export default function Home() {
           {coaches.length === 0 ? (
             <p className="mt-12 text-center text-gray-400">เร็วๆ นี้</p>
           ) : (
-            <div className="mt-12 -mx-6 md:-mx-12 lg:-mx-24 overflow-x-auto">
-              <div className="flex gap-8 w-max mx-auto px-6 md:px-12 lg:px-24 pt-6 pb-4 items-start">
-                {coaches.map((coach) => {
-                  const name =
-                    coach.nickname ||
-                    [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
-                    `โค้ช #${coach.id}`;
-                  return (
-                    <button
-                      key={coach.id}
-                      type="button"
-                      onClick={() => setSelectedCoach(coach)}
-                      className="group flex w-72 shrink-0 flex-col items-center text-center focus:outline-none"
-                    >
-                      {coach.profile_picture ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coach.profile_picture} alt={name}
-                          className="w-40 h-40 rounded-full object-cover shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40" />
-                      ) : (
-                        <div className="w-40 h-40 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40">
-                          <UserRound className="w-16 h-16" />
-                        </div>
-                      )}
-                      <h3 className="mt-5 text-xl font-bold text-gray-900">{name}</h3>
+            <div className="mt-12 flex flex-wrap justify-center gap-8">
+              {coaches.map((coach) => {
+                // ใช้รูปหน้าแรกที่แอดมินตั้ง ถ้ายังไม่ตั้งค่อย fallback รูปโปรไฟล์โค้ช
+                const img = coach.home_image || coach.profile_picture;
+                const name =
+                  coach.nickname ||
+                  [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
+                  `โค้ช #${coach.id}`;
+                return (
+                  <button
+                    key={coach.id}
+                    type="button"
+                    onClick={() => setSelectedCoach(coach)}
+                    className="group relative aspect-[3/4] w-64 sm:w-72 overflow-hidden rounded-3xl bg-gray-100 shadow-sm ring-1 ring-black/5 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl focus:outline-none"
+                  >
+                    {img ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img} alt={name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gray-300">
+                        <UserRound className="h-16 w-16" />
+                      </div>
+                    )}
+
+                    {/* ไล่เฉดดำด้านล่าง + ชื่อโค้ช (จัดกึ่งกลาง) */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 pb-6 pt-16 text-center">
+                      <h3 className="text-xl font-bold leading-tight text-white drop-shadow">{name}</h3>
                       {coach.specialization && (
-                        <p className="mt-1 text-sm text-[#CC0000] font-medium">{coach.specialization}</p>
+                        <span className="mt-2 inline-block rounded-full bg-[#CC0000] px-3 py-0.5 text-xs font-bold text-white">
+                          ระดับ {coach.specialization}
+                        </span>
                       )}
-                      {coach.bio?.trim() && (
-                        <p className="mt-2 w-full whitespace-pre-line text-sm leading-relaxed text-gray-500">{coach.bio}</p>
-                      )}
-                      <span className="mt-3 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูเพิ่มเติม</span>
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -356,74 +357,58 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Modal รายละเอียดโค้ช — เปิดเมื่อคลิกโค้ชในส่วนบุคลากร */}
-      {selectedCoach && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          onClick={() => setSelectedCoach(null)}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setSelectedCoach(null)}
-              className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10"
-              aria-label="ปิด"
-            >
-              <X className="h-5 w-5" />
-            </button>
+      {/* Modal รายละเอียดโค้ช — เปิดเมื่อคลิกการ์ดในส่วนบุคลากร */}
+      {selectedCoach && (() => {
+        const c = selectedCoach;
+        const img = c.home_image || c.profile_picture;
+        const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ");
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setSelectedCoach(null)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setSelectedCoach(null)}
+                className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/80 text-gray-700 shadow transition hover:bg-white"
+                aria-label="ปิด"
+              >
+                <X className="h-5 w-5" />
+              </button>
 
-            <div className="flex flex-col items-center px-6 pt-8 pb-6 text-center">
-              {selectedCoach.profile_picture ? (
+              {/* รูปด้านบน — เต็มความกว้าง สัดส่วน 3:4 (ตรงกับรูปที่ครอปไว้) ไม่มีขอบข้าง */}
+              {img ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selectedCoach.profile_picture}
-                  alt=""
-                  className="h-32 w-32 rounded-full object-cover shadow-md"
-                />
+                <img src={img} alt="" className="aspect-[3/4] w-full bg-gray-50 object-cover" />
               ) : (
-                <div className="grid h-32 w-32 place-items-center rounded-full bg-gray-100 text-gray-300 shadow-md">
-                  <UserRound className="h-14 w-14" />
+                <div className="flex aspect-[3/4] w-full items-center justify-center bg-gray-100 text-gray-300">
+                  <UserRound className="h-20 w-20" />
                 </div>
               )}
 
-              <h3 className="mt-4 text-2xl font-bold text-gray-900">
-                {selectedCoach.nickname ||
-                  [selectedCoach.firstName, selectedCoach.lastName].filter(Boolean).join(" ") ||
-                  `โค้ช #${selectedCoach.id}`}
-              </h3>
-              {(selectedCoach.firstName || selectedCoach.lastName) && selectedCoach.nickname && (
-                <p className="mt-0.5 text-sm text-gray-400">
-                  {[selectedCoach.firstName, selectedCoach.lastName].filter(Boolean).join(" ")}
-                </p>
-              )}
+              <div className="p-6">
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {c.nickname || fullName || `โค้ช #${c.id}`}
+                </h3>
+                {fullName && c.nickname && <p className="mt-0.5 text-sm text-gray-400">{fullName}</p>}
 
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                {selectedCoach.specialization && (
-                  <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-[#CC0000]">
-                    ระดับ {selectedCoach.specialization}
-                  </span>
-                )}
-                {selectedCoach.coach_license && (
-                  <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-                    {selectedCoach.coach_license}
-                  </span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {c.specialization && (
+                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-[#CC0000]">ระดับ {c.specialization}</span>
+                  )}
+                  {c.coach_license && (
+                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{c.coach_license}</span>
+                  )}
+                </div>
+
+                {c.bio?.trim() ? (
+                  <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-gray-600">{c.bio}</p>
+                ) : (
+                  <p className="mt-4 text-sm text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
                 )}
               </div>
             </div>
-
-            <div className="border-t border-gray-100 px-6 py-5">
-              {selectedCoach.bio?.trim() ? (
-                <p className="whitespace-pre-line text-sm leading-relaxed text-gray-600">{selectedCoach.bio}</p>
-              ) : (
-                <p className="text-center text-sm text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

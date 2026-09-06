@@ -17,6 +17,7 @@ export interface PublicCoach {
   specialization: string;
   coach_license: string;
   profile_picture: string;
+  home_image: string; // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเอง)
   bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
   feature_on_home: boolean;
 }
