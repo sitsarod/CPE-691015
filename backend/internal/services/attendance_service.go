@@ -112,10 +112,11 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 		var studentCount int64
 		s.db.Model(&models.Enrollment{}).
 			Where("package_id IN ? AND status = ?", ids, models.EnrollmentStatusActive).
+			Distinct("customer_id").
 			Count(&studentCount)
 
 		confirmedCount := 0
-		if confirmed, err := s.confirmedEnrollments(s.db, ids, sessionDateValue(now)); err == nil {
+		if confirmed, err := s.confirmedCustomers(s.db, ids, sessionDateValue(now), key.start); err == nil {
 			confirmedCount = len(confirmed)
 		}
 
@@ -265,7 +266,7 @@ func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSes
 		return nil, nil, err
 	}
 
-	confirmed, err := s.confirmedEnrollments(tx, packageIDs, session.SessionDate)
+	confirmed, err := s.confirmedCustomers(tx, packageIDs, session.SessionDate, session.ScheduleStartTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,15 +286,12 @@ func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSes
 
 	for _, group := range groupEnrollmentsByCustomer(enrollments) {
 		var (
-			rep          *models.Enrollment
-			record       *models.StudentAttendance
-			anyConfirmed bool
+			rep    *models.Enrollment
+			record *models.StudentAttendance
 		)
+		anyConfirmed := confirmed[group[0].CustomerID]
 
 		for _, e := range group {
-			if confirmed[e.ID] {
-				anyConfirmed = true
-			}
 			if r := byEnrollment[e.ID]; r != nil && record == nil {
 				record, rep = r, e
 			}
@@ -313,37 +311,28 @@ func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSes
 	return roster, walkInCandidates, nil
 }
 
-func (s *AttendanceService) confirmedEnrollments(tx *gorm.DB, packageIDs []uint, classDate time.Time) (map[uint]bool, error) {
+func (s *AttendanceService) confirmedCustomers(tx *gorm.DB, packageIDs []uint, classDate time.Time, startTime string) (map[uint]bool, error) {
 	if len(packageIDs) == 0 {
 		return map[uint]bool{}, nil
 	}
 
-	var rows []models.ClassConfirmation
+	var ids []uint
 	if err := tx.Model(&models.ClassConfirmation{}).
-		Select("class_confirmations.*").
-		Joins("JOIN enrollments ON enrollments.id = class_confirmations.enrollment_id AND enrollments.deleted_at IS NULL").
-		Where("enrollments.package_id IN ? AND enrollments.status = ? AND class_confirmations.class_date = ? AND class_confirmations.status = ?",
-			packageIDs, models.EnrollmentStatusActive, dateKey(classDate), models.ClassConfirmationGoing).
-		Find(&rows).Error; err != nil {
+		Joins("JOIN enrollments e ON e.id = class_confirmations.enrollment_id AND e.deleted_at IS NULL").
+		Where("e.package_id IN ? AND e.status = ?", packageIDs, models.EnrollmentStatusActive).
+		Where("class_confirmations.class_date = ? AND class_confirmations.status = ?",
+			dateKey(classDate), models.ClassConfirmationGoing).
+		Where("class_confirmations.schedule_start_time = ?", startTime).
+		Distinct("e.customer_id").
+		Pluck("e.customer_id", &ids).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายชื่อที่ยืนยันมาเรียนได้")
 	}
 
-	out := make(map[uint]bool, len(rows))
-	for _, r := range rows {
-		out[r.EnrollmentID] = true
+	out := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
 	}
 	return out, nil
-}
-
-func isConfirmedForSession(tx *gorm.DB, enrollmentID uint, classDate time.Time) bool {
-	var count int64
-	if err := tx.Model(&models.ClassConfirmation{}).
-		Where("enrollment_id = ? AND class_date = ? AND status = ?",
-			enrollmentID, dateKey(classDate), models.ClassConfirmationGoing).
-		Count(&count).Error; err != nil {
-		return false
-	}
-	return count > 0
 }
 
 func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageIDs []uint) ([]models.Enrollment, error) {
@@ -504,18 +493,7 @@ func (s *AttendanceService) classEnrollments(
 		return nil, nil
 	}
 
-	q := tx.Where("customer_id = ? AND package_id IN ? AND status = ?",
-		customerID, packageIDs, models.EnrollmentStatusActive).
-		Order("id ASC")
-	if preloadCustomer {
-		q = q.Preload("Customer").Preload("Customer.User")
-	}
-
-	var list []models.Enrollment
-	if err := q.Find(&list).Error; err != nil {
-		return nil, errors.New("ไม่สามารถดึงข้อมูลการลงทะเบียนได้")
-	}
-	return list, nil
+	return customerClassEnrollments(tx, customerID, packageIDs, preloadCustomer)
 }
 
 func groupEnrollmentsByCustomer(enrollments []models.Enrollment) [][]*models.Enrollment {
@@ -580,7 +558,7 @@ func (s *AttendanceService) resolveClassEnrollment(
 	if customer == nil {
 		customer = picked.Customer
 	}
-	return s.buildContext(tx, session, picked, customer), nil
+	return s.buildContext(tx, session, picked, customer, packageIDs), nil
 }
 
 // resolveByQR — ด่าน 2 (หาตัวคนจาก QR) และ 3 (อยู่ในแพ็กเกจนี้และสิทธิ์ยังไม่หมดอายุ)
@@ -622,7 +600,7 @@ func (s *AttendanceService) resolveByEnrollment(tx *gorm.DB, session *models.Att
 		return nil, ErrNotInPackage
 	}
 
-	return s.buildContext(tx, session, &enrollment, enrollment.Customer), nil
+	return s.buildContext(tx, session, &enrollment, enrollment.Customer, packageIDs), nil
 }
 
 func (s *AttendanceService) buildContext(
@@ -630,11 +608,12 @@ func (s *AttendanceService) buildContext(
 	session *models.AttendanceSession,
 	enrollment *models.Enrollment,
 	customer *models.Customer,
+	packageIDs []uint,
 ) *scanContext {
 	ctx := &scanContext{
 		Session:    *session,
 		Enrollment: *enrollment,
-		Confirmed:  isConfirmedForSession(tx, enrollment.ID, session.SessionDate),
+		Confirmed:  confirmedForClass(tx, enrollment.CustomerID, packageIDs, session.SessionDate, session.ScheduleStartTime),
 	}
 
 	if customer != nil {

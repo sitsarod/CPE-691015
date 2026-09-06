@@ -102,6 +102,14 @@ func main() {
 		log.Fatalf("สร้าง index ของอีเมล/เลขบัตรประชาชนไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.EnsureAttendanceUniqueIndexes(db); err != nil {
+		log.Fatalf("สร้าง index กันเช็คชื่อซ้ำต่อคนไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
+		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {
 		log.Fatalf("ปรับแพ็กเกจของตารางงานโค้ชไม่สำเร็จ: %v", err)
 	}

@@ -146,6 +146,45 @@ func NormalizeFutureWorkSchedulePackages(db *gorm.DB) error {
 	return nil
 }
 
+func customerClassEnrollments(db *gorm.DB, customerID uint, packageIDs []uint, preloadCustomer bool) ([]models.Enrollment, error) {
+	if len(packageIDs) == 0 {
+		return nil, nil
+	}
+
+	q := db.Where("customer_id = ? AND package_id IN ? AND status = ?",
+		customerID, packageIDs, models.EnrollmentStatusActive).
+		Order("id ASC")
+	if preloadCustomer {
+		q = q.Preload("Customer").Preload("Customer.User")
+	}
+
+	var list []models.Enrollment
+	if err := q.Find(&list).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงข้อมูลการลงทะเบียนได้")
+	}
+	return list, nil
+}
+
+func confirmedForClass(db *gorm.DB, customerID uint, packageIDs []uint, classDate time.Time, startTime string) bool {
+	if len(packageIDs) == 0 {
+		return false
+	}
+
+	var n int64
+	err := db.Model(&models.ClassConfirmation{}).
+		Joins("JOIN enrollments e ON e.id = class_confirmations.enrollment_id AND e.deleted_at IS NULL").
+		Where("e.customer_id = ? AND e.package_id IN ? AND e.status = ?",
+			customerID, packageIDs, models.EnrollmentStatusActive).
+		Where("class_confirmations.class_date = ? AND class_confirmations.status = ?",
+			dateKey(classDate), models.ClassConfirmationGoing).
+		Where("class_confirmations.schedule_start_time = ?", startTime).
+		Count(&n).Error
+	if err != nil {
+		return false
+	}
+	return n > 0
+}
+
 func (s *AttendanceService) openSessionForSlot(
 	tx *gorm.DB,
 	packageIDs []uint,
