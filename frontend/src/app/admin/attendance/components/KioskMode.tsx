@@ -291,6 +291,15 @@ export default function KioskMode({
                 pausedReason={pausedReason}
                 frameClassName={FRAME_CLASS}
                 onFaceFrame={onFaceFrame}
+                overlay={
+                  outcome && (
+                    <ScanResultBanner
+                      variant="overlay"
+                      outcome={outcome}
+                      onDismiss={onDismissOutcome}
+                    />
+                  )
+                }
               />
             </div>
           ) : canScan ? (
@@ -328,6 +337,14 @@ export default function KioskMode({
               </div>
             </FrameCard>
           )}
+          {/* กล้องปิดอยู่ → ผลมาขึ้นเป็นแถบตรงนี้แทน (ตอนเปิดกล้องมันไปขึ้นทับบนภาพ)
+              ⚠️ ต้องเลือกอย่างใดอย่างหนึ่ง ไม่งั้นผลเดียวกันโผล่สองที่ และได้ยินเสียงซ้อนสองครั้ง
+              เพราะ ScanResultBanner เรียก beep ของตัวเองทุกตัว */}
+          {outcome && !showCamera && (
+            <div className="w-full max-w-md">
+              <ScanResultBanner outcome={outcome} onDismiss={onDismissOutcome} />
+            </div>
+          )}
         </main>
 
         <CoachStrip coaches={coaches} />
@@ -357,14 +374,6 @@ export default function KioskMode({
           </button>
         </footer>
       </div>
-
-      {outcome && (
-        <ScanResultBanner
-          variant="fullscreen"
-          outcome={outcome}
-          onDismiss={onDismissOutcome}
-        />
-      )}
 
       {/* การ์ดยืนยันมาก่อนผลลัพธ์เสมอ — ถ้ามีทั้งคู่แปลว่ากำลังจะบันทึกรายถัดไป */}
       {faceCandidate && onConfirmFace && onCancelFace && (

@@ -8,10 +8,10 @@ import { fetchAllCourses } from "@/services/courseAPI";
 import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
 import { CourseDTO } from "@/types/course";
-import CourseCover from "@/components/course/CourseCover";
+import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 import { PublicHome, PublicCoach } from "@/types/homeContent";
 import { Review } from "@/types/review";
-import { BookOpen, Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X } from "lucide-react";
 
 export default function Home() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
@@ -140,37 +140,22 @@ export default function Home() {
               <Loader2 className="w-10 h-10 animate-spin text-[#CC0000]" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            // แถวเลื่อนซ้ายขวา — เดิมเป็นกริดสามคอลัมน์ที่พอคอร์สเยอะจะยาวลงไปเรื่อย ๆ
+            // จนดันเนื้อหาส่วนถัดไปตกจอ
+            //
+            // ความกว้างการ์ด 84vw บนจอเล็กโดยตั้งใจ ให้เห็นขอบใบถัดไปโผล่มานิดหนึ่ง
+            // เป็นสัญญาณว่าเลื่อนได้ ถ้าเต็ม 100% จะดูเหมือนมีใบเดียว
+            <div
+              className="-mx-1 flex snap-x snap-mandatory gap-8 overflow-x-auto px-1 pb-3
+                         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {courses.map((course) => (
-                <Link key={course.id} href={`/courses/${course.id}`}>
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-                    <CourseCover
-                      src={course.image_url}
-                      alt={course.course_name}
-                      className="aspect-[16/9] w-full shrink-0 bg-gray-50 object-cover"
-                    />
-
-                    <div className="p-8 flex flex-1 flex-col">
-                    <div className="flex items-center gap-3 mb-4">
-                      <BookOpen className="w-6 h-6 text-[#CC0000]" />
-                      <span className="bg-red-100 text-[#CC0000] text-xs font-bold px-3 py-1 rounded-full uppercase">
-                        {course.status}
-                      </span>
-                    </div>
-
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{course.course_name}</h3>
-                    <p className="text-gray-600 text-sm mb-6 flex-grow line-clamp-3">
-                      {course.description}
-                    </p>
-
-                    <div className="border-t pt-4 text-center">
-                      <span className="text-[#CC0000] font-semibold text-sm hover:underline">
-                        ดูรายละเอียดและแพ็กเกจทั้งหมด →
-                      </span>
-                    </div>
-                    </div>
-                  </div>
-                </Link>
+                <div
+                  key={course.id}
+                  className="w-[min(25rem,86vw)] shrink-0 snap-start"
+                >
+                  <CourseSummaryCard course={course} href={`/courses/${course.id}`} />
+                </div>
               ))}
             </div>
           )}
