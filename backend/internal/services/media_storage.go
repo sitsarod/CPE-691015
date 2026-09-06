@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 )
 
 // ─── ที่เก็บไฟล์ของระบบจำแนกนักเรียนในรูป/วิดีโอ (RawPhoto/RawVideo) ───
@@ -36,4 +37,20 @@ type MediaStorage interface {
 
 	// Delete ลบไฟล์จริงตาม storage key — ไม่พบไฟล์อยู่แล้วถือว่าสำเร็จ (idempotent)
 	Delete(ctx context.Context, kind MediaKind, storageKey string) error
+}
+
+// NewMediaStorage เลือกที่เก็บไฟล์ตาม environment ที่ตั้งไว้ — ใช้จุดเดียวนี้จากทั้ง
+// routes.go และ cmd/serve/main.go (background cleanup job) กันไม่ให้ทั้งสองที่เลือกคนละอย่างกัน
+//
+// ตั้งค่า R2 ครบ (ดู r2_media_storage.go) จะใช้ R2 ซึ่งอยู่ถาวรข้ามการ redeploy
+// ไม่ตั้งค่าไว้เลย fallback ไปเก็บดิสก์เครื่อง (LocalMediaStorage) — ใช้ได้เฉพาะ dev เท่านั้น
+// เพราะดิสก์ของ container ส่วนใหญ่เป็น ephemeral ไฟล์จะหายทุกครั้งที่ redeploy
+func NewMediaStorage() MediaStorage {
+	if r2 := NewR2MediaStorage(); r2 != nil {
+		log.Println("ใช้ Cloudflare R2 เป็นที่เก็บไฟล์รูป/วิดีโอโพสต์")
+		return r2
+	}
+	log.Println("ยังไม่ได้ตั้งค่า R2 (R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_BUCKET) — " +
+		"ใช้ดิสก์เครื่องเก็บไฟล์รูป/วิดีโอโพสต์ชั่วคราวแทน (ไม่เหมาะกับ production)")
+	return NewLocalMediaStorage()
 }

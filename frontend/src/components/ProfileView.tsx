@@ -8,6 +8,7 @@ import type { Evaluation } from "@/types/evaluation";
 import { fetchMyPosts } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 import PostMediaThumb from "@/components/PostMediaThumb";
+import PostViewerModal from "@/components/PostViewerModal";
 import { Grid2X2, ClipboardCheck, ImageOff } from "lucide-react";
 
 
@@ -111,6 +112,16 @@ export default function ProfileView({
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsError, setPostsError] = useState<string | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+
+  // ปิดหน้าต่างดูโพสต์อัตโนมัติถ้าโพสต์ที่เหลือหมดไป (เช่นลบจนว่าง) ไม่งั้นเลื่อน index ให้อยู่ในขอบเขตเสมอ
+  useEffect(() => {
+    setViewingIndex((i) => {
+      if (i === null) return null;
+      if (posts.length === 0) return null;
+      return Math.min(i, posts.length - 1);
+    });
+  }, [posts.length]);
 
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
@@ -323,9 +334,15 @@ export default function ProfileView({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
-                {posts.map((post) => (
+                {posts.map((post, i) => (
                   <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
-                    <PostMediaThumb post={post} />
+                    <PostMediaThumb
+                      post={post}
+                      onOpen={() => setViewingIndex(i)}
+                      onDeleted={() =>
+                        setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)))
+                      }
+                    />
                     {post.type === "video" && (
                       <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
                         วิดีโอ
@@ -387,6 +404,15 @@ export default function ProfileView({
         )}
 
       </div>
+
+      {viewingIndex !== null && (
+        <PostViewerModal
+          posts={posts}
+          index={viewingIndex}
+          onClose={() => setViewingIndex(null)}
+          onNavigate={setViewingIndex}
+        />
+      )}
     </div>
   );
 }

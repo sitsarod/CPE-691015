@@ -45,6 +45,9 @@ type FaceEmbedAllResult struct {
 type DetectedFaceEmbedding struct {
 	Embedding []float32
 	Quality   float64
+	// BBox คือกรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซลของรูปต้นฉบับ — ใช้วาดกรอบ/ชื่อ
+	// ทับรูปตอนโค้ชตรวจทาน (ไม่ได้ฝังลงไฟล์จริง) nil ได้ถ้า face-service รุ่นเก่าไม่ส่งมา
+	BBox []float64
 }
 
 type FaceEngine interface {
@@ -116,6 +119,7 @@ type embedAllResponse struct {
 	Faces     []struct {
 		Embedding []float32 `json:"embedding"`
 		Quality   float64   `json:"quality"`
+		BBox      []float64 `json:"bbox"`
 	} `json:"faces"`
 }
 
@@ -193,7 +197,7 @@ func (e *HTTPFaceEngine) EmbedAll(ctx context.Context, image []byte) (*FaceEmbed
 		if len(f.Embedding) != faceEmbedDimensions {
 			continue
 		}
-		faces = append(faces, DetectedFaceEmbedding{Embedding: f.Embedding, Quality: f.Quality})
+		faces = append(faces, DetectedFaceEmbedding{Embedding: f.Embedding, Quality: f.Quality, BBox: f.BBox})
 	}
 
 	return &FaceEmbedAllResult{
