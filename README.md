@@ -222,20 +222,22 @@ npm run dev      # http://localhost:3000
 Python service ที่แปลงรูปใบหน้าเป็น embedding — **ถ้าไม่รัน รูปที่นักเรียนอัปโหลด
 จะค้างสถานะ "กำลังประมวลผล" ตลอด** ส่วนอย่างอื่นของระบบทำงานปกติ (รวมถึงเช็คชื่อด้วย QR)
 
-**ติดตั้งครั้งแรกครั้งเดียว** (ต้องมี Homebrew)
+> 💡 **แนะนำ:** `insightface` ไม่มี wheel สำเร็จรูป ต้อง compile จาก source (ต้องมี C/C++ compiler + cmake)
+> ถ้าไม่อยากยุ่งกับ toolchain — โดยเฉพาะบน Windows — ใช้ **[ทางเลือก Docker](#รัน-face-service-ด้วย-docker-ข้ามแพลตฟอร์ม)** ด้านล่างจะง่ายและชัวร์กว่ามาก
+
+<details>
+<summary><b>macOS / Linux (native)</b></summary>
+
+**ติดตั้งครั้งแรกครั้งเดียว** (macOS ต้องมี Homebrew)
 ```bash
+# macOS
 brew install python@3.12 cmake
+# Ubuntu/Debian: sudo apt install -y python3.12 python3.12-venv build-essential cmake
+
 cd face-service
 python3.12 -m venv .venv
 .venv/bin/pip install numpy==1.26.4 Cython==3.0.11   # ต้องมาก่อน insightface
 .venv/bin/pip install -r requirements.txt
-```
-รันครั้งแรกจะโหลดโมเดล buffalo_l (~330 MB) ลง `~/.insightface/` อัตโนมัติ
-
-**ตั้งค่าใน `.env` ที่ root**
-```
-FACE_SERVICE_URL=http://127.0.0.1:8099
-FACE_SERVICE_SECRET=<สุ่มด้วย openssl rand -hex 32>
 ```
 
 **รันทุกครั้งที่จะทดสอบ**
@@ -246,6 +248,58 @@ FACE_SERVICE_SECRET=$(grep ^FACE_SERVICE_SECRET= ../.env | cut -d= -f2) \
 ```
 
 เช็คว่าขึ้นแล้ว: `curl http://127.0.0.1:8099/health`
+</details>
+
+<details>
+<summary><b>Windows (native)</b></summary>
+
+Windows ไม่มี Homebrew และ `insightface` ต้อง compile เอง จึงต้องลง toolchain ก่อน
+เส้นทางนี้ค่อนข้างหนักและพังง่าย — ถ้าเป็นไปได้แนะนำใช้ **[Docker](#รัน-face-service-ด้วย-docker-ข้ามแพลตฟอร์ม)** แทน
+
+**ติดตั้งครั้งแรกครั้งเดียว** (PowerShell)
+```powershell
+# ต้องลง C++ build tools ด้วย ไม่งั้น insightface build ไม่ผ่าน
+winget install Python.Python.3.12 Kitware.CMake Microsoft.VisualStudio.2022.BuildTools
+# ในตัวติดตั้ง Build Tools ให้ติ๊ก workload "Desktop development with C++" แล้วปิด-เปิด terminal ใหม่
+
+cd face-service
+py -3.12 -m venv .venv
+.venv\Scripts\pip install numpy==1.26.4 Cython==3.0.11   # ต้องมาก่อน insightface
+.venv\Scripts\pip install -r requirements.txt
+```
+
+**รันทุกครั้งที่จะทดสอบ** (path ใช้ `\Scripts\` ไม่ใช่ `/bin/`)
+```powershell
+cd face-service
+$env:FACE_SERVICE_SECRET = (Select-String '^FACE_SERVICE_SECRET=' ..\.env).Line.Split('=')[1]
+.venv\Scripts\uvicorn main:app --host 127.0.0.1 --port 8099
+```
+
+เช็คว่าขึ้นแล้ว: `curl http://127.0.0.1:8099/health` (หรือ `Invoke-RestMethod http://127.0.0.1:8099/health`)
+</details>
+
+รันครั้งแรก (native) จะโหลดโมเดล buffalo_l (~330 MB) ลง `~/.insightface/` อัตโนมัติ
+
+**ตั้งค่าใน `.env` ที่ root** (จำเป็นทั้งแบบ native และ Docker)
+```
+FACE_SERVICE_URL=http://127.0.0.1:8099
+FACE_SERVICE_SECRET=<สุ่มด้วย openssl rand -hex 32>
+```
+
+#### รัน face-service ด้วย Docker (ข้ามแพลตฟอร์ม)
+
+ไม่ต้องลง Python 3.12 / cmake / compiler เองเลย — ทุกอย่างถูกจัดการใน Dockerfile (ใช้ Python 3.11 ภายใน
+และฝังโมเดล buffalo_l ลงอิมเมจตอน build) เหมาะกับ **Windows** เป็นพิเศษ ต้องมี Docker Desktop เปิดอยู่
+
+```bash
+# จาก root ของโปรเจกต์
+docker compose up -d --build face-service
+docker compose logs -f face-service      # ดู log / เช็คว่าขึ้นแล้ว
+```
+
+> ⚠️ ใน `docker-compose.yml` ตัว `face-service` **ตั้งใจไม่ map port ออกมา** — เรียกได้เฉพาะจาก network
+> ภายในของ compose (backend เรียกผ่าน `http://face-service:8080`) ฉะนั้นให้รัน backend ใน compose
+> เดียวกันด้วย ไม่ต้องตั้ง `FACE_SERVICE_URL` เป็น `127.0.0.1:8099` แบบ native
 
 > รายละเอียด API / วิธี deploy บน Railway / ข้อจำกัดลิขสิทธิ์ของโมเดล — ดู `face-service/README.md`
 
