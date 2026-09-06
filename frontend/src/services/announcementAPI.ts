@@ -16,8 +16,11 @@ interface ApiResponse<T> {
 
 export const announcementAPI = {
   // Public: คืนเฉพาะประกาศที่กำลังแสดงผล (active) — ใช้กับหน้าเว็บสาธารณะ
-  getPublicAnnouncements: async (): Promise<Announcement[]> => {
-    const res = await apiFetch<ApiResponse<Announcement[]>>('/announcements');
+  // audience: 'guest' = หน้าแรกก่อนล็อกอิน, 'member' = แดชบอร์ดลูกค้าที่ล็อกอินแล้ว
+  // ไม่ระบุ = ไม่กรอง visibility (ใช้เมื่อยังไม่ทราบกลุ่มเป้าหมาย)
+  getPublicAnnouncements: async (audience?: 'guest' | 'member'): Promise<Announcement[]> => {
+    const qs = audience ? `?audience=${audience}` : '';
+    const res = await apiFetch<ApiResponse<Announcement[]>>(`/announcements${qs}`);
     return res.data;
   },
 

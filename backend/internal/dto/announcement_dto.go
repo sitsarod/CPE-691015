@@ -8,6 +8,7 @@ type AnnouncementDTO struct {
 	Content     string       `json:"content"`
 	ImageURL    string       `json:"image_url"`
 	Link        string       `json:"link"`
+	Visibility  string       `json:"visibility"`
 	UserID      uint         `json:"user_id"`
 	User        *UserDTO     `json:"user"`
 	CategoryID  uint         `json:"category_id"`
@@ -37,6 +38,8 @@ type CreateAnnouncementReq struct {
 	Content    string    `json:"content"`
 	ImageURL   string    `json:"image_url"`
 	Link       string    `json:"link"`
+	// ใครเห็นประกาศนี้ได้บ้าง: "all" | "guest" | "member" — เว้นว่างมา = ค่าเริ่มต้น "all"
+	Visibility string    `json:"visibility"`
 	// user_id ไม่รับจาก client อีกต่อไป — controller จะดึงจาก JWT ของแอดมินที่ล็อกอินอยู่
 	// เพื่อกันการปลอมเจ้าของประกาศ (attribution) และให้ตรงกับตัวตนจริงเสมอ
 	CategoryID uint      `json:"category_id" binding:"required"`
@@ -53,6 +56,7 @@ type UpdateAnnouncementReq struct {
 	Content    *string    `json:"content"`
 	ImageURL   *string    `json:"image_url"`
 	Link       *string    `json:"link"`
+	Visibility *string    `json:"visibility"`
 	CategoryID *uint      `json:"category_id"`
 	StartDate  *time.Time `json:"start_date"`
 	EndDate    *time.Time `json:"end_date"`

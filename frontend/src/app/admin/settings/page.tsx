@@ -1,35 +1,25 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { homeContentAPI } from '@/services/homeContentAPI';
-import { HomeContent, HeroSlide, PublicCoach } from '@/types/homeContent';
-import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
+import { HomeContent, PublicCoach } from '@/types/homeContent';
 import {
   Users,
-  Plus,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
   MapPin,
   Loader2,
   Check,
+  Megaphone,
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState<HomeContent | null>(null);
-  const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [coaches, setCoaches] = useState<PublicCoach[]>([]);
 
   // content form state
   const [savingContent, setSavingContent] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-
-  // slide upload state
-  const [uploadingSlide, setUploadingSlide] = useState(false);
-  const slideFileRef = useRef<HTMLInputElement>(null);
-
 
   useEffect(() => {
     loadAll();
@@ -38,13 +28,11 @@ export default function AdminSettingsPage() {
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [c, s, co] = await Promise.all([
+      const [c, co] = await Promise.all([
         homeContentAPI.getHomeContent(),
-        homeContentAPI.getSlides(),
         homeContentAPI.getAllCoaches(),
       ]);
       setContent(c);
-      setSlides(s);
       setCoaches(co);
     } catch (error) {
       console.error('โหลดข้อมูลหน้าแรกไม่สำเร็จ:', error);
@@ -97,75 +85,6 @@ export default function AdminSettingsPage() {
     }
   };
 
-  // ---------- Hero slides ----------
-  const handleAddSlide = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const sizeError = validateImageSize(file);
-    if (sizeError) {
-      alert(sizeError);
-      if (slideFileRef.current) slideFileRef.current.value = '';
-      return;
-    }
-    try {
-      setUploadingSlide(true);
-      const url = await homeContentAPI.uploadImage(file);
-      const created = await homeContentAPI.createSlide({
-        image_url: url,
-        sort_order: slides.length,
-      });
-      setSlides((prev) => [...prev, created]);
-    } catch (error: any) {
-      alert(`เพิ่มรูปสไลด์ไม่สำเร็จ: ${error.message}`);
-    } finally {
-      setUploadingSlide(false);
-      if (slideFileRef.current) slideFileRef.current.value = '';
-    }
-  };
-
-  const handleDeleteSlide = async (id: number) => {
-    if (!window.confirm('ต้องการลบรูปสไลด์นี้หรือไม่?')) return;
-    try {
-      await homeContentAPI.deleteSlide(id);
-      setSlides((prev) => prev.filter((s) => s.id !== id));
-    } catch (error: any) {
-      alert(`ลบไม่สำเร็จ: ${error.message}`);
-    }
-  };
-
-  const handleToggleSlideActive = async (slide: HeroSlide) => {
-    try {
-      const updated = await homeContentAPI.updateSlide(slide.id, { is_active: !slide.is_active });
-      setSlides((prev) => prev.map((s) => (s.id === slide.id ? updated : s)));
-    } catch (error: any) {
-      alert(`อัปเดตไม่สำเร็จ: ${error.message}`);
-    }
-  };
-
-  const handleUpdateCaption = async (slide: HeroSlide, caption: string) => {
-    if (caption === slide.caption) return;
-    try {
-      const updated = await homeContentAPI.updateSlide(slide.id, { caption });
-      setSlides((prev) => prev.map((s) => (s.id === slide.id ? updated : s)));
-    } catch (error: any) {
-      alert(`อัปเดตคำบรรยายไม่สำเร็จ: ${error.message}`);
-    }
-  };
-
-  const moveSlide = async (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= slides.length) return;
-    const reordered = [...slides];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    setSlides(reordered);
-    try {
-      await homeContentAPI.reorderSlides(reordered.map((s) => s.id));
-    } catch (error: any) {
-      alert(`จัดลำดับไม่สำเร็จ: ${error.message}`);
-      loadAll();
-    }
-  };
-
   // ---------- Coaches ----------
   const handleToggleCoach = async (coach: PublicCoach) => {
     try {
@@ -201,77 +120,22 @@ export default function AdminSettingsPage() {
         </p>
       </div>
 
-      {/* ===== รูปสไลด์ ===== */}
-      <SectionCard title="รูปสไลด์ (Hero Slider)"
-        desc={`รูปภาพขนาดใหญ่ที่เลื่อนสลับด้านบนสุดของหน้าแรก — แสดงเป็นแบนเนอร์สัดส่วน 16:9 ควรอัปแนวนอน 1920×1080 พิกเซล (16:9) เพื่อให้พอดีแบนเนอร์และเห็นรูปเต็มทั้งภาพทุกขนาดจอ ขนาดไฟล์ไม่เกิน ${MAX_UPLOAD_MB} MB ต่อรูป`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {slides.map((slide, index) => (
-            <div key={slide.id} className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={slide.image_url} alt={slide.caption || `slide ${index + 1}`}
-                  className="w-full h-40 object-cover" />
-                {!slide.is_active && (
-                  <span className="absolute top-2 left-2 rounded-full bg-gray-900/70 text-white text-xs px-2 py-0.5">
-                    ซ่อนอยู่
-                  </span>
-                )}
-                <span className="absolute top-2 right-2 rounded-full bg-white/90 text-gray-700 text-xs font-bold px-2 py-0.5">
-                  #{index + 1}
-                </span>
-              </div>
-              <div className="p-3 space-y-3">
-                <input
-                  type="text"
-                  defaultValue={slide.caption}
-                  onBlur={(e) => handleUpdateCaption(slide, e.target.value)}
-                  placeholder="คำบรรยาย (ไม่บังคับ)"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none"
-                />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => moveSlide(index, -1)} disabled={index === 0}
-                      className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนขึ้น">
-                      <ArrowUp size={16} />
-                    </button>
-                    <button onClick={() => moveSlide(index, 1)} disabled={index === slides.length - 1}
-                      className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนลง">
-                      <ArrowDown size={16} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleToggleSlideActive(slide)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                        slide.is_active ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}>
-                      {slide.is_active ? 'แสดงอยู่' : 'ซ่อนอยู่'}
-                    </button>
-                    <button onClick={() => handleDeleteSlide(slide.id)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50" title="ลบ">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* ปุ่มเพิ่มรูป */}
-          <button
-            type="button"
-            onClick={() => slideFileRef.current?.click()}
-            disabled={uploadingSlide}
-            className="flex flex-col items-center justify-center gap-2 h-full min-h-[220px] rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-[#CC0000] hover:text-[#CC0000] transition-colors disabled:opacity-50"
-          >
-            {uploadingSlide ? <Loader2 className="h-8 w-8 animate-spin" /> : <Plus className="h-8 w-8" />}
-            <span className="text-sm font-medium">{uploadingSlide ? 'กำลังอัปโหลด...' : 'เพิ่มรูปสไลด์'}</span>
-          </button>
-          <input type="file" accept="image/*" className="hidden" ref={slideFileRef} onChange={handleAddSlide} />
+      {/* ===== รูปสไลด์ — ย้ายไปจัดการที่หน้า "สร้างประกาศ" แล้ว ===== */}
+      <div className="rounded-2xl border border-[#CC0000]/20 bg-[#FFF6F6] p-5 flex items-start gap-4">
+        <div className="w-10 h-10 rounded-xl bg-[#CC0000]/10 flex items-center justify-center text-[#CC0000] flex-shrink-0">
+          <Megaphone size={20} />
         </div>
-        {slides.length === 0 && (
-          <p className="mt-3 text-xs text-gray-400">ยังไม่มีรูปสไลด์ — หน้าแรกจะใช้รูปเริ่มต้นชั่วคราวจนกว่าจะเพิ่มรูป</p>
-        )}
-      </SectionCard>
+        <div>
+          <p className="font-semibold text-gray-900">รูปสไลด์หน้าแรกย้ายไปอยู่ที่ "จัดการประกาศข่าวสาร" แล้ว</p>
+          <p className="mt-1 text-sm text-gray-600">
+            รูปสไลด์ของหน้าแรกตอนนี้ดึงมาจากรูปปกของประกาศที่ตั้งค่าให้ <span className="font-medium">"ผู้เยี่ยมชม"</span> หรือ{' '}
+            <span className="font-medium">"ทั้งคู่"</span> เห็น — สร้าง/แก้ไข/จัดการได้ที่{' '}
+            <Link href="/admin/announcements" className="text-[#CC0000] font-semibold hover:underline">
+              จัดการประกาศข่าวสาร
+            </Link>
+          </p>
+        </div>
+      </div>
 
       {/* ===== เกี่ยวกับเรา ===== */}
       <SectionCard title="เกี่ยวกับเรา (About)"

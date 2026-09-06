@@ -11,12 +11,17 @@ export interface User {
   role: string;
 }
 
+// ใครเห็นประกาศนี้ได้บ้าง: "all" = ทุกคน, "guest" = เฉพาะผู้เยี่ยมชมที่ยังไม่ล็อกอิน,
+// "member" = เฉพาะสมาชิกที่ล็อกอินแล้ว
+export type AnnouncementVisibility = 'all' | 'guest' | 'member';
+
 export interface Announcement {
   id: number;
   title: string;
   content: string;
   image_url: string;
   link?: string;
+  visibility: AnnouncementVisibility;
   user_id: number;
   user?: User;
   category_id: number;
@@ -34,6 +39,7 @@ export interface CreateAnnouncementReq {
   content: string;
   image_url: string;
   link?: string;
+  visibility?: AnnouncementVisibility;
   category_id: number;
   start_date: string;
   end_date: string;
@@ -44,6 +50,7 @@ export interface UpdateAnnouncementReq {
   content?: string;
   image_url?: string;
   link?: string;
+  visibility?: AnnouncementVisibility;
   category_id?: number;
   start_date?: string;
   end_date?: string;

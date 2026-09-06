@@ -7,29 +7,36 @@ import SocialLinks from "@/components/SocialLinks";
 import { fetchAllCourses } from "@/services/courseAPI";
 import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
+import { announcementAPI } from "@/services/announcementAPI";
 import { CourseDTO } from "@/types/course";
 import CourseCover from "@/components/course/CourseCover";
 import { PublicHome, PublicCoach } from "@/types/homeContent";
 import { Review } from "@/types/review";
+import { Announcement } from "@/types/announcement";
 import { BookOpen, Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X } from "lucide-react";
 
 export default function Home() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [home, setHome] = useState<PublicHome | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
+  // ประกาศที่แสดงให้ "ผู้เยี่ยมชม" เห็น (visibility: all/guest) — ใช้เป็นรูปสไลด์หน้าแรกแทน
+  // รูปสไลด์แบบเดิมที่เคยตั้งค่าแยกจากระบบประกาศข่าวสาร (ย้ายมาจัดการรวมในหน้า "สร้างประกาศ" แทน)
+  const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // โค้ชที่ถูกคลิกในหน้าแรก → เปิด modal
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // โหลดคอร์ส + เนื้อหาหน้าแรกพร้อมกัน โดยไม่ให้ตัวใดตัวหนึ่งพังทั้งหน้า
-        const [coursesRes, homeRes] = await Promise.allSettled([
+        // โหลดคอร์ส + เนื้อหาหน้าแรก + ประกาศสำหรับผู้เยี่ยมชมพร้อมกัน โดยไม่ให้ตัวใดตัวหนึ่งพังทั้งหน้า
+        const [coursesRes, homeRes, announcementsRes] = await Promise.allSettled([
           fetchAllCourses(),
           homeContentAPI.getPublicHome(),
+          announcementAPI.getPublicAnnouncements('guest'),
         ]);
 
         if (coursesRes.status === "fulfilled") setCourses(coursesRes.value);
+        if (announcementsRes.status === "fulfilled") setGuestAnnouncements(announcementsRes.value);
         if (homeRes.status === "fulfilled") {
           setHome(homeRes.value);
           // โหลดรีวิว featured เฉพาะเมื่อแอดมินเปิดใช้งาน
@@ -51,7 +58,8 @@ export default function Home() {
   }, []);
 
   const content = home?.content;
-  const slideImages = (home?.slides ?? []).map((s) => s.image_url);
+  // รูปสไลด์หน้าแรก: มาจากรูปปกของประกาศที่ตั้งค่าให้ผู้เยี่ยมชมเห็น (สร้าง/แก้ไขได้ที่หน้า "สร้างประกาศ" ของแอดมิน)
+  const slideImages = guestAnnouncements.map((a) => a.image_url).filter((url): url is string => !!url);
   const coaches = home?.featured_coaches ?? [];
   // ชื่อแบรนด์สำหรับ footer/ลิขสิทธิ์ — ใช้ค่าจาก CMS ถ้ามี ไม่งั้น fallback ชื่อโรงเรียน
   const schoolName = content?.school_name?.trim() || "Koyama Badminton School";
