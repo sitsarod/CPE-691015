@@ -113,7 +113,9 @@ export default function EnrollmentReviewPanel({
   const seatsFull = data ? data.package.seats_left <= 0 : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    // z สูงกว่าแถบเมนูล่างของมือถือ (z-[60] ใน AdminSideBar)
+    // ที่ z-50 แถบเมนูจะทับ footer ของแผงพอดี = ไม่เห็นปุ่มอนุมัติกับปฏิเสธเลย
+    <div className="fixed inset-0 z-[70] flex justify-end">
       <div
         className="absolute inset-0 bg-black/40"
         onClick={isApproving ? undefined : onClose}
@@ -404,7 +406,7 @@ export default function EnrollmentReviewPanel({
         </div>
 
         {/* ปุ่มตัดสินใจ */}
-        <footer className="border-t border-gray-200 bg-gray-50 px-6 py-4">
+        <footer className="border-t border-gray-200 bg-gray-50 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {data && !isPending ? (
             <div className="text-center text-sm text-gray-500">
               คำขอนี้ดำเนินการไปแล้ว{" "}
@@ -475,7 +477,11 @@ export default function EnrollmentReviewPanel({
               </div>
             </div>
           ) : (
-            <div className="flex gap-3">
+            // มือถือเรียงลงมาแทนที่จะยัดสามปุ่มในแถวเดียว
+            // ปุ่มอนุมัติมีข้อความยาว ("ที่นั่งเต็ม อนุมัติไม่ได้") พอเบียดกับอีกสองปุ่ม
+            // ในจอ 375px แล้วตัวหนังสือจะพันบรรทัดจนปุ่มสูงไม่เท่ากัน
+            // col-reverse เพื่อให้ปุ่มหลักอยู่บนสุดโดยไม่ต้องสลับลำดับใน DOM
+            <div className="flex flex-col-reverse gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={onClose}
@@ -491,19 +497,19 @@ export default function EnrollmentReviewPanel({
                 disabled={isApproving || isLoading || !!error}
                 className="flex items-center justify-center gap-2 rounded-xl border border-gray-400 bg-white px-5 py-3 font-bold text-gray-700 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <XCircle className="h-5 w-5" />
+                <XCircle className="h-5 w-5 shrink-0" />
                 ปฏิเสธ
               </button>
               <button
                 type="button"
                 onClick={() => onApprove(enrollmentId)}
                 disabled={isApproving || isLoading || !!error || seatsFull}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#CC0000] py-3 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-3 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
               >
                 {isApproving ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
                 ) : (
-                  <CheckCircle2 className="h-5 w-5" />
+                  <CheckCircle2 className="h-5 w-5 shrink-0" />
                 )}
                 {seatsFull ? "ที่นั่งเต็ม อนุมัติไม่ได้" : "อนุมัติและสร้างบิล"}
               </button>
