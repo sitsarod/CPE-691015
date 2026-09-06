@@ -14,7 +14,7 @@ type OpenablePackageDTO struct {
 	CourseID   uint   `json:"course_id"`
 	CourseName string `json:"course_name"`
 
-	SessionsCount  uint  `json:"sessions_count"`
+	PackageCount   int   `json:"package_count"`
 	StudentCount   int64 `json:"student_count"`
 	ConfirmedCount int   `json:"confirmed_count"`
 

@@ -147,6 +147,18 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 	return nil
 }
 
+func anchorPackageForSlot(db *gorm.DB, req dto.CreateWorkScheduleRequest) *uint {
+	d, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return nil
+	}
+	anchor, err := classAnchorPackageID(db, req.CourseID, d.Weekday().String(), req.StartTime, req.EndTime)
+	if err != nil {
+		return nil
+	}
+	return anchor
+}
+
 // AssignWorkSchedule สร้างตารางงานใหม่ให้ coach หลังผ่าน validation ครบ (ทำในทรานแซกชันเดียว)
 func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleRequest) (*models.WorkSchedule, error) {
 	// ห้ามมอบหมายคาบที่วันผ่านไปแล้ว (กันย้อนหลัง — เช็คที่ server ด้วย ไม่ใช่แค่ที่ UI)
@@ -164,6 +176,11 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 			return err
 		}
 
+		packageID := req.PackageID
+		if anchor := anchorPackageForSlot(tx, req); anchor != nil {
+			packageID = anchor
+		}
+
 		work = models.WorkSchedule{
 			Date:              req.Date,
 			StartTime:         req.StartTime,
@@ -172,7 +189,7 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 			Courtnumber:       req.CourtNumber,
 			CoachID:           req.CoachID,
 			CourseID:          req.CourseID,
-			PackageID:         req.PackageID,
+			PackageID:         packageID,
 			PackageScheduleID: req.PackageScheduleID,
 			IsEmergency:       req.IgnoreAvailability,
 		}
@@ -353,6 +370,10 @@ func (s *workScheduleService) Update(id uint, req dto.CreateWorkScheduleRequest)
 			"description":  req.Description,
 			"coach_id":     req.CoachID,
 			"course_id":    req.CourseID,
+		}
+
+		if anchor := anchorPackageForSlot(tx, req); anchor != nil {
+			updateData["package_id"] = *anchor
 		}
 
 		if err := tx.Model(&schedule).Updates(updateData).Error; err != nil {

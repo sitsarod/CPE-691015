@@ -137,9 +137,14 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 ) (bool, error) {
 	date := session.SessionDate.Format("2006-01-02")
 
+	scope, err := s.classScheduleScope(tx, session)
+	if err != nil {
+		return false, err
+	}
+
 	var existing int64
-	if err := tx.Model(&models.WorkSchedule{}).
-		Where("coach_id = ? AND package_id = ? AND date = ?", coachID, session.PackageID, date).
+	if err := scope.Model(&models.WorkSchedule{}).
+		Where("coach_id = ?", coachID).
 		Count(&existing).Error; err != nil {
 		return false, errors.New("ไม่สามารถตรวจตารางงานของโค้ชได้")
 	}
@@ -185,17 +190,40 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 
 // ─── รายชื่อโค้ชของรอบ ───────────────────────────────────────────────────────
 
+func (s *AttendanceService) classScheduleScope(
+	tx *gorm.DB,
+	session *models.AttendanceSession,
+) (*gorm.DB, error) {
+	date := session.SessionDate.Format("2006-01-02")
+
+	if session.ScheduleStartTime == "" || session.ScheduleEndTime == "" {
+		return tx.Where("package_id = ? AND date = ?", session.PackageID, date), nil
+	}
+
+	courseID, err := s.sessionCourseID(tx, session)
+	if err != nil {
+		return nil, err
+	}
+	if courseID == 0 {
+		return tx.Where("package_id = ? AND date = ?", session.PackageID, date), nil
+	}
+
+	return tx.Where("course_id = ? AND date = ? AND start_time = ? AND end_time = ?",
+		courseID, date, session.ScheduleStartTime, session.ScheduleEndTime), nil
+}
+
 // coachSchedules = "ใครควรมาสอนคาบนี้" เทียบเท่า activeEnrollments ของฝั่งนักเรียน
 func (s *AttendanceService) coachSchedules(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
 ) ([]models.WorkSchedule, error) {
-	var rows []models.WorkSchedule
-	err := tx.Preload("Coach.User").
-		Where("package_id = ? AND date = ?", session.PackageID, session.SessionDate.Format("2006-01-02")).
-		Order("id ASC").
-		Find(&rows).Error
+	q, err := s.classScheduleScope(tx, session)
 	if err != nil {
+		return nil, err
+	}
+
+	var rows []models.WorkSchedule
+	if err := q.Preload("Coach.User").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงตารางงานของโค้ชได้")
 	}
 

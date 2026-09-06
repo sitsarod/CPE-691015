@@ -101,7 +101,12 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 			item.CourseName = session.Package.Course.CourseName
 		}
 
-		confirmed, err := s.confirmedEnrollments(s.db, session.PackageID, session.SessionDate)
+		packageIDs, err := s.siblingPackageIDs(s.db, session)
+		if err != nil {
+			return nil, err
+		}
+
+		confirmed, err := s.confirmedEnrollments(s.db, packageIDs, session.SessionDate)
 		if err != nil {
 			return nil, err
 		}
@@ -188,12 +193,17 @@ func (s *AttendanceService) markAbsentees(
 
 	expireStaleEnrollments(tx)
 
-	enrollments, err := s.activeEnrollments(tx, session.PackageID)
+	packageIDs, err := s.siblingPackageIDs(tx, session)
 	if err != nil {
 		return err
 	}
 
-	confirmed, err := s.confirmedEnrollments(tx, session.PackageID, session.SessionDate)
+	enrollments, err := s.activeEnrollments(tx, packageIDs)
+	if err != nil {
+		return err
+	}
+
+	confirmed, err := s.confirmedEnrollments(tx, packageIDs, session.SessionDate)
 	if err != nil {
 		return err
 	}
@@ -208,11 +218,23 @@ func (s *AttendanceService) markAbsentees(
 	}
 
 	sessionID := session.ID
-	for i := range enrollments {
-		e := &enrollments[i]
-		if checked[e.ID] || !confirmed[e.ID] {
+
+	for _, group := range groupEnrollmentsByCustomer(enrollments) {
+		alreadyChecked := false
+		anyConfirmed := false
+		for _, e := range group {
+			if checked[e.ID] {
+				alreadyChecked = true
+			}
+			if confirmed[e.ID] {
+				anyConfirmed = true
+			}
+		}
+		if alreadyChecked || !anyConfirmed {
 			continue
 		}
+
+		e := pickUsableEnrollmentPtr(group)
 
 		var studentUserID *uint
 		if uid, err := ResolveUserID(tx, e.CustomerID); err == nil {
