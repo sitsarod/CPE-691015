@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
 )
@@ -206,4 +207,50 @@ func (s *AttendanceService) openSessionForSlot(
 		return nil, errors.New("ไม่สามารถตรวจรอบเช็คชื่อที่เปิดไว้แล้วได้")
 	}
 	return &existing, nil
+}
+
+// classPackageDetails คืนรายละเอียดของแพ็กเกจทุกใบในคาบ พร้อมจำนวนคนของแต่ละใบ
+//
+// นับ "หัวคน" ไม่ใช่ "ใบลงทะเบียน" เหมือนที่อื่นทั้งระบบ — คนหนึ่งถือหลายใบใน
+// แพ็กเกจเดียวกันได้ ถ้านับเป็นใบยอดบนจอจะเกินจำนวนคนจริง
+//
+// ⚠️ คนที่ถือใบในหลายแพ็กเกจของคาบเดียวกันจะถูกนับในทุกใบที่เขาถือ
+// ผลรวมของทุกแถวจึงมากกว่าจำนวนคนในคาบได้ ตัวเลขรวมของคาบต้องอ่านจาก
+// StudentCount ที่นับแยกต่างหาก ไม่ใช่เอาแถวพวกนี้มาบวกกัน
+func classPackageDetails(db *gorm.DB, packageIDs []uint, anchorID uint) ([]dto.ClassPackageDTO, error) {
+	if len(packageIDs) == 0 {
+		return []dto.ClassPackageDTO{}, nil
+	}
+
+	var rows []struct {
+		ID            uint
+		SessionsCount uint
+		Price         float64
+		StudentCount  int64
+	}
+	err := db.Raw(`
+		SELECT p.id, p.sessions_count, p.price,
+		       COUNT(DISTINCT e.customer_id) AS student_count
+		FROM packages p
+		LEFT JOIN enrollments e
+		       ON e.package_id = p.id AND e.deleted_at IS NULL AND e.status = ?
+		WHERE p.id IN ?
+		GROUP BY p.id, p.sessions_count, p.price
+		ORDER BY p.id
+	`, models.EnrollmentStatusActive, packageIDs).Scan(&rows).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายละเอียดแพ็กเกจของคาบนี้ได้")
+	}
+
+	out := make([]dto.ClassPackageDTO, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dto.ClassPackageDTO{
+			ID:            r.ID,
+			SessionsCount: r.SessionsCount,
+			Price:         r.Price,
+			StudentCount:  r.StudentCount,
+			IsAnchor:      r.ID == anchorID,
+		})
+	}
+	return out, nil
 }

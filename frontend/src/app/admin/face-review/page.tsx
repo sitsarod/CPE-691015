@@ -380,11 +380,24 @@ export default function FaceReviewPage() {
                     <p className="text-xs text-gray-500 mt-2">เหตุผล: {image.reject_reason}</p>
                   )}
 
+                  {image.status === "pending" && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      ระบบยังประมวลผลรูปนี้ไม่เสร็จ — อนุมัติตอนนี้จะได้รูปที่สแกนหน้าไม่เจอ
+                      รอสักครู่แล้วรีเฟรช
+                    </p>
+                  )}
+
                   {canReview && (
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={() => handleApprove(image)}
-                        disabled={busyID === image.id || bulkBusy || image.status === "ready"}
+                        title={image.status === "pending" ? "รอระบบประมวลผลรูปให้เสร็จก่อน" : undefined}
+                        disabled={
+                          busyID === image.id ||
+                          bulkBusy ||
+                          image.status === "ready" ||
+                          image.status === "pending"
+                        }
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-white bg-green-700 hover:bg-green-800 disabled:opacity-40"
                       >
                         {busyID === image.id ? (
