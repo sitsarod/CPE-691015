@@ -743,6 +743,27 @@ export default function AdminAttendancePage() {
                       </span>
                       <span>{pkg.package_count} แพ็กเกจ</span>
                     </div>
+
+                    {/* แพ็กเกจที่เรียนคาบนี้ร่วมกัน — แอดมินต้องรู้ว่าเปิดรอบเดียวแล้ว
+                        ครอบใครบ้าง ไม่ใช่เห็นแค่ตัวเลขรวม */}
+                    {pkg.packages.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {pkg.packages.map((p) => (
+                          <span
+                            key={p.id}
+                            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${
+                              p.student_count > 0
+                                ? "bg-gray-100 text-gray-700"
+                                : "bg-gray-50 text-gray-400"
+                            }`}
+                          >
+                            <span className="font-semibold">แพ็กเกจ {p.sessions_count} ครั้ง</span>
+                            <span className="text-gray-400">·</span>
+                            <span>{p.student_count} คน</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {isClosed ? (
@@ -833,6 +854,29 @@ export default function AdminAttendancePage() {
               <span className="font-medium text-amber-600">เปิดค้างอยู่ · เลยเวลาแล้ว</span>
             )}
           </p>
+
+          {/* รอบเดียวครอบหลายแพ็กเกจ — ต้องเห็นว่าใบไหนบ้างและใบไหนเป็นแพ็กเกจหลัก
+              ไม่งั้นเวลาตัวเลขไม่ตรงกับที่คาดจะไล่หาสาเหตุไม่ถูก */}
+          {session.packages.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {session.packages.map((p) => (
+                <span
+                  key={p.id}
+                  title={p.is_anchor ? "แพ็กเกจหลักของรอบนี้" : undefined}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${
+                    p.student_count > 0
+                      ? "bg-gray-100 text-gray-700"
+                      : "bg-gray-50 text-gray-400"
+                  }`}
+                >
+                  <span className="font-semibold">แพ็กเกจ {p.sessions_count} ครั้ง</span>
+                  <span className="text-gray-400">·</span>
+                  <span>{p.student_count} คน</span>
+                  {p.is_anchor && <span className="text-[#CC0000]">★</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">

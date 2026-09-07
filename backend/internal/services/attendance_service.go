@@ -134,6 +134,10 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			item.CourseName = anchor.Course.CourseName
 		}
 
+		if pkgs, derr := classPackageDetails(s.db, ids, anchor.ID); derr == nil {
+			item.Packages = pkgs
+		}
+
 		if existing, err := s.openSessionForSlot(s.db, ids, dayStart, dayEnd); err == nil && existing != nil {
 			id := existing.ID
 			item.ExistingSessionID = &id
@@ -214,6 +218,15 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		return nil, err
 	}
 
+	packageIDs, err := s.siblingPackageIDs(s.db, &session)
+	if err != nil {
+		return nil, err
+	}
+	classPackages, err := classPackageDetails(s.db, packageIDs, session.PackageID)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &dto.AttendanceSessionDTO{
 		ID:                session.ID,
 		PackageID:         session.PackageID,
@@ -224,6 +237,7 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		ScheduleStartTime: session.ScheduleStartTime,
 		ScheduleEndTime:   session.ScheduleEndTime,
 		CanScan:           canScanNow(&session, nowLocal()),
+		Packages:          classPackages,
 		Roster:            roster,
 		WalkInCandidates:  walkInCandidates,
 		Coaches:           coaches,

@@ -6,6 +6,16 @@ export type SessionStatus = "open" | "closed";
 
 // ─── เปิดรอบ ─────────────────────────────────────────────────────────────────
 
+/** แพ็กเกจหนึ่งใบที่เรียนอยู่ในคาบเดียวกัน — คาบเดียวมีได้หลายใบ (8/12/16/20 ครั้ง) */
+export interface ClassPackage {
+  id: number;
+  sessions_count: number;
+  price: number;
+  student_count: number;
+  /** ใบที่รอบเช็คชื่อยึดไว้ (id น้อยสุดของคาบ) */
+  is_anchor: boolean;
+}
+
 export interface OpenablePackage {
   package_id: number;
   course_id: number;
@@ -14,6 +24,7 @@ export interface OpenablePackage {
   package_count: number;
   student_count: number;
   confirmed_count: number;
+  packages: ClassPackage[];
 
   day_of_week: string;
   start_time: string;
@@ -85,6 +96,7 @@ export interface AttendanceSession {
   // แต่สแกนไม่ได้ อย่าดูแค่ status
   can_scan: boolean;
 
+  packages: ClassPackage[];
   roster: RosterItem[];
   walk_in_candidates: RosterItem[];
 
