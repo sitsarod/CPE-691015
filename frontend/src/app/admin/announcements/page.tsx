@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { announcementAPI } from '@/services/announcementAPI';
 import { Announcement, AnnouncementVisibility, Category } from '@/types/announcement';
-import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
+import { MAX_UPLOAD_MB, IMAGE_ACCEPT, validateImageFile } from '@/utils/imageUpload';
 import AnnouncementCoverCropModal from '@/components/AnnouncementCoverCropModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { Plus, Edit2, Trash2, Calendar, Tag, X, Image as ImageIcon, Loader2, Users, Eye, Crop, Search, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -346,9 +346,9 @@ export default function AdminAnnouncementsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const sizeError = validateImageSize(file);
-    if (sizeError) {
-      showAlert(sizeError);
+    const fileError = validateImageFile(file);
+    if (fileError) {
+      showAlert(fileError);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -685,7 +685,7 @@ export default function AdminAnnouncementsPage() {
                     )}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={IMAGE_ACCEPT}
                       className="hidden"
                       ref={fileInputRef}
                       onChange={handleImageUpload}
