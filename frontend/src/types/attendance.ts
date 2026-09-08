@@ -6,14 +6,25 @@ export type SessionStatus = "open" | "closed";
 
 // ─── เปิดรอบ ─────────────────────────────────────────────────────────────────
 
+/** แพ็กเกจหนึ่งใบที่เรียนอยู่ในคาบเดียวกัน — คาบเดียวมีได้หลายใบ (8/12/16/20 ครั้ง) */
+export interface ClassPackage {
+  id: number;
+  sessions_count: number;
+  price: number;
+  student_count: number;
+  /** ใบที่รอบเช็คชื่อยึดไว้ (id น้อยสุดของคาบ) */
+  is_anchor: boolean;
+}
+
 export interface OpenablePackage {
   package_id: number;
   course_id: number;
   course_name: string;
 
-  sessions_count: number;
+  package_count: number;
   student_count: number;
   confirmed_count: number;
+  packages: ClassPackage[];
 
   day_of_week: string;
   start_time: string;
@@ -85,6 +96,7 @@ export interface AttendanceSession {
   // แต่สแกนไม่ได้ อย่าดูแค่ status
   can_scan: boolean;
 
+  packages: ClassPackage[];
   roster: RosterItem[];
   walk_in_candidates: RosterItem[];
 
@@ -256,6 +268,49 @@ export interface CoachHistoryItem {
   is_scheduled: boolean;
 }
 
+// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
+//
+// ค่าจ้างของโค้ชนับจากคาบที่ "มีรอบเช็คชื่อปิดแล้ว" เท่านั้น
+// ถ้าแอดมินลืมเปิดรอบ หรือเปิดไม่ทันช่วงที่ระบบอนุญาต (คาบ ±30 นาที)
+// คาบนั้นจะไม่มีทางถูกนับเป็นเงินได้อีกเลย โดยไม่มี error ให้ใครเห็น
+//
+// รายการนี้คือ "เงินที่ยังไม่ถูกนับให้โค้ช" ไม่ใช่รายงานเชิงสถิติ
+
+export interface MissedClassCoach {
+  coach_id: number;
+  full_name: string;
+  nickname: string;
+
+  // true = คาบนี้ถูกมอบหมายนอกกฎ (แอดมินติ๊กฉุกเฉิน หรือระบบสร้างให้ตอนโค้ชสแกน)
+  is_emergency: boolean;
+}
+
+// หนึ่งรายการ = หนึ่ง "คลาส" ไม่ใช่หนึ่งโค้ช — คลาสเดียวมีโค้ชหลายคนได้
+// และต้องตัดสินใจพร้อมกันทั้งคลาส เพราะการสร้างรอบขึ้นมาหนึ่งรอบ
+// มีผลกับค่าจ้างของทุกคนในคลาสนั้นทันที
+export interface MissedClass {
+  work_schedule_id: number; // ตัวแทนของคลาส ใช้ส่งกลับตอนเคลียร์
+  course_id: number;
+  course_name: string;
+
+  date: string; // YYYY-MM-DD
+  start_time: string;
+  end_time: string;
+
+  coaches: MissedClassCoach[];
+}
+
+export interface ResolveMissedClassResult {
+  session_id: number;
+  package_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+
+  present_coach_ids: number[];
+  absent_coach_ids: number[];
+}
+
 // ─── ป้ายภาษาไทยที่ใช้ร่วมกันทุกหน้า ─────────────────────────────────────────
 
 export const STATUS_LABEL: Record<AttendanceStatus, string> = {
@@ -268,7 +323,7 @@ export const STATUS_TONE: Record<AttendanceStatus, string> = {
   absent: "bg-red-100 text-red-700",
 };
 
-export const OFF_SCHEDULE_LABEL = "มาไม่ตรงวัน";
+export const OFF_SCHEDULE_LABEL = "นอกเหนือจากยืนยัน";
 export const OFF_SCHEDULE_TONE = "bg-amber-100 text-amber-700";
 
 // สถานะเก่าที่ถอดออกแล้วแต่ยังมีแถวค้างอยู่ในฐานข้อมูล
@@ -302,6 +357,24 @@ export const COACH_STATUS_LABEL: Record<AttendanceStatus, string> = {
 export function coachStatusLabel(status: string): string {
   return COACH_STATUS_LABEL[status as AttendanceStatus] ?? status;
 }
+
+/**
+ * คำอธิบายผลของแต่ละสถานะฝั่งโค้ช — แสดงในโมดัลแก้สถานะก่อนแอดมินกดยืนยัน
+ *
+ * ⚠️ ข้อความนี้พูดเรื่องเงิน ต้องตรงกับ backend เสมอ
+ *
+ * เดิมเขียนว่า "ไม่กระทบค่าจ้าง" ซึ่งตรงกับพฤติกรรมสมัยนั้นจริง (การนับคาบ
+ * ไม่ได้ดูสถานะเช็คชื่อเลย โค้ชขาดงานก็ยังได้เงินเต็ม) แต่ตอนนี้แก้แล้ว
+ * คาบที่มีสถานะ absent จะไม่ถูกนับ ข้อความเดิมจึงกลายเป็นการบอกแอดมินผิด
+ * ในเรื่องที่เป็นเงินจริง
+ *
+ * เก็บไว้ที่เดียวให้ทุกหน้าดึงไปใช้ จะได้ไม่มีหน้าไหนตกค้างเป็นข้อความเก่า
+ * (ดู services/coach_workschedule.go — taughtScheduleScope)
+ */
+export const COACH_STATUS_NOTE: Record<AttendanceStatus, string> = {
+  present: "บันทึกว่ามาสอนคาบนี้ · นับเป็นคาบที่ได้ค่าจ้าง",
+  absent: "บันทึกว่าไม่ได้มาสอน · คาบนี้จะไม่ถูกนับค่าจ้าง",
+};
 
 export const METHOD_LABEL: Record<CheckInMethod, string> = {
   qr_code: "สแกน QR",

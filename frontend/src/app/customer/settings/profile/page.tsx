@@ -74,8 +74,8 @@ export default function EditForm() {
           parentEmail: profile.parentEmail || "",
           parentPhoneNumber: profile.parentPhoneNumber || ""
         });
-      } catch (err: any) {
-        setErrorMsg(err.message || "ไม่สามารถดึงข้อมูลโปรไฟล์ได้");
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : "ไม่สามารถดึงข้อมูลโปรไฟล์ได้");
       } finally {
         setIsLoading(false);
       }
@@ -95,8 +95,8 @@ export default function EditForm() {
     try {
       await updateUserProfileAPI(userId, { profile_picture: url });
       setProfilePicture(url);
-    } catch (err: any) {
-      setErrorMsg(err.message || "บันทึกรูปโปรไฟล์ไม่สำเร็จ");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "บันทึกรูปโปรไฟล์ไม่สำเร็จ");
     }
   };
 
@@ -119,8 +119,8 @@ export default function EditForm() {
       });
 
       window.history.back();
-    } catch (err: any) {
-      setErrorMsg(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     } finally {
       setIsSaving(false);
     }

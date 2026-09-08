@@ -41,8 +41,10 @@ func mapFaceImageError(c *gin.Context, err error) {
 
 	case errors.Is(err, services.ErrFacePoseAlreadyExists),
 		errors.Is(err, services.ErrFaceImageLimitReached),
-		// ไฟล์หายไปแล้ว = สถานะปัจจุบันไม่เอื้อให้ทำ ไม่ใช่ข้อมูลที่ส่งมาผิด
-		errors.Is(err, services.ErrFaceImageFileGone):
+		// ไฟล์หายไปแล้ว / ยังประมวลผลไม่เสร็จ = สถานะปัจจุบันไม่เอื้อให้ทำ
+		// ไม่ใช่ข้อมูลที่ส่งมาผิด และรออีกสักครู่ก็ทำได้
+		errors.Is(err, services.ErrFaceImageFileGone),
+		errors.Is(err, services.ErrFaceImageNotProcessed):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	// ยังไม่ได้ตั้งค่าที่เก็บไฟล์ = ระบบยังไม่พร้อม ไม่ใช่ผู้ใช้ทำผิด

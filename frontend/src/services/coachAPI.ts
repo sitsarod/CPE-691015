@@ -296,6 +296,71 @@ export async function fetchCoachTaughtSessionDates(coachId: number, token: strin
   return resData.dates ?? [];
 }
 
+// ค่าจ้างของโค้ช — ตัวเลขทุกตัวคำนวณที่ backend
+//
+// ⚠️ ห้ามเอาตัวเลขจากตรงนี้ไปคูณ/ลบ/บวกเองที่หน้าเว็บ
+// เดิมสูตร (จำนวนคาบ × เรตปัจจุบัน) − ที่จ่ายแล้ว อยู่ใน React ทั้งหมด ผลคือ
+// วันที่ขึ้นค่าจ้างโค้ช ยอดค้างจ่ายย้อนหลังทุกคาบเปลี่ยนตามเรตใหม่ทันที
+// ตอนนี้ backend คิดจากสแนปช็อตเรตของแต่ละคาบ และตรวจยอดซ้ำตอนบันทึกด้วย
+export interface CoachPayrollLine {
+  pay_rate: number;
+  sessions: number;
+  amount: number;
+}
+
+export interface CoachPayroll {
+  coach_id: number;
+  payment_type: 'per_session' | 'monthly';
+  pay_rate: number;
+
+  sessions_done: number;
+  expected: number;
+  already_paid: number;
+  unpaid: number;
+
+  unresolved_sessions: number;
+  unresolved_amount: number;
+
+  rate_breakdown: CoachPayrollLine[];
+  period_note: string;
+}
+
+export async function fetchCoachPayroll(coachId: number, token: string): Promise<CoachPayroll> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}/payroll`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถคำนวณค่าจ้างของโค้ชได้");
+  }
+  return resData.data;
+}
+
+// นับ "คาบที่สอนแล้วแต่ยังไม่มีรอบเช็คชื่อ" ของโค้ช = คาบที่ยังไม่ถูกนับเป็นเงิน
+//
+// ⚠️ ต้องเรียกคู่กับ fetchCoachTaughtSessions เสมอในหน้าที่แสดงยอดค่าจ้าง
+// ตัวนั้นบอกว่า "นับให้แล้วกี่คาบ" ตัวนี้บอกว่า "ยังไม่ได้นับอีกกี่คาบ"
+// ถ้าแสดงแต่ตัวแรก คาบที่ค้างจะหายไปจากสายตาทั้งของแอดมินและของโค้ช
+// ซึ่งเป็นบั๊กที่หน้า /admin/attendance/missed ถูกสร้างขึ้นมาแก้
+export async function fetchCoachUnresolvedSessions(coachId: number, token: string): Promise<number> {
+  const response = await fetch(`${BASE_URL}/coaches/${coachId}/unresolved-sessions`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถนับคาบที่ยังไม่มีรอบเช็คชื่อได้");
+  }
+  return resData.count ?? 0;
+}
+
 // ดึงประวัติค่าจ้างของโค้ช
 export async function fetchCoachWages(coachId: number, token: string): Promise<CoachWageEntry[]> {
   const response = await fetch(`${BASE_URL}/coaches/${coachId}/expenses`, {

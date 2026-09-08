@@ -135,6 +135,7 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 					CustomerID: m.CustomerID,
 					Nickname:   m.Nickname,
 					Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
+					BBox:       m.BBox,
 				})
 			}
 		}
@@ -293,6 +294,53 @@ func (ctrl *PhotoPostController) GetPhotoDetectedStudents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+// DeleteMyPost handles DELETE /api/students/posts/:type/:raw_id
+//
+// นักเรียนลบโพสต์ (รูปหรือวิดีโอ) ที่ตัวเองถูกแท็กออกจากแท็บ Posts ของตัวเอง — เพิ่มเติมจากการ
+// ลบอัตโนมัติหลัง 7 วันที่มีอยู่แล้ว (ยังทำงานเหมือนเดิม ไม่เกี่ยวกัน)
+//
+// ⚠️ ลบแค่แท็กของตัวเอง ไม่ได้ลบรูป/วิดีโอต้นฉบับ — ถ้าเป็นสื่อกลุ่มที่มีนักเรียนคนอื่นถูกแท็กอยู่ด้วย
+// คนอื่นยังเห็นโพสต์นี้ตามปกติ (เหมือนการ "ลบตัวเองออกจากแท็ก" ไม่ใช่ "ลบโพสต์ของทุกคน")
+func (ctrl *PhotoPostController) DeleteMyPost(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		return
+	}
+
+	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
+		return
+	}
+
+	rawID, ok := uintParam(c, "raw_id", "รหัสโพสต์")
+	if !ok {
+		return
+	}
+
+	switch c.Param("type") {
+	case "photo":
+		err = ctrl.photoPostService.DeleteMyPhotoTag(customerID, rawID)
+	case "video":
+		err = ctrl.videoService.DeleteMyVideoTag(customerID, rawID)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ประเภทโพสต์ไม่ถูกต้อง"})
+		return
+	}
+
+	if err != nil {
+		if errors.Is(err, services.ErrPostNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ลบโพสต์นี้แล้ว"})
 }
 
 // GetMyPosts handles GET /api/students/posts/me

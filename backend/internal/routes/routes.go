@@ -102,9 +102,11 @@ func SetupRoutes(r *gin.Engine) {
 	evaluationService := services.NewEvaluationService(db)
 	evaluationController := controllers.NewEvaluationController(evaluationService, db)
 
-	// ไฟล์รูป/วิดีโอของระบบจำแนกนักเรียน (RawPhoto/RawVideo) เก็บในเครื่องเซิร์ฟเวอร์เอง
-	// (ไม่ใช่ Cloudinary) เข้าถึงได้ผ่าน endpoint ที่เช็คสิทธิ์แล้วเท่านั้น (ดู GetVideoRaw/GetPhotoPostRaw)
-	mediaStorage := services.NewLocalMediaStorage()
+	// ไฟล์รูป/วิดีโอของระบบจำแนกนักเรียน (RawPhoto/RawVideo) — เก็บบน Cloudflare R2 ถ้าตั้งค่าไว้
+	// (แยก account จาก Cloudinary ที่ระบบอื่นใช้ เพราะไฟล์กลุ่มนี้ถูกลบทิ้งเองใน 7 วัน) ไม่ตั้งค่า
+	// R2 จะ fallback ไปเก็บดิสก์เครื่องแทน (ดู NewMediaStorage) เข้าถึงได้ผ่าน endpoint
+	// ที่เช็คสิทธิ์แล้วเท่านั้นเสมอ ไม่ว่าจะเก็บที่ไหน (ดู GetVideoRaw/GetPhotoPostRaw)
+	mediaStorage := services.NewMediaStorage()
 
 	// ตัวแปลงรูปเป็น embedding (face-service) — ใช้ร่วมกันทั้งเช็คชื่อด้วยใบหน้าและจำแนกคนในรูปโพสต์
 	faceEngine := services.NewHTTPFaceEngine()
@@ -199,7 +201,9 @@ func SetupRoutes(r *gin.Engine) {
 			coachGroup.PUT("/:id/availability", coachAvailabilityController.UpdateAvailability)                     // เจ้าของเท่านั้น (admin แก้ไม่ได้)
 			coachGroup.GET("/:id/work-schedules", workScheduleController.GetSchedulesByCoach)                       // เจ้าของ หรือ admin
 			coachGroup.GET("/:id/taught-sessions", workScheduleController.GetTaughtSessionCount)                    // เจ้าของ หรือ admin — นับคาบที่เช็คชื่อปิดรอบจริง (คำนวณค่าจ้าง)
+			coachGroup.GET("/:id/unresolved-sessions", workScheduleController.GetUnresolvedSessions)                // เจ้าของ หรือ admin — คาบที่สอนแล้วแต่ยังไม่มีรอบเช็คชื่อ (ยังไม่ได้เงิน)
 			coachGroup.GET("/:id/expenses", expenseController.GetExpensesByCoach)                                   // เจ้าของ หรือ admin — ดูประวัติค่าจ้าง
+			coachGroup.GET("/:id/payroll", expenseController.GetCoachPayroll)                                       // เจ้าของ หรือ admin — ยอดค่าจ้างที่ backend คำนวณให้ (แหล่งเดียว)
 		}
 		// เฉพาะ admin: ดูรายชื่อ coach ทั้งหมด, เพิ่ม/ลบ, แก้ระดับ/ค่าจ้าง
 		adminCoachGroup := adminOnly.Group("/coaches")
@@ -355,6 +359,7 @@ func SetupRoutes(r *gin.Engine) {
 		studentPostsGroup := protected.Group("/students/posts")
 		{
 			studentPostsGroup.GET("/me", photoPostController.GetMyPosts)
+			studentPostsGroup.DELETE("/:type/:raw_id", photoPostController.DeleteMyPost)
 		}
 
 		enrollmentGroup := protected.Group("/enrollments")
@@ -384,6 +389,11 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.GET("/openable", attendanceController.GetOpenablePackages)
 			attendanceGroup.GET("/history", attendanceController.GetHistory)
 			attendanceGroup.GET("/coach-history", attendanceController.GetCoachHistory)
+
+			// คาบที่ผ่านไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ = ค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+			// resolve สร้างรอบย้อนหลัง + บันทึกว่าใครมาสอน (ดู coach_missed_class.go)
+			attendanceGroup.GET("/missed-classes", attendanceController.GetMissedClasses)
+			attendanceGroup.POST("/missed-classes/resolve", attendanceController.ResolveMissedClass)
 
 			// รอบที่เปิดค้างอยู่ — หน้าเช็คชื่อเรียกคู่กับ /openable ใน Promise.all
 			// ขาดเส้นนี้ = 404 แล้วล้มทั้งชุด หน้าโหลดไม่ขึ้นเลย

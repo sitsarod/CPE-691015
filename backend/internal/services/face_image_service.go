@@ -33,6 +33,7 @@ var (
 	ErrInvalidReviewAction    = errors.New("การกระทำไม่ถูกต้อง (รองรับเฉพาะ approve หรือ reject)")
 	ErrRejectReasonRequired   = errors.New("กรุณาระบุเหตุผลที่ปฏิเสธรูปนี้")
 	ErrFaceImageFileGone      = errors.New("รูปนี้ถูกลบไฟล์ไปแล้ว ตรวจสอบไม่ได้ ต้องให้นักเรียนถ่ายใหม่")
+	ErrFaceImageNotProcessed  = errors.New("รูปนี้ยังประมวลผลไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่")
 )
 
 type FaceImageService struct {
@@ -315,6 +316,17 @@ func (s *FaceImageService) Review(adminUserID, imageID uint, action, reason stri
 
 	switch action {
 	case "approve":
+		// ⚠️ ยังไม่มี embedding = อนุมัติไม่ได้
+		//
+		// worker เป็นทางเดียวที่สร้าง embedding และมันหยิบเฉพาะแถวสถานะ pending
+		// พออนุมัติไปเป็น ready แล้ว worker จะไม่กลับมาเก็บอีกเลย เหลือแถวที่ทุกหน้าจอ
+		// บอกว่า "พร้อมใช้งาน" แต่การจับคู่กรอง embedding IS NOT NULL จึงข้ามไปตลอด
+		// = สแกนหน้าไม่มีวันเจอ และไม่มีอะไรฟ้องว่าทำไม
+		//
+		// เหตุผลเดียวกับด่านไฟล์หายข้างบน ต่างกันแค่ของที่หายไปคือเวกเตอร์แทนไฟล์
+		if image.Embedding == nil {
+			return nil, ErrFaceImageNotProcessed
+		}
 		updates["status"] = models.FaceImageReady
 		updates["reject_reason"] = ""
 	case "reject":

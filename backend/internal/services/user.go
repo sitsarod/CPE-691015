@@ -240,8 +240,26 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models
 //     ซึ่งขัด PDPA (เก็บข้อมูลไว้ทั้งที่ไม่มีฐานให้เก็บแล้ว) และทำให้
 //     ข้อมูลกำพร้าไปโผล่ในรายงานที่ join ข้ามตาราง
 func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
+	return DeleteUserAccount(s.db, s.faceStorage, id, actorUserID)
+}
+
+// DeleteUserAccount คือ "แกนกลางเดียว" ของการลบบัญชีในระบบ ทุกเส้นทางลบต้องเรียกผ่านตัวนี้
+//
+// ⚠️ เหตุที่แยกเป็นฟังก์ชันระดับแพ็กเกจแทนที่จะเป็นเมธอดของ UserService:
+//
+// เดิม CoachService.Delete เขียนขั้นตอนลบโค้ชขึ้นมาอีกชุดหนึ่งต่างหาก แล้วนโยบาย
+// สวนทางกับที่นี่คนละทางเลย — ทางนั้น hard delete (Unscoped) ทั้ง work_schedules
+// และ coach_attendances ทิ้งหมด ทั้งที่ตรงนี้ตั้งใจเก็บไว้เพราะเป็นบันทึกการทำงาน
+// ที่ใช้คิดค่าจ้างย้อนหลัง ผลคือปุ่มลบในหน้าจัดการโค้ชทำลายประวัติแบบกู้ไม่ได้
+// และทิ้งแถว biometric_consents ให้กำพร้า
+//
+// พอนโยบายอยู่ในฟังก์ชันเดียว เส้นทางอื่นจึงเลือกได้แค่ "เรียกผ่าน" ไม่มีทางเขียนสวนได้อีก
+// ถ้าจะเพิ่มเส้นทางลบใหม่ ให้เรียกฟังก์ชันนี้เท่านั้น อย่าเขียนลำดับลบขึ้นมาเองซ้ำ
+//
+// faceStorage เป็น nil ได้ (แค่ข้ามการลบไฟล์บนคลาวด์ แถวในฐานยังถูกลบตามปกติ)
+func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, actorUserID uint) error {
 	var user models.User
-	if err := s.db.First(&user, id).Error; err != nil {
+	if err := db.First(&user, id).Error; err != nil {
 		return err
 	}
 
@@ -254,7 +272,7 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 
 	if user.Role == models.AdminRole {
 		var remaining int64
-		if err := s.db.Model(&models.User{}).
+		if err := db.Model(&models.User{}).
 			Where("role = ? AND id <> ?", models.AdminRole, user.ID).
 			Count(&remaining).Error; err != nil {
 			return err
@@ -273,7 +291,7 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 	var photoFiles []string
 	var faceKeys []string
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var files []string
 		var keys []string
 		var err error
@@ -282,8 +300,7 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 		case models.CustomerRole:
 			files, keys, err = deleteCustomerData(tx, user.ID)
 		case models.CoachRole:
-			// โค้ชยังลงทะเบียนใบหน้าไม่ได้ (face_images ผูกกับ customers เท่านั้น)
-			files, err = deleteCoachData(tx, user.ID)
+			files, keys, err = deleteCoachData(tx, user.ID)
 		}
 		if err != nil {
 			return err
@@ -298,7 +315,7 @@ func (s *UserService) DeleteUser(id uint, actorUserID uint) error {
 	}
 
 	RemovePhotoFiles(photoFiles)
-	DestroyFaceImageFiles(s.faceStorage, faceKeys)
+	DestroyFaceImageFiles(faceStorage, faceKeys)
 	return nil
 }
 
@@ -376,26 +393,39 @@ func deleteCustomerData(tx *gorm.DB, userID uint) ([]string, []string, error) {
 
 // deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
 //
-// คืนรายการ URL ของไฟล์ภาพที่ต้องลบตามหลัง transaction commit
-func deleteCoachData(tx *gorm.DB, userID uint) ([]string, error) {
+// คืนสองรายการที่ต้องเอาไปลบ "หลัง" commit เหมือนฝั่งผู้เรียน:
+// URL ของไฟล์ในเครื่อง (ตาราง photos) และ StorageKey บน Cloudinary (ตาราง face_images)
+func deleteCoachData(tx *gorm.DB, userID uint) ([]string, []string, error) {
 	var coach models.Coach
 	if err := tx.Where("user_id = ?", userID).First(&coach).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	// ข้อมูลชีวภาพ เหตุผลเดียวกับฝั่งผู้เรียน
 	photoFiles, err := DeleteCoachPhotos(tx, coach.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// รูปที่ใช้สแกนหน้าเช็คชื่อเข้างานอยู่คนละตารางกับ photos ต้องลบแยก
+	//
+	// เดิมตรงนี้ข้ามไป เพราะสมัยที่เขียนโค้ชยังลงทะเบียนใบหน้าไม่ได้ (face_images
+	// ผูกกับ customers อย่างเดียว) แต่ตอนนี้ผูกกับ coaches ได้แล้ว ถ้าไม่ลบ
+	// ไฟล์ใบหน้าจะค้างบน Cloudinary ต่อไปทั้งที่บัญชีถูกลบแล้ว ซึ่งขัดกับเหตุผล
+	// PDPA ที่เขียนกำกับไว้เองด้านบน
+	faceKeys, err := DeleteCoachFaceImages(tx, coach.ID)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// เวลาว่างประจำสัปดาห์ — เป็นข้อมูลสำหรับจัดตารางล่วงหน้าเท่านั้น ไม่มีคุณค่าย้อนหลัง
 	// ถ้าไม่ลบ โค้ชที่ออกไปแล้วจะยังโผล่เป็นตัวเลือกในหน้าจัดตารางของแอดมิน
 	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.CoachAvailability{}).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// คาบสอนตั้งแต่วันนี้เป็นต้นไป — ยังไม่เกิดขึ้นจริง ต้องเอาออกจากปฏิทิน
@@ -406,13 +436,13 @@ func deleteCoachData(tx *gorm.DB, userID uint) ([]string, error) {
 	today := time.Now().Format("2006-01-02")
 	if err := tx.Where("coach_id = ? AND date >= ?", coach.ID, today).
 		Delete(&models.WorkSchedule{}).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := tx.Delete(&coach).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return photoFiles, nil
+	return photoFiles, faceKeys, nil
 }
 
 // IsActiveStudent ตรวจสอบว่าลูกค้ามีคอร์สที่กำลังเรียนอยู่หรือไม่

@@ -9,14 +9,30 @@ import (
 // ─── เปิดรอบ ─────────────────────────────────────────────────────────────────
 
 // OpenablePackageDTO คือแพ็กเกจที่ตอนนี้อยู่ในคาบเรียน จึงเปิดรอบเช็คชื่อได้
+// ClassPackageDTO คือแพ็กเกจหนึ่งใบที่เรียนอยู่ในคาบนี้
+//
+// คาบเดียวมีหลายแพ็กเกจได้ (8/12/16/20 ครั้งของคอร์สเดียวกัน เรียนพร้อมกัน)
+// แอดมินต้องเห็นว่าในคาบมีใบไหนบ้างและแต่ละใบมีคนกี่คน ไม่ใช่เห็นแค่ตัวเลขรวม
+type ClassPackageDTO struct {
+	ID            uint    `json:"id"`
+	SessionsCount uint    `json:"sessions_count"`
+	Price         float64 `json:"price"`
+	StudentCount  int64   `json:"student_count"`
+
+	// IsAnchor = ใบที่รอบเช็คชื่อยึดไว้ (id น้อยสุดของคาบ)
+	IsAnchor bool `json:"is_anchor"`
+}
+
 type OpenablePackageDTO struct {
 	PackageID  uint   `json:"package_id"`
 	CourseID   uint   `json:"course_id"`
 	CourseName string `json:"course_name"`
 
-	SessionsCount  uint  `json:"sessions_count"`
+	PackageCount   int   `json:"package_count"`
 	StudentCount   int64 `json:"student_count"`
 	ConfirmedCount int   `json:"confirmed_count"`
+
+	Packages []ClassPackageDTO `json:"packages"`
 
 	DayOfWeek string `json:"day_of_week"`
 	StartTime string `json:"start_time"`
@@ -72,6 +88,9 @@ type AttendanceSessionDTO struct {
 	// ต้องแยกจาก Status เพราะรอบที่ "เปิดอยู่แต่เลยเวลาแล้ว" ยังดูรายชื่อและกดปิดรอบได้
 	// แต่สแกนไม่ได้ ถ้าหน้าเว็บดูแค่ Status จะโชว์กล้องให้ยิงแล้วเจอ error ทุกครั้ง
 	CanScan bool `json:"can_scan"`
+
+	// แพ็กเกจที่เรียนอยู่ในคาบนี้ — เรียง id จากน้อยไปมาก
+	Packages []ClassPackageDTO `json:"packages"`
 
 	Roster           []RosterItemDTO `json:"roster"`
 	WalkInCandidates []RosterItemDTO `json:"walk_in_candidates"`

@@ -32,6 +32,9 @@ type PhotoFaceMatch struct {
 	CustomerID uint
 	Nickname   string
 	Confidence float64 // 0–1 (cosine similarity)
+	// BBox คือกรอบใบหน้าที่แมตช์คนนี้ [x1, y1, x2, y2] เป็นพิกเซลของรูปต้นฉบับ
+	// ให้หน้าเว็บวาดกรอบ/ชื่อทับตอนตรวจทาน — nil ถ้า face-service ไม่ได้ส่ง bbox มา
+	BBox []float64
 }
 
 type PhotoTaggingService struct {
@@ -93,7 +96,12 @@ func (s *PhotoTaggingService) DetectStudentsInPhoto(
 	//
 	// ⚠️ หน้าหลายใบในรูปเดียวอาจแมตช์คนเดียวกันได้ (เช่นมีกระจก/โปสเตอร์ หรือโมเดล
 	// ตรวจซ้อน) ถ้าไม่รวมให้เหลือคนละแถวจะเสนอชื่อซ้ำให้โค้ชกดยืนยันหลายรอบ
-	best := make(map[uint]float64)
+	// เก็บ bbox ของใบหน้าที่ให้คะแนนดีที่สุดไว้ด้วย เพื่อวาดกรอบทับรูปตอนตรวจทาน
+	type bestMatch struct {
+		confidence float64
+		bbox       []float64
+	}
+	best := make(map[uint]bestMatch)
 	for _, face := range result.Faces {
 		if face.Quality < faceTagMinQuality() {
 			continue // หน้าเบลอ/เล็กเกินไป เดาไปก็มั่ว
@@ -107,17 +115,18 @@ func (s *PhotoTaggingService) DetectStudentsInPhoto(
 		if customerID == 0 {
 			continue // ไม่มีใครถึงเกณฑ์
 		}
-		if current, ok := best[customerID]; !ok || confidence > current {
-			best[customerID] = confidence
+		if current, ok := best[customerID]; !ok || confidence > current.confidence {
+			best[customerID] = bestMatch{confidence: confidence, bbox: face.BBox}
 		}
 	}
 
 	matches := make([]PhotoFaceMatch, 0, len(best))
-	for customerID, confidence := range best {
+	for customerID, m := range best {
 		matches = append(matches, PhotoFaceMatch{
 			CustomerID: customerID,
 			Nickname:   nicknames[customerID],
-			Confidence: confidence,
+			Confidence: m.confidence,
+			BBox:       m.bbox,
 		})
 	}
 	sortMatchesByConfidence(matches)

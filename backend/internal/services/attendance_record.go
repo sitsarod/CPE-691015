@@ -101,25 +101,32 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 			item.CourseName = session.Package.Course.CourseName
 		}
 
-		confirmed, err := s.confirmedEnrollments(s.db, session.PackageID, session.SessionDate)
+		packageIDs, err := s.siblingPackageIDs(s.db, session)
 		if err != nil {
 			return nil, err
 		}
 
-		var records []models.StudentAttendance
-		if err := s.db.Select("enrollment_id").
-			Where("attendance_session_id = ?", session.ID).
-			Find(&records).Error; err != nil {
+		confirmed, err := s.confirmedCustomers(s.db, packageIDs, session.SessionDate, session.ScheduleStartTime)
+		if err != nil {
+			return nil, err
+		}
+
+		var checkedIDs []uint
+		if err := s.db.Model(&models.StudentAttendance{}).
+			Joins("JOIN enrollments e ON e.id = student_attendances.enrollment_id AND e.deleted_at IS NULL").
+			Where("student_attendances.attendance_session_id = ?", session.ID).
+			Distinct("e.customer_id").
+			Pluck("e.customer_id", &checkedIDs).Error; err != nil {
 			return nil, errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อได้")
 		}
-		checked := make(map[uint]bool, len(records))
-		for _, r := range records {
-			checked[r.EnrollmentID] = true
+		checked := make(map[uint]bool, len(checkedIDs))
+		for _, id := range checkedIDs {
+			checked[id] = true
 		}
 
 		item.TotalCount = len(confirmed)
-		for enrollmentID := range confirmed {
-			if !checked[enrollmentID] {
+		for customerID := range confirmed {
+			if !checked[customerID] {
 				item.PendingCount++
 			}
 		}
@@ -188,12 +195,17 @@ func (s *AttendanceService) markAbsentees(
 
 	expireStaleEnrollments(tx)
 
-	enrollments, err := s.activeEnrollments(tx, session.PackageID)
+	packageIDs, err := s.siblingPackageIDs(tx, session)
 	if err != nil {
 		return err
 	}
 
-	confirmed, err := s.confirmedEnrollments(tx, session.PackageID, session.SessionDate)
+	enrollments, err := s.activeEnrollments(tx, packageIDs)
+	if err != nil {
+		return err
+	}
+
+	confirmed, err := s.confirmedCustomers(tx, packageIDs, session.SessionDate, session.ScheduleStartTime)
 	if err != nil {
 		return err
 	}
@@ -208,11 +220,22 @@ func (s *AttendanceService) markAbsentees(
 	}
 
 	sessionID := session.ID
-	for i := range enrollments {
-		e := &enrollments[i]
-		if checked[e.ID] || !confirmed[e.ID] {
+
+	for _, group := range groupEnrollmentsByCustomer(enrollments) {
+		if !confirmed[group[0].CustomerID] {
 			continue
 		}
+		alreadyChecked := false
+		for _, e := range group {
+			if checked[e.ID] {
+				alreadyChecked = true
+			}
+		}
+		if alreadyChecked {
+			continue
+		}
+
+		e := pickUsableEnrollmentPtr(group)
 
 		var studentUserID *uint
 		if uid, err := ResolveUserID(tx, e.CustomerID); err == nil {

@@ -31,6 +31,10 @@ func (s *DetectedPhotoService) WithMediaStorage(ms MediaStorage) *DetectedPhotoS
 // เหมือน ErrRawVideoForbidden แต่แยกตัวแปรเพื่อให้ controller แมป error message ได้ตรงบริบท
 var ErrRawPhotoForbidden = errors.New("ไม่มีสิทธิ์เข้าถึงรูปนี้")
 
+// ErrPostNotFound ใช้ตอนนักเรียนพยายามลบโพสต์ (รูป/วิดีโอ) ที่ตัวเองไม่ได้ถูกแท็กอยู่จริง
+// (กัน IDOR — เดข raw_id ของคนอื่นแล้วยิงลบไม่ได้ ถือใช้ร่วมกันทั้งรูปและวิดีโอ)
+var ErrPostNotFound = errors.New("ไม่พบโพสต์นี้ หรือคุณไม่ได้ถูกแท็กอยู่ในโพสต์นี้")
+
 // VerifyCoachOwnsRawPhoto คืน nil ถ้าผู้ใช้เป็นแอดมิน หรือเป็นโค้ชเจ้าของรูปนี้จริง
 func VerifyCoachOwnsRawPhoto(db *gorm.DB, rawPhoto *models.RawPhoto, userID uint, role string) error {
 	if role == string(models.AdminRole) {
@@ -146,6 +150,22 @@ func (s *DetectedPhotoService) GetDetectedPhotosByRawPhotoID(rawPhotoID uint) ([
 		Preload("Customer.User").
 		Find(&list).Error
 	return list, err
+}
+
+// DeleteMyPhotoTag ให้นักเรียนลบตัวเองออกจากรูปนี้ (soft delete แท็กของตัวเองเท่านั้น)
+//
+// ⚠️ ต่างจาก DeleteOldRawPhotos ตรงที่ไม่แตะรูปต้นฉบับ (RawPhoto) เลย — รูปหมู่ที่มีคนอื่นถูกแท็ก
+// อยู่ด้วยจะยังอยู่ให้คนอื่นเห็นตามปกติ ถ้าลบแล้วไม่เหลือใครถูกแท็กในรูปนี้อีก รูปต้นฉบับจะยัง
+// ไม่ถูกลบทันที แต่รอ cron อายุ 7 วันมาเก็บกวาดทีหลังเหมือนเดิม
+func (s *DetectedPhotoService) DeleteMyPhotoTag(customerID, rawPhotoID uint) error {
+	result := s.db.Where("raw_photo_id = ? AND customer_id = ?", rawPhotoID, customerID).Delete(&models.DetectedPhoto{})
+	if result.Error != nil {
+		return errors.New("ไม่สามารถลบโพสต์นี้ได้")
+	}
+	if result.RowsAffected == 0 {
+		return ErrPostNotFound
+	}
+	return nil
 }
 
 // DeleteOldRawPhotos ลบรูปโพสต์ที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)

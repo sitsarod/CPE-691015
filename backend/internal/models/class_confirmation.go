@@ -24,16 +24,16 @@ type ClassConfirmation struct {
 	gorm.Model
 
 	// หนึ่งใบลงทะเบียนตอบได้วันละคำตอบเดียว — ด่านสุดท้ายกันกดรัว ๆ จนเกิดสองแถว
-	EnrollmentID uint        `json:"enrollment_id" gorm:"not null;uniqueIndex:idx_class_confirmation_enrollment_date"`
+	EnrollmentID uint        `json:"enrollment_id" gorm:"not null;uniqueIndex:idx_class_confirmation_slot"`
 	Enrollment   *Enrollment `json:"enrollment,omitempty" gorm:"foreignKey:EnrollmentID"`
 
-	ClassDate time.Time `json:"class_date" gorm:"type:date;not null;uniqueIndex:idx_class_confirmation_enrollment_date"`
+	ClassDate time.Time `json:"class_date" gorm:"type:date;not null;uniqueIndex:idx_class_confirmation_slot"`
 
 	Status ClassConfirmationStatus `json:"status" gorm:"type:varchar(20);not null"`
 
 	// สแนปช็อตเวลาคาบตอนที่ตอบ — แอดมินอาจแก้ PackageSchedule ทีหลัง
 	// แล้วรายงานย้อนหลังจะอ่านไม่ตรงกับคาบที่นักเรียนตอบไปจริง
-	ScheduleStartTime string `json:"schedule_start_time" gorm:"type:varchar(10)"`
+	ScheduleStartTime string `json:"schedule_start_time" gorm:"type:varchar(10);uniqueIndex:idx_class_confirmation_slot"`
 	ScheduleEndTime   string `json:"schedule_end_time" gorm:"type:varchar(10)"`
 
 	RespondedAt time.Time `json:"responded_at"`

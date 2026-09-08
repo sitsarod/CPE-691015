@@ -15,6 +15,7 @@ import {
   CameraOff,
   AlertTriangle,
   Maximize,
+  CalendarX,
 } from "lucide-react";
 
 import {
@@ -30,8 +31,9 @@ import {
   closeSession,
   updateAttendanceStatus,
   updateCoachAttendanceStatus,
+  fetchMissedClasses,
 } from "@/services/attendanceAPI";
-import { COACH_STATUS_LABEL } from "@/types/attendance";
+import { COACH_STATUS_LABEL, COACH_STATUS_NOTE } from "@/types/attendance";
 import type {
   OpenablePackage,
   OpenSessionSummary,
@@ -49,7 +51,6 @@ import CoachRosterList from "./components/CoachRosterList";
 import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
-
 
 const SCAN_COOLDOWN_SECONDS = 5;
 
@@ -126,7 +127,6 @@ export default function AdminAttendancePage() {
 
   const startCooldown = useCallback(() => setCooldown(SCAN_COOLDOWN_SECONDS), []);
 
-
   // เครื่องที่สนามถูกรีโหลดระหว่างคาบได้ ต้องกลับเข้าโหมดเอง
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +171,26 @@ export default function AdminAttendancePage() {
   }, []);
 
   const [refreshTick, setRefreshTick] = useState(0);
+
+  // จำนวนคลาสที่สอนไปแล้วแต่ไม่มีรอบเช็คชื่อ = ค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+  //
+  // โหลดแยกจากรายการหลักโดยตั้งใจ — เป็นตัวเลขประกอบ ถ้าดึงไม่ได้ก็ไม่ควร
+  // ทำให้หน้าเช็คชื่อทั้งหน้าขึ้น error จนเปิดรอบไม่ได้
+  const [missedCount, setMissedCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMissedClasses()
+      .then((list) => {
+        if (!cancelled) setMissedCount(list.length);
+      })
+      .catch(() => {
+        /* ตัวเลขประกอบ ล้มเหลวได้เงียบ ๆ */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -590,6 +610,24 @@ export default function AdminAttendancePage() {
           </div>
 
           <div className="flex shrink-0 gap-2">
+            {/* คาบที่ไม่มีรอบเช็คชื่อ = ค่าจ้างที่โค้ชยังไม่ได้รับ
+                ต้องอยู่ตรงนี้ ไม่ใช่ซ่อนในเมนู เพราะไม่มีใครไปหาสิ่งที่ไม่รู้ว่ามีอยู่ */}
+            <Link
+              href="/admin/attendance/missed"
+              className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2 font-medium transition sm:flex-none ${
+                missedCount > 0
+                  ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                  : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <CalendarX className="h-4 w-4" />
+              คาบค้าง
+              {missedCount > 0 && (
+                <span className="rounded-full bg-amber-600 px-1.5 text-xs font-semibold text-white">
+                  {missedCount}
+                </span>
+              )}
+            </Link>
             <Link
               href="/admin/attendance/history"
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 sm:flex-none"
@@ -703,8 +741,29 @@ export default function AdminAttendancePage() {
                         <Users className="h-4 w-4" />
                         ยืนยันแล้ว {pkg.confirmed_count} / {pkg.student_count} คน
                       </span>
-                      <span>{pkg.sessions_count} ครั้ง/แพ็กเกจ</span>
+                      <span>{pkg.package_count} แพ็กเกจ</span>
                     </div>
+
+                    {/* แพ็กเกจที่เรียนคาบนี้ร่วมกัน — แอดมินต้องรู้ว่าเปิดรอบเดียวแล้ว
+                        ครอบใครบ้าง ไม่ใช่เห็นแค่ตัวเลขรวม */}
+                    {pkg.packages.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {pkg.packages.map((p) => (
+                          <span
+                            key={p.id}
+                            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${
+                              p.student_count > 0
+                                ? "bg-gray-100 text-gray-700"
+                                : "bg-gray-50 text-gray-400"
+                            }`}
+                          >
+                            <span className="font-semibold">แพ็กเกจ {p.sessions_count} ครั้ง</span>
+                            <span className="text-gray-400">·</span>
+                            <span>{p.student_count} คน</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {isClosed ? (
@@ -795,10 +854,33 @@ export default function AdminAttendancePage() {
               <span className="font-medium text-amber-600">เปิดค้างอยู่ · เลยเวลาแล้ว</span>
             )}
           </p>
+
+          {/* รอบเดียวครอบหลายแพ็กเกจ — ต้องเห็นว่าใบไหนบ้างและใบไหนเป็นแพ็กเกจหลัก
+              ไม่งั้นเวลาตัวเลขไม่ตรงกับที่คาดจะไล่หาสาเหตุไม่ถูก */}
+          {session.packages.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {session.packages.map((p) => (
+                <span
+                  key={p.id}
+                  title={p.is_anchor ? "แพ็กเกจหลักของรอบนี้" : undefined}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${
+                    p.student_count > 0
+                      ? "bg-gray-100 text-gray-700"
+                      : "bg-gray-50 text-gray-400"
+                  }`}
+                >
+                  <span className="font-semibold">แพ็กเกจ {p.sessions_count} ครั้ง</span>
+                  <span className="text-gray-400">·</span>
+                  <span>{p.student_count} คน</span>
+                  {p.is_anchor && <span className="text-[#CC0000]">★</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/มาไม่ตรงวัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
+          {/* ตัวเลขเดียวพอ — ใครมา/ขาด/นอกเหนือจากยืนยัน ดูได้จากรายชื่อที่อยู่ข้าง ๆ */}
           <div className="flex items-baseline gap-2 whitespace-nowrap">
             <span className="text-sm text-gray-500">เช็คแล้ว</span>
             <span className="text-2xl font-bold leading-none text-gray-900">
@@ -956,10 +1038,7 @@ export default function AdminAttendancePage() {
           currentRemarks={editingCoach.remarks}
           isSubmitting={isSavingCoachStatus}
           // โค้ชไม่มีโควตาและไม่ถูกคิดค่าสนาม ข้อความของนักเรียนจึงใช้ไม่ได้
-          statusNote={{
-            present: "บันทึกว่ามาสอนคาบนี้",
-            absent: "บันทึกว่าไม่ได้มาสอน — ไม่กระทบค่าจ้าง",
-          }}
+          statusNote={COACH_STATUS_NOTE}
           onSubmit={handleSaveCoachStatus}
           onClose={() => setEditingCoach(null)}
         />

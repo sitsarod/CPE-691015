@@ -332,6 +332,7 @@ func mapToPublicCoachDTO(m *models.Coach) dto.PublicCoachDTO {
 		Specialization: m.Specialization,
 		CoachLicense:   m.CoachLicense,
 		ProfilePicture: m.ProfilePicture,
+		HomeImage:      m.HomeImage,
 		Bio:            m.Bio,
 		FeatureOnHome:  m.FeatureOnHome,
 	}

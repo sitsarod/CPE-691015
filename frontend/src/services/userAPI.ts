@@ -103,6 +103,7 @@ export interface AdminCoachDetail {
   payment_type: string;
   pay_rate: number;
   bio?: string;
+  home_image?: string;
 }
 
 /** ตรงกับ dto.AdminUserDetailResponse */
@@ -208,6 +209,7 @@ export interface AdminUpdateCoachProfile {
   pay_rate?: number;
   status?: string; // "active" | "inactive"
   bio?: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
+  home_image?: string; // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเองเท่านั้น)
 }
 
 /** ข้อมูลโปรไฟล์ผู้เรียนที่แอดมินแก้ได้ (ตรงกับ dto.AdminUpdateCustomerProfile) */

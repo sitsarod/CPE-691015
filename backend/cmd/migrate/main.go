@@ -95,6 +95,31 @@ func main() {
 		log.Fatalf("สร้าง index ของ embedding ใบหน้าไม่สำเร็จ: %v", err)
 	}
 
+	// อีเมลกับเลขบัตรประชาชนห้ามซ้ำ "เฉพาะคนที่ยังไม่ถูกลบ"
+	// ขั้นนี้รื้อ unique constraint เก่าที่ AutoMigrate เคยสร้างไว้ด้วย
+	// ถ้าล้มต้องหยุด เพราะแปลว่าตอนนี้ไม่มีอะไรกันอีเมลซ้ำเลย
+	if err := services.EnsureSoftDeleteUniqueIndexes(db); err != nil {
+		log.Fatalf("สร้าง index ของอีเมล/เลขบัตรประชาชนไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.EnsureAttendanceUniqueIndexes(db); err != nil {
+		log.Fatalf("สร้าง index กันเช็คชื่อซ้ำต่อคนไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
+		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {
+		log.Fatalf("ปรับแพ็กเกจของตารางงานโค้ชไม่สำเร็จ: %v", err)
+	}
+
+	// ตรึงอัตราค่าจ้างของคาบเก่าไว้กับตัวแถว ไม่ให้ยอดย้อนหลังเปลี่ยนตามเรตปัจจุบัน
+	// ถ้าล้มต้องหยุด เพราะแปลว่าการคิดค่าจ้างจะอ่านค่า 0 แล้วยอดค้างจ่ายหายไปทั้งก้อน
+	if err := services.BackfillWorkSchedulePayRates(db); err != nil {
+		log.Fatalf("เติมอัตราค่าจ้างย้อนหลังให้ตารางงานไม่สำเร็จ: %v", err)
+	}
+
 	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
 	if err := services.CleanupLegacyFacePhotos(db); err != nil {
 		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)

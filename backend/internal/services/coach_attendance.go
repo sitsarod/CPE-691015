@@ -137,9 +137,14 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 ) (bool, error) {
 	date := session.SessionDate.Format("2006-01-02")
 
+	scope, err := s.classScheduleScope(tx, session)
+	if err != nil {
+		return false, err
+	}
+
 	var existing int64
-	if err := tx.Model(&models.WorkSchedule{}).
-		Where("coach_id = ? AND package_id = ? AND date = ?", coachID, session.PackageID, date).
+	if err := scope.Model(&models.WorkSchedule{}).
+		Where("coach_id = ?", coachID).
 		Count(&existing).Error; err != nil {
 		return false, errors.New("ไม่สามารถตรวจตารางงานของโค้ชได้")
 	}
@@ -176,6 +181,9 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 		PackageID:         &session.PackageID,
 		PackageScheduleID: packageScheduleID,
 		IsEmergency:       true,
+
+		// แถวนี้เกิดตอนโค้ชสแกน = ตอนที่งานเกิดขึ้นจริง เรตปัจจุบันจึงเป็นเรตที่ถูกต้อง
+		PayRateSnapshot: coachPayRateSnapshot(tx, coachID),
 	}
 	if err := tx.Create(&schedule).Error; err != nil {
 		return false, errors.New("ไม่สามารถเพิ่มตารางงานให้โค้ชได้")
@@ -185,17 +193,40 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 
 // ─── รายชื่อโค้ชของรอบ ───────────────────────────────────────────────────────
 
+func (s *AttendanceService) classScheduleScope(
+	tx *gorm.DB,
+	session *models.AttendanceSession,
+) (*gorm.DB, error) {
+	date := session.SessionDate.Format("2006-01-02")
+
+	if session.ScheduleStartTime == "" || session.ScheduleEndTime == "" {
+		return tx.Where("package_id = ? AND date = ?", session.PackageID, date), nil
+	}
+
+	courseID, err := s.sessionCourseID(tx, session)
+	if err != nil {
+		return nil, err
+	}
+	if courseID == 0 {
+		return tx.Where("package_id = ? AND date = ?", session.PackageID, date), nil
+	}
+
+	return tx.Where("course_id = ? AND date = ? AND start_time = ? AND end_time = ?",
+		courseID, date, session.ScheduleStartTime, session.ScheduleEndTime), nil
+}
+
 // coachSchedules = "ใครควรมาสอนคาบนี้" เทียบเท่า activeEnrollments ของฝั่งนักเรียน
 func (s *AttendanceService) coachSchedules(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
 ) ([]models.WorkSchedule, error) {
-	var rows []models.WorkSchedule
-	err := tx.Preload("Coach.User").
-		Where("package_id = ? AND date = ?", session.PackageID, session.SessionDate.Format("2006-01-02")).
-		Order("id ASC").
-		Find(&rows).Error
+	q, err := s.classScheduleScope(tx, session)
 	if err != nil {
+		return nil, err
+	}
+
+	var rows []models.WorkSchedule
+	if err := q.Preload("Coach.User").Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงตารางงานของโค้ชได้")
 	}
 
@@ -324,8 +355,12 @@ func (s *AttendanceService) ManualCoachCheckIn(
 //
 // recordedBy = nil แปลว่างานปิดรอบอัตโนมัติเป็นคนมาร์ค (หลักเดียวกับ markAbsentees)
 //
-// ⚠️ ไม่กระทบค่าจ้าง — ค่าจ้างนับจาก WorkSchedule ที่ยังอยู่ครบ ไม่ใช่ตารางนี้
-// ถ้าวันหนึ่งเปลี่ยนไปคิดจากตารางนี้ ต้องกลับมาคิดเรื่องนี้ใหม่ทั้งหมด
+// ⚠️ กระทบค่าจ้างโดยตรง — แถว absent ที่สร้างตรงนี้ทำให้คาบนั้นไม่ถูกนับใน
+// taughtSessionDates โค้ชจึงไม่ได้เงินของคาบนั้น (เดิมมาร์คแล้วยังได้เงินเต็ม
+// ซึ่งเป็นบั๊ก) ก่อนแก้อะไรในฟังก์ชันนี้ ให้อ่านคอมเมนต์ของ taughtSessionDates ก่อน
+//
+// กรณีโค้ชมาสอนจริงแต่ลืมสแกน แอดมินแก้สถานะย้อนหลังได้ทั้งจากหน้ารอบที่เปิดอยู่
+// และหน้าประวัติเช็คชื่อ (UpdateCoachAttendanceStatus ไม่ห้ามแก้หลังปิดรอบ)
 func (s *AttendanceService) markCoachAbsentees(
 	tx *gorm.DB,
 	session *models.AttendanceSession,

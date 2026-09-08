@@ -109,6 +109,38 @@ func (ctrl *WorkScheduleController) GetTaughtSessionCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"count": len(dates), "dates": dates})
 }
 
+// GetUnresolvedSessions handles GET /api/coaches/:id/unresolved-sessions
+//
+// คาบที่โค้ชถูกมอบหมาย ผ่านวันมาแล้ว แต่ยังไม่มีรอบเช็คชื่อ = ยังไม่ถูกนับเป็นเงิน
+//
+// ⚠️ หน้าไหนที่แสดงยอดค่าจ้างจาก /taught-sessions ควรเรียกตัวนี้คู่กันเสมอ
+// ไม่งั้นคาบที่ค้างจะหายไปจากสายตาทั้งของแอดมินและของโค้ช ซึ่งเป็นบั๊กที่
+// ระบบเคลียร์คาบย้อนหลังถูกสร้างขึ้นมาแก้ (services/coach_missed_class.go)
+func (ctrl *WorkScheduleController) GetUnresolvedSessions(c *gin.Context) {
+	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		return
+	}
+
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	dates, err := ctrl.service.UnresolvedSessionDates(uint(coachID), userID, role)
+	if err != nil {
+		if errors.Is(err, services.ErrCoachForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายการคาบที่ยังไม่มีรอบเช็คชื่อได้"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": len(dates), "dates": dates})
+}
+
 // GetScheduleByID handles GET /api/work-schedules/:id
 func (ctrl *WorkScheduleController) GetScheduleByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

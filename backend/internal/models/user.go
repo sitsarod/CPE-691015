@@ -21,7 +21,17 @@ type User struct {
 	// ตรวจแค่ "รูปแบบอีเมลถูกต้อง" ตรงนี้เท่านั้น
 	// ส่วนกติกาว่าบทบาทไหนใช้โดเมนอะไรได้ อยู่ที่ services.ValidateEmailForRole
 	// เพราะโมเดลไม่ควรรู้เรื่องนโยบายที่ต่างกันตามบทบาท
-	Email 				string 			`json:"email" gorm:"unique" valid:"required~Email is required,email~รูปแบบอีเมลไม่ถูกต้อง"`
+	//
+	// ⚠️ ไม่มีแท็ก unique โดยตั้งใจ — กติกา "ห้ามอีเมลซ้ำ" ย้ายไปสร้างเป็น
+	// partial unique index ที่ services.EnsureSoftDeleteUniqueIndexes แทน
+	//
+	// เหตุผล: การลบสมาชิกเป็น soft delete แถวที่ลบแล้วยังอยู่ในตาราง
+	// unique ธรรมดาจึงจองอีเมลของคนที่ลาออกไปแล้วไว้ตลอดกาล ทำให้รับคนเดิม
+	// กลับเข้ามาใหม่ไม่ได้ index ตัวใหม่เติมเงื่อนไข WHERE deleted_at IS NULL
+	// ให้ตรงกับที่โค้ดฝั่ง Go เช็คอยู่แล้ว
+	//
+	// ห้ามใส่แท็ก unique กลับเข้ามา ไม่งั้น AutoMigrate จะสร้างกติกาเก่าทับอีกครั้ง
+	Email 				string 			`json:"email" valid:"required~Email is required,email~รูปแบบอีเมลไม่ถูกต้อง"`
 	Password 			string 			`json:"password" valid:"required~Password is required,length(6|30)~Password must be between 6 and 30 characters"`
 
 	// TokenVersion ใช้ยกเลิก token เก่าทั้งหมดของผู้ใช้คนนี้พร้อมกัน

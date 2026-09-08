@@ -11,6 +11,8 @@ import type {
   AttendanceHistoryItem,
   CoachHistoryItem,
   AttendanceStatus,
+  MissedClass,
+  ResolveMissedClassResult,
 } from "@/types/attendance";
 
 interface Envelope<T> {
@@ -201,4 +203,35 @@ export async function fetchCoachHistory(params?: {
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<CoachHistoryItem[]>>(`/attendance/coach-history${suffix}`);
   return res.data ?? [];
+}
+
+// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
+
+// [GET] คาบที่ผ่านวันมาแล้ว มีโค้ชถูกมอบหมาย แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
+//
+// ทุกรายการที่ได้กลับมาคือค่าจ้างที่ยังไม่ถูกนับให้โค้ช
+export async function fetchMissedClasses(): Promise<MissedClass[]> {
+  const res = await apiFetch<Envelope<MissedClass[]>>("/attendance/missed-classes");
+  return res.data ?? [];
+}
+
+// [POST] เคลียร์คาบที่ค้าง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าใครมาสอนบ้าง
+//
+// ⚠️ ต้องส่งสถานะมาให้ครบทุกคนของคลาสนั้น backend ปฏิเสธถ้าขาดคนใดคนหนึ่ง
+// เพราะกติกาการนับคาบคือ "ไม่มีแถวขาดงาน = ได้เงิน" คนที่ตกหล่นจึงจะได้เงิน
+// โดยไม่มีใครตัดสินใจ
+//
+// 409 = คาบนี้มีรอบอยู่แล้ว หรือรอบยังเปิดค้าง (ข้อความจาก backend อ่านรู้เรื่องแล้ว)
+export async function resolveMissedClass(
+  workScheduleId: number,
+  coaches: { coach_id: number; status: AttendanceStatus; remarks?: string }[],
+): Promise<ResolveMissedClassResult> {
+  const res = await apiFetch<Envelope<ResolveMissedClassResult>>(
+    "/attendance/missed-classes/resolve",
+    {
+      method: "POST",
+      body: JSON.stringify({ work_schedule_id: workScheduleId, coaches }),
+    },
+  );
+  return res.data;
 }

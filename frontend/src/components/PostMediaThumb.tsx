@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, ImageOff, Loader2, PlayCircle } from "lucide-react";
-import { downloadPost, fetchPostObjectURL } from "@/services/postAPI";
+import { Download, ImageOff, Loader2, PlayCircle, Trash2 } from "lucide-react";
+import { deletePost, downloadPost, fetchPostObjectURL } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 
 /**
@@ -11,14 +11,24 @@ import type { PostItem } from "@/types/post";
  * ⚠️ วิดีโอไม่ดึงเนื้อไฟล์มาทำ thumbnail — endpoint /videos/:id/raw ตอบแบบ private
  * (Cache-Control: no-store) ไม่รองรับ Range request ทาง blob fetch จึงต้องโหลดวิดีโอทั้งไฟล์
  * (สูงสุด 200MB) มาแค่โชว์กรอบเล็กๆ ในกริด ซึ่งหนักเกินไปโดยเฉพาะบนมือถือ — โชว์แค่ไอคอนแทน
- * ตัววิดีโอจริงเปิดดูได้ตอนกดเข้าไปดูทีละอันเท่านั้น (ยังไม่มีหน้ารายละเอียดตอนนี้)
+ * ตัววิดีโอจริงโหลดมาเล่นตอนกดเข้าไปดูทีละอันเท่านั้น — ผ่าน onOpen ที่ ProfileView เปิด
+ * PostViewerModal ให้ (เลื่อนสไลด์ดูโพสต์อื่นในชุดเดียวกันได้จากตรงนั้น)
  *
- * มีปุ่มดาวน์โหลดกำกับไว้เสมอ เพราะโพสต์จะถูกลบอัตโนมัติหลังผ่านไป 7 วัน
+ * มีปุ่มดาวน์โหลด+ลบกำกับไว้เสมอ เพราะโพสต์จะถูกลบอัตโนมัติหลังผ่านไป 7 วันอยู่แล้ว
  */
-export default function PostMediaThumb({ post }: { post: PostItem }) {
+export default function PostMediaThumb({
+  post,
+  onOpen,
+  onDeleted,
+}: {
+  post: PostItem;
+  onOpen: () => void;
+  onDeleted: () => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (post.type === "video") return;
@@ -58,6 +68,20 @@ export default function PostMediaThumb({ post }: { post: PostItem }) {
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (deleting) return;
+    if (!window.confirm("ลบโพสต์นี้ออกจากโปรไฟล์ของคุณ? (ดาวน์โหลดเก็บไว้ก่อนถ้ายังไม่ได้เก็บ)")) return;
+    setDeleting(true);
+    try {
+      await deletePost(post.type, post.raw_id);
+      onDeleted();
+    } catch {
+      alert("ลบโพสต์นี้ไม่สำเร็จ กรุณาลองใหม่");
+      setDeleting(false);
+    }
+  };
+
   let content: React.ReactNode;
   if (post.type === "video") {
     content = (
@@ -84,7 +108,16 @@ export default function PostMediaThumb({ post }: { post: PostItem }) {
 
   return (
     <>
-      {content}
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={failed}
+        className="block h-full w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-left disabled:cursor-default"
+        title="ดูรูป/วิดีโอเต็มขนาด"
+      >
+        {content}
+      </button>
+
       <button
         type="button"
         onClick={handleDownload}
@@ -93,6 +126,16 @@ export default function PostMediaThumb({ post }: { post: PostItem }) {
         className="absolute bottom-1.5 left-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+      </button>
+
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+        title="ลบโพสต์นี้ออกจากโปรไฟล์ของคุณ"
+        className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-red-600/90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
       </button>
     </>
   );

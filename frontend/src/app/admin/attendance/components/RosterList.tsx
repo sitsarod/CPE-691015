@@ -242,7 +242,7 @@ export default function RosterList({ session, onManualCheckIn, onEditStatus }: P
                 ไม่ได้ยืนยันว่าจะมาคาบนี้ ({walkInRows.length})
               </p>
               <p className="text-sm text-amber-800">
-                เช็คให้ได้ แต่จะถูกบันทึกเป็น &ldquo;มาไม่ตรงวัน&rdquo; และถูกคิดค่าสนามด้วย
+                เช็คให้ได้ แต่จะถูกบันทึกเป็น &ldquo;นอกเหนือจากยืนยัน&rdquo; และถูกคิดค่าสนามด้วย
               </p>
             </div>
 

@@ -11,27 +11,26 @@ import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
 import { announcementAPI } from "@/services/announcementAPI";
 import { CourseDTO } from "@/types/course";
-import CourseCover from "@/components/course/CourseCover";
+import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 import { PublicHome, PublicCoach } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
-import { BookOpen, Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X } from "lucide-react";
 
 export default function Home() {
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [home, setHome] = useState<PublicHome | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  // ประกาศที่แสดงให้ "ผู้เยี่ยมชม" เห็น (visibility: all/guest) — ใช้เป็นรูปสไลด์หน้าแรกแทน
-  // รูปสไลด์แบบเดิมที่เคยตั้งค่าแยกจากระบบประกาศข่าวสาร (ย้ายมาจัดการรวมในหน้า "สร้างประกาศ" แทน)
-  const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // โค้ชที่ถูกคลิกในหน้าแรก → เปิด modal
+  const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // คลิกการ์ดโค้ช → เปิด modal รายละเอียด
 
-  // แกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) — เปิดจากปุ่มมุมซ้ายล่างของรูปสไลด์
+  // ประกาศข่าวสารสำหรับผู้เยี่ยมชม (visibility: all/guest) — ใช้ในส่วนข่าว/ประกาศบนหน้าแรก
+  const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
+  // แกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) — เปิดจากปุ่ม "ดูข่าวทั้งหมด"
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [galleryItems, setGalleryItems] = useState<Announcement[]>([]);
   const [isGalleryLoading, setIsGalleryLoading] = useState(false);
-  const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น ไม่โหลดล่วงหน้า
+  const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น
   const [selectedNews, setSelectedNews] = useState<Announcement | null>(null); // ประกาศที่กดอ่านจากแกลเลอรี
 
   useEffect(() => {
@@ -67,10 +66,7 @@ export default function Home() {
   }, []);
 
   const content = home?.content;
-  // สไลด์หน้าแรก: รูปปก + พาดหัว จากประกาศที่ตั้งค่าให้ผู้เยี่ยมชมเห็น (สร้าง/แก้ไขได้ที่หน้า "สร้างประกาศ" ของแอดมิน)
-  const heroSlides = guestAnnouncements
-    .filter((a) => !!a.image_url)
-    .map((a) => ({ image_url: a.image_url, title: a.title }));
+  const slideImages = (home?.slides ?? []).map((s) => s.image_url);
   const coaches = home?.featured_coaches ?? [];
 
   // โหลดแกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) แบบ lazy — เรียกครั้งแรกตอนกดปุ่มเท่านั้น
@@ -102,17 +98,11 @@ export default function Home() {
     <div className="min-h-screen bg-white flex flex-col font-sans">
 
       <main className="w-full">
-        {/* ข่าว/ประกาศสไตล์ BWF: ข่าวเด่นใหญ่ + การ์ดรอง รูปเห็นเต็มภาพไม่ตัดขอบ
-            ถ้ายังไม่มีประกาศสำหรับผู้เยี่ยมชม ใช้สไลด์รูปเริ่มต้นเป็นแบนเนอร์แทน */}
-        {heroSlides.length > 0 ? (
-          <AnnouncementNewsSection announcements={guestAnnouncements} onOpenGallery={handleOpenGallery} />
-        ) : (
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-6xl mt-4 sm:mt-6 overflow-hidden rounded-2xl shadow-sm">
-              <HeroSlider slides={heroSlides} onGalleryClick={handleOpenGallery} />
-            </div>
-          </div>
-        )}
+        {/* แบนเนอร์สไลด์หน้าแรกจาก CMS (แอดมินตั้งรูปสไลด์เอง) */}
+        <HeroSlider slides={slideImages.map((image_url) => ({ image_url }))} />
+
+        {/* ส่วนข่าว/ประกาศสไตล์ BWF — แสดงเมื่อมีประกาศสำหรับผู้เยี่ยมชม (ถ้าไม่มีจะซ่อนเอง) */}
+        <AnnouncementNewsSection announcements={guestAnnouncements} onOpenGallery={handleOpenGallery} />
       </main>
 
       {/* 2. ส่วนบุคลากร */}
@@ -128,41 +118,42 @@ export default function Home() {
           {coaches.length === 0 ? (
             <p className="mt-12 text-center text-gray-400">เร็วๆ นี้</p>
           ) : (
-            <div className="mt-12 -mx-6 md:-mx-12 lg:-mx-24 overflow-x-auto">
-              <div className="flex gap-8 w-max mx-auto px-6 md:px-12 lg:px-24 pt-6 pb-4 items-start">
-                {coaches.map((coach) => {
-                  const name =
-                    coach.nickname ||
-                    [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
-                    `โค้ช #${coach.id}`;
-                  return (
-                    <button
-                      key={coach.id}
-                      type="button"
-                      onClick={() => setSelectedCoach(coach)}
-                      className="group flex w-72 shrink-0 flex-col items-center text-center focus:outline-none"
-                    >
-                      {coach.profile_picture ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coach.profile_picture} alt={name}
-                          className="w-40 h-40 rounded-full object-cover shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40" />
-                      ) : (
-                        <div className="w-40 h-40 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 shadow-md ring-2 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:ring-[#CC0000]/40">
-                          <UserRound className="w-16 h-16" />
-                        </div>
-                      )}
-                      <h3 className="mt-5 text-xl font-bold text-gray-900">{name}</h3>
+            <div className="mt-12 flex flex-wrap justify-center gap-8">
+              {coaches.map((coach) => {
+                // ใช้รูปหน้าแรกที่แอดมินตั้ง ถ้ายังไม่ตั้งค่อย fallback รูปโปรไฟล์โค้ช
+                const img = coach.home_image || coach.profile_picture;
+                const name =
+                  coach.nickname ||
+                  [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
+                  `โค้ช #${coach.id}`;
+                return (
+                  <button
+                    key={coach.id}
+                    type="button"
+                    onClick={() => setSelectedCoach(coach)}
+                    className="group relative aspect-[3/4] w-64 sm:w-72 overflow-hidden rounded-3xl bg-gray-100 shadow-sm ring-1 ring-black/5 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl focus:outline-none"
+                  >
+                    {img ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img} alt={name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gray-300">
+                        <UserRound className="h-16 w-16" />
+                      </div>
+                    )}
+
+                    {/* ไล่เฉดดำด้านล่าง + ชื่อโค้ช (จัดกึ่งกลาง) */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 pb-6 pt-16 text-center">
+                      <h3 className="text-xl font-bold leading-tight text-white drop-shadow">{name}</h3>
                       {coach.specialization && (
-                        <p className="mt-1 text-sm text-[#CC0000] font-medium">{coach.specialization}</p>
+                        <span className="mt-2 inline-block rounded-full bg-[#CC0000] px-3 py-0.5 text-xs font-bold text-white">
+                          ระดับ {coach.specialization}
+                        </span>
                       )}
-                      {coach.bio?.trim() && (
-                        <p className="mt-2 w-full whitespace-pre-line text-sm leading-relaxed text-gray-500">{coach.bio}</p>
-                      )}
-                      <span className="mt-3 text-xs text-gray-400 opacity-0 transition group-hover:opacity-100">คลิกเพื่อดูเพิ่มเติม</span>
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -184,37 +175,22 @@ export default function Home() {
               <Loader2 className="w-10 h-10 animate-spin text-[#CC0000]" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            // แถวเลื่อนซ้ายขวา — เดิมเป็นกริดสามคอลัมน์ที่พอคอร์สเยอะจะยาวลงไปเรื่อย ๆ
+            // จนดันเนื้อหาส่วนถัดไปตกจอ
+            //
+            // ความกว้างการ์ด 84vw บนจอเล็กโดยตั้งใจ ให้เห็นขอบใบถัดไปโผล่มานิดหนึ่ง
+            // เป็นสัญญาณว่าเลื่อนได้ ถ้าเต็ม 100% จะดูเหมือนมีใบเดียว
+            <div
+              className="-mx-1 flex snap-x snap-mandatory gap-8 overflow-x-auto px-1 pb-3
+                         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {courses.map((course) => (
-                <Link key={course.id} href={`/courses/${course.id}`}>
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-                    <CourseCover
-                      src={course.image_url}
-                      alt={course.course_name}
-                      className="aspect-[16/9] w-full shrink-0 bg-gray-50 object-cover"
-                    />
-
-                    <div className="p-8 flex flex-1 flex-col">
-                    <div className="flex items-center gap-3 mb-4">
-                      <BookOpen className="w-6 h-6 text-[#CC0000]" />
-                      <span className="bg-red-100 text-[#CC0000] text-xs font-bold px-3 py-1 rounded-full uppercase">
-                        {course.status}
-                      </span>
-                    </div>
-
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{course.course_name}</h3>
-                    <p className="text-gray-600 text-sm mb-6 flex-grow line-clamp-3">
-                      {course.description}
-                    </p>
-
-                    <div className="border-t pt-4 text-center">
-                      <span className="text-[#CC0000] font-semibold text-sm hover:underline">
-                        ดูรายละเอียดและแพ็กเกจทั้งหมด →
-                      </span>
-                    </div>
-                    </div>
-                  </div>
-                </Link>
+                <div
+                  key={course.id}
+                  className="w-[min(25rem,86vw)] shrink-0 snap-start"
+                >
+                  <CourseSummaryCard course={course} href={`/courses/${course.id}`} />
+                </div>
               ))}
             </div>
           )}
@@ -401,74 +377,58 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Modal รายละเอียดโค้ช — เปิดเมื่อคลิกโค้ชในส่วนบุคลากร */}
-      {selectedCoach && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          onClick={() => setSelectedCoach(null)}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setSelectedCoach(null)}
-              className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10"
-              aria-label="ปิด"
-            >
-              <X className="h-5 w-5" />
-            </button>
+      {/* Modal รายละเอียดโค้ช — เปิดเมื่อคลิกการ์ดในส่วนบุคลากร */}
+      {selectedCoach && (() => {
+        const c = selectedCoach;
+        const img = c.home_image || c.profile_picture;
+        const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ");
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setSelectedCoach(null)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setSelectedCoach(null)}
+                className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/80 text-gray-700 shadow transition hover:bg-white"
+                aria-label="ปิด"
+              >
+                <X className="h-5 w-5" />
+              </button>
 
-            <div className="flex flex-col items-center px-6 pt-8 pb-6 text-center">
-              {selectedCoach.profile_picture ? (
+              {/* รูปด้านบน — เต็มความกว้าง สัดส่วน 3:4 (ตรงกับรูปที่ครอปไว้) ไม่มีขอบข้าง */}
+              {img ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selectedCoach.profile_picture}
-                  alt=""
-                  className="h-32 w-32 rounded-full object-cover shadow-md"
-                />
+                <img src={img} alt="" className="aspect-[3/4] w-full bg-gray-50 object-cover" />
               ) : (
-                <div className="grid h-32 w-32 place-items-center rounded-full bg-gray-100 text-gray-300 shadow-md">
-                  <UserRound className="h-14 w-14" />
+                <div className="flex aspect-[3/4] w-full items-center justify-center bg-gray-100 text-gray-300">
+                  <UserRound className="h-20 w-20" />
                 </div>
               )}
 
-              <h3 className="mt-4 text-2xl font-bold text-gray-900">
-                {selectedCoach.nickname ||
-                  [selectedCoach.firstName, selectedCoach.lastName].filter(Boolean).join(" ") ||
-                  `โค้ช #${selectedCoach.id}`}
-              </h3>
-              {(selectedCoach.firstName || selectedCoach.lastName) && selectedCoach.nickname && (
-                <p className="mt-0.5 text-sm text-gray-400">
-                  {[selectedCoach.firstName, selectedCoach.lastName].filter(Boolean).join(" ")}
-                </p>
-              )}
+              <div className="p-6">
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {c.nickname || fullName || `โค้ช #${c.id}`}
+                </h3>
+                {fullName && c.nickname && <p className="mt-0.5 text-sm text-gray-400">{fullName}</p>}
 
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                {selectedCoach.specialization && (
-                  <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-[#CC0000]">
-                    ระดับ {selectedCoach.specialization}
-                  </span>
-                )}
-                {selectedCoach.coach_license && (
-                  <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-                    {selectedCoach.coach_license}
-                  </span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {c.specialization && (
+                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-[#CC0000]">ระดับ {c.specialization}</span>
+                  )}
+                  {c.coach_license && (
+                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{c.coach_license}</span>
+                  )}
+                </div>
+
+                {c.bio?.trim() ? (
+                  <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-gray-600">{c.bio}</p>
+                ) : (
+                  <p className="mt-4 text-sm text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
                 )}
               </div>
             </div>
-
-            <div className="border-t border-gray-100 px-6 py-5">
-              {selectedCoach.bio?.trim() ? (
-                <p className="whitespace-pre-line text-sm leading-relaxed text-gray-600">{selectedCoach.bio}</p>
-              ) : (
-                <p className="text-center text-sm text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal แกลเลอรีรูปประกาศทั้งหมด — เปิดจากปุ่มมุมซ้ายล่างของรูปสไลด์ (รวมประกาศที่หมดอายุแล้ว) */}
       {isGalleryOpen && (
