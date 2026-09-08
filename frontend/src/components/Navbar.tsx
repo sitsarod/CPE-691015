@@ -6,8 +6,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
-// section ที่มีเมนูใน Top bar (ต้องตรงกับ id ใน frontend/src/app/page.tsx)
-const SECTIONS = ["coaches", "courses", "about"];
+// เมนูใน Top bar — id ต้องตรงกับ section id ใน frontend/src/app/page.tsx
+// เรียงตามลำดับหัวข้อจริงบนหน้าแรก
+const NAV_ITEMS: { id: string; label: string }[] = [
+  { id: "courses", label: "คอร์สเรียน" },
+  { id: "coaches", label: "บุคลากร" },
+  { id: "news", label: "ข่าว" },
+  { id: "faq", label: "คำถามที่พบบ่อย" },
+  { id: "about", label: "ติดต่อเรา" },
+];
+const SECTIONS = NAV_ITEMS.map((item) => item.id);
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -84,30 +92,26 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* เมนูฝั่งขวา (จอ md ขึ้นไปเท่านั้น) */}
-        <div className="hidden md:flex items-center gap-8 text-black text-lg font-medium">
-          <Link href="/#coaches" className={linkClass("coaches")}>
-            บุคลากร
-          </Link>
-          <Link href="/#courses" className={linkClass("courses")}>
-            คอร์สเรียน
-          </Link>
-          <Link href="/#about" className={linkClass("about")}>
-            เกี่ยวกับฉัน
-          </Link>
+        {/* เมนูฝั่งขวา (จอ lg ขึ้นไป — เมนูยาวขึ้นจึงเลื่อน breakpoint) */}
+        <div className="hidden lg:flex items-center gap-7 text-black text-base font-medium">
+          {NAV_ITEMS.map((item) => (
+            <Link key={item.id} href={`/#${item.id}`} className={linkClass(item.id)}>
+              {item.label}
+            </Link>
+          ))}
 
           {/* เส้นกั้นแนวตั้ง */}
-          <div className="h-6 w-px bg-gray-400 mx-2"></div>
+          <div className="h-6 w-px bg-gray-400 mx-1"></div>
 
           <Link href="/login" className="hover:text-red-600 transition-colors">
             เข้าสู่ระบบ
           </Link>
         </div>
 
-        {/* ปุ่ม Hamburger (เฉพาะมือถือ จอเล็กกว่า md) */}
+        {/* ปุ่ม Hamburger (จอเล็กกว่า lg) */}
         <button
           type="button"
-          className="md:hidden text-black hover:text-red-600 transition-colors p-2 -mr-2"
+          className="lg:hidden text-black hover:text-red-600 transition-colors p-2 -mr-2"
           onClick={() => setMenuOpen(true)}
           aria-label="เปิดเมนู"
           aria-expanded={menuOpen}
@@ -122,7 +126,7 @@ export default function Navbar() {
         <>
           {/* ฉากหลังมืด: กดที่ว่างเพื่อปิดเมนู */}
           <div
-            className="md:hidden fixed inset-0 z-[60] bg-black/40"
+            className="lg:hidden fixed inset-0 z-[60] bg-black/40"
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
@@ -130,7 +134,7 @@ export default function Navbar() {
           {/* แผง drawer ฝั่งขวา */}
           <aside
             id="mobile-menu"
-            className="md:hidden fixed top-0 right-0 z-[70] h-full w-4/5 max-w-xs bg-white shadow-2xl flex flex-col"
+            className="lg:hidden fixed top-0 right-0 z-[70] h-full w-4/5 max-w-xs bg-white shadow-2xl flex flex-col"
           >
             {/* ปุ่มปิด (X) มุมบนขวา */}
             <div className="flex justify-end p-4">
@@ -154,15 +158,16 @@ export default function Navbar() {
                 เข้าสู่ระบบ
               </Link>
 
-              <Link href="/#coaches" onClick={() => setMenuOpen(false)} className={drawerLinkClass("coaches")}>
-                บุคลากร
-              </Link>
-              <Link href="/#courses" onClick={() => setMenuOpen(false)} className={drawerLinkClass("courses")}>
-                คอร์สเรียน
-              </Link>
-              <Link href="/#about" onClick={() => setMenuOpen(false)} className={drawerLinkClass("about")}>
-                เกี่ยวกับฉัน
-              </Link>
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/#${item.id}`}
+                  onClick={() => setMenuOpen(false)}
+                  className={drawerLinkClass(item.id)}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           </aside>
         </>

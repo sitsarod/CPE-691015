@@ -19,9 +19,14 @@ interface HeroSliderProps {
   slides?: HeroSlideItem[];
   // ปุ่ม "ดูรูปทั้งหมด" มุมซ้ายล่าง — ส่งมาเมื่อมีแกลเลอรีให้เปิดดู (ไม่ส่ง = ไม่แสดงปุ่ม)
   onGalleryClick?: () => void;
+  // วิธีจัดรูปในกรอบ:
+  //  - "contain" (ค่าเริ่มต้น) โชว์เต็มใบไม่ตัดขอบ + พื้นหลังเบลอเติมขอบ เหมาะกับโปสเตอร์ประกาศ
+  //  - "cover" ภาพเต็มกรอบแบบใหญ่ ยอมให้ถูกตัดขอบ เหมาะกับแบนเนอร์ hero
+  fit?: "contain" | "cover";
 }
 
-export default function HeroSlider({ slides: slidesProp, onGalleryClick }: HeroSliderProps) {
+export default function HeroSlider({ slides: slidesProp, onGalleryClick, fit = "contain" }: HeroSliderProps) {
+  const isCover = fit === "cover";
   const slides = slidesProp && slidesProp.length > 0 ? slidesProp : DEFAULT_SLIDES;
   const isSingle = slides.length <= 1; // มีรูปเดียว = ไม่ต้องเลื่อน/ไม่มีปุ่ม
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -98,9 +103,11 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick }: HeroS
       // ไม่ให้แบนเนอร์บังเต็มจอจนดูตัน — มือถือ 55svh, จอใหญ่ 60svh (สูงขึ้นเล็กน้อยให้สมส่วนกับจอกว้าง)
       // ใช้ svh กัน browser UI บนมือถือบังส่วนล่าง จับคู่กับ object-contain ที่รูปด้านใน
       // รูปจึงแสดงครบทุกสัดส่วนไม่ถูกตัดขอบ ไม่ว่าจะเป็นจอไหน
-      className={`relative w-full h-[55svh] min-h-[260px] md:h-[60svh] max-h-[700px] overflow-hidden group ${
-        isSingle ? "" : "cursor-grab active:cursor-grabbing"
-      }`}
+      className={`relative w-full overflow-hidden group ${
+        isCover
+          ? "h-[72svh] min-h-[440px] max-h-[860px]"
+          : "h-[55svh] min-h-[260px] md:h-[60svh] max-h-[700px]"
+      } ${isSingle ? "" : "cursor-grab active:cursor-grabbing"}`}
       onTouchStart={(e) => {
         if (isSingle) return;
         setTouchEnd(0);
@@ -141,21 +148,24 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick }: HeroS
       >
         {slides.map((slide, index) => (
           <div key={index} className="min-w-full h-full relative bg-black">
-            {/* พื้นหลังเบลอจากรูปเดียวกัน เติมพื้นที่ขอบ (letterbox) ให้ดูตั้งใจแทนแถบดำว่าง ๆ */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={slide.image_url}
-              alt=""
-              aria-hidden
-              className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50 select-none pointer-events-none"
-              draggable={false}
-            />
-            {/* รูปจริง — object-contain เพื่อโชว์เต็มทั้งภาพไม่ตัดขอบ เห็นครบทุกสัดส่วนบนทุกจอ */}
+            {/* พื้นหลังเบลอจากรูปเดียวกัน เติมพื้นที่ขอบ (letterbox) — เฉพาะโหมด contain
+                โหมด cover ภาพเต็มกรอบอยู่แล้วจึงไม่ต้องมี */}
+            {!isCover && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={slide.image_url}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50 select-none pointer-events-none"
+                draggable={false}
+              />
+            )}
+            {/* รูปจริง — contain: โชว์เต็มใบไม่ตัดขอบ · cover: เต็มกรอบยอมตัดขอบ */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={slide.image_url}
               alt={slide.title || `Slide ${index + 1}`}
-              className="relative w-full h-full object-contain select-none pointer-events-none"
+              className={`relative w-full h-full select-none pointer-events-none ${isCover ? "object-cover" : "object-contain"}`}
               draggable={false}
             />
             {/* ไล่สีเข้มเฉพาะโซนล่างให้พาดหัวอ่านออก แทนการปิดทับทั้งรูปแบบเดิม (ทำให้รูปดูมืด) */}

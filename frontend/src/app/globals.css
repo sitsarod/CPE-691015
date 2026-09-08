@@ -36,7 +36,8 @@
   --color-border-light: var(--border-light);
   
  
-  --font-sans: 'Geist Sans', system-ui, -apple-system, sans-serif;
+  /* ใช้ Kanit เป็นฟอนต์หลักทั้งเว็บ (ผูกผ่าน --font-kanit จาก next/font ใน layout) */
+  --font-sans: var(--font-kanit), 'Geist Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'Geist Mono', monospace;
 }
 
