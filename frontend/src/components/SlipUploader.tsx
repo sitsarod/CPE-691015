@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Receipt } from 'lucide-react';
-import { MAX_UPLOAD_MB, validateImageSize } from '@/utils/imageUpload';
+import { MAX_UPLOAD_MB, IMAGE_ACCEPT, validateImageFile } from '@/utils/imageUpload';
 import ImageLightbox from '@/components/ImageLightbox';
 
 export interface SlipUploaderProps {
@@ -23,10 +23,10 @@ export default function SlipUploader({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const sizeError = validateImageSize(file);
-    if (sizeError) {
-      if (onError) onError(sizeError);
-      else alert(sizeError);
+    const fileError = validateImageFile(file);
+    if (fileError) {
+      if (onError) onError(fileError);
+      else alert(fileError);
       e.target.value = '';
       return;
     }
@@ -70,7 +70,7 @@ export default function SlipUploader({
         <input
           type="file"
           id="global-slip-upload"
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           onChange={handleFileChange}
           className="hidden"
           disabled={uploading}

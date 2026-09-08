@@ -78,6 +78,15 @@ func TestValidateImageRejectsHTMLDisguisedAsImage(t *testing.T) {
 	}
 }
 
+// ไฟล์ GIF ต้องถูกปฏิเสธ — ไม่รองรับภาพเคลื่อนไหว/รูปถ่ายคุณภาพต่ำอีกต่อไป
+func TestValidateImageRejectsGIF(t *testing.T) {
+	fh := makeFileHeader(t, "anim.gif", gifBytes())
+
+	if _, err := ValidateImageUpload(fh); !errors.Is(err, ErrUploadBadType) {
+		t.Fatalf("ไฟล์ GIF ต้องถูกปฏิเสธด้วย ErrUploadBadType แต่ได้ error: %v", err)
+	}
+}
+
 // ไฟล์ SVG ต้องถูกปฏิเสธ เพราะฝัง <script> ได้ทั้งที่ดูเหมือนรูป
 func TestValidateImageRejectsSVG(t *testing.T) {
 	svg := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
@@ -125,7 +134,6 @@ func TestValidateImageAcceptsCommonFormats(t *testing.T) {
 	}{
 		{"PNG", pngBytes(), ".png"},
 		{"JPEG", jpegBytes(), ".jpg"},
-		{"GIF", gifBytes(), ".gif"},
 	}
 
 	for _, tc := range cases {

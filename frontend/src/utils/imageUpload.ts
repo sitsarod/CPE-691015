@@ -4,8 +4,10 @@
 // ถ้าตั้งเกินกว่านี้ ไฟล์จะผ่าน client แต่ไป reject ที่ server ทำให้ผู้ใช้งง
 export const MAX_UPLOAD_MB = 5;
 
-// ชนิดรูปที่ backend ยอมรับ (ไม่รวม svg เพราะฝัง <script> ได้ = ช่องทาง XSS)
-export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+// ชนิดรูปที่ backend ยอมรับ — ต้องตรงกับ imageExtByType ใน controllers/upload.go
+// ไม่รวม svg (ฝัง <script> ได้ = ช่องทาง XSS) และไม่รวม gif
+// (ภาพเคลื่อนไหว 256 สี คุณภาพต่ำ ไฟล์ใหญ่ ไม่เหมาะกับรูปถ่าย)
+export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
 /**
  * ตรวจขนาดไฟล์ ถ้าเกิน MAX_UPLOAD_MB จะคืนข้อความ error (ไทย) ไม่งั้นคืน null
@@ -18,16 +20,19 @@ export function validateImageSize(file: File): string | null {
   return null;
 }
 
+// ชนิดรูปที่รับได้ — ต้องตรงกับ IMAGE_ACCEPT และ backend
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 /**
  * ตรวจว่าไฟล์เป็นรูปจริงและขนาดไม่เกิน (เช็คฝั่ง client ก่อนยิงไป backend)
- * — เช็คชนิด: ต้องเป็น image/* และไม่ใช่ svg
+ * — เช็คชนิด: ต้องเป็น jpg/png/webp เท่านั้น (ไม่รับ svg = XSS, ไม่รับ gif)
  * — เช็คขนาด: ไม่เกิน MAX_UPLOAD_MB
  *
  * หมายเหตุ: นี่เป็นแค่ด่านแรก backend ยังตรวจซ้ำจากเนื้อไฟล์จริงอีกชั้น (ปลอม type มาไม่ผ่าน)
  */
 export function validateImageFile(file: File): string | null {
-  if (!file.type.startsWith("image/") || file.type === "image/svg+xml") {
-    return "ไฟล์ที่เลือกไม่ใช่รูปภาพ กรุณาเลือกไฟล์ .jpg .png .webp หรือ .gif";
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    return "ชนิดไฟล์นี้ไม่รองรับ กรุณาเลือกไฟล์ .jpg .png หรือ .webp";
   }
   return validateImageSize(file);
 }
