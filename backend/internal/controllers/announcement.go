@@ -29,7 +29,8 @@ func announcementErrorStatus(err error) int {
 	case errors.Is(err, services.ErrInvalidDateRange),
 		errors.Is(err, services.ErrUserNotFound),
 		errors.Is(err, services.ErrCategoryNotFound),
-		errors.Is(err, services.ErrInvalidLink):
+		errors.Is(err, services.ErrInvalidLink),
+		errors.Is(err, services.ErrInvalidVisibility):
 		return http.StatusBadRequest
 	case errors.Is(err, services.ErrCategoryInUse):
 		return http.StatusConflict
@@ -90,8 +91,24 @@ func (ctrl *AnnouncementController) GetAllAnnouncements(c *gin.Context) {
 }
 
 // GetActiveAnnouncements คืนเฉพาะประกาศที่กำลังแสดงผล — สำหรับหน้าเว็บสาธารณะ
+// ?audience=guest  → หน้าแรกก่อนล็อกอิน (visibility: all/guest)
+// ?audience=member → แดชบอร์ดลูกค้าที่ล็อกอินแล้ว (visibility: all/member)
+// ไม่ระบุ → ไม่กรอง visibility
 func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
-	res, err := ctrl.service.GetActiveAnnouncements()
+	audience := c.Query("audience")
+	res, err := ctrl.service.GetActiveAnnouncements(audience)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// GetGuestGallery คืนประกาศที่ visibility เป็น all/guest ทั้งหมด (รวมที่หมดอายุแล้ว)
+// ใช้กับปุ่ม "ดูรูปทั้งหมด" บนหน้าแรกสาธารณะ — ไม่ต้องล็อกอิน
+func (ctrl *AnnouncementController) GetGuestGallery(c *gin.Context) {
+	res, err := ctrl.service.GetGuestGalleryAnnouncements()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -62,7 +62,7 @@ export default function AnnouncementDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl min-h-[60vh] flex items-center justify-center">
+      <div className="mx-auto max-w-7xl min-h-[60vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CC0000]"></div>
       </div>
     );
@@ -70,7 +70,7 @@ export default function AnnouncementDetailPage() {
 
   if (notFound || !announcement) {
     return (
-      <div className="mx-auto max-w-4xl min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center">
+      <div className="mx-auto max-w-7xl min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center">
         <p className="text-gray-500">ไม่พบประกาศที่คุณต้องการ หรือประกาศนี้อาจถูกลบไปแล้ว</p>
         <button
           onClick={() => router.push('/customer/dashboard')}
@@ -94,7 +94,7 @@ export default function AnnouncementDetailPage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl pb-20">
+    <div className="mx-auto max-w-7xl pb-20">
       {/* ปุ่มย้อนกลับ */}
       <button
         onClick={() => router.back()}

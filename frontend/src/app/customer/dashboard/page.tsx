@@ -6,7 +6,7 @@ import { announcementAPI } from '@/services/announcementAPI';
 import { reviewAPI } from '@/services/reviewAPI';
 import { Announcement, Category } from '@/types/announcement';
 import { Review } from '@/types/review';
-import { ChevronLeft, ChevronRight, Calendar, Eye, Star, Quote, BookOpen, UserRound, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Star, Quote, BookOpen, UserRound, CalendarClock } from 'lucide-react';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
 import type { Enrollment } from '@/types/enrollment';
 import {
@@ -14,6 +14,7 @@ import {
   EXPIRY_WARNING_DAYS,
 } from '@/components/course/expiryUtils';
 import WelcomeOnboardingModal from './components/WelcomeOnboardingModal';
+import { Poster } from '@/components/AnnouncementDetailModal';
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function CustomerDashboardPage() {
       const [annData, catData] = await Promise.all([
         // ฝั่งลูกค้าใช้ endpoint สาธารณะ (เห็นเฉพาะประกาศที่กำลังแสดงผล)
         // ไม่ใช่ /admin/announcements ที่จำกัดเฉพาะแอดมิน (จะได้ 403)
-        announcementAPI.getPublicAnnouncements(),
+        announcementAPI.getPublicAnnouncements('member'),
         announcementAPI.getAllCategories(),
       ]);
       setAnnouncements(annData || []);
@@ -162,7 +163,7 @@ export default function CustomerDashboardPage() {
       )}
 
       {/* Hero Cinematic Section (Kept Dark for Image Visibility) */}
-      <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden group">
+      <div className="relative w-full h-[55vh] md:h-[60vh] overflow-hidden group bg-black">
         {featuredAnnouncements.length > 0 ? (
           <>
             {/* Slides */}
@@ -175,7 +176,12 @@ export default function CustomerDashboardPage() {
               >
                 {/* Background Image or Gradient */}
                 {ann.image_url ? (
-                  <img src={ann.image_url} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
+                  <>
+                    {/* พื้นหลังเบลอจากรูปเดียวกัน เติมขอบ (letterbox) แทนแถบดำว่าง */}
+                    <img src={ann.image_url} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50" />
+                    {/* รูปจริง — object-contain เพื่อโชว์เต็มทั้งภาพไม่ตัดขอบ */}
+                    <img src={ann.image_url} alt="Cover" className="absolute inset-0 w-full h-full object-contain" />
+                  </>
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
                 )}
@@ -275,45 +281,82 @@ export default function CustomerDashboardPage() {
           </h2>
           
           {displayedAnnouncements.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayedAnnouncements.map((ann) => (
-                <div
-                  key={ann.id}
-                  onClick={() => openDetail(ann)}
-                  className="bg-white border border-gray-100 rounded-2xl cursor-pointer hover:border-[#CC0000]/50 hover:shadow-lg transition-all duration-300 group flex flex-col h-full overflow-hidden shadow-sm"
-                >
-                  {ann.image_url && (
-                    <div className="w-full h-40 overflow-hidden bg-gray-100">
-                      <img src={ann.image_url} alt="Cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <>
+              <div className="grid gap-6 lg:grid-cols-5">
+                {/* ข่าวเด่น */}
+                {(() => {
+                  const featured = displayedAnnouncements[0];
+                  return (
+                    <div
+                      onClick={() => openDetail(featured)}
+                      className={`group cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-lg lg:col-span-3 ${
+                        displayedAnnouncements.length === 1 ? 'lg:col-start-2' : ''
+                      }`}
+                    >
+                      {featured.image_url ? (
+                        <Poster src={featured.image_url} alt={featured.title} className="aspect-[16/9] w-full" />
+                      ) : (
+                        <div className="aspect-[16/9] w-full bg-gradient-to-br from-gray-800 to-gray-900" />
+                      )}
+                      <div className="p-5 sm:p-6">
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                          {featured.category?.name && (
+                            <span className="rounded-md bg-[#FFF0F0] px-2.5 py-1 font-bold uppercase tracking-wider text-[#CC0000]">
+                              {featured.category.name}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <Calendar size={13} />
+                            {new Date(featured.start_date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <h3 className="text-xl font-bold leading-snug text-gray-900 transition-colors group-hover:text-[#CC0000] sm:text-2xl line-clamp-2">
+                          {featured.title}
+                        </h3>
+                        <p className="mt-2 line-clamp-2 text-sm text-gray-600">{featured.content}</p>
+                      </div>
                     </div>
-                  )}
-                  <div className="p-6 flex flex-col flex-grow">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md tracking-wider">
-                        {ann.category?.name}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
-                        <Eye size={14} /> {ann.view_count}
-                      </span>
+                  );
+                })()}
+
+                {/* รายการข่าวย่อยทางขวา — ข่าวที่เหลือทั้งหมดอยู่ในนี้แล้วเลื่อนดู
+                    มือถือ/iPad: ปัดแนวนอน (snap) กัน scroll ซ้อนกับหน้า · คอม: เลื่อนแนวตั้งข้างข่าวเด่น
+                    แสดงเฉพาะเมื่อมีข่าวย่อย (มากกว่า 1 ข่าว) — ถ้ามีข่าวเดียวจะจัดข่าวเด่นไว้กลางแทน */}
+                {displayedAnnouncements.length > 1 && (
+                <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 lg:col-span-2 lg:snap-none lg:flex-col lg:self-start lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0 lg:pr-1 lg:max-h-[496px]">
+                  {displayedAnnouncements.slice(1).map((ann) => (
+                    <div
+                      key={ann.id}
+                      onClick={() => openDetail(ann)}
+                      className="group flex w-72 shrink-0 snap-start cursor-pointer gap-3 overflow-hidden rounded-xl border border-gray-100 bg-white p-2 shadow-sm transition-all duration-300 hover:shadow-md sm:w-80 lg:h-[112px] lg:w-full lg:shrink-0"
+                    >
+                      {ann.image_url ? (
+                        <Poster src={ann.image_url} alt={ann.title} className="h-20 w-28 shrink-0 rounded-lg sm:h-24 sm:w-32" />
+                      ) : (
+                        <div className="h-20 w-28 shrink-0 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 sm:h-24 sm:w-32" />
+                      )}
+                      <div className="flex min-w-0 flex-1 flex-col justify-center py-0.5 pr-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                          {ann.category?.name && (
+                            <span className="rounded bg-gray-100 px-1.5 py-0.5 font-bold uppercase tracking-wider text-gray-600">
+                              {ann.category.name}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <Calendar size={11} />
+                            {new Date(ann.start_date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <h4 className="line-clamp-2 text-sm font-bold leading-snug text-gray-900 transition-colors group-hover:text-[#CC0000]">
+                          {ann.title}
+                        </h4>
+                      </div>
                     </div>
-                    <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-[#CC0000] transition-colors line-clamp-2">
-                      {ann.title}
-                    </h3>
-                    <p className="text-gray-600 text-sm mb-6 line-clamp-3 flex-grow">
-                      {ann.content}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-auto pt-4 border-t border-gray-100">
-                      <Calendar size={14} />
-                      <span>
-                        {new Date(ann.start_date).toLocaleDateString('th-TH', {
-                          month: 'short', day: 'numeric', year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                )}
+              </div>
+            </>
           ) : (
             <div className="text-center py-20 text-gray-500 bg-white rounded-2xl border border-gray-100 shadow-sm">
               ไม่พบประกาศในหมวดหมู่นี้

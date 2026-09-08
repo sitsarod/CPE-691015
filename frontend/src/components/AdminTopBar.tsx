@@ -5,9 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MessageSquareText, Settings, User, LogOut, LayoutDashboard, Clock } from "lucide-react";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell, { NOTIFICATION_STREAM_EVENT } from "@/components/NotificationBell";
 import { autoQaAPI } from "@/services/autoQaAPI";
 import { ChatSession } from "@/types/autoQa";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 // ยิง event นี้เมื่อแอดมินเปิดดูห้องแชทหนึ่ง ๆ แล้ว (จากหน้า /admin/chat-sessions)
 // เพื่อให้ badge ที่ปุ่ม "สอบถาม" อัปเดตจำนวนที่ยังไม่อ่านทันทีโดยไม่ต้องรอรอบ poll ถัดไป
@@ -96,18 +97,24 @@ export default function CustomerTopbar() {
     }
   }, []);
 
-  // โหลดตอน mount, poll ทุก 5 วิ, และรีเฟรชทันทีเมื่อแอดมินเปิดดูห้องแชท/กลับมาโฟกัสแท็บ
+  // โหลดตอน mount, รีเฟรชทันทีเมื่อแอดมินเปิดดูห้องแชท/กลับมาโฟกัสแท็บ,
+  // และรีเฟรชทันทีเมื่อมีข้อความลูกค้าเข้ามาจริงๆ (สัญญาณ SSE จาก NotificationBell — ดู
+  // NotifyAdmins ฝั่ง backend ที่ยิงตอนลูกค้าส่งข้อความใหม่) แทนที่จะต้องรอ poll ตามรอบ
   useEffect(() => {
     loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 5000);
     window.addEventListener(ADMIN_CHAT_VIEWED_EVENT, loadUnreadCount);
     window.addEventListener("focus", loadUnreadCount);
+    window.addEventListener(NOTIFICATION_STREAM_EVENT, loadUnreadCount);
     return () => {
-      clearInterval(interval);
       window.removeEventListener(ADMIN_CHAT_VIEWED_EVENT, loadUnreadCount);
       window.removeEventListener("focus", loadUnreadCount);
+      window.removeEventListener(NOTIFICATION_STREAM_EVENT, loadUnreadCount);
     };
   }, [loadUnreadCount]);
+
+  // poll สำรองทุก 2 นาที เผื่อ SSE หลุดชั่วคราว (ตัวหลักคือ event ด้านบนซึ่งเกิดทันทีที่มีข้อความจริง)
+  // ยังคงหยุดโดยอัตโนมัติเมื่อแอดมินย่อ/สลับแท็บออกไป ไม่ยิง request ตอนไม่มีใครดูอยู่
+  useVisibleInterval(loadUnreadCount, 120000);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -159,7 +166,7 @@ export default function CustomerTopbar() {
         
         <NotificationBell viewAllHref="/admin/notifications" />
 
-        {/* ปุ่ม "สอบถาม" */}
+        {/* ปุ่ม "จัดการแชท" */}
         <div className="relative" ref={chatDropdownRef}>
           <button
             onClick={() => setIsChatDropdownOpen((v) => !v)}
@@ -177,7 +184,7 @@ export default function CustomerTopbar() {
                 </span>
               )}
             </span>
-            <span className="hidden md:inline">สอบถาม</span>
+            <span className="hidden md:inline">จัดการแชท</span>
           </button>
 
           {isChatDropdownOpen && (

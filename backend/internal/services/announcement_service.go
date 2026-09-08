@@ -19,6 +19,15 @@ var (
 	ErrCategoryInUse    = errors.New("cannot delete category that is currently in use by announcements")
 	// ErrInvalidLink กันลิงก์ประเภท javascript:/data: ฯลฯ ที่อาจใช้ทำ XSS ผ่านการกดลิงก์ในหน้าประกาศ
 	ErrInvalidLink = errors.New("link must start with http:// or https://")
+	// ErrInvalidVisibility: visibility ต้องเป็นหนึ่งใน all/guest/member เท่านั้น
+	ErrInvalidVisibility = errors.New("visibility must be one of: all, guest, member")
+)
+
+// ค่าที่ยอมรับได้ของ Announcement.Visibility
+const (
+	VisibilityAll    = "all"
+	VisibilityGuest  = "guest"
+	VisibilityMember = "member"
 )
 
 type AnnouncementService interface {
@@ -27,7 +36,12 @@ type AnnouncementService interface {
 	GetAnnouncementByID(id uint) (*dto.AnnouncementDTO, error)
 	GetAllAnnouncements() ([]dto.AnnouncementDTO, error)
 	// GetActiveAnnouncements คืนเฉพาะประกาศที่อยู่ในช่วงเวลาแสดงผล (สำหรับหน้าเว็บสาธารณะ)
-	GetActiveAnnouncements() ([]dto.AnnouncementDTO, error)
+	// audience: "guest" = เฉพาะที่ visibility เป็น all/guest, "member" = เฉพาะที่ visibility เป็น all/member
+	// audience ว่าง = ไม่กรอง visibility (คืนทุกค่าที่ active ตามช่วงเวลา)
+	GetActiveAnnouncements(audience string) ([]dto.AnnouncementDTO, error)
+	// GetGuestGalleryAnnouncements คืนประกาศที่ visibility เป็น all/guest "ทั้งหมด" ไม่กรองตามช่วงวันที่
+	// (รวมประกาศเก่าที่หมดอายุไปแล้วด้วย) — ใช้กับปุ่ม "ดูรูปทั้งหมด" บนหน้าแรกสาธารณะ
+	GetGuestGalleryAnnouncements() ([]dto.AnnouncementDTO, error)
 	UpdateAnnouncement(id uint, req *dto.UpdateAnnouncementReq) (*dto.AnnouncementDTO, error)
 	DeleteAnnouncement(id uint) error
 	// DeleteExpiredAnnouncements ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ (คืนจำนวนที่ลบ)
@@ -85,12 +99,31 @@ func validateAnnouncementLink(link string) error {
 	return nil
 }
 
+// normalizeVisibility ตรวจและ default visibility ที่รับมาจาก client
+// เว้นว่างมา = "all" (ค่าเริ่มต้น แสดงให้ทุกคนเห็น) ตามพฤติกรรมเดิมก่อนมีฟีเจอร์นี้
+func normalizeVisibility(v string) (string, error) {
+	if v == "" {
+		return VisibilityAll, nil
+	}
+	switch v {
+	case VisibilityAll, VisibilityGuest, VisibilityMember:
+		return v, nil
+	default:
+		return "", ErrInvalidVisibility
+	}
+}
+
 func (s *announcementService) CreateAnnouncement(userID uint, req *dto.CreateAnnouncementReq) (*dto.AnnouncementDTO, error) {
 	if req.StartDate.After(req.EndDate) {
 		return nil, ErrInvalidDateRange
 	}
 
 	if err := validateAnnouncementLink(req.Link); err != nil {
+		return nil, err
+	}
+
+	visibility, err := normalizeVisibility(req.Visibility)
+	if err != nil {
 		return nil, err
 	}
 
@@ -111,6 +144,7 @@ func (s *announcementService) CreateAnnouncement(userID uint, req *dto.CreateAnn
 		Content:    req.Content,
 		ImageURL:   req.ImageURL,
 		Link:       req.Link,
+		Visibility: visibility,
 		UserID:     userID,
 		CategoryID: req.CategoryID,
 		StartDate:  startOfDay(req.StartDate),
@@ -152,12 +186,43 @@ func (s *announcementService) GetAllAnnouncements() ([]dto.AnnouncementDTO, erro
 // GetActiveAnnouncements คืนเฉพาะประกาศที่ "กำลังแสดงผล" ณ ตอนนี้
 // (start_date <= now <= end_date) สำหรับหน้าเว็บสาธารณะ ไม่โชว์ประกาศที่หมดอายุ
 // หรือที่ยังไม่ถึงกำหนดเริ่ม
-func (s *announcementService) GetActiveAnnouncements() ([]dto.AnnouncementDTO, error) {
+//
+// audience = "guest"  → เฉพาะประกาศที่ visibility เป็น "all" หรือ "guest" (หน้าแรกก่อนล็อกอิน)
+// audience = "member" → เฉพาะประกาศที่ visibility เป็น "all" หรือ "member" (แดชบอร์ดลูกค้าที่ล็อกอินแล้ว)
+// audience = ""        → ไม่กรอง visibility (คืนทุกค่า) — ใช้เมื่อไม่ระบุกลุ่มเป้าหมาย
+func (s *announcementService) GetActiveAnnouncements(audience string) ([]dto.AnnouncementDTO, error) {
 	var announcements []models.Announcement
 	now := time.Now()
+	q := s.db.Preload("User").Preload("Category").
+		Where("start_date <= ? AND end_date >= ?", now, now)
+
+	switch audience {
+	case VisibilityGuest:
+		q = q.Where("visibility IN ?", []string{VisibilityAll, VisibilityGuest})
+	case VisibilityMember:
+		q = q.Where("visibility IN ?", []string{VisibilityAll, VisibilityMember})
+	}
+
+	err := q.Order("created_at DESC").Find(&announcements).Error
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]dto.AnnouncementDTO, 0, len(announcements))
+	for _, a := range announcements {
+		dtos = append(dtos, mapToAnnouncementDTO(&a))
+	}
+	return dtos, nil
+}
+
+// GetGuestGalleryAnnouncements คืนประกาศที่ visibility เป็น "all" หรือ "guest" ทั้งหมด
+// โดยไม่กรองตามช่วงวันที่แสดงผล (รวมประกาศเก่าที่หมดอายุไปแล้ว) — ใช้ป้อนแกลเลอรีรูปภาพ
+// ทั้งหมดบนหน้าแรกสาธารณะ ที่ผู้เยี่ยมชมกดดูได้โดยไม่ต้องล็อกอิน
+func (s *announcementService) GetGuestGalleryAnnouncements() ([]dto.AnnouncementDTO, error) {
+	var announcements []models.Announcement
 	err := s.db.Preload("User").Preload("Category").
-		Where("start_date <= ? AND end_date >= ?", now, now).
-		Order("created_at DESC").
+		Where("visibility IN ?", []string{VisibilityAll, VisibilityGuest}).
+		Order("start_date DESC").
 		Find(&announcements).Error
 	if err != nil {
 		return nil, err
@@ -191,6 +256,13 @@ func (s *announcementService) UpdateAnnouncement(id uint, req *dto.UpdateAnnounc
 			return nil, err
 		}
 		announcement.Link = *req.Link
+	}
+	if req.Visibility != nil {
+		visibility, err := normalizeVisibility(*req.Visibility)
+		if err != nil {
+			return nil, err
+		}
+		announcement.Visibility = visibility
 	}
 	if req.CategoryID != nil {
 		var category models.Category
@@ -305,6 +377,7 @@ func mapToAnnouncementDTO(m *models.Announcement) dto.AnnouncementDTO {
 		Content:     m.Content,
 		ImageURL:    m.ImageURL,
 		Link:        m.Link,
+		Visibility:  m.Visibility,
 		UserID:      m.UserID,
 		CategoryID:  m.CategoryID,
 		StartDate:   m.StartDate,

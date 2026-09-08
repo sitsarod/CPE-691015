@@ -19,7 +19,7 @@ const navItems = [
   { href: "/admin/usermanagement", icon: <BookUser />, label: "จัดการข้อมูลผู้ใช้งาน" },
   { href: "/admin/enrollments", icon: <Book />, label: "การลงทะเบียนเรียน" },
   // "จัดการแชท (Chat Sessions)" ย้ายไปเปิดจากปุ่ม "สอบถาม" มุมขวาบนของ AdminTopBar แล้ว
-  { href: "/admin/auto-qa", icon: <ListChecks />, label: "จัดการ Q&A (Knowledge Base)" },
+  { href: "/admin/auto-qa", icon: <ListChecks />, label: "จัดการ Q&A" },
 ];
 
 // Mobile bottom bar: 4 primary icons + a "more" button that opens a full-screen menu

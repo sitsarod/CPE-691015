@@ -229,6 +229,63 @@ func (ctrl *AutoQAController) GetChatSessionByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+// StreamChatSession เปิด SSE ส่งสัญญาณ "มีข้อความใหม่ในห้องนี้" แบบเรียลไทม์ — สาธารณะ ไม่ต้องล็อกอิน
+// (ผู้เยี่ยมชมไม่มี JWT จึงใช้ /notifications/stream เดิมไม่ได้ ต้องแยก stream ผูกกับ session ID แทน)
+//
+// [GET] /api/chat-sessions/:id/stream
+// ส่งแค่สัญญาณ (event: notify) — client รับแล้วไปเรียก GET /chat-sessions/:id เองเหมือน poll เดิม
+// รูปแบบเดียวกับ NotificationController.Stream แต่คีย์ด้วย session ID แทน user ID
+func (ctrl *AutoQAController) StreamChatSession(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+	sessionID := uint(id)
+
+	// ตรวจว่าห้องนี้มีอยู่จริงก่อนเปิด stream ค้างไว้ (กันเปิด goroutine ทิ้งไว้เปล่าๆ กับ id มั่ว)
+	if _, err := ctrl.service.GetChatSessionByID(sessionID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		return
+	}
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "เซิร์ฟเวอร์ไม่รองรับ streaming"})
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no") // กัน nginx buffer response
+
+	ch := services.ChatHub.Subscribe(sessionID)
+	defer services.ChatHub.Unsubscribe(sessionID, ch)
+
+	fmt.Fprint(c.Writer, ": connected\n\n")
+	flusher.Flush()
+
+	// keepalive กัน proxy/บาง network ปิด connection ที่เงียบนานเกินไป
+	ticker := time.NewTicker(25 * time.Second)
+	defer ticker.Stop()
+
+	done := c.Request.Context().Done()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ch:
+			fmt.Fprint(c.Writer, "event: notify\ndata: 1\n\n")
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprint(c.Writer, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
 func (ctrl *AutoQAController) GetAllChatSessions(c *gin.Context) {
 	res, err := ctrl.service.GetAllChatSessions()
 	if err != nil {
