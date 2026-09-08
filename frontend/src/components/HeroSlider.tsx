@@ -1,21 +1,33 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Images } from "lucide-react";
 
-// รูปเริ่มต้น ใช้เป็น fallback เมื่อแอดมินยังไม่ได้ตั้งค่ารูปสไลด์
-const DEFAULT_IMAGES = [
-  "/slide1.jpg",
-  "/slide2.jpg",
-  "/slide3.jpg",
+// รูปเริ่มต้น ใช้เป็น fallback เมื่อยังไม่มีประกาศที่ตั้งค่าให้ผู้เยี่ยมชมเห็น
+const DEFAULT_SLIDES: HeroSlideItem[] = [
+  { image_url: "/slide1.jpg" },
+  { image_url: "/slide2.jpg" },
+  { image_url: "/slide3.jpg" },
 ];
 
-export default function HeroSlider({ images: imagesProp }: { images?: string[] }) {
-  const images = imagesProp && imagesProp.length > 0 ? imagesProp : DEFAULT_IMAGES;
-  const isSingle = images.length <= 1; // มีรูปเดียว = ไม่ต้องเลื่อน/ไม่มีปุ่ม
+export interface HeroSlideItem {
+  image_url: string;
+  title?: string;
+}
+
+interface HeroSliderProps {
+  slides?: HeroSlideItem[];
+  // ปุ่ม "ดูรูปทั้งหมด" มุมซ้ายล่าง — ส่งมาเมื่อมีแกลเลอรีให้เปิดดู (ไม่ส่ง = ไม่แสดงปุ่ม)
+  onGalleryClick?: () => void;
+}
+
+export default function HeroSlider({ slides: slidesProp, onGalleryClick }: HeroSliderProps) {
+  const slides = slidesProp && slidesProp.length > 0 ? slidesProp : DEFAULT_SLIDES;
+  const isSingle = slides.length <= 1; // มีรูปเดียว = ไม่ต้องเลื่อน/ไม่มีปุ่ม
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [touchStart, setTouchStart] = useState(0);
-  const [touchEnd, setTouchEnd] = useState(0)   ;
+  const [touchEnd, setTouchEnd] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const isWheelCooldown = useRef(false);
@@ -24,29 +36,29 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
   // รีเซ็ต index หากจำนวนรูปเปลี่ยน (เช่น โหลดรูปจาก API มาแทน fallback) กัน index เกินขอบเขต
   useEffect(() => {
     setCurrentIndex(0);
-  }, [images.length]);
+  }, [slides.length]);
 
   useEffect(() => {
     if (isSingle) return; // มีรูปเดียว ไม่ต้องตั้งเวลาเลื่อน
 
     const timer = setInterval(() => {
       setCurrentIndex((prevIndex) =>
-        prevIndex === images.length - 1 ? 0 : prevIndex + 1
+        prevIndex === slides.length - 1 ? 0 : prevIndex + 1
       );
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [currentIndex, isSingle, images.length]);
+  }, [currentIndex, isSingle, slides.length]);
 
   const prevSlide = () => {
-    setCurrentIndex((prevIndex) => 
-      prevIndex === 0 ? images.length - 1 : prevIndex - 1
+    setCurrentIndex((prevIndex) =>
+      prevIndex === 0 ? slides.length - 1 : prevIndex - 1
     );
   };
 
   const nextSlide = () => {
-    setCurrentIndex((prevIndex) => 
-      prevIndex === images.length - 1 ? 0 : prevIndex + 1
+    setCurrentIndex((prevIndex) =>
+      prevIndex === slides.length - 1 ? 0 : prevIndex + 1
     );
   };
 
@@ -54,10 +66,10 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
     if (isSingle) return;
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    
+
     if (distance > minSwipeDistance) nextSlide();
     else if (distance < -minSwipeDistance) prevSlide();
-    
+
     setTouchStart(0);
     setTouchEnd(0);
   };
@@ -82,7 +94,11 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
 
   return (
     <div
-      className={`relative w-full aspect-[16/9] overflow-hidden group ${
+      // ความสูงกรอบ ~ครึ่งจอทั้งมือถือและจอใหญ่ เพื่อให้เห็นเนื้อหาถัดไปโผล่ขึ้นมา บอกใบ้ว่าเลื่อนลงได้
+      // ไม่ให้แบนเนอร์บังเต็มจอจนดูตัน — มือถือ 55svh, จอใหญ่ 60svh (สูงขึ้นเล็กน้อยให้สมส่วนกับจอกว้าง)
+      // ใช้ svh กัน browser UI บนมือถือบังส่วนล่าง จับคู่กับ object-contain ที่รูปด้านใน
+      // รูปจึงแสดงครบทุกสัดส่วนไม่ถูกตัดขอบ ไม่ว่าจะเป็นจอไหน
+      className={`relative w-full h-[55svh] min-h-[260px] md:h-[60svh] max-h-[700px] overflow-hidden group ${
         isSingle ? "" : "cursor-grab active:cursor-grabbing"
       }`}
       onTouchStart={(e) => {
@@ -118,28 +134,59 @@ export default function HeroSlider({ images: imagesProp }: { images?: string[] }
       }}
       onWheel={handleWheel}
     >
-      
-      <div 
+
+      <div
         className="flex w-full h-full transition-transform duration-500 ease-in-out"
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
-        {images.map((src, index) => (
-          <div key={index} className="min-w-full h-full relative">
+        {slides.map((slide, index) => (
+          <div key={index} className="min-w-full h-full relative bg-black">
+            {/* พื้นหลังเบลอจากรูปเดียวกัน เติมพื้นที่ขอบ (letterbox) ให้ดูตั้งใจแทนแถบดำว่าง ๆ */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={src} 
-              alt={`Slide ${index + 1}`} 
-              className="w-full h-full object-cover select-none pointer-events-none"
+            <img
+              src={slide.image_url}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50 select-none pointer-events-none"
               draggable={false}
             />
-            <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>
+            {/* รูปจริง — object-contain เพื่อโชว์เต็มทั้งภาพไม่ตัดขอบ เห็นครบทุกสัดส่วนบนทุกจอ */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slide.image_url}
+              alt={slide.title || `Slide ${index + 1}`}
+              className="relative w-full h-full object-contain select-none pointer-events-none"
+              draggable={false}
+            />
+            {/* ไล่สีเข้มเฉพาะโซนล่างให้พาดหัวอ่านออก แทนการปิดทับทั้งรูปแบบเดิม (ทำให้รูปดูมืด) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+            {slide.title && (
+              <div className="absolute bottom-16 sm:bottom-20 left-4 right-16 sm:left-8 sm:right-24">
+                <p className="text-white font-bold text-lg sm:text-2xl leading-snug line-clamp-2 drop-shadow-md">
+                  {slide.title}
+                </p>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
+      {/* ปุ่ม "ดูรูปทั้งหมด" — มุมซ้ายล่าง เปิดแกลเลอรีรวมประกาศทั้งหมด (รวมที่หมดอายุแล้ว) */}
+      {onGalleryClick && (
+        <button
+          type="button"
+          onClick={onGalleryClick}
+          className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white text-xs sm:text-sm font-medium px-3 py-1.5 backdrop-blur-sm transition-colors"
+          title="ดูรูปประกาศทั้งหมด"
+        >
+          <Images size={14} />
+          <span className="hidden sm:inline">ดูรูปทั้งหมด</span>
+        </button>
+      )}
+
       {!isSingle && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-10">
-          {images.map((_, index) => (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 z-10">
+          {slides.map((_, index) => (
             <button
               key={index}
               onClick={(e) => {

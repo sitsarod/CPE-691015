@@ -39,6 +39,9 @@ type AnnouncementService interface {
 	// audience: "guest" = เฉพาะที่ visibility เป็น all/guest, "member" = เฉพาะที่ visibility เป็น all/member
 	// audience ว่าง = ไม่กรอง visibility (คืนทุกค่าที่ active ตามช่วงเวลา)
 	GetActiveAnnouncements(audience string) ([]dto.AnnouncementDTO, error)
+	// GetGuestGalleryAnnouncements คืนประกาศที่ visibility เป็น all/guest "ทั้งหมด" ไม่กรองตามช่วงวันที่
+	// (รวมประกาศเก่าที่หมดอายุไปแล้วด้วย) — ใช้กับปุ่ม "ดูรูปทั้งหมด" บนหน้าแรกสาธารณะ
+	GetGuestGalleryAnnouncements() ([]dto.AnnouncementDTO, error)
 	UpdateAnnouncement(id uint, req *dto.UpdateAnnouncementReq) (*dto.AnnouncementDTO, error)
 	DeleteAnnouncement(id uint) error
 	// DeleteExpiredAnnouncements ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ (คืนจำนวนที่ลบ)
@@ -201,6 +204,26 @@ func (s *announcementService) GetActiveAnnouncements(audience string) ([]dto.Ann
 	}
 
 	err := q.Order("created_at DESC").Find(&announcements).Error
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]dto.AnnouncementDTO, 0, len(announcements))
+	for _, a := range announcements {
+		dtos = append(dtos, mapToAnnouncementDTO(&a))
+	}
+	return dtos, nil
+}
+
+// GetGuestGalleryAnnouncements คืนประกาศที่ visibility เป็น "all" หรือ "guest" ทั้งหมด
+// โดยไม่กรองตามช่วงวันที่แสดงผล (รวมประกาศเก่าที่หมดอายุไปแล้ว) — ใช้ป้อนแกลเลอรีรูปภาพ
+// ทั้งหมดบนหน้าแรกสาธารณะ ที่ผู้เยี่ยมชมกดดูได้โดยไม่ต้องล็อกอิน
+func (s *announcementService) GetGuestGalleryAnnouncements() ([]dto.AnnouncementDTO, error) {
+	var announcements []models.Announcement
+	err := s.db.Preload("User").Preload("Category").
+		Where("visibility IN ?", []string{VisibilityAll, VisibilityGuest}).
+		Order("start_date DESC").
+		Find(&announcements).Error
 	if err != nil {
 		return nil, err
 	}

@@ -105,6 +105,18 @@ func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+// GetGuestGallery คืนประกาศที่ visibility เป็น all/guest ทั้งหมด (รวมที่หมดอายุแล้ว)
+// ใช้กับปุ่ม "ดูรูปทั้งหมด" บนหน้าแรกสาธารณะ — ไม่ต้องล็อกอิน
+func (ctrl *AnnouncementController) GetGuestGallery(c *gin.Context) {
+	res, err := ctrl.service.GetGuestGalleryAnnouncements()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
 func (ctrl *AnnouncementController) UpdateAnnouncement(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)

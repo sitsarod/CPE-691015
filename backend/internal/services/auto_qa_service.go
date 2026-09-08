@@ -4,6 +4,7 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -327,6 +328,29 @@ func (s *autoQAService) AskQuestion(sessionID uint, req *dto.AskQuestionReq) (*d
 		return nil, err
 	}
 
+	// แจ้งเตือนแอดมินทุกคนแบบเรียลไทม์ผ่าน SSE ที่มีอยู่แล้ว (ระบบ Notification ทั่วไป)
+	// แทนที่จะให้หน้าแอดมิน poll ถามเองเป็นระยะ — หน้าเว็บจะได้สัญญาณแล้วค่อยไป fetch ข้อมูลจริง
+	// signature ผูกกับ ID ข้อความนี้เจาะจง กันไม่ให้ dedup ทับข้อความอื่นในห้องเดียวกัน
+	if hasText || req.AttachmentURL != "" {
+		guestLabel := strings.TrimSpace(session.GuestName)
+		if guestLabel == "" {
+			guestLabel = "ผู้เยี่ยมชม"
+		}
+		preview := strings.TrimSpace(req.Question)
+		if preview == "" && req.AttachmentURL != "" {
+			preview = "[ไฟล์แนบ]"
+		}
+		NotifyAdmins(
+			s.db,
+			"chat_message",
+			fmt.Sprintf("chat-msg-%d", interactionLog.ID),
+			fmt.Sprintf("ข้อความใหม่จาก %s", guestLabel),
+			preview,
+			fmt.Sprintf("/admin/chat-sessions?session=%d", sessionID),
+			"info",
+		)
+	}
+
 	var matchDTO *dto.AutoQADTO
 	if bestMatch != nil {
 		d := mapToAutoQADTO(bestMatch)
@@ -368,6 +392,30 @@ func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto
 
 	if err := s.db.Create(&interactionLog).Error; err != nil {
 		return nil, err
+	}
+
+	// แจ้งเตือนแบบเรียลไทม์ผ่าน SSE ให้ฝั่งลูกค้า/ผู้เยี่ยมชมที่กำลังเปิดกล่องแชทอยู่ — ใช้ ChatHub
+	// (ผูกกับ session ID) ครอบคลุมทั้งผู้เยี่ยมชมที่ไม่ได้ล็อกอินและสมาชิกที่ล็อกอิน ต่างจาก NotifHub
+	// ด้านล่างที่ต้องมี JWT จึงใช้ได้เฉพาะสมาชิกที่ล็อกอินเท่านั้น
+	ChatHub.Publish(sessionID)
+
+	// แจ้งเตือนลูกค้าแบบเรียลไทม์ผ่าน SSE ของระบบ Notification ทั่วไป — เฉพาะกรณีเป็นสมาชิกที่ล็อกอินอยู่
+	// (มี user_id ผูกกับห้อง) เพิ่มเติมจาก ChatHub ด้านบน เพื่อให้ badge กระดิ่งแจ้งเตือนทั่วไปเห็นด้วย
+	if session.UserID != nil {
+		preview := strings.TrimSpace(req.Answer)
+		if preview == "" && req.AttachmentURL != "" {
+			preview = "[ไฟล์แนบ]"
+		}
+		CreateNotification(
+			s.db,
+			*session.UserID,
+			"chat_reply",
+			fmt.Sprintf("chat-msg-%d", interactionLog.ID),
+			"แอดมินตอบกลับข้อความของคุณ",
+			preview,
+			"", // ไม่มีหน้าแยกสำหรับแชท — กล่องแชทเป็น widget ลอยที่เปิดจากปุ่ม "สอบถาม" เอง ไม่ใช่หน้า route
+			"info",
+		)
 	}
 
 	dtoRes := mapToAutoQADTO(&interactionLog)

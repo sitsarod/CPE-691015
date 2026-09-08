@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { autoQaAPI } from '../../../services/autoQaAPI';
 import { ChatSession, AutoQA } from '../../../types/autoQa';
 import { ADMIN_CHAT_VIEWED_EVENT, adminChatLastViewedKey, URGENT_WAIT_MS, formatWaitElapsed } from '../../../components/AdminTopBar';
+import { NOTIFICATION_STREAM_EVENT } from '../../../components/NotificationBell';
+import { useVisibleInterval } from '../../../hooks/useVisibleInterval';
 import {
   MessageSquare, Send, Trash2, Power, RotateCcw, Search, ArrowLeft,
   MoreVertical, Settings, X, Mail, Phone, User, Calendar, RefreshCw,
@@ -73,26 +75,31 @@ export default function ChatSessionsManagement() {
     loadData();
   }, []);
 
-  // รีเฟรชรายการห้องแชท (ไม่กระทบ loading state ทั้งหน้า) ทุก 20 วิ เพื่อให้ badge
-  // "ใครทักมา" / "รอนาน" อัปเดตแบบไม่ต้องกดรีเฟรชเอง — ไม่แตะห้องที่กำลังเปิดดูอยู่
+  // รีเฟรชรายการห้องแชท (ไม่กระทบ loading state ทั้งหน้า) — ให้ badge "ใครทักมา" / "รอนาน"
+  // อัปเดตแบบไม่ต้องกดรีเฟรชเอง โดยไม่แตะห้องที่กำลังเปิดดูอยู่
+  const refreshSessionsList = async () => {
+    try {
+      const data = await autoQaAPI.getAllChatSessions();
+      setSessions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to refresh chat sessions list', err);
+    }
+  };
+
+  // รีเฟรชทันทีเมื่อมีข้อความลูกค้าเข้ามาจริงๆ (สัญญาณ SSE จาก NotificationBell) แทนการรอ poll
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const data = await autoQaAPI.getAllChatSessions();
-        setSessions(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to refresh chat sessions list', err);
-      }
-    }, 20000);
-    return () => clearInterval(interval);
+    window.addEventListener(NOTIFICATION_STREAM_EVENT, refreshSessionsList);
+    return () => window.removeEventListener(NOTIFICATION_STREAM_EVENT, refreshSessionsList);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // poll สำรองทุก 60 วิ เผื่อ SSE หลุดชั่วคราว — หยุดอัตโนมัติเมื่อแอดมินย่อ/สลับแท็บออกไป
+  useVisibleInterval(refreshSessionsList, 60000);
+
   // บังคับ re-render ทุก 30 วิ เพื่อให้ข้อความ "รอ X นาที" นับเวลาต่อไปเรื่อย ๆ
+  // (ไม่ยิง request ใดๆ แค่ re-render ในเครื่อง แต่หยุดตอนแท็บถูกซ่อนไว้ด้วยเพื่อประหยัด CPU)
   const [, forceTick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => forceTick((x) => x + 1), 30000);
-    return () => clearInterval(t);
-  }, []);
+  useVisibleInterval(() => forceTick((x) => x + 1), 30000);
 
   // เปิดห้องแชทที่ระบุมาทาง query string อัตโนมัติ (มาจากคลิกแจ้งเตือนใน AdminTopBar)
   // เช่น /admin/chat-sessions?session=12

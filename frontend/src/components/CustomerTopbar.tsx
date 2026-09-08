@@ -2,14 +2,15 @@
 
 import { clearSession } from "@/services/session";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MessageCircleMore, Settings, User, LogOut, ShieldCheck, ScanFace } from "lucide-react";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell, { NOTIFICATION_STREAM_EVENT } from "@/components/NotificationBell";
 import { OPEN_CHAT_EVENT, chatOwner, chatSessionKey, chatLastViewedKey } from "@/components/ChatWidget";
 import { autoQaAPI } from "@/services/autoQaAPI";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 export default function CustomerTopbar() {
   const router = useRouter();
@@ -30,38 +31,40 @@ export default function CustomerTopbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // เช็คข้อความตอบกลับใหม่จากแอดมินเป็นระยะ ๆ (เทียบกับเวลาที่เปิดกล่องแชทครั้งล่าสุด)
-  useEffect(() => {
-    let cancelled = false;
-
-    const checkUnread = async () => {
-      try {
-        const owner = chatOwner();
-        const sessionId = localStorage.getItem(chatSessionKey(owner));
-        if (!sessionId) {
-          if (!cancelled) setUnreadCount(0);
-          return;
-        }
-        const lastViewedRaw = localStorage.getItem(chatLastViewedKey(owner));
-        const lastViewed = lastViewedRaw ? new Date(lastViewedRaw).getTime() : 0;
-
-        const session = await autoQaAPI.getChatSessionById(Number(sessionId));
-        const count = (session.auto_qas || []).filter(
-          (qa) => qa.mode === "admin_reply" && new Date(qa.created_at).getTime() > lastViewed
-        ).length;
-        if (!cancelled) setUnreadCount(count);
-      } catch {
-        // เงียบไว้ — ไม่ให้ error กระทบ topbar หลัก
+  // เช็คข้อความตอบกลับใหม่จากแอดมิน (เทียบกับเวลาที่เปิดกล่องแชทครั้งล่าสุด)
+  // ไม่ยิง request เลยถ้ายังไม่เคยเริ่มแชท (ไม่มี session ใน localStorage)
+  const checkUnread = useCallback(async () => {
+    try {
+      const owner = chatOwner();
+      const sessionId = localStorage.getItem(chatSessionKey(owner));
+      if (!sessionId) {
+        setUnreadCount(0);
+        return;
       }
-    };
+      const lastViewedRaw = localStorage.getItem(chatLastViewedKey(owner));
+      const lastViewed = lastViewedRaw ? new Date(lastViewedRaw).getTime() : 0;
 
-    checkUnread();
-    const interval = setInterval(checkUnread, 10000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+      const session = await autoQaAPI.getChatSessionById(Number(sessionId));
+      const count = (session.auto_qas || []).filter(
+        (qa) => qa.mode === "admin_reply" && new Date(qa.created_at).getTime() > lastViewed
+      ).length;
+      setUnreadCount(count);
+    } catch {
+      // เงียบไว้ — ไม่ให้ error กระทบ topbar หลัก
+    }
   }, []);
+
+  // โหลดตอน mount และรีเฟรชทันทีเมื่อแอดมินตอบกลับจริง (สัญญาณ SSE จาก NotificationBell — ดู
+  // CreateNotification ฝั่ง backend ใน AdminReply) แทนการรอ poll ตามรอบ
+  useEffect(() => {
+    checkUnread();
+    window.addEventListener(NOTIFICATION_STREAM_EVENT, checkUnread);
+    return () => window.removeEventListener(NOTIFICATION_STREAM_EVENT, checkUnread);
+  }, [checkUnread]);
+
+  // poll สำรองทุก 60 วิ เผื่อ SSE หลุดชั่วคราว หรือเพิ่งเริ่มแชทแบบผู้เยี่ยมชม (ไม่มี SSE เพราะไม่ได้ล็อกอิน)
+  // หยุดอัตโนมัติเมื่อผู้ใช้ย่อ/สลับแท็บออกไป — เดิมยิงทุก 10 วิไม่หยุดแม้ไม่ได้ใช้งาน
+  useVisibleInterval(checkUnread, 60000);
 
   const handleLogout = () => {
     // ⚠️ ห้ามลบคีย์ทีละตัวตรงนี้ ให้เพิ่มที่ services/session.ts แทน

@@ -10,6 +10,11 @@ import {
   type NotificationDTO,
 } from "@/services/notificationAPI";
 
+// ยิง event นี้ทุกครั้งที่ SSE stream ของ Notification ทั่วไปส่งสัญญาณ "มีแจ้งเตือนใหม่" มา
+// ให้ badge อื่นๆ ในหน้าเว็บ (เช่น badge ห้องแชท "สอบถาม" ของแอดมิน) อาศัย event นี้รีเฟรชตัวเอง
+// แทนการเปิด SSE connection ซ้ำซ้อน หรือ poll เซิร์ฟเวอร์เป็นระยะด้วยตัวเอง
+export const NOTIFICATION_STREAM_EVENT = "koyama:notification-stream";
+
 const TONE_DOT: Record<string, string> = {
   danger: "bg-rose-500",
   warning: "bg-amber-500",
@@ -87,7 +92,10 @@ export default function NotificationBell({
       const token = localStorage.getItem("token");
       if (!token || closed) return;
       es = new EventSource(`${base}/notifications/stream?token=${encodeURIComponent(token)}`);
-      es.addEventListener("notify", () => refresh());
+      es.addEventListener("notify", () => {
+        refresh();
+        window.dispatchEvent(new Event(NOTIFICATION_STREAM_EVENT));
+      });
       es.onerror = () => {
         es?.close();
         if (closed) return;

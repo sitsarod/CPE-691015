@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import HeroSlider from "@/components/HeroSlider";
+import AnnouncementNewsSection from "@/components/AnnouncementNewsSection";
+import AnnouncementDetailModal from "@/components/AnnouncementDetailModal";
 import SocialLinks from "@/components/SocialLinks";
 import { fetchAllCourses } from "@/services/courseAPI";
 import { homeContentAPI } from "@/services/homeContentAPI";
@@ -24,6 +26,13 @@ export default function Home() {
   const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // โค้ชที่ถูกคลิกในหน้าแรก → เปิด modal
+
+  // แกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) — เปิดจากปุ่มมุมซ้ายล่างของรูปสไลด์
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [galleryItems, setGalleryItems] = useState<Announcement[]>([]);
+  const [isGalleryLoading, setIsGalleryLoading] = useState(false);
+  const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น ไม่โหลดล่วงหน้า
+  const [selectedNews, setSelectedNews] = useState<Announcement | null>(null); // ประกาศที่กดอ่านจากแกลเลอรี
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,9 +67,27 @@ export default function Home() {
   }, []);
 
   const content = home?.content;
-  // รูปสไลด์หน้าแรก: มาจากรูปปกของประกาศที่ตั้งค่าให้ผู้เยี่ยมชมเห็น (สร้าง/แก้ไขได้ที่หน้า "สร้างประกาศ" ของแอดมิน)
-  const slideImages = guestAnnouncements.map((a) => a.image_url).filter((url): url is string => !!url);
+  // สไลด์หน้าแรก: รูปปก + พาดหัว จากประกาศที่ตั้งค่าให้ผู้เยี่ยมชมเห็น (สร้าง/แก้ไขได้ที่หน้า "สร้างประกาศ" ของแอดมิน)
+  const heroSlides = guestAnnouncements
+    .filter((a) => !!a.image_url)
+    .map((a) => ({ image_url: a.image_url, title: a.title }));
   const coaches = home?.featured_coaches ?? [];
+
+  // โหลดแกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) แบบ lazy — เรียกครั้งแรกตอนกดปุ่มเท่านั้น
+  const handleOpenGallery = async () => {
+    setIsGalleryOpen(true);
+    if (galleryLoaded) return;
+    setIsGalleryLoading(true);
+    try {
+      const items = await announcementAPI.getGuestGallery();
+      setGalleryItems(items);
+      setGalleryLoaded(true);
+    } catch (error) {
+      console.error("โหลดแกลเลอรีประกาศไม่สำเร็จ:", error);
+    } finally {
+      setIsGalleryLoading(false);
+    }
+  };
   // ชื่อแบรนด์สำหรับ footer/ลิขสิทธิ์ — ใช้ค่าจาก CMS ถ้ามี ไม่งั้น fallback ชื่อโรงเรียน
   const schoolName = content?.school_name?.trim() || "Koyama Badminton School";
 
@@ -75,7 +102,17 @@ export default function Home() {
     <div className="min-h-screen bg-white flex flex-col font-sans">
 
       <main className="w-full">
-        <HeroSlider images={slideImages} />
+        {/* ข่าว/ประกาศสไตล์ BWF: ข่าวเด่นใหญ่ + การ์ดรอง รูปเห็นเต็มภาพไม่ตัดขอบ
+            ถ้ายังไม่มีประกาศสำหรับผู้เยี่ยมชม ใช้สไลด์รูปเริ่มต้นเป็นแบนเนอร์แทน */}
+        {heroSlides.length > 0 ? (
+          <AnnouncementNewsSection announcements={guestAnnouncements} onOpenGallery={handleOpenGallery} />
+        ) : (
+          <div className="px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-6xl mt-4 sm:mt-6 overflow-hidden rounded-2xl shadow-sm">
+              <HeroSlider slides={heroSlides} onGalleryClick={handleOpenGallery} />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* 2. ส่วนบุคลากร */}
@@ -431,6 +468,68 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal แกลเลอรีรูปประกาศทั้งหมด — เปิดจากปุ่มมุมซ้ายล่างของรูปสไลด์ (รวมประกาศที่หมดอายุแล้ว) */}
+      {isGalleryOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          onClick={() => setIsGalleryOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <h3 className="text-lg font-bold text-gray-900">รูปประกาศทั้งหมด</h3>
+              <button
+                onClick={() => setIsGalleryOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10"
+                aria-label="ปิด"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-5">
+              {isGalleryLoading ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#CC0000]" />
+                </div>
+              ) : galleryItems.length === 0 ? (
+                <p className="py-16 text-center text-gray-400">ยังไม่มีรูปประกาศ</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                  {galleryItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedNews(item)}
+                      className="group flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#CC0000]/40 hover:shadow-md"
+                    >
+                      {/* รูปเห็นเต็มภาพไม่ตัดขอบ + พื้นหลังเบลอเติมขอบ */}
+                      <div className="relative aspect-square w-full overflow-hidden bg-black">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.image_url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.image_url} alt={item.title} className="relative h-full w-full object-contain" />
+                      </div>
+                      <p className="line-clamp-2 px-2.5 py-2 text-xs font-medium text-gray-700 group-hover:text-[#CC0000]">
+                        {item.title}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* หน้าต่างอ่านข่าว — เปิดจากการกดการ์ดในแกลเลอรี "รูปประกาศทั้งหมด" */}
+      {selectedNews && (
+        <AnnouncementDetailModal announcement={selectedNews} onClose={() => setSelectedNews(null)} />
       )}
     </div>
   );

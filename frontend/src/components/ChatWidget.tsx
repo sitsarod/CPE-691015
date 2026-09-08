@@ -6,6 +6,7 @@ import { MessageCircle, X, Send, Paperclip, FileText, Loader2, Download, MoreVer
 import { autoQaAPI } from '../services/autoQaAPI';
 import { getUserProfileAPI } from '../services/userAPI';
 import { AutoQA, ChatSession, CreateChatSessionReq } from '../types/autoQa';
+import { useVisibleInterval } from '../hooks/useVisibleInterval';
 
 interface ChatMessage {
   id: string;
@@ -258,42 +259,81 @@ export default function ChatWidget() {
     }
   };
 
-  // Poll ข้อความใหม่ทุก 5 วิ
-  useEffect(() => {
-    if (!isOpen || !session || session.status !== 'active') return;
-    const interval = setInterval(async () => {
-      try {
-        const fetched = await autoQaAPI.getChatSessionById(session.id);
-        if (fetched && fetched.status === 'active') {
-          if (fetched.auto_qas) {
-            const loaded = mapAutoQAsToMessages(fetched.auto_qas);
-            setMessages((prev) => {
-              const serverCount = loaded.length;
-              const localSaved = prev.filter((m) => !m.id.startsWith('temp-') && !m.id.startsWith('error-') && m.id !== 'greeting').length;
-              if (serverCount > localSaved) {
-                const greeting = prev.find((m) => m.id === 'greeting');
-                return greeting ? [greeting, ...loaded] : loaded;
-              }
-              return prev;
-            });
-          }
-        } else {
-          setSession(fetched);
+  // ดึงข้อความล่าสุดของห้องแชทปัจจุบันมาต่อกับข้อความที่มีอยู่ในเครื่อง (ไม่ทับข้อความที่ยังไม่ sync)
+  // เก็บเป็น ref แล้วอัปเดตทุก render (แทนการ useCallback) เพื่อให้ SSE handler ด้านล่างเรียกฟังก์ชัน
+  // เวอร์ชันล่าสุดที่อ้างอิง session ปัจจุบันได้เสมอ โดยไม่ต้อง reconnect ทุกครั้งที่ state อื่นเปลี่ยน
+  const refreshSessionRef = useRef<() => Promise<void>>(async () => {});
+  refreshSessionRef.current = async () => {
+    if (!session) return;
+    try {
+      const fetched = await autoQaAPI.getChatSessionById(session.id);
+      if (fetched && fetched.status === 'active') {
+        if (fetched.auto_qas) {
+          const loaded = mapAutoQAsToMessages(fetched.auto_qas);
+          setMessages((prev) => {
+            const serverCount = loaded.length;
+            const localSaved = prev.filter((m) => !m.id.startsWith('temp-') && !m.id.startsWith('error-') && m.id !== 'greeting').length;
+            if (serverCount > localSaved) {
+              const greeting = prev.find((m) => m.id === 'greeting');
+              return greeting ? [greeting, ...loaded] : loaded;
+            }
+            return prev;
+          });
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : '';
-        if (msg.includes('not found') || msg.includes('ไม่พบ')) {
-          localStorage.removeItem(chatSessionKey(chatOwner()));
-          setSession(null);
-          setMessages([]);
-          autoStartTriedRef.current = false;
-        } else {
-          console.error('Failed to poll chat session:', err);
-        }
+      } else {
+        setSession(fetched);
       }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isOpen, session]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('not found') || msg.includes('ไม่พบ')) {
+        localStorage.removeItem(chatSessionKey(chatOwner()));
+        setSession(null);
+        setMessages([]);
+        autoStartTriedRef.current = false;
+      } else {
+        console.error('Failed to refresh chat session:', err);
+      }
+    }
+  };
+
+  const isChatStreamActive = isOpen && !!session && session.status === 'active';
+
+  // SSE — รับสัญญาณ "มีข้อความใหม่" แบบเรียลไทม์จาก backend แทนการ poll รัวๆ ทุก 5 วิเหมือนเดิม
+  // ใช้ session ID เป็นคีย์ (ไม่ต้องล็อกอิน ต่างจาก NotificationBell ที่ต้องมี JWT) — พอมีสัญญาณเข้ามา
+  // ค่อยไปเรียก GET /chat-sessions/:id จริงเหมือนตอน poll เดิม มี reconnect เองถ้าหลุด
+  useEffect(() => {
+    if (!isChatStreamActive || !session) return;
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    if (!base) return;
+
+    let es: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const connect = () => {
+      if (closed) return;
+      es = new EventSource(`${base}/chat-sessions/${session.id}/stream`);
+      es.addEventListener('notify', () => refreshSessionRef.current());
+      es.onerror = () => {
+        es?.close();
+        if (closed) return;
+        if (retry) clearTimeout(retry);
+        retry = setTimeout(connect, 5000);
+      };
+    };
+    connect();
+
+    return () => {
+      closed = true;
+      if (retry) clearTimeout(retry);
+      es?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChatStreamActive, session?.id]);
+
+  // poll สำรองทุก 45 วิ เผื่อ SSE หลุด/เบราว์เซอร์บล็อก EventSource — หยุดอัตโนมัติเมื่อย่อ/สลับแท็บ
+  // (เดิมยิงทุก 5 วิไม่หยุดตราบใดที่เปิดกล่องแชทค้างไว้ ตอนนี้ SSE เป็นตัวหลัก อันนี้แค่กันพลาด)
+  useVisibleInterval(() => refreshSessionRef.current(), 45000, isChatStreamActive);
 
   const handleResetSession = () => {
     localStorage.removeItem(chatSessionKey(chatOwner()));

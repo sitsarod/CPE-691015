@@ -523,6 +523,8 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/announcements/:id", announcementController.GetAnnouncementByID)
 		api.POST("/announcements/:id/view", announcementController.IncrementViewCount)
 		api.GET("/announcements/categories", announcementController.GetAllCategories)
+		// แกลเลอรีรูปภาพทั้งหมดสำหรับผู้เยี่ยมชม (รวมประกาศเก่าที่หมดอายุแล้ว) — ปุ่ม "ดูรูปทั้งหมด" บนหน้าแรก
+		api.GET("/announcements/gallery", announcementController.GetGuestGallery)
 
 		// แอดมิน: ดูประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) สำหรับหน้าจัดการ
 		adminOnly.GET("/admin/announcements", announcementController.GetAllAnnouncements)
@@ -533,6 +535,9 @@ func SetupRoutes(r *gin.Engine) {
 		// สร้าง session และถามคำถามเป็น endpoint สาธารณะที่เขียน DB — ใส่ rate limit กันสแปม
 		api.POST("/chat-sessions", middlewares.PublicChatRateLimit(), autoQAController.CreateChatSession)
 		api.GET("/chat-sessions/:id", autoQAController.GetChatSessionByID)
+		// SSE — แจ้งสัญญาณ "มีข้อความใหม่" แบบเรียลไทม์ให้ผู้เยี่ยมชม/ลูกค้าที่เปิดกล่องแชทอยู่
+		// (rate limit เดียวกับ endpoint แชทสาธารณะอื่นๆ กันเปิด connection รัวๆ)
+		api.GET("/chat-sessions/:id/stream", middlewares.PublicChatRateLimit(), autoQAController.StreamChatSession)
 		api.POST("/chat-sessions/:id/ask", middlewares.PublicChatRateLimit(), autoQAController.AskQuestion)
 		// ลูกค้าแก้ไข/ลบข้อความของตัวเองในห้องแชท (สาธารณะ + rate limit)
 		api.PATCH("/chat-sessions/:id/messages/:msgId", middlewares.PublicChatRateLimit(), autoQAController.EditMessage)

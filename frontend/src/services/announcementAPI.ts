@@ -24,6 +24,13 @@ export const announcementAPI = {
     return res.data;
   },
 
+  // แกลเลอรีรูปภาพประกาศทั้งหมดสำหรับผู้เยี่ยมชม (รวมประกาศเก่าที่หมดอายุแล้ว)
+  // ใช้กับปุ่ม "ดูรูปทั้งหมด" บนหน้าแรกสาธารณะ
+  getGuestGallery: async (): Promise<Announcement[]> => {
+    const res = await apiFetch<ApiResponse<Announcement[]>>('/announcements/gallery');
+    return res.data;
+  },
+
   // Admin: คืนประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) — ใช้กับหน้าจัดการของแอดมิน
   getAllAnnouncements: async (): Promise<Announcement[]> => {
     const res = await apiFetch<ApiResponse<Announcement[]>>('/admin/announcements');
