@@ -134,6 +134,7 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			item.CourseName = anchor.Course.CourseName
 		}
 
+		item.Packages = []dto.ClassPackageDTO{}
 		if pkgs, derr := classPackageDetails(s.db, ids, anchor.ID); derr == nil {
 			item.Packages = pkgs
 		}
