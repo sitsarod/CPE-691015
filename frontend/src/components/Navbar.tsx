@@ -11,8 +11,9 @@ import { Menu, X } from "lucide-react";
 const NAV_ITEMS: { id: string; label: string }[] = [
   { id: "courses", label: "คอร์สเรียน" },
   { id: "coaches", label: "บุคลากร" },
+  { id: "facility", label: "ภาพบรรยากาศ" },
   { id: "news", label: "ข่าว" },
-  { id: "faq", label: "คำถามที่พบบ่อย" },
+  { id: "faq", label: "FAQ" },
   { id: "about", label: "ติดต่อเรา" },
 ];
 const SECTIONS = NAV_ITEMS.map((item) => item.id);

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 
 	"CPE-691015/internal/dto"
@@ -144,6 +145,49 @@ func (s *homeContentService) UpdateHomeContent(req *dto.UpdateHomeContentReq) (*
 	}
 	if req.TermsOfService != nil {
 		content.TermsOfService = *req.TermsOfService
+	}
+
+	// ---- เนื้อหาหลักหน้าแรก ----
+	if req.HeroEyebrow != nil {
+		content.HeroEyebrow = *req.HeroEyebrow
+	}
+	if req.HeroHeadline != nil {
+		content.HeroHeadline = *req.HeroHeadline
+	}
+	if req.HeroSubtext != nil {
+		content.HeroSubtext = *req.HeroSubtext
+	}
+	if req.CoursesFootnote != nil {
+		content.CoursesFootnote = *req.CoursesFootnote
+	}
+	if req.CoachesNote != nil {
+		content.CoachesNote = *req.CoachesNote
+	}
+	if req.FacilityTitle != nil {
+		content.FacilityTitle = *req.FacilityTitle
+	}
+	if req.FacilitySubtitle != nil {
+		content.FacilitySubtitle = *req.FacilitySubtitle
+	}
+	if req.FooterCtaTitle != nil {
+		content.FooterCtaTitle = *req.FooterCtaTitle
+	}
+	if req.FooterCtaSubtitle != nil {
+		content.FooterCtaSubtitle = *req.FooterCtaSubtitle
+	}
+
+	// ---- ข้อมูลชุดซ้ำ: marshal เป็น JSON แล้วเก็บลงคอลัมน์ text ----
+	if req.HeroStats != nil {
+		content.HeroStatsJSON = marshalJSON(*req.HeroStats)
+	}
+	if req.CoachStats != nil {
+		content.CoachStatsJSON = marshalJSON(*req.CoachStats)
+	}
+	if req.FacilityTiles != nil {
+		content.FacilityTilesJSON = marshalJSON(*req.FacilityTiles)
+	}
+	if req.FaqItems != nil {
+		content.FaqItemsJSON = marshalJSON(*req.FaqItems)
 	}
 
 	if err := s.db.Save(content).Error; err != nil {
@@ -310,8 +354,66 @@ func mapToHomeContentDTO(m *models.HomeContent) dto.HomeContentDTO {
 		OpeningHours:        m.OpeningHours,
 		PrivacyPolicy:       m.PrivacyPolicy,
 		TermsOfService:      m.TermsOfService,
+		HeroEyebrow:         m.HeroEyebrow,
+		HeroHeadline:        m.HeroHeadline,
+		HeroSubtext:         m.HeroSubtext,
+		CoursesFootnote:     m.CoursesFootnote,
+		CoachesNote:         m.CoachesNote,
+		FacilityTitle:       m.FacilityTitle,
+		FacilitySubtitle:    m.FacilitySubtitle,
+		FooterCtaTitle:      m.FooterCtaTitle,
+		FooterCtaSubtitle:   m.FooterCtaSubtitle,
+		HeroStats:           unmarshalStats(m.HeroStatsJSON),
+		CoachStats:          unmarshalStats(m.CoachStatsJSON),
+		FacilityTiles:       unmarshalTiles(m.FacilityTilesJSON),
+		FaqItems:            unmarshalFaq(m.FaqItemsJSON),
 		UpdatedAt:           m.UpdatedAt,
 	}
+}
+
+// ---------- JSON helpers สำหรับข้อมูลชุดซ้ำที่เก็บเป็น text ----------
+
+// marshalJSON แปลง slice เป็นสตริง JSON (error → "" เพื่อไม่ให้พังทั้งคำขอ)
+func marshalJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// unmarshalStats/Tiles/Faq แปลง JSON กลับเป็น slice (ว่าง/พังรูปแบบ → slice ว่าง)
+func unmarshalStats(s string) []dto.StatItem {
+	if s == "" {
+		return []dto.StatItem{}
+	}
+	var out []dto.StatItem
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return []dto.StatItem{}
+	}
+	return out
+}
+
+func unmarshalTiles(s string) []dto.FacilityTileItem {
+	if s == "" {
+		return []dto.FacilityTileItem{}
+	}
+	var out []dto.FacilityTileItem
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return []dto.FacilityTileItem{}
+	}
+	return out
+}
+
+func unmarshalFaq(s string) []dto.FaqItem {
+	if s == "" {
+		return []dto.FaqItem{}
+	}
+	var out []dto.FaqItem
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return []dto.FaqItem{}
+	}
+	return out
 }
 
 func mapToHeroSlideDTO(m *models.HeroSlide) dto.HeroSlideDTO {
