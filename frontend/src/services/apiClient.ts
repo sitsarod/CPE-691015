@@ -27,6 +27,10 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
   const response = await fetch(url, {
+    // ค่าเริ่มต้นไม่ให้ browser/Next แคช เพื่อให้ได้ข้อมูลล่าสุดเสมอ
+    // (แก้ปัญหา: แก้เนื้อหาในแอดมินแล้วรีเฟรชหน้าแรกยังเห็นข้อมูลเก่า)
+    // ผู้เรียกยัง override ได้ด้วยการส่ง cache มาใน options
+    cache: 'no-store',
     ...options,
     headers: buildHeaders(options),
   });
