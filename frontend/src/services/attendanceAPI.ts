@@ -20,6 +20,13 @@ interface Envelope<T> {
   message?: string;
 }
 
+const ALREADY_CHECKED_IN_HINTS = ["เช็คชื่อในรอบนี้ไปแล้ว", "เช็คชื่อคาบนี้ไปแล้ว"];
+
+export function isAlreadyCheckedIn(message: string | undefined): boolean {
+  if (!message) return false;
+  return ALREADY_CHECKED_IN_HINTS.some((hint) => message.includes(hint));
+}
+
 // [GET] แพ็กเกจที่ตอนนี้อยู่ในคาบเรียน จึงเปิดรอบเช็คชื่อได้
 export async function fetchOpenablePackages(): Promise<OpenablePackage[]> {
   const res = await apiFetch<Envelope<OpenablePackage[]>>("/attendance/openable");
@@ -145,7 +152,10 @@ export async function updateCoachAttendanceStatus(
   });
 }
 
-// [PATCH] ปิดรอบ — คนที่ไม่ได้เช็คชื่อจะถูกมาร์ค absent และถูกหักโควตาทันที
+// [PATCH] ปิดรอบ — คนที่ยืนยันว่าจะมาแล้วไม่มาจะถูกมาร์ค absent
+//
+// ไม่หักโควตา (ยังไม่ได้เรียน) — ดู markAbsentees ฝั่ง backend ที่สร้างแถวเปล่า
+// โดยไม่เรียก deductSession · โค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อก็ถูกมาร์คพร้อมกัน
 export async function closeSession(sessionId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(
     `/attendance/sessions/${sessionId}/close`,
@@ -154,10 +164,11 @@ export async function closeSession(sessionId: number): Promise<AttendanceSession
   return res.data;
 }
 
-// [PATCH] แก้สถานะย้อนหลัง — ใช้ตอนนักเรียนแจ้งลาแล้วมาปรับให้ทีหลัง
+// [PATCH] แก้สถานะย้อนหลัง — ใช้ตอนคนมาเรียนจริงแต่ลืมสแกน แล้วมาปรับให้ทีหลัง
 //
-// กติกาโควตา: present หัก · absent หัก · leave ไม่หัก
-// การเปลี่ยนเป็น leave จึงคืนโควตา 1 ครั้ง และเปลี่ยนออกจาก leave จะหักคืน
+// รับสองสถานะเท่านั้น: present · absent (ค่าอื่นได้ 400 จาก UpdateAttendanceStatus)
+// กติกาโควตา: present หัก · absent ไม่หัก
+// present → absent จึงคืนโควตา 1 ครั้ง และ absent → present หัก 1 ครั้ง
 export async function updateAttendanceStatus(
   attendanceId: number,
   status: AttendanceStatus,

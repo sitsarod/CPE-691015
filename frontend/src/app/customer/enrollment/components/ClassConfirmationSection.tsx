@@ -20,7 +20,8 @@ import { dayLabel } from "@/components/course/courseUtils";
  * ⚠️ ปุ่มที่ปิดแล้วเป็นแค่การบอกผู้ใช้ backend ตรวจเส้นตายซ้ำเสมอ
  */
 
-const keyOf = (c: UpcomingClass) => `${c.enrollment_id}-${c.class_date}`;
+const keyOf = (c: UpcomingClass) =>
+  `${c.enrollment_id}-${c.class_date}-${c.start_time}`;
 
 /** "2026-09-01" → "1 ก.ย." — แปลงเองไม่ผ่าน new Date() เพราะเป็นวันตามปฏิทิน
  *  ไม่ใช่จุดเวลา ถ้าให้เบราว์เซอร์ตีความจะเลื่อนวันในบางโซนเวลา */
@@ -71,7 +72,11 @@ export default function ClassConfirmationSection() {
   // ยิง API แล้วอัปเดตเฉพาะการ์ดใบนั้น
   const run = async (
     item: UpcomingClass,
-    action: (payload: { enrollment_id: number; class_date: string }) => Promise<UpcomingClass>
+    action: (payload: {
+      enrollment_id: number;
+      class_date: string;
+      start_time: string;
+    }) => Promise<UpcomingClass>
   ) => {
     const key = keyOf(item);
     setSavingKey(key);
@@ -79,6 +84,7 @@ export default function ClassConfirmationSection() {
       const updated = await action({
         enrollment_id: item.enrollment_id,
         class_date: item.class_date,
+        start_time: item.start_time,
       });
       setClasses((prev) =>
         prev.map((c) => (keyOf(c) === key ? { ...c, ...updated } : c))

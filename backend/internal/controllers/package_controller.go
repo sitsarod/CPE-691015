@@ -30,7 +30,8 @@ func (ctrl *PackageController) CreatePackage(c *gin.Context) {
 
 	pkg, err := ctrl.packageService.CreatePackage(input)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidDuration) {
+		if errors.Is(err, services.ErrInvalidDuration) ||
+			errors.Is(err, services.ErrPackageScheduleInvalid) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -58,7 +59,8 @@ func (ctrl *PackageController) UpdatePackage(c *gin.Context) {
 
 	updatedPkg, err := ctrl.packageService.UpdatePackage(uint(packageID), input)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidDuration) {
+		if errors.Is(err, services.ErrInvalidDuration) ||
+			errors.Is(err, services.ErrPackageScheduleInvalid) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

@@ -123,17 +123,25 @@ export default function ClassHeadcountPanel() {
                   // กดที่แถวเพื่อดูรายชื่อ — <tr> ไม่ใช่ปุ่ม จึงต้องใส่ tabIndex
                   // กับ onKeyDown เอง ไม่งั้นคนที่ใช้คีย์บอร์ดโฟกัสไม่ได้เลย
                   <tr
-                    key={`${r.package_id}-${r.class_date}`}
+                    key={`${r.package_id}-${r.class_date}-${r.start_time}`}
                     role="button"
                     tabIndex={0}
                     aria-label={`ดูรายชื่อ ${g.courseName} ${r.start_time}–${r.end_time}`}
                     onClick={() =>
-                      setTarget({ packageId: r.package_id, classDate: r.class_date })
+                      setTarget({
+                        packageId: r.package_id,
+                        classDate: r.class_date,
+                        startTime: r.start_time,
+                      })
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setTarget({ packageId: r.package_id, classDate: r.class_date });
+                        setTarget({
+                          packageId: r.package_id,
+                          classDate: r.class_date,
+                          startTime: r.start_time,
+                        });
                       }
                     }}
                     className="cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50 focus:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#CC0000]"

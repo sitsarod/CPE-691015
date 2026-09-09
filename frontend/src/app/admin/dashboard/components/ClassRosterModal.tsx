@@ -20,6 +20,7 @@ function formatClassDate(ymd: string): string {
 export interface ClassRosterTarget {
   packageId: number;
   classDate: string;
+  startTime: string;
 }
 
 export default function ClassRosterModal({
@@ -35,19 +36,20 @@ export default function ClassRosterModal({
 
   const packageId = target?.packageId;
   const classDate = target?.classDate;
+  const startTime = target?.startTime;
 
   const load = useCallback(async () => {
-    if (packageId == null || !classDate) return;
+    if (packageId == null || !classDate || !startTime) return;
     setIsLoading(true);
     setError(null);
     try {
-      setRoster(await fetchClassRoster(packageId, classDate));
+      setRoster(await fetchClassRoster(packageId, classDate, startTime));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ไม่สามารถดึงรายชื่อได้");
     } finally {
       setIsLoading(false);
     }
-  }, [packageId, classDate]);
+  }, [packageId, classDate, startTime]);
 
   // ปิดกฎเหมือนที่ useAdminResource ทำ — ดึงข้อมูลตอนเปิดคือข้อยกเว้นที่ตั้งใจ
   useEffect(() => {
@@ -60,7 +62,8 @@ export default function ClassRosterModal({
   const current =
     roster &&
     roster.package_id === packageId &&
-    roster.class_date === classDate
+    roster.class_date === classDate &&
+    roster.start_time === startTime
       ? roster
       : null;
 

@@ -24,12 +24,14 @@ export interface UpcomingClass {
 export interface ConfirmClassInput {
   enrollment_id: number;
   class_date: string;
+  start_time: string;
   status: "going";
 }
 
 export interface CancelClassInput {
   enrollment_id: number;
   class_date: string;
+  start_time: string;
 }
 
 // ยอดสรุปรายคาบที่แอดมินใช้ตัดสินใจจองสนาม

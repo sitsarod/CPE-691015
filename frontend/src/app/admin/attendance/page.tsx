@@ -32,6 +32,7 @@ import {
   updateAttendanceStatus,
   updateCoachAttendanceStatus,
   fetchMissedClasses,
+  isAlreadyCheckedIn,
 } from "@/services/attendanceAPI";
 import { COACH_STATUS_LABEL, COACH_STATUS_NOTE } from "@/types/attendance";
 import type {
@@ -53,6 +54,8 @@ import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
 
 const SCAN_COOLDOWN_SECONDS = 5;
+
+const REPEAT_NOTICE_SILENCE_MS = 30_000;
 
 // จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
 const KIOSK_STORAGE_KEY = "attendance_kiosk";
@@ -126,6 +129,8 @@ export default function AdminAttendancePage() {
   }, [cooldown]);
 
   const startCooldown = useCallback(() => setCooldown(SCAN_COOLDOWN_SECONDS), []);
+
+  const dismissOutcome = useCallback(() => setOutcome(null), []);
 
   // เครื่องที่สนามถูกรีโหลดระหว่างคาบได้ ต้องกลับเข้าโหมดเอง
   useEffect(() => {
@@ -303,10 +308,12 @@ export default function AdminAttendancePage() {
           });
         }
       } catch (err: unknown) {
+        const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
         setOutcome({
           ok: false,
           title: "เช็คชื่อไม่สำเร็จ",
-          detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+          detail,
+          repeat: isAlreadyCheckedIn(detail),
         });
       } finally {
         setIsCheckingIn(false);
@@ -333,6 +340,8 @@ export default function AdminAttendancePage() {
   // ใช้ ref ไม่ใช่ state เพราะต้องอ่านค่าล่าสุดทันทีในรอบเดียวกัน ไม่รอ re-render
   const faceInFlight = useRef(false);
 
+  const lastRejected = useRef<{ key: string; at: number } | null>(null);
+
   const handleFaceFrame = useCallback(
     async (frame: Blob) => {
       if (!session || faceInFlight.current) return;
@@ -346,11 +355,25 @@ export default function AdminAttendancePage() {
         // การ์ดเต็มจอที่มีปุ่มเดียวให้กดคือ "ไม่ใช่" จึงไม่ได้ช่วยอะไร
         // ขึ้นแถบเล็กแบบเดียวกับตอนยื่น QR ซ้ำแทน แล้วพักกล้องไว้เหมือนกัน
         if (!person.can_check_in) {
-          setOutcome({
-            ok: false,
-            title: person.full_name.trim() || person.nickname,
-            detail: person.reason || "เช็คชื่อในรอบนี้ไปแล้ว",
-          });
+          const key =
+            result.kind === "coach"
+              ? `coach:${result.coach.coach_id}`
+              : `student:${result.student.enrollment_id}`;
+          const now = Date.now();
+          const previous = lastRejected.current;
+          const isLingering =
+            previous?.key === key && now - previous.at < REPEAT_NOTICE_SILENCE_MS;
+          lastRejected.current = { key, at: now };
+
+          if (!isLingering) {
+            const detail = person.reason || "เช็คชื่อในรอบนี้ไปแล้ว";
+            setOutcome({
+              ok: false,
+              title: person.full_name.trim() || person.nickname,
+              detail,
+              repeat: isAlreadyCheckedIn(detail),
+            });
+          }
           startCooldown();
           return;
         }
@@ -400,10 +423,12 @@ export default function AdminAttendancePage() {
         });
       }
     } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
       setOutcome({
         ok: false,
         title: "เช็คชื่อไม่สำเร็จ",
-        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+        detail,
+        repeat: isAlreadyCheckedIn(detail),
       });
     } finally {
       setIsConfirmingFace(false);
@@ -428,10 +453,12 @@ export default function AdminAttendancePage() {
       });
       await refreshSession();
     } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
       setOutcome({
         ok: false,
         title: "เช็คชื่อให้ไม่สำเร็จ",
-        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+        detail,
+        repeat: isAlreadyCheckedIn(detail),
       });
     }
   };
@@ -449,10 +476,12 @@ export default function AdminAttendancePage() {
       });
       await refreshSession();
     } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
       setOutcome({
         ok: false,
         title: "เช็คชื่อให้ไม่สำเร็จ",
-        detail: err instanceof Error ? err.message : "ไม่ทราบสาเหตุ",
+        detail,
+        repeat: isAlreadyCheckedIn(detail),
       });
     }
   };
@@ -585,7 +614,7 @@ export default function AdminAttendancePage() {
               : "กำลังบันทึก..."
         }
         outcome={outcome}
-        onDismissOutcome={() => setOutcome(null)}
+        onDismissOutcome={dismissOutcome}
         onExit={exitKiosk}
         onFaceFrame={handleFaceFrame}
         faceCandidate={faceCandidate}
@@ -965,7 +994,7 @@ export default function AdminAttendancePage() {
                     <ScanResultBanner
                       variant="overlay"
                       outcome={outcome}
-                      onDismiss={() => setOutcome(null)}
+                      onDismiss={dismissOutcome}
                     />
                   )
                 }
@@ -989,7 +1018,7 @@ export default function AdminAttendancePage() {
                 ต้องเลือกอย่างใดอย่างหนึ่ง ไม่งั้นผลเดียวกันโผล่สองที่
                 แล้วจะได้ยินเสียงซ้อนสองครั้งด้วย (แต่ละตัวเรียก beep ของตัวเอง) */}
             {outcome && !showResultOnCamera && (
-              <ScanResultBanner outcome={outcome} onDismiss={() => setOutcome(null)} />
+              <ScanResultBanner outcome={outcome} onDismiss={dismissOutcome} />
             )}
 
             <button
