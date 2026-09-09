@@ -327,11 +327,12 @@ function ItemReviewPanel({
         </span>
       </div>
 
-      {/* บอกให้รู้ว่ามีหน้าที่ระบบเห็นแต่จับคู่ไม่ได้ จะได้ไม่เข้าใจผิดว่าเจอครบแล้ว */}
+      {/* บอกให้รู้ว่ามีหน้าที่ระบบเห็นแต่จับคู่ไม่ได้ จะได้ไม่เข้าใจผิดว่าเจอครบแล้ว
+          (วิดีโอนับใบหน้าซ้ำได้ถ้าคนเดิมโผล่หลายเฟรมที่สุ่มตรวจ ไม่ใช่จำนวนคนจริงเป๊ะ) */}
       {item.faceCount > detections.length && (
         <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-amber-600">
           <CircleAlert size={13} className="mt-0.5 flex-shrink-0" />
-          เจอ {item.faceCount} ใบหน้าในรูป แต่จับคู่ได้ {detections.length} คน — ที่เหลือเพิ่มเองด้านล่างได้
+          เจอ {item.faceCount} ใบหน้า{item.isVideo ? '' : 'ในรูป'} แต่จับคู่ได้ {detections.length} คน — ที่เหลือเพิ่มเองด้านล่างได้
         </p>
       )}
 
@@ -479,7 +480,7 @@ function DetectionRow({
   onReassign: (studentId: number) => void;
   onRemove: () => void;
 }) {
-  const { predictedNickname, confidence, studentId, status } = detection;
+  const { predictedNickname, confidence, studentId, status, bbox, frameImage } = detection;
   const currentStudent = students.find((s) => s.id === studentId) ?? null;
 
   return (
@@ -492,6 +493,10 @@ function DetectionRow({
           : 'border-gray-200 bg-white'
       }`}
     >
+      {/* เฟรมวิดีโอที่แมตช์ได้ พร้อมกรอบมาร์กแบบเดียวกับฝั่งรูป — ให้โค้ชเห็นภาพจริงยืนยัน
+          แทนที่จะเห็นแค่เปอร์เซ็นต์มั่นใจลอย ๆ */}
+      {frameImage && bbox && <VideoFrameMark frameImage={frameImage} bbox={bbox} label={predictedNickname} />}
+
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100">
           <UserRound size={20} />
@@ -571,6 +576,63 @@ function DetectionRow({
           <Trash2 size={15} />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ==================== เฟรมวิดีโอพร้อมกรอบมาร์ก (สำหรับ detection แถวหนึ่งในวิดีโอ) ====================
+// bbox ที่ backend ส่งมาสเกลตาม frameImage นี้แล้ว (ไม่ใช่เฟรมต้นฉบับก่อนย่อ) — ตรรกะเดียวกับ
+// PhotoPreviewWithMarks ฝั่งรูป แค่ต่อภาพหนึ่งภาพต่อการจับคู่หนึ่งรายการ ไม่ใช่ภาพเดียวใช้ร่วมกัน
+function VideoFrameMark({
+  frameImage,
+  bbox,
+  label,
+}: {
+  frameImage: string;
+  bbox: [number, number, number, number];
+  label: string | null;
+}) {
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [bx1, by1, bx2, by2] = bbox;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+      {/* ⚠️ ห้ามใส่ max-height/object-contain — จะเกิด letterbox ทำให้กรอบ % เพี้ยน (เหตุผลเดียวกับ
+          PhotoPreviewWithMarks) */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- data URI จาก base64 ใช้ next/image ไม่ได้ */}
+      <img
+        src={`data:image/jpeg;base64,${frameImage}`}
+        alt=""
+        className="block w-full"
+        onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+      />
+      {naturalSize &&
+        (() => {
+          const padX = (bx2 - bx1) * 0.35;
+          const padY = (by2 - by1) * 0.15;
+          const x1 = Math.max(0, bx1 - padX);
+          const y1 = Math.max(0, by1 - padY);
+          const x2 = Math.min(naturalSize.w, bx2 + padX);
+          const y2 = Math.min(naturalSize.h, by2 + padY);
+
+          return (
+            <div
+              className="absolute"
+              style={{
+                left: `${(x1 / naturalSize.w) * 100}%`,
+                top: `${(y1 / naturalSize.h) * 100}%`,
+                width: `${((x2 - x1) / naturalSize.w) * 100}%`,
+                height: `${((y2 - y1) / naturalSize.h) * 100}%`,
+              }}
+            >
+              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
+              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2 py-1 text-xs font-black text-white shadow-md">
+                {label ?? 'ไม่ทราบชื่อ'}
+              </span>
+            </div>
+          );
+        })()}
     </div>
   );
 }

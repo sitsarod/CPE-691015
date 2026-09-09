@@ -23,7 +23,7 @@ import (
 type PhotoPostController struct {
 	photoPostService *services.DetectedPhotoService
 	videoService     *services.DetectedVideoService
-	taggingService   *services.PhotoTaggingService
+	taggingService   *services.FaceTaggingService
 	mediaStorage     services.MediaStorage
 	db               *gorm.DB
 }
@@ -31,7 +31,7 @@ type PhotoPostController struct {
 func NewPhotoPostController(
 	photoPostService *services.DetectedPhotoService,
 	videoService *services.DetectedVideoService,
-	taggingService *services.PhotoTaggingService,
+	taggingService *services.FaceTaggingService,
 	mediaStorage services.MediaStorage,
 	db *gorm.DB,
 ) *PhotoPostController {

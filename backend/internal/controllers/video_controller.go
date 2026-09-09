@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -13,21 +16,33 @@ import (
 )
 
 type VideoController struct {
-	videoService *services.DetectedVideoService
-	mediaStorage services.MediaStorage
-	db           *gorm.DB
+	videoService   *services.DetectedVideoService
+	taggingService *services.FaceTaggingService
+	mediaStorage   services.MediaStorage
+	db             *gorm.DB
 }
 
-func NewVideoController(videoService *services.DetectedVideoService, mediaStorage services.MediaStorage, db *gorm.DB) *VideoController {
+func NewVideoController(
+	videoService *services.DetectedVideoService,
+	taggingService *services.FaceTaggingService,
+	mediaStorage services.MediaStorage,
+	db *gorm.DB,
+) *VideoController {
 	return &VideoController{
-		videoService: videoService,
-		mediaStorage: mediaStorage,
-		db:           db,
+		videoService:   videoService,
+		taggingService: taggingService,
+		mediaStorage:   mediaStorage,
+		db:             db,
 	}
 }
 
 // UploadVideo handles POST /api/coaches/videos
-// โค้ชอัปโหลดวิดีโอ ระบบจะบันทึกและรันการวิเคราะห์จำลองใบหน้า (Mock Face Detection)
+//
+// โค้ช/แอดมินอัปโหลดวิดีโอ แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในคลิปบ้าง (ถ้าส่ง course_id มา)
+// ⚠️ ผลที่คืนไปเป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง — ต้องผ่าน ManuallyAssignStudents อีกที
+// (เหมือน UploadPhotoPost ทุกอย่าง — ก่อนหน้านี้เคยเขียน DetectedVideo ลง DB ทันทีตอนอัปโหลด
+// ด้วยผลจากระบบ mock แบบสุ่ม ทำให้คนที่ AI เดา "ยังไม่ได้ยืนยัน" ไปโผล่ในแท็บ Posts ของนักเรียน
+// ก่อนโค้ชตรวจทานเสร็จ — แก้ให้เป็น suggestion-only เหมือนฝั่งรูปแล้ว)
 func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
@@ -44,7 +59,6 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		}
 	}
 
-	// 1. รับไฟล์วิดีโอ
 	fh, err := c.FormFile("video")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์วิดีโอ (ฟิลด์ 'video')"})
@@ -58,6 +72,17 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		return
 	}
 
+	// course_id ไม่บังคับ — ไม่ส่งมาก็อัปโหลดได้ปกติ แค่ไม่มีการจำแนกให้ (เหมือน UploadPhotoPost)
+	var courseID uint
+	if raw := c.PostForm("course_id"); raw != "" {
+		id, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
+			return
+		}
+		courseID = uint(id)
+	}
+
 	file, err := fh.Open()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
@@ -65,13 +90,20 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	}
 	defer file.Close()
 
-	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindVideo, file, ext)
+	// อ่านเข้าหน่วยความจำครั้งเดียวแล้วใช้สองต่อ (เก็บไฟล์ + ส่งให้โมเดลจำแนก) — เหมือน
+	// UploadPhotoPost ปลอดภัยเพราะ ValidateVideoUpload คุมขนาดไว้ที่ MaxVideoUploadBytes มาแล้ว
+	raw, err := io.ReadAll(io.LimitReader(file, MaxVideoUploadBytes))
+	if err != nil || len(raw) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		return
+	}
+
+	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindVideo, bytes.NewReader(raw), ext)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์วิดีโอล้มเหลว"})
 		return
 	}
 
-	// 2. สร้าง RawVideo บันทึกลง DB
 	rawVideo, err := ctrl.videoService.CreateRawVideo(storageKey, coachID)
 	if err != nil {
 		// เขียนแถวไม่สำเร็จ = ไฟล์ที่เพิ่งอัปไม่มีใครชี้ถึงอีกเลย ต้องลบทันที (เหมือน FaceImageService.Upload)
@@ -80,27 +112,33 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		return
 	}
 
-	// 3. รัน Mock Face Recognition
-	detectedVideos, err := ctrl.videoService.ProcessFaceDetection(rawVideo.ID, rawVideo.VideoURL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "การวิเคราะห์สแกนใบหน้าขัดข้อง: " + err.Error()})
-		return
+	resp := dto.UploadVideoResponse{
+		RawVideoID: rawVideo.ID,
+		VideoURL:   rawVideo.VideoURL,
+		Students:   []dto.DetectedStudentSuggestion{},
 	}
 
-	// ดึงรายการ ID นักเรียนที่ถูกตรวจจับเจอ
-	var studentIDs []uint
-	for _, dv := range detectedVideos {
-		studentIDs = append(studentIDs, dv.CustomerID)
+	// จำแนกใบหน้าแบบ best-effort — face-service ล่มหรือยังไม่ตั้งค่า ต้องไม่ทำให้อัปโหลดล้มเหลว
+	// (หลักการเดียวกับเช็คชื่อที่ยังใช้ QR ต่อได้เมื่อระบบใบหน้าใช้ไม่ได้) โค้ชแท็กเองได้อยู่แล้ว
+	if courseID != 0 && role == "coach" {
+		matches, faceCount, err := ctrl.taggingService.DetectStudentsInVideo(c.Request.Context(), userID, courseID, raw)
+		if err != nil {
+			log.Printf("จำแนกใบหน้าในวิดีโอ raw_video=%d ไม่สำเร็จ: %v", rawVideo.ID, err)
+		} else {
+			resp.FaceCount = faceCount
+			for _, m := range matches {
+				resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
+					CustomerID: m.CustomerID,
+					Nickname:   m.Nickname,
+					Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
+					BBox:       m.BBox,
+					FrameImage: m.FrameImage, // เฟรมที่แมตช์ได้ (ย่อขนาดแล้ว) ให้โค้ชวาดกรอบดูภาพจริงตอนตรวจทาน
+				})
+			}
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "อัปโหลดวิดีโอและสแกนใบหน้าผู้ประเมินเรียบร้อย",
-		"data": dto.UploadVideoResponse{
-			RawVideoID: rawVideo.ID,
-			VideoURL:   rawVideo.VideoURL,
-			StudentIDs: studentIDs,
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "อัปโหลดวิดีโอสำเร็จ", "data": resp})
 }
 
 // GetVideoRaw handles GET /api/videos/:raw_video_id/raw — เนื้อไฟล์วิดีโอจริง

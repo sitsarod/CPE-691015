@@ -41,13 +41,18 @@ type FaceEmbedAllResult struct {
 	Model     string
 }
 
-// DetectedFaceEmbedding คือหนึ่งใบหน้าที่เจอในรูป — ยังไม่รู้ว่าเป็นใคร
+// DetectedFaceEmbedding คือหนึ่งใบหน้าที่เจอในรูป/วิดีโอ — ยังไม่รู้ว่าเป็นใคร
 type DetectedFaceEmbedding struct {
 	Embedding []float32
 	Quality   float64
-	// BBox คือกรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซลของรูปต้นฉบับ — ใช้วาดกรอบ/ชื่อ
-	// ทับรูปตอนโค้ชตรวจทาน (ไม่ได้ฝังลงไฟล์จริง) nil ได้ถ้า face-service รุ่นเก่าไม่ส่งมา
+	// BBox คือกรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซล — ของรูปต้นฉบับ (ฝั่งรูป) หรือของ FrameImage
+	// ด้านล่าง (ฝั่งวิดีโอ — bbox สเกลตามรูปที่ย่อแล้ว ไม่ใช่เฟรมต้นฉบับ) ใช้วาดกรอบ/ชื่อทับตอน
+	// โค้ชตรวจทาน (ไม่ได้ฝังลงไฟล์จริง) nil ได้ถ้า face-service รุ่นเก่าไม่ส่งมา
 	BBox []float64
+	// FrameImage คือเฟรมวิดีโอที่ย่อขนาดแล้ว (JPEG base64) ที่ตรวจพบหน้านี้ — มีเฉพาะที่มาจาก
+	// วิดีโอ (EmbedAllVideo) ฝั่งรูปปล่อยว่างเสมอเพราะหน้าเว็บมีไฟล์รูปต้นฉบับอยู่แล้ว
+	// วาดกรอบทับเองได้โดยไม่ต้องใช้ค่านี้ (bbox ข้างบนอ้างอิงรูปนี้เสมอ)
+	FrameImage string
 }
 
 type FaceEngine interface {
@@ -55,6 +60,9 @@ type FaceEngine interface {
 	Embed(ctx context.Context, image []byte) (*FaceEmbedResult, error)
 	// EmbedAll คืนทุกใบหน้าที่เจอในรูป (ไม่ใช่แค่ใบที่ใหญ่ที่สุดเหมือน Embed)
 	EmbedAll(ctx context.Context, image []byte) (*FaceEmbedAllResult, error)
+	// EmbedAllVideo เหมือน EmbedAll แต่รับ "เนื้อไฟล์วิดีโอ" ดิบ ๆ — face-service สุ่มตรวจ
+	// หลายเฟรมแล้วรวมใบหน้าที่เจอทั้งหมดเป็นลิสต์เดียว (รูปแบบผลลัพธ์เหมือน EmbedAll ทุกอย่าง)
+	EmbedAllVideo(ctx context.Context, video []byte) (*FaceEmbedAllResult, error)
 	// Enabled บอกว่าตั้งค่าครบพร้อมใช้งานไหม
 	Enabled() bool
 }
@@ -71,11 +79,17 @@ const faceEmbedDimensions = 512
 // faceEngineTimeout — เกินแล้วตอบ error ให้ระบบไปใช้ QR ต่อ ไม่ปล่อยให้รอค้าง
 const faceEngineTimeout = 10 * time.Second
 
+// faceEngineVideoTimeout — วิดีโอหนักได้ถึง 200MB และต้องถอดหลายเฟรมมาตรวจ (ดู
+// MAX_VIDEO_SAMPLE_FRAMES ฝั่ง Python) ช้ากว่ารูปเดี่ยวมาก ใช้ client แยกต่างหากจาก
+// faceEngineTimeout เพื่อไม่ให้กระทบเวลารอของเช็คชื่อ/แท็กรูปที่ต้องไวกว่านี้มาก
+const faceEngineVideoTimeout = 90 * time.Second
+
 // HTTPFaceEngine คุยกับ Python face-service ผ่าน HTTP
 type HTTPFaceEngine struct {
-	baseURL string
-	secret  string
-	client  *http.Client
+	baseURL     string
+	secret      string
+	client      *http.Client
+	videoClient *http.Client
 }
 
 // NewHTTPFaceEngine อ่านค่าจาก environment
@@ -87,9 +101,10 @@ type HTTPFaceEngine struct {
 // เพื่อให้ระบบส่วนอื่น (เช่นเช็คชื่อด้วย QR) ยังทำงานได้ตามปกติ
 func NewHTTPFaceEngine() *HTTPFaceEngine {
 	e := &HTTPFaceEngine{
-		baseURL: os.Getenv("FACE_SERVICE_URL"),
-		secret:  os.Getenv("FACE_SERVICE_SECRET"),
-		client:  &http.Client{Timeout: faceEngineTimeout},
+		baseURL:     os.Getenv("FACE_SERVICE_URL"),
+		secret:      os.Getenv("FACE_SERVICE_SECRET"),
+		client:      &http.Client{Timeout: faceEngineTimeout},
+		videoClient: &http.Client{Timeout: faceEngineVideoTimeout},
 	}
 	if !e.Enabled() {
 		log.Println("face-service ยังไม่ถูกตั้งค่า — รูปใบหน้าจะค้างที่สถานะ pending จนกว่าจะตั้งค่าครบ")
@@ -117,20 +132,22 @@ type embedAllResponse struct {
 	FaceCount int    `json:"face_count"`
 	Model     string `json:"model"`
 	Faces     []struct {
-		Embedding []float32 `json:"embedding"`
-		Quality   float64   `json:"quality"`
-		BBox      []float64 `json:"bbox"`
+		Embedding  []float32 `json:"embedding"`
+		Quality    float64   `json:"quality"`
+		BBox       []float64 `json:"bbox"`
+		FrameImage string    `json:"frame_image"` // มีค่าเฉพาะที่มาจาก /embed-all-video
 	} `json:"faces"`
 }
 
-// postJSON ยิงรูปไปที่ path ที่กำหนดแล้ว decode ผลลงใน out
-// (ใช้ร่วมกันทั้ง /embed และ /embed-all — ต่างกันแค่ path กับรูปแบบผลลัพธ์)
-func (e *HTTPFaceEngine) postJSON(ctx context.Context, path string, image []byte, out any) error {
+// postJSON ยิงรูป/วิดีโอไปที่ path ที่กำหนดแล้ว decode ผลลงใน out
+// (ใช้ร่วมกันทั้ง /embed, /embed-all, /embed-all-video — ต่างกันแค่ path, client (timeout
+// ต่างกันสำหรับวิดีโอ) และรูปแบบผลลัพธ์)
+func (e *HTTPFaceEngine) postJSON(ctx context.Context, client *http.Client, path string, payload []byte, out any) error {
 	if !e.Enabled() {
 		return ErrFaceEngineDisabled
 	}
 
-	body, err := json.Marshal(embedRequest{Image: base64.StdEncoding.EncodeToString(image)})
+	body, err := json.Marshal(embedRequest{Image: base64.StdEncoding.EncodeToString(payload)})
 	if err != nil {
 		return err
 	}
@@ -142,7 +159,7 @@ func (e *HTTPFaceEngine) postJSON(ctx context.Context, path string, image []byte
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Service-Key", e.secret)
 
-	resp, err := e.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("เรียก face-service ไม่สำเร็จ: %w", err)
 	}
@@ -160,7 +177,7 @@ func (e *HTTPFaceEngine) postJSON(ctx context.Context, path string, image []byte
 
 func (e *HTTPFaceEngine) Embed(ctx context.Context, image []byte) (*FaceEmbedResult, error) {
 	var out embedResponse
-	if err := e.postJSON(ctx, "/embed", image, &out); err != nil {
+	if err := e.postJSON(ctx, e.client, "/embed", image, &out); err != nil {
 		return nil, err
 	}
 
@@ -188,23 +205,41 @@ func (e *HTTPFaceEngine) Embed(ctx context.Context, image []byte) (*FaceEmbedRes
 // ทำให้โค้ชแท็กคนที่เหลือไม่ได้เลยทั้งที่ข้อมูลใช้ได้
 func (e *HTTPFaceEngine) EmbedAll(ctx context.Context, image []byte) (*FaceEmbedAllResult, error) {
 	var out embedAllResponse
-	if err := e.postJSON(ctx, "/embed-all", image, &out); err != nil {
+	if err := e.postJSON(ctx, e.client, "/embed-all", image, &out); err != nil {
 		return nil, err
 	}
+	return parseEmbedAllResponse(out), nil
+}
 
+// EmbedAllVideo เหมือน EmbedAll แต่รับวิดีโอ — ใช้ videoClient (timeout ยาวกว่ามาก) เพราะ
+// face-service ต้องถอดหลายเฟรมมาตรวจ ไม่ใช่แค่รูปเดียว ช้ากว่าปกติมาก
+func (e *HTTPFaceEngine) EmbedAllVideo(ctx context.Context, video []byte) (*FaceEmbedAllResult, error) {
+	var out embedAllResponse
+	if err := e.postJSON(ctx, e.videoClient, "/embed-all-video", video, &out); err != nil {
+		return nil, err
+	}
+	return parseEmbedAllResponse(out), nil
+}
+
+// parseEmbedAllResponse กรองหน้าที่มิติ embedding ไม่ตรงทิ้ง (โมเดลถูกเปลี่ยนโดยไม่รู้ตัว) —
+// ใช้ร่วมกันทั้ง EmbedAll (รูป) และ EmbedAllVideo (วิดีโอ) เพราะรูปแบบผลลัพธ์เหมือนกันทุกอย่าง
+//
+// ⚠️ หน้าที่มิติไม่ตรงจะถูก "ข้าม" ไม่ใช่ทำให้ทั้งคำขอล้มเหลว — รูป/วิดีโอมีได้หลายหน้า
+// การทิ้งทั้งหมดเพราะหน้าเดียวเพี้ยนทำให้โค้ชแท็กคนที่เหลือไม่ได้เลยทั้งที่ข้อมูลใช้ได้
+func parseEmbedAllResponse(out embedAllResponse) *FaceEmbedAllResult {
 	faces := make([]DetectedFaceEmbedding, 0, len(out.Faces))
 	for _, f := range out.Faces {
 		if len(f.Embedding) != faceEmbedDimensions {
 			continue
 		}
-		faces = append(faces, DetectedFaceEmbedding{Embedding: f.Embedding, Quality: f.Quality, BBox: f.BBox})
+		faces = append(faces, DetectedFaceEmbedding{Embedding: f.Embedding, Quality: f.Quality, BBox: f.BBox, FrameImage: f.FrameImage})
 	}
 
 	return &FaceEmbedAllResult{
 		FaceCount: out.FaceCount,
 		Faces:     faces,
 		Model:     out.Model,
-	}, nil
+	}
 }
 
 // ยืนยันตอนคอมไพล์ว่า implementation ยังตรงกับ interface
