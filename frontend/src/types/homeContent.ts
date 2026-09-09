@@ -31,6 +31,7 @@ export interface StatItem {
 export interface FacilityTile {
   label: string;
   wide?: boolean;
+  image_url?: string; // รูปจริงของช่อง (ว่าง = แสดง placeholder)
 }
 
 export interface FaqItem {

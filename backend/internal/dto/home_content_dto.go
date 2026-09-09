@@ -34,8 +34,9 @@ type StatItem struct {
 
 // FacilityTileItem หนึ่งช่องภาพในส่วนภาพบรรยากาศ (wide = ช่องกว้าง/สูง 2 แถวใน mosaic)
 type FacilityTileItem struct {
-	Label string `json:"label"`
-	Wide  bool   `json:"wide"`
+	Label    string `json:"label"`
+	Wide     bool   `json:"wide"`
+	ImageURL string `json:"image_url"` // รูปจริงของช่อง (ว่าง = แสดง placeholder)
 }
 
 // FaqItem หนึ่งข้อคำถามที่พบบ่อย

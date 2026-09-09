@@ -10,8 +10,8 @@ import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
 import { announcementAPI } from "@/services/announcementAPI";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
-import { groupSchedulesByTime, seatsTotal, priceRange } from "@/components/course/courseUtils";
-import { PublicHome, PublicCoach } from "@/types/homeContent";
+import { priceRange } from "@/components/course/courseUtils";
+import { PublicHome, PublicCoach, FacilityTile } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
 import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images } from "lucide-react";
@@ -24,17 +24,6 @@ const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as 
 
 // ---- ตัวช่วยสรุปข้อมูลแพ็กเกจสำหรับตารางค่าเรียนสไตล์ editorial ----
 
-// ชื่อวัน (อังกฤษจาก backend) → อักษรย่อไทย เช่น Monday → "จ."
-const DAY_SHORT: Record<string, string> = {
-  Monday: "จ.",
-  Tuesday: "อ.",
-  Wednesday: "พ.",
-  Thursday: "พฤ.",
-  Friday: "ศ.",
-  Saturday: "ส.",
-  Sunday: "อา.",
-};
-
 // แพ็กเกจตัวแทนของคอร์ส = ราคาถูกสุดที่ตั้งราคาแล้ว (ถ้าไม่มีก็ใช้ตัวแรก)
 function representativePackage(course: CourseDTO): CoursePackageDTO | null {
   const pkgs = course.packages ?? [];
@@ -44,28 +33,9 @@ function representativePackage(course: CourseDTO): CoursePackageDTO | null {
   return pool.reduce((min, p) => (p.price < min.price ? p : min), pool[0]);
 }
 
-function sessionsLabel(pkg: CoursePackageDTO): string {
-  return pkg.sessions_count ? `${pkg.sessions_count} ครั้ง` : "รายชม.";
-}
-
-function groupLabel(pkg: CoursePackageDTO): string {
-  const total = seatsTotal(pkg);
-  if (total <= 0) return "—";
-  if (total <= 2) return "ตัวต่อตัว";
-  return `${total} คน`;
-}
-
-function scheduleLabel(pkg: CoursePackageDTO): string {
-  const groups = groupSchedulesByTime(pkg.schedules);
-  if (groups.length === 0) return "ตามนัดหมาย";
-  const g = groups[0];
-  const days = g.days.map((d) => DAY_SHORT[d] ?? d).join(" / ");
-  return `${days} ${g.startTime.slice(0, 5)}`;
-}
-
 // ช่องภาพในส่วน "สนามและสิ่งอำนวยความสะดวก" (ดีไซน์ 2b — แถบเลื่อนแนวนอน)
 // ยังไม่มีฟิลด์รูปสนามใน CMS จึงเป็น placeholder ตามดีไซน์ รอลูกค้าอัปโหลดภาพจริง
-const FACILITY_TILES: { label: string; wide?: boolean }[] = [
+const FACILITY_TILES: FacilityTile[] = [
   { label: "คอร์ทหลัก มุมกว้าง", wide: true },
   { label: "โซนพักผู้ปกครอง" },
   { label: "ห้องเปลี่ยนเสื้อผ้า" },
@@ -235,10 +205,73 @@ export default function Home() {
       ? content.faq_items.map((f) => ({ q: f.question, a: f.answer }))
       : FAQ_ITEMS;
 
-  const priceHint = (course: CourseDTO) => {
+  const startingPrice = (course: CourseDTO) => {
     const r = priceRange(course.packages);
-    return r ? `${r.min.toLocaleString("th-TH")} บาท` : "สอบถามราคา";
+    return r ? `เริ่มต้น ${r.min.toLocaleString("th-TH")} บาท` : "สอบถามราคา";
   };
+
+  // ระหว่างรอข้อมูลจาก database แสดง skeleton ตามโครงหน้าจริง
+  // ไม่โชว์ค่า fallback พื้นฐานให้เห็นก่อน
+  if (isLoading) {
+    return (
+      <div style={kanitFont} className="min-h-screen animate-pulse bg-white">
+        {/* hero */}
+        <section className="relative h-[60vh] min-h-[380px] w-full overflow-hidden bg-gray-200">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 to-transparent" />
+          <div className="absolute inset-0 mx-auto flex max-w-6xl flex-col justify-center gap-4 px-6 pb-14 md:px-10">
+            <div className="h-3 w-40 rounded bg-gray-300/70" />
+            <div className="h-9 w-3/4 max-w-lg rounded bg-gray-300 md:h-14" />
+            <div className="h-9 w-2/3 max-w-md rounded bg-gray-300 md:h-14" />
+            <div className="mt-2 h-4 w-full max-w-xl rounded bg-gray-300/60" />
+            <div className="h-4 w-1/2 max-w-sm rounded bg-gray-300/60" />
+            <div className="mt-3 flex gap-4">
+              <div className="h-12 w-44 rounded bg-gray-300" />
+              <div className="h-12 w-32 rounded bg-gray-300/60" />
+            </div>
+          </div>
+        </section>
+
+        {/* แถบสถิติ */}
+        <div className="border-b border-gray-200 bg-white">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 md:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-2 border-gray-200 px-5 py-5 [&:not(:nth-child(2n))]:border-r [&:nth-child(-n+2)]:border-b md:border-b-0 md:[&:not(:last-child)]:border-r"
+              >
+                <div className="h-7 w-16 rounded bg-gray-300" />
+                <div className="h-3 w-24 rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* คอร์สเรียน */}
+        <section className="mx-auto max-w-6xl px-6 py-14 md:px-10">
+          <div className="mb-8 h-8 w-56 rounded bg-gray-200" />
+          <div className="flex flex-col">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-4 border-b border-gray-100 py-5"
+              >
+                <div className="flex-1 space-y-2">
+                  <div className="h-5 w-48 rounded bg-gray-300" />
+                  <div className="h-3 w-64 max-w-full rounded bg-gray-200" />
+                </div>
+                <div className="hidden gap-8 md:flex">
+                  <div className="h-4 w-24 rounded bg-gray-200" />
+                  <div className="h-4 w-24 rounded bg-gray-200" />
+                  <div className="h-4 w-20 rounded bg-gray-200" />
+                </div>
+                <div className="h-10 w-28 rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div style={kanitFont} className="min-h-screen bg-white pb-20 text-gray-900 lg:pb-0">
@@ -320,51 +353,83 @@ export default function Home() {
           ) : (
             <div>
               {/* หัวตาราง (เฉพาะจอ md ขึ้นไป) */}
-              <div className="hidden grid-cols-[1.6fr_0.8fr_0.8fr_1fr_1fr_140px] gap-4 border-b border-gray-200 pb-3 text-[11px] font-light tracking-[0.08em] text-gray-400 md:grid">
+              <div className="hidden grid-cols-[1.8fr_1fr_1fr_1fr_150px] gap-4 border-b border-gray-200 pb-3 text-[11px] font-light tracking-[0.08em] text-gray-400 md:grid">
                 <span>คอร์ส</span>
-                <span>ครั้ง</span>
-                <span>กลุ่ม</span>
-                <span>รอบเวลา</span>
-                <span>ค่าเรียน</span>
+                <span>จำนวนครั้ง</span>
+                <span>เวลาเรียน</span>
+                <span>ราคา</span>
                 <span />
               </div>
 
-              {courses.map((course) => {
+              {courses.slice(0, 3).map((course) => {
                 const pkg = representativePackage(course);
+                const sessionsText =
+                  pkg && pkg.sessions_count ? `เริ่มต้น ${pkg.sessions_count} ครั้ง` : "รายชั่วโมง";
+                const hoursText =
+                  pkg && pkg.hours_count ? `เริ่มต้น ${pkg.hours_count} ชั่วโมง` : "—";
+                const priceText = startingPrice(course);
                 return (
                   <div
                     key={course.id}
-                    className="grid grid-cols-1 items-center gap-y-2 border-b border-gray-100 py-5 transition-colors hover:bg-[#CC0000]/[0.03] md:grid-cols-[1.6fr_0.8fr_0.8fr_1fr_1fr_140px] md:gap-4"
+                    className="border-b border-gray-100 py-5 transition-colors hover:bg-[#CC0000]/[0.03]"
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-base font-normal text-gray-900">{course.course_name}</span>
-                      {course.description && (
-                        <span className="line-clamp-1 text-xs font-light text-gray-400">{course.description}</span>
-                      )}
+                    {/* มือถือ: รายละเอียดซ้าย · ราคา+ปุ่มชิดขวา */}
+                    <div className="flex items-start justify-between gap-4 md:hidden">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="text-base font-normal text-gray-900">{course.course_name}</span>
+                        {course.description && (
+                          <span className="line-clamp-2 text-xs font-light text-gray-400">{course.description}</span>
+                        )}
+                        <div className="mt-1 flex flex-col gap-0.5 text-sm font-light text-gray-600">
+                          <span>{sessionsText}</span>
+                          <span>{hoursText}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-none flex-col items-end gap-2">
+                        <span className="whitespace-nowrap text-base font-medium text-gray-900">{priceText}</span>
+                        <Link
+                          href={`/courses/${course.id}`}
+                          className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                        >
+                          เลือกคอร์ส
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </div>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">ครั้ง: </span>
-                      {pkg ? sessionsLabel(pkg) : "—"}
-                    </span>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">กลุ่ม: </span>
-                      {pkg ? groupLabel(pkg) : "—"}
-                    </span>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">รอบเวลา: </span>
-                      {pkg ? scheduleLabel(pkg) : "ตามนัดหมาย"}
-                    </span>
-                    <span className="text-base font-medium text-gray-900">{priceHint(course)}</span>
-                    <Link
-                      href={`/courses/${course.id}`}
-                      className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
-                    >
-                      เลือกคอร์ส
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+
+                    {/* จอใหญ่: ตารางแนวนอน */}
+                    <div className="hidden grid-cols-[1.8fr_1fr_1fr_1fr_150px] items-center gap-4 md:grid">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-base font-normal text-gray-900">{course.course_name}</span>
+                        {course.description && (
+                          <span className="line-clamp-1 text-xs font-light text-gray-400">{course.description}</span>
+                        )}
+                      </div>
+                      <span className="text-sm font-light text-gray-600">{sessionsText}</span>
+                      <span className="text-sm font-light text-gray-600">{hoursText}</span>
+                      <span className="text-base font-medium text-gray-900">{priceText}</span>
+                      <Link
+                        href={`/courses/${course.id}`}
+                        className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
+                      >
+                        เลือกคอร์ส
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 );
               })}
+              {courses.length > 3 && (
+                <div className="mt-6 flex justify-center">
+                  <Link
+                    href="/courses"
+                    className="inline-flex items-center gap-1.5 border border-gray-300 px-6 py-3 text-sm font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                  >
+                    ดูคอร์สทั้งหมด ({courses.length})
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              )}
               <p className="mt-4 text-xs font-light text-gray-400">
                 {content?.courses_footnote || "รวมค่าคอร์ทและลูกขนไก่ · ยืมไม้ฟรีตลอดคอร์ส · แบ่งชำระ 2 งวดได้"}
               </p>
@@ -564,10 +629,37 @@ export default function Home() {
                 className={`relative flex items-end overflow-hidden ${
                   tile.wide ? "col-span-2 row-span-1 md:col-span-1 md:row-span-2" : ""
                 }`}
-                style={{ background: "repeating-linear-gradient(115deg,#efefec 0 10px,#f7f7f4 10px 20px)" }}
+                style={
+                  tile.image_url
+                    ? undefined
+                    : { background: "repeating-linear-gradient(115deg,#efefec 0 10px,#f7f7f4 10px 20px)" }
+                }
               >
-                <Images className="absolute right-3 top-3 h-5 w-5 text-gray-300" />
-                <span className="p-3.5 text-xs font-light text-gray-500">{tile.label}</span>
+                {tile.image_url ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={tile.image_url}
+                      alt={tile.label}
+                      loading="lazy"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    {tile.label && (
+                      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/55 to-transparent" />
+                    )}
+                  </>
+                ) : (
+                  <Images className="absolute right-3 top-3 h-5 w-5 text-gray-300" />
+                )}
+                {tile.label && (
+                  <span
+                    className={`relative p-3.5 text-xs font-light ${
+                      tile.image_url ? "text-white" : "text-gray-500"
+                    }`}
+                  >
+                    {tile.label}
+                  </span>
+                )}
               </div>
             ))}
           </div>
