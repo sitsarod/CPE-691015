@@ -42,4 +42,28 @@ type HomeContent struct {
 	// เอกสารทางกฎหมาย (แสดงเป็นหน้าแยก /privacy, /terms และลิงก์ท้ายหน้า)
 	PrivacyPolicy  string `json:"privacy_policy" gorm:"type:text"`  // นโยบายความเป็นส่วนตัว (PDPA)
 	TermsOfService string `json:"terms_of_service" gorm:"type:text"` // ข้อกำหนดการใช้งาน
+
+	// ---- เนื้อหาหลักหน้าแรก (แอดมินแก้ได้) — เว้นว่างช่องไหน หน้าแรกจะ fallback เป็นค่า default ในโค้ด ----
+	// ส่วน Hero
+	HeroEyebrow  string `json:"hero_eyebrow" gorm:"type:varchar(255)"` // ข้อความ eyebrow เหนือหัวเรื่อง
+	HeroHeadline string `json:"hero_headline" gorm:"type:text"`        // หัวเรื่องใหญ่ (แบ่งบรรทัดด้วย \n)
+	HeroSubtext  string `json:"hero_subtext" gorm:"type:text"`         // ย่อหน้าใต้หัวเรื่อง
+
+	// ข้อความปิดท้ายส่วนต่างๆ
+	CoursesFootnote string `json:"courses_footnote" gorm:"type:text"` // หมายเหตุใต้ตารางคอร์ส
+	CoachesNote     string `json:"coaches_note" gorm:"type:text"`     // ข้อความปิดท้ายส่วนโค้ช
+
+	// ส่วนภาพบรรยากาศ
+	FacilityTitle    string `json:"facility_title" gorm:"type:varchar(255)"`    // หัวข้อ (default "ภาพบรรยากาศ")
+	FacilitySubtitle string `json:"facility_subtitle" gorm:"type:varchar(255)"` // คำโปรยอังกฤษ (default "Facility")
+
+	// CTA ท้ายหน้า (footer)
+	FooterCtaTitle    string `json:"footer_cta_title" gorm:"type:varchar(255)"` // หัวข้อ CTA (แบ่งบรรทัดด้วย \n)
+	FooterCtaSubtitle string `json:"footer_cta_subtitle" gorm:"type:text"`      // คำโปรยข้าง CTA
+
+	// ---- ข้อมูลชุดซ้ำ เก็บเป็น JSON array (แปลงเป็น slice ที่ชั้น service) ----
+	HeroStatsJSON     string `json:"-" gorm:"column:hero_stats;type:text"`         // []{value,label} สถิติใต้ hero
+	CoachStatsJSON    string `json:"-" gorm:"column:coach_stats;type:text"`        // []{value,label} สถิติส่วนโค้ช
+	FacilityTilesJSON string `json:"-" gorm:"column:facility_tiles;type:text"`     // []{label,wide} ช่องภาพบรรยากาศ
+	FaqItemsJSON      string `json:"-" gorm:"column:faq_items;type:text"`          // []{question,answer} คำถามที่พบบ่อย
 }

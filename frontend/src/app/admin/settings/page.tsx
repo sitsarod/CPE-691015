@@ -3,13 +3,19 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { homeContentAPI } from '@/services/homeContentAPI';
-import { HomeContent, PublicCoach } from '@/types/homeContent';
+import { HomeContent, PublicCoach, StatItem, FacilityTile, FaqItem, HeroSlide } from '@/types/homeContent';
 import {
   Users,
   MapPin,
   Loader2,
   Check,
-  Megaphone,
+  Plus,
+  Trash2,
+  ImagePlus,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -21,6 +27,10 @@ export default function AdminSettingsPage() {
   const [savingContent, setSavingContent] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // รูปสไลด์ hero (จัดการแยกจากประกาศ)
+  const [slides, setSlides] = useState<HeroSlide[]>([]);
+  const [uploadingSlide, setUploadingSlide] = useState(false);
+
   useEffect(() => {
     loadAll();
   }, []);
@@ -28,17 +38,72 @@ export default function AdminSettingsPage() {
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [c, co] = await Promise.all([
+      const [c, co, sl] = await Promise.all([
         homeContentAPI.getHomeContent(),
         homeContentAPI.getAllCoaches(),
+        homeContentAPI.getSlides(),
       ]);
       setContent(c);
       setCoaches(co);
+      setSlides(sl);
     } catch (error) {
       console.error('โหลดข้อมูลหน้าแรกไม่สำเร็จ:', error);
       alert('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ---------- Hero slides ----------
+  // อัปโหลดรูปใหม่ → สร้างสไลด์ต่อท้าย (active ทันที)
+  const handleUploadSlide = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // เคลียร์เพื่อให้เลือกไฟล์เดิมซ้ำได้
+    if (!file) return;
+    try {
+      setUploadingSlide(true);
+      const image_url = await homeContentAPI.uploadImage(file);
+      const created = await homeContentAPI.createSlide({ image_url, sort_order: slides.length });
+      setSlides((prev) => [...prev, created]);
+    } catch (error) {
+      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+    } finally {
+      setUploadingSlide(false);
+    }
+  };
+
+  // เปิด/ปิดการแสดงสไลด์บนหน้าแรก
+  const handleToggleSlide = async (slide: HeroSlide) => {
+    try {
+      const updated = await homeContentAPI.updateSlide(slide.id, { is_active: !slide.is_active });
+      setSlides((prev) => prev.map((s) => (s.id === slide.id ? updated : s)));
+    } catch (error) {
+      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+    }
+  };
+
+  const handleDeleteSlide = async (slide: HeroSlide) => {
+    if (!confirm('ลบรูปสไลด์นี้?')) return;
+    try {
+      await homeContentAPI.deleteSlide(slide.id);
+      setSlides((prev) => prev.filter((s) => s.id !== slide.id));
+    } catch (error) {
+      alert(`ลบไม่สำเร็จ: ${(error as Error).message}`);
+    }
+  };
+
+  // สลับลำดับกับเพื่อนบ้าน แล้วบันทึกลำดับใหม่ (optimistic)
+  const handleMoveSlide = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= slides.length) return;
+    const reordered = [...slides];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setSlides(reordered);
+    try {
+      await homeContentAPI.reorderSlides(reordered.map((s) => s.id));
+    } catch (error) {
+      alert(`จัดลำดับไม่สำเร็จ: ${(error as Error).message}`);
+      loadAll(); // ดึงลำดับจริงกลับมาเมื่อพลาด
     }
   };
 
@@ -74,6 +139,21 @@ export default function AdminSettingsPage() {
         opening_hours: content.opening_hours,
         privacy_policy: content.privacy_policy,
         terms_of_service: content.terms_of_service,
+        // เนื้อหาหลักหน้าแรก
+        hero_eyebrow: content.hero_eyebrow,
+        hero_headline: content.hero_headline,
+        hero_subtext: content.hero_subtext,
+        courses_footnote: content.courses_footnote,
+        coaches_note: content.coaches_note,
+        facility_title: content.facility_title,
+        facility_subtitle: content.facility_subtitle,
+        footer_cta_title: content.footer_cta_title,
+        footer_cta_subtitle: content.footer_cta_subtitle,
+        // ข้อมูลชุดซ้ำ (ส่ง [] เมื่อว่างเพื่อล้างค่า)
+        hero_stats: content.hero_stats ?? [],
+        coach_stats: content.coach_stats ?? [],
+        facility_tiles: content.facility_tiles ?? [],
+        faq_items: content.faq_items ?? [],
       });
       setContent(updated);
       setSavedFlash(true);
@@ -120,22 +200,58 @@ export default function AdminSettingsPage() {
         </p>
       </div>
 
-      {/* ===== รูปสไลด์ — ย้ายไปจัดการที่หน้า "สร้างประกาศ" แล้ว ===== */}
-      <div className="rounded-2xl border border-[#CC0000]/20 bg-[#FFF6F6] p-5 flex items-start gap-4">
-        <div className="w-10 h-10 rounded-xl bg-[#CC0000]/10 flex items-center justify-center text-[#CC0000] flex-shrink-0">
-          <Megaphone size={20} />
+      {/* ===== รูปสไลด์ Hero (จัดการแยกจากประกาศ) ===== */}
+      <SectionCard title="รูปสไลด์แบนเนอร์ (Hero)"
+        desc="รูปสไลด์บนสุดของหน้าแรก — อัปโหลด จัดลำดับ เปิด/ปิด และลบได้ที่นี่ (แยกจากประกาศข่าวสาร)">
+        <div className="space-y-4">
+          {/* ปุ่มอัปโหลด */}
+          <label className={`inline-flex items-center gap-2 rounded-xl border border-dashed border-[#CC0000]/40 bg-[#FFF6F6] px-5 py-3 text-sm font-medium text-[#CC0000] transition-colors hover:bg-[#FFECEC] ${uploadingSlide ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}>
+            {uploadingSlide ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} />}
+            {uploadingSlide ? 'กำลังอัปโหลด...' : 'เพิ่มรูปสไลด์'}
+            <input type="file" accept="image/*" onChange={handleUploadSlide} disabled={uploadingSlide} className="hidden" />
+          </label>
+
+          {slides.length === 0 ? (
+            <p className="text-sm text-gray-400">ยังไม่มีรูปสไลด์ — หน้าแรกจะใช้รูปเริ่มต้นจนกว่าจะเพิ่มรูป</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {slides.map((slide, i) => (
+                <div key={slide.id}
+                  className={`group relative overflow-hidden rounded-xl border ${slide.is_active ? 'border-gray-200' : 'border-gray-200 opacity-60'}`}>
+                  {/* รูปตัวอย่าง */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={slide.image_url} alt={`สไลด์ ${i + 1}`} className="aspect-video w-full object-cover bg-gray-100" />
+
+                  {/* ป้ายสถานะ/ลำดับ */}
+                  <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-xs font-medium text-white">
+                    #{i + 1}{!slide.is_active && ' · ซ่อนอยู่'}
+                  </span>
+
+                  {/* แถบเครื่องมือ */}
+                  <div className="flex items-center justify-between gap-1 border-t border-gray-100 bg-white px-2 py-2">
+                    <div className="flex items-center gap-1">
+                      <IconBtn label="เลื่อนขึ้น" disabled={i === 0} onClick={() => handleMoveSlide(i, -1)}>
+                        <ArrowUp size={16} />
+                      </IconBtn>
+                      <IconBtn label="เลื่อนลง" disabled={i === slides.length - 1} onClick={() => handleMoveSlide(i, 1)}>
+                        <ArrowDown size={16} />
+                      </IconBtn>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <IconBtn label={slide.is_active ? 'ซ่อนจากหน้าแรก' : 'แสดงบนหน้าแรก'} onClick={() => handleToggleSlide(slide)}>
+                        {slide.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
+                      </IconBtn>
+                      <IconBtn label="ลบ" danger onClick={() => handleDeleteSlide(slide)}>
+                        <Trash2 size={16} />
+                      </IconBtn>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div>
-          <p className="font-semibold text-gray-900">รูปสไลด์หน้าแรกย้ายไปอยู่ที่ "จัดการประกาศข่าวสาร" แล้ว</p>
-          <p className="mt-1 text-sm text-gray-600">
-            รูปสไลด์ของหน้าแรกตอนนี้ดึงมาจากรูปปกของประกาศที่ตั้งค่าให้ <span className="font-medium">"ผู้เยี่ยมชม"</span> หรือ{' '}
-            <span className="font-medium">"ทั้งคู่"</span> เห็น — สร้าง/แก้ไข/จัดการได้ที่{' '}
-            <Link href="/admin/announcements" className="text-[#CC0000] font-semibold hover:underline">
-              จัดการประกาศข่าวสาร
-            </Link>
-          </p>
-        </div>
-      </div>
+      </SectionCard>
 
       {/* ===== เกี่ยวกับเรา ===== */}
       <SectionCard title="เกี่ยวกับเรา (About)"
@@ -312,6 +428,104 @@ export default function AdminSettingsPage() {
         </div>
       </SectionCard>
 
+      {/* ===== Hero (แบนเนอร์บนสุด) ===== */}
+      <SectionCard title="แบนเนอร์บนสุด (Hero)"
+        desc="ข้อความที่ทับอยู่บนรูปสไลด์บนสุดของหน้าแรก">
+        <div className="space-y-4">
+          <Field label="ข้อความเล็กด้านบน (eyebrow)">
+            <input type="text" value={content.hero_eyebrow}
+              onChange={(e) => setField('hero_eyebrow', e.target.value)}
+              placeholder="เช่น สำหรับผู้ปกครอง · เปิดสอนตั้งแต่ปี 2562"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="หัวเรื่องใหญ่ (ขึ้นบรรทัดใหม่ = Enter)">
+            <textarea rows={2} value={content.hero_headline}
+              onChange={(e) => setField('hero_headline', e.target.value)}
+              placeholder={"พื้นฐานที่ถูกต้อง\nสำคัญกว่าชนะเร็ว"}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+          </Field>
+          <Field label="คำอธิบายใต้หัวเรื่อง">
+            <textarea rows={3} value={content.hero_subtext}
+              onChange={(e) => setField('hero_subtext', e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+          </Field>
+          <Field label="สถิติใต้แบนเนอร์ (ตัวเลข + คำอธิบาย)">
+            <StatListEditor items={content.hero_stats} onChange={(v) => setField('hero_stats', v)} />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* ===== ข้อความคอร์ส & โค้ช ===== */}
+      <SectionCard title="ข้อความส่วนคอร์ส & โค้ช"
+        desc="หมายเหตุใต้ตารางคอร์ส สถิติและข้อความปิดท้ายส่วนโค้ช">
+        <div className="space-y-4">
+          <Field label="หมายเหตุใต้ตารางคอร์ส">
+            <input type="text" value={content.courses_footnote}
+              onChange={(e) => setField('courses_footnote', e.target.value)}
+              placeholder="เช่น รวมค่าคอร์ทและลูกขนไก่ · ยืมไม้ฟรีตลอดคอร์ส"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="ข้อความปิดท้ายส่วนโค้ช">
+            <input type="text" value={content.coaches_note}
+              onChange={(e) => setField('coaches_note', e.target.value)}
+              placeholder="เช่น โค้ชทุกคนผ่านการตรวจประวัติ..."
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+          <Field label="สถิติส่วนโค้ช (ตัวเลข + คำอธิบาย)">
+            <StatListEditor items={content.coach_stats} onChange={(v) => setField('coach_stats', v)} />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* ===== ภาพบรรยากาศ ===== */}
+      <SectionCard title="ภาพบรรยากาศ (สนาม)"
+        desc="หัวข้อและช่องภาพในส่วนภาพบรรยากาศ — ช่อง 'กว้าง' จะกินพื้นที่ใหญ่/สูง 2 แถวบนจอใหญ่">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field label="หัวข้อ">
+              <input type="text" value={content.facility_title}
+                onChange={(e) => setField('facility_title', e.target.value)}
+                placeholder="เช่น ภาพบรรยากาศ"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+            </Field>
+            <Field label="คำโปรย (อังกฤษ)">
+              <input type="text" value={content.facility_subtitle}
+                onChange={(e) => setField('facility_subtitle', e.target.value)}
+                placeholder="เช่น Facility"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+            </Field>
+          </div>
+          <Field label="ช่องภาพ">
+            <TileListEditor items={content.facility_tiles} onChange={(v) => setField('facility_tiles', v)} />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* ===== คำถามที่พบบ่อย ===== */}
+      <SectionCard title="คำถามที่พบบ่อย (FAQ)"
+        desc="รายการคำถาม–คำตอบที่แสดงในส่วน FAQ ของหน้าแรก">
+        <FaqListEditor items={content.faq_items} onChange={(v) => setField('faq_items', v)} />
+      </SectionCard>
+
+      {/* ===== CTA ท้ายหน้า ===== */}
+      <SectionCard title="ข้อความชวนสมัคร (ท้ายหน้า)"
+        desc="หัวข้อและคำโปรยของแถบชวนสมัครในส่วนท้ายหน้า (footer)">
+        <div className="space-y-4">
+          <Field label="หัวข้อ (ขึ้นบรรทัดใหม่ = Enter)">
+            <textarea rows={2} value={content.footer_cta_title}
+              onChange={(e) => setField('footer_cta_title', e.target.value)}
+              placeholder={"พร้อมเริ่มเรียน\nกับเราแล้วหรือยัง?"}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none resize-none" />
+          </Field>
+          <Field label="คำโปรย">
+            <input type="text" value={content.footer_cta_subtitle}
+              onChange={(e) => setField('footer_cta_subtitle', e.target.value)}
+              placeholder="เช่น ทดลองเรียนฟรี 1 ครั้ง ไม่มีข้อผูกมัด"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none" />
+          </Field>
+        </div>
+      </SectionCard>
+
       {/* ===== บุคลากร ===== */}
       <SectionCard title="เลือกบุคลากรที่แสดงหน้าแรก"
         desc="ติ๊กเลือกโค้ชที่ต้องการโชว์ในส่วนบุคลากร (ดึงข้อมูลจริงจากระบบ)">
@@ -424,6 +638,138 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ปุ่มเพิ่มแถวในตัวแก้ไขรายการ (ใช้ร่วมทุก editor)
+function AddRowButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#CC0000] hover:text-[#990000] transition-colors">
+      <Plus size={16} /> {label}
+    </button>
+  );
+}
+
+// ปุ่มไอคอนเล็ก (ใช้ในแถบเครื่องมือของรูปสไลด์)
+function IconBtn({
+  children, label, onClick, disabled, danger,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
+      className={`grid place-items-center w-8 h-8 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+        danger ? 'text-gray-500 hover:bg-red-50 hover:text-red-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+      }`}>
+      {children}
+    </button>
+  );
+}
+
+// ปุ่มลบแถว
+function RemoveRowButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="ลบแถว"
+      className="flex-shrink-0 grid place-items-center w-9 h-9 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+      <Trash2 size={16} />
+    </button>
+  );
+}
+
+const editorInputClass =
+  'w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none';
+
+// ตัวแก้ไขรายการสถิติ (value + label) — ใช้กับ hero_stats และ coach_stats
+function StatListEditor({
+  items, onChange,
+}: {
+  items: StatItem[] | null | undefined;
+  onChange: (v: StatItem[]) => void;
+}) {
+  const list = items ?? [];
+  const update = (i: number, key: keyof StatItem, value: string) =>
+    onChange(list.map((it, idx) => (idx === i ? { ...it, [key]: value } : it)));
+  return (
+    <div className="space-y-2">
+      {list.map((it, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input type="text" value={it.value} placeholder="ตัวเลข เช่น 100%"
+            onChange={(e) => update(i, 'value', e.target.value)}
+            className={`${editorInputClass} w-32 flex-shrink-0`} />
+          <input type="text" value={it.label} placeholder="คำอธิบาย เช่น มีใบรับรอง"
+            onChange={(e) => update(i, 'label', e.target.value)}
+            className={editorInputClass} />
+          <RemoveRowButton onClick={() => onChange(list.filter((_, idx) => idx !== i))} />
+        </div>
+      ))}
+      <AddRowButton onClick={() => onChange([...list, { value: '', label: '' }])} label="เพิ่มสถิติ" />
+    </div>
+  );
+}
+
+// ตัวแก้ไขช่องภาพบรรยากาศ (label + wide)
+function TileListEditor({
+  items, onChange,
+}: {
+  items: FacilityTile[] | null | undefined;
+  onChange: (v: FacilityTile[]) => void;
+}) {
+  const list = items ?? [];
+  const update = (i: number, patch: Partial<FacilityTile>) =>
+    onChange(list.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  return (
+    <div className="space-y-2">
+      {list.map((it, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input type="text" value={it.label} placeholder="ชื่อภาพ เช่น คอร์ทหลัก มุมกว้าง"
+            onChange={(e) => update(i, { label: e.target.value })}
+            className={editorInputClass} />
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap select-none">
+            <input type="checkbox" checked={!!it.wide}
+              onChange={(e) => update(i, { wide: e.target.checked })}
+              className="w-4 h-4 accent-[#CC0000]" />
+            กว้าง
+          </label>
+          <RemoveRowButton onClick={() => onChange(list.filter((_, idx) => idx !== i))} />
+        </div>
+      ))}
+      <AddRowButton onClick={() => onChange([...list, { label: '', wide: false }])} label="เพิ่มช่องภาพ" />
+    </div>
+  );
+}
+
+// ตัวแก้ไขคำถามที่พบบ่อย (question + answer)
+function FaqListEditor({
+  items, onChange,
+}: {
+  items: FaqItem[] | null | undefined;
+  onChange: (v: FaqItem[]) => void;
+}) {
+  const list = items ?? [];
+  const update = (i: number, key: keyof FaqItem, value: string) =>
+    onChange(list.map((it, idx) => (idx === i ? { ...it, [key]: value } : it)));
+  return (
+    <div className="space-y-3">
+      {list.map((it, i) => (
+        <div key={i} className="flex items-start gap-2 rounded-xl border border-gray-200 p-3">
+          <div className="flex-1 space-y-2">
+            <input type="text" value={it.question} placeholder="คำถาม"
+              onChange={(e) => update(i, 'question', e.target.value)}
+              className={`${editorInputClass} font-medium`} />
+            <textarea rows={2} value={it.answer} placeholder="คำตอบ"
+              onChange={(e) => update(i, 'answer', e.target.value)}
+              className={`${editorInputClass} resize-none`} />
+          </div>
+          <RemoveRowButton onClick={() => onChange(list.filter((_, idx) => idx !== i))} />
+        </div>
+      ))}
+      <AddRowButton onClick={() => onChange([...list, { question: '', answer: '' }])} label="เพิ่มคำถาม" />
     </div>
   );
 }
