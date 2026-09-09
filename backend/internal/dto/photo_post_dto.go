@@ -10,15 +10,20 @@ type DetectedPhotoResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// DetectedStudentSuggestion คือนักเรียนที่ระบบเดาว่าอยู่ในรูป — ยังไม่ได้บันทึกอะไรทั้งสิ้น
-// โค้ชต้องตรวจทานแล้วกดยืนยันผ่าน /photo-posts/:id/assign อีกทีถึงจะถูกแท็กจริง
+// DetectedStudentSuggestion คือนักเรียนที่ระบบเดาว่าอยู่ในรูป/วิดีโอ — ยังไม่ได้บันทึกอะไรทั้งสิ้น
+// โค้ชต้องตรวจทานแล้วกดยืนยันผ่าน /photo-posts/:id/assign หรือ /videos/:id/assign อีกทีถึงจะถูกแท็กจริง
 type DetectedStudentSuggestion struct {
 	CustomerID uint    `json:"customer_id"`
 	Nickname   string  `json:"nickname"`
 	Confidence float64 `json:"confidence"` // เปอร์เซ็นต์ (0–100) ให้หน้าเว็บเอาไปโชว์ได้ตรง ๆ
-	// BBox คือกรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซลของรูปต้นฉบับ ให้หน้าเว็บวาดกรอบ/ชื่อ
-	// ทับรูปตอนโค้ชตรวจทาน (ไม่ได้ฝังลงไฟล์จริง) — nil ถ้าจับคู่ไม่ได้ตำแหน่งใบหน้า
+	// BBox คือกรอบใบหน้า [x1, y1, x2, y2] เป็นพิกเซล — ของรูปต้นฉบับ (ฝั่งรูป) หรือของ FrameImage
+	// ด้านล่าง (ฝั่งวิดีโอ) ให้หน้าเว็บวาดกรอบ/ชื่อทับตอนโค้ชตรวจทาน (ไม่ได้ฝังลงไฟล์จริง) —
+	// nil ถ้าจับคู่ไม่ได้ตำแหน่งใบหน้า
 	BBox []float64 `json:"bbox,omitempty"`
+	// FrameImage คือเฟรมวิดีโอที่ย่อขนาดแล้ว (JPEG base64 ไม่มี data URL prefix) ของเฟรมที่แมตช์
+	// คนนี้ได้คะแนนดีที่สุด — มีเฉพาะที่มาจากวิดีโอเท่านั้น (รูปไม่ต้องใช้ เพราะหน้าเว็บมีไฟล์
+	// ต้นฉบับอยู่แล้ว) bbox ข้างบนอ้างอิงรูปนี้เสมอ (ไม่ใช่เฟรมต้นฉบับก่อนย่อ)
+	FrameImage string `json:"frame_image,omitempty"`
 }
 
 type UploadPhotoPostResponse struct {

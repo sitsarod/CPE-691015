@@ -111,13 +111,14 @@ func SetupRoutes(r *gin.Engine) {
 	// ตัวแปลงรูปเป็น embedding (face-service) — ใช้ร่วมกันทั้งเช็คชื่อด้วยใบหน้าและจำแนกคนในรูปโพสต์
 	faceEngine := services.NewHTTPFaceEngine()
 
+	// จำแนกนักเรียนในรูป/วิดีโอที่โค้ชอัปโหลด — ใช้ roster ของ evaluationService เป็นกติกาว่าเทียบกับใครได้บ้าง
+	faceTaggingService := services.NewFaceTaggingService(db, faceEngine, evaluationService)
+
 	videoService := services.NewDetectedVideoService(db)
-	videoController := controllers.NewVideoController(videoService, mediaStorage, db)
+	videoController := controllers.NewVideoController(videoService, faceTaggingService, mediaStorage, db)
 
 	photoPostService := services.NewDetectedPhotoService(db)
-	// จำแนกนักเรียนในรูปที่โค้ชอัปโหลด — ใช้ roster ของ evaluationService เป็นกติกาว่าเทียบกับใครได้บ้าง
-	photoTaggingService := services.NewPhotoTaggingService(db, faceEngine, evaluationService)
-	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, photoTaggingService, mediaStorage, db)
+	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, faceTaggingService, mediaStorage, db)
 
 	// การลงทะเบียนใบหน้า — ไฟล์เก็บบน Cloudinary โหมด authenticated เท่านั้น
 	faceImageService := services.NewFaceImageService(db, cloudinaryService)

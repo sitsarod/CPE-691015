@@ -13,5 +13,9 @@ type DetectedVideoResponse struct {
 type UploadVideoResponse struct {
 	RawVideoID uint   `json:"raw_video_id"`
 	VideoURL   string `json:"video_url"`
-	StudentIDs []uint `json:"student_ids"`
+
+	// FaceCount คือจำนวนใบหน้าทั้งหมดที่เจอจากทุกเฟรมที่สุ่มตรวจ (คนเดิมโผล่หลายเฟรมนับซ้ำได้
+	// จึงมากกว่าจำนวนคนจริงในคลิปได้ — ดูคอมเมนต์ที่ FaceTaggingService.DetectStudentsInVideo)
+	FaceCount int                         `json:"face_count"`
+	Students  []DetectedStudentSuggestion `json:"students"`
 }
