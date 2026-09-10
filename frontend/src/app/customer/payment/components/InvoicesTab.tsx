@@ -47,7 +47,7 @@ export default function InvoicesTab({
   return (
     <div className="space-y-4">
       {invoices.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
+        <div className="text-center py-16 bg-white border border-gray-200 flex flex-col items-center justify-center space-y-3">
           <div className="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center">
             <FileText className="w-8 h-8" />
           </div>
@@ -118,7 +118,7 @@ export default function InvoicesTab({
               } as Record<string, string>)[invoiceStatus] ?? "bg-gray-300";
 
             return (
-              <div key={`invoice-${inv.id}`} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all">
+              <div key={`invoice-${inv.id}`} className="relative overflow-hidden border border-gray-200 bg-white transition-all">
                 {/* แถบสถานะด้านซ้าย */}
                 <span className={`absolute inset-y-0 left-0 w-1 ${statusBar}`} />
                 {/* Invoice Card Header */}
@@ -216,7 +216,7 @@ export default function InvoicesTab({
                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">รายการที่รวมชำระ ({inv.paymentitems.length})</h4>
                     <div className="space-y-2">
                       {inv.paymentitems.map((item, idx) => (
-                        <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5">
+                        <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between gap-3 border border-gray-200 bg-white p-3.5">
                           <div>
                             <span className="text-[10px] font-bold text-gray-400">BILL-{item.billing_id}</span>
                             <h5 className="mt-0.5 text-sm font-bold text-gray-800">{item.billing?.billingdescription || "รายการเก็บเงินย่อย"}</h5>

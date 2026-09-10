@@ -8,7 +8,6 @@ import {
   Loader2,
   AlertCircle,
   Wallet,
-  CalendarDays,
   TrendingUp,
   TrendingDown,
   ChevronDown,
@@ -434,8 +433,8 @@ export default function CoachPaymentPage() {
     <div className="mx-auto max-w-7xl space-y-6 animate-fadeIn">
       {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
       {isRefreshing && (
-        <div className="fixed left-1/2 top-[104px] z-30 -trangray-x-1/2 animate-fadeIn">
-          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-4 py-1.5 text-xs font-bold text-gray-600 shadow-md backdrop-blur">
+        <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
+          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-4 py-1.5 text-xs font-medium text-gray-600 shadow-md backdrop-blur">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[#CC0000]" />
             กำลังอัปเดตข้อมูล...
           </div>
@@ -454,8 +453,8 @@ export default function CoachPaymentPage() {
 
       {/* ===================== มือถือ (< md): มุมมองแบบสมุดบัญชี ===================== */}
       <div className="md:hidden space-y-4">
-        {/* การ์ดบัญชี — สีขาวกรอบแดง แก้ไขข้อมูลบัญชีตัวเองได้ */}
-        <div className="rounded-3xl bg-white border-2 border-[#CC0000] p-5 shadow-sm">
+        {/* การ์ดบัญชี — แก้ไขข้อมูลบัญชีตัวเองได้ */}
+        <div className="border border-gray-200 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-[#FFF0F0] text-[#CC0000] flex items-center justify-center flex-shrink-0 overflow-hidden">
               {avatarUrl ? (
@@ -518,14 +517,14 @@ export default function CoachPaymentPage() {
                 })
               )}
             </select>
-            <ChevronDown className="absolute right-3.5 top-1/2 -trangray-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
         {/* รายการธุรกรรมของเดือนที่เลือก — จัดกลุ่มตามวัน (หัวข้อวันที่ + ยอดรวมของวัน) */}
         <div className="space-y-4">
           {groupedTransactions.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-12 text-center text-gray-400">
+            <div className="border border-gray-200 bg-white py-12 text-center text-gray-400">
               <Wallet className="w-8 h-8 mx-auto mb-2 text-gray-300" />
               <p className="text-xs">ไม่มีรายการในเดือนนี้</p>
             </div>
@@ -548,7 +547,7 @@ export default function CoachPaymentPage() {
                       key={e.id}
                       onClick={() => setSelectedTx(e)}
                       aria-label="ดูรายละเอียดรายการ"
-                      className="w-full text-left bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3.5 flex items-center justify-between gap-3 hover:border-[#CC0000]/40 hover:bg-gray-50/60 active:scale-[0.99] transition-all"
+                      className="w-full text-left border border-gray-200 bg-white px-4 py-3.5 flex items-center justify-between gap-3 hover:border-[#CC0000]/40 hover:bg-gray-50/60 transition-all"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-gray-800 truncate">
@@ -640,122 +639,114 @@ export default function CoachPaymentPage() {
       </div>
 
       {/* ===================== เดสก์ท็อป (md+): สรุป / กราฟ / ตารางแบบเต็ม ===================== */}
-      <div className="hidden md:block space-y-6">
+      <div className="hidden md:block space-y-8">
+      {/* header */}
+      <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CC0000]">Coach Earnings</span>
+          <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-gray-900">การเงิน</h1>
+          <p className="mt-1.5 text-[13px] font-light text-gray-500">
+            ค่าจ้างการสอนและรายได้อื่นที่สถาบันบันทึกให้คุณ · โค้ช ·{" "}
+            {paymentType === "monthly" ? "รายเดือน" : `รายคาบ ฿${payRate.toLocaleString()}/คาบ`}
+          </p>
+        </div>
+        <div className="min-w-[300px] flex-none border border-gray-200 px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-gray-400">บัญชีรับเงิน</span>
+            <button
+              type="button"
+              onClick={openBankEditor}
+              className="text-xs font-medium text-[#CC0000] hover:text-[#990000]"
+            >
+              แก้ไข
+            </button>
+          </div>
+          <p className="mt-2.5 text-sm text-gray-900">{bankAccount || "ยังไม่ได้ตั้งบัญชีรับเงิน"}</p>
+          {promptPay && (
+            <p className="mt-0.5 text-xs font-light text-gray-500">
+              พร้อมเพย์ {promptPay}
+              {userName ? ` · ${userName}` : ""}
+            </p>
+          )}
+        </div>
+      </div>
+
       {wageEntries.length === 0 && otherEntries.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-20 text-center text-gray-400">
+        <div className="border border-gray-200 bg-white py-20 text-center text-gray-400">
           <Wallet className="w-10 h-10 mx-auto mb-3 text-gray-300" />
           <p className="text-xs">ยังไม่มีประวัติค่าจ้างในขณะนี้</p>
         </div>
       ) : (
         <>
           {wageEntries.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-16 text-center text-gray-400">
+            <div className="border border-gray-200 bg-white py-16 text-center text-gray-400">
               <Wallet className="w-10 h-10 mx-auto mb-3 text-gray-300" />
               <p className="text-sm font-semibold text-gray-500">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
               <p className="text-xs mt-1">เมื่อสถาบันบันทึกค่าจ้างการสอนให้ ระบบจะแสดงสรุปและกราฟรายได้ที่นี่</p>
             </div>
           ) : (
           <>
-          {/* Stats — จอเล็ก: เลื่อนแนวนอน (swipe) · จอใหญ่: grid */}
+          {/* Stats — แถบ 1px-gutter 4 ช่อง */}
           <div
             ref={statsScrollRef}
-            className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory [&>*]:min-w-[78%] [&>*]:snap-center sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 sm:overflow-visible sm:snap-none sm:[&>*]:min-w-0"
+            className="grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 lg:grid-cols-4"
           >
-            {/* ค่าจ้างสะสม — แดง */}
-            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
-              <span className="absolute inset-y-0 left-0 w-1 bg-[#CC0000]" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#CC0000]" />
-                  <span className="text-sm font-bold text-gray-600">ค่าจ้างสะสมทั้งหมด</span>
-                </div>
-                <Wallet className="h-5 w-5 text-[#CC0000]" />
-              </div>
-              <div className="mt-5 flex items-baseline gap-1">
-                <span className="text-base font-bold text-gray-400">฿</span>
-                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{totalWages.toLocaleString()}</span>
-              </div>
-              <div className="mt-4 border-t border-gray-100 pt-3">
-                <span className="text-xs text-gray-500">รวมทุกปีที่ผ่านมา</span>
-              </div>
+            {/* ค่าจ้างสะสม */}
+            <div className="flex flex-col gap-2 bg-white px-5 py-5">
+              <span className="text-xs font-light text-gray-500">ค่าจ้างสะสมทั้งหมด</span>
+              <span className="text-2xl font-semibold leading-none tabular-nums text-gray-900 sm:text-3xl">
+                ฿{totalWages.toLocaleString()}
+              </span>
+              <span className="text-[11px] font-light text-gray-400">รวมทุกปีที่ผ่านมา</span>
             </div>
 
-            {/* ยอดรวมปี — น้ำเงิน */}
-            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
-              <span className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-blue-500" />
-                  <span className="text-sm font-bold text-gray-600">ยอดรวมปี {selectedYear ?? "-"}</span>
-                </div>
-                <CalendarDays className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="mt-5 flex items-baseline gap-1">
-                <span className="text-base font-bold text-gray-400">฿</span>
-                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{((currentYearGroup?.total ?? 0) + yearBonusTotal).toLocaleString()}</span>
-              </div>
-              <div className="mt-4 border-t border-gray-100 pt-3">
+            {/* ยอดรวมปี */}
+            <div className="flex flex-col gap-2 bg-white px-5 py-5">
+              <span className="text-xs font-light text-gray-500">ยอดรวมปี {selectedYear ?? "-"}</span>
+              <span className="text-2xl font-semibold leading-none tabular-nums text-gray-900 sm:text-3xl">
+                ฿{((currentYearGroup?.total ?? 0) + yearBonusTotal).toLocaleString()}
+              </span>
+              <span className="text-[11px] font-light text-gray-400">
                 {yearBonusTotal > 0 ? (
-                  <span className="text-xs text-gray-500">
-                    ค่าจ้าง ฿{(currentYearGroup?.total ?? 0).toLocaleString()} ·{" "}
-                    <span className="font-semibold text-violet-600">โบนัส ฿{yearBonusTotal.toLocaleString()}</span>
-                  </span>
+                  <>
+                    ค่าจ้าง ฿{(currentYearGroup?.total ?? 0).toLocaleString()} · โบนัส ฿{yearBonusTotal.toLocaleString()}
+                  </>
                 ) : (
-                  <span className="text-xs text-gray-500">เฉลี่ย ฿{Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน</span>
+                  `เฉลี่ย ฿${Math.round(avgPerMonthThisYear).toLocaleString()}/เดือน`
                 )}
-              </div>
+              </span>
             </div>
 
-            {/* ยอดเดือนนี้ — เขียว */}
-            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
-              <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  <span className="text-sm font-bold text-gray-600">ยอดเดือนนี้</span>
-                </div>
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div className="mt-5 flex items-baseline gap-1">
-                <span className="text-base font-bold text-gray-400">฿</span>
-                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{currentMonthTotal.toLocaleString()}</span>
-              </div>
-              <div className="mt-4 border-t border-gray-100 pt-3">
-                {momDeltaPct !== null ? (
-                  <span className={`flex items-center gap-1 text-xs font-semibold ${momDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {momDeltaPct >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                    {Number.isFinite(momDeltaPct)
-                      ? `${momDeltaPct >= 0 ? "+" : ""}${momDeltaPct.toFixed(1)}% จากเดือนก่อน`
-                      : "ใหม่ (เดือนก่อนไม่มีรายได้)"}
-                  </span>
-                ) : (
-                  <span className="text-xs text-gray-500">เทียบกับเดือนก่อนไม่ได้</span>
-                )}
-              </div>
+            {/* ยอดเดือนนี้ — แดง */}
+            <div className="flex flex-col gap-2 bg-white px-5 py-5">
+              <span className="text-xs font-light text-gray-500">ยอดเดือนนี้</span>
+              <span className="text-2xl font-semibold leading-none tabular-nums text-[#CC0000] sm:text-3xl">
+                ฿{currentMonthTotal.toLocaleString()}
+              </span>
+              {momDeltaPct !== null ? (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-light ${momDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {momDeltaPct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                  {Number.isFinite(momDeltaPct)
+                    ? `${momDeltaPct >= 0 ? "+" : ""}${momDeltaPct.toFixed(1)}% จากเดือนก่อน`
+                    : "ใหม่"}
+                </span>
+              ) : (
+                <span className="text-[11px] font-light text-gray-400">เทียบเดือนก่อนไม่ได้</span>
+              )}
             </div>
 
-            {/* โบนัส / รายได้อื่น — ม่วง */}
-            <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-gray-300 hover:shadow-md">
-              <span className="absolute inset-y-0 left-0 w-1 bg-violet-500" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-violet-500" />
-                  <span className="text-sm font-bold text-gray-600">โบนัส / รายได้อื่น ๆ</span>
-                </div>
-                <Gift className="h-5 w-5 text-violet-600" />
-              </div>
-              <div className="mt-5 flex items-baseline gap-1">
-                <span className="text-base font-bold text-gray-400">฿</span>
-                <span className="text-2xl font-black tabular-nums text-gray-900 sm:text-[28px]">{otherTotal.toLocaleString()}</span>
-              </div>
-              <div className="mt-4 border-t border-gray-100 pt-3">
-                <span className="text-xs text-gray-500">รวม {otherEntries.length} รายการ</span>
-              </div>
+            {/* โบนัส / รายได้อื่น */}
+            <div className="flex flex-col gap-2 bg-white px-5 py-5">
+              <span className="text-xs font-light text-gray-500">โบนัส / รายได้อื่น ๆ</span>
+              <span className="text-2xl font-semibold leading-none tabular-nums text-gray-900 sm:text-3xl">
+                ฿{otherTotal.toLocaleString()}
+              </span>
+              <span className="text-[11px] font-light text-gray-400">รวม {otherEntries.length} รายการ</span>
             </div>
           </div>
 
           {/* View toggle + year selector — ซ่อนปุ่มสลับเมื่อมีปีเดียว (ไม่มีอะไรให้สลับ) */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col justify-between gap-3 border-b border-gray-200 pb-4 sm:flex-row sm:items-center">
             {showYearlyTab ? (
               <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 self-start">
                 {(["monthly", "yearly"] as const).map((v) => (
@@ -799,10 +790,10 @@ export default function CoachPaymentPage() {
           {effectiveView === "monthly" && currentYearGroup ? (
             <>
               {/* Monthly bar chart — ซ่อนบนมือถือ (แท่งแคบ + tooltip อาศัย hover) ดูข้อมูลได้จากตารางด้านล่างแทน */}
-              <div className="hidden md:block bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <div className="mb-6">
-                  <h3 className="text-md font-bold text-gray-800">รายได้รายเดือน ปี {selectedYear}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+              <div className="hidden md:block">
+                <div className="mb-6 border-b border-gray-200 pb-4">
+                  <h3 className="text-xl font-semibold tracking-tight text-gray-900">รายได้รายเดือน ปี {selectedYear}</h3>
+                  <p className="mt-1 text-[13px] font-light text-gray-500">
                     {bestMonth
                       ? `เดือนที่รายได้สูงสุด: ${MONTH_NAMES_FULL[bestMonth.month]} (฿${bestMonth.total.toLocaleString()})`
                       : "ยังไม่มีข้อมูลในปีนี้"}
@@ -815,7 +806,7 @@ export default function CoachPaymentPage() {
                     const pct = maxMonthTotal > 0 ? (m.total / maxMonthTotal) * 100 : 0;
                     return (
                       <div key={m.month} className="flex-1 h-full flex flex-col items-center justify-end group relative">
-                        <div className="absolute -top-2 -trangray-y-full left-1/2 -trangray-x-1/2 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                        <div className="absolute -top-2 -translate-y-full left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] rounded-lg px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
                           <span className="font-bold">฿{m.total.toLocaleString()}</span>
                           <span className="text-gray-300"> · {MONTH_NAMES_FULL[m.month]}</span>
                         </div>
@@ -838,10 +829,10 @@ export default function CoachPaymentPage() {
 
               {/* Monthly breakdown table — รวมคอลัมน์เทียบตารางสอน (เฉพาะโค้ชรายครั้ง) เข้ามาในตัว
                   กดที่แถวเพื่อขยายดูรายการแบบสมุดบัญชี */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-gray-100">
-                  <h3 className="text-md font-bold text-gray-800">รายละเอียดรายเดือน</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+              <div>
+                <div className="mb-2 border-b border-gray-200 pb-4">
+                  <h3 className="text-xl font-semibold tracking-tight text-gray-900">รายละเอียดรายเดือน</h3>
+                  <p className="mt-1.5 text-[13px] font-light text-gray-500">
                     {comparison
                       ? <>คลิกที่แถวเพื่อดูรายการของเดือนนั้น · &quot;ได้รับจริง&quot; รวมค่าจ้างสอน + โบนัส/รายได้อื่น เทียบกับรายได้ที่ควรได้จากคาบที่สอนจริง × ค่าจ้างต่อคาบ (฿{payRate.toLocaleString()}/คาบ){payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้าง ตัวเลขที่ควรได้จึงยังไม่ถูกต้อง"}</>
                       : "คลิกที่แถวเพื่อดูรายการของเดือนนั้น · ยอดรวมค่าจ้างสอน + โบนัส/รายได้อื่น"}
@@ -850,7 +841,7 @@ export default function CoachPaymentPage() {
                 <div ref={monthlyTableRef} className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-wider border-b border-gray-200">
+                      <tr className="text-gray-500 text-[10px] font-medium uppercase tracking-[0.14em] border-b border-gray-200">
                         <th className="py-3 px-4 sm:px-5">เดือน</th>
                         {comparison ? (
                           <>
@@ -1030,10 +1021,10 @@ export default function CoachPaymentPage() {
               </div>
             </>
           ) : effectiveView === "yearly" ? (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-gray-100">
-                <h3 className="text-md font-bold text-gray-800">สรุปรายได้รายปี</h3>
-                <p className="text-xs text-gray-500 mt-0.5">ยอดรวมค่าจ้างแยกตามปี ทั้งหมด {yearGroups.length} ปี</p>
+            <div>
+              <div className="mb-2 border-b border-gray-200 pb-4">
+                <h3 className="text-xl font-semibold tracking-tight text-gray-900">สรุปรายได้รายปี</h3>
+                <p className="mt-1.5 text-[13px] font-light text-gray-500">ยอดรวมค่าจ้างแยกตามปี ทั้งหมด {yearGroups.length} ปี</p>
               </div>
               <div ref={yearlyTableRef} className="overflow-x-auto no-scrollbar">
                 <table className="w-full text-left border-collapse">
@@ -1124,7 +1115,7 @@ function CoachPaymentSkeleton() {
       {/* ===== มือถือ ===== */}
       <div className="md:hidden space-y-4">
         {/* การ์ดบัญชี */}
-        <div className="rounded-3xl border-2 border-[#CC0000]/30 bg-white p-5">
+        <div className="border border-gray-200 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 shrink-0 rounded-full bg-gray-200" />
             <div className="flex-1 space-y-2">
@@ -1159,7 +1150,7 @@ function CoachPaymentSkeleton() {
               <div className="h-3 w-16 rounded bg-gray-100" />
             </div>
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
+              <div key={i} className="flex items-center justify-between border border-gray-200 bg-white px-4 py-3.5">
                 <div className="space-y-2">
                   <div className="h-3.5 w-40 rounded bg-gray-200" />
                   <div className="h-2.5 w-24 rounded bg-gray-100" />
@@ -1172,54 +1163,55 @@ function CoachPaymentSkeleton() {
       </div>
 
       {/* ===== เดสก์ท็อป ===== */}
-      <div className="hidden md:block space-y-6">
-        {/* Stat cards — สไตล์ PaymentStats (แถบ accent + จุด + คำโปรยท้าย) */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="hidden md:block space-y-8">
+        {/* header */}
+        <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-6">
+          <div className="space-y-2">
+            <div className="h-3 w-28 rounded bg-gray-100" />
+            <div className="h-8 w-40 rounded bg-gray-200" />
+            <div className="h-3.5 w-80 max-w-full rounded bg-gray-100" />
+          </div>
+          <div className="hidden h-24 w-[300px] border border-gray-200 lg:block" />
+        </div>
+
+        {/* stat row */}
+        <div className="grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5">
-              <span className="absolute inset-y-0 left-0 w-1 bg-gray-200" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-gray-200" />
-                  <div className="h-3.5 w-24 rounded bg-gray-200" />
-                </div>
-                <div className="h-5 w-5 rounded bg-gray-200" />
-              </div>
-              <div className="mt-5 h-8 w-28 rounded-lg bg-gray-200" />
-              <div className="mt-4 border-t border-gray-100 pt-3">
-                <div className="h-3 w-24 rounded bg-gray-100" />
-              </div>
+            <div key={i} className="flex flex-col gap-2.5 bg-white px-5 py-5">
+              <div className="h-3 w-24 rounded bg-gray-100" />
+              <div className="h-7 w-28 rounded bg-gray-200" />
+              <div className="h-2.5 w-20 rounded bg-gray-100" />
             </div>
           ))}
         </div>
 
-        {/* Toggle + year selector */}
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="h-9 w-40 rounded-xl bg-gray-200" />
+        {/* toggle */}
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-4">
+          <div className="h-9 w-40 rounded-lg bg-gray-100" />
           <div className="h-8 w-32 rounded bg-gray-100" />
         </div>
 
-        {/* Chart */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6">
-          <div className="mb-6 space-y-2">
-            <div className="h-4 w-48 rounded bg-gray-200" />
+        {/* chart */}
+        <div>
+          <div className="mb-6 space-y-2 border-b border-gray-200 pb-4">
+            <div className="h-6 w-52 rounded bg-gray-200" />
             <div className="h-3 w-64 rounded bg-gray-100" />
           </div>
           <div className="flex h-40 items-end gap-2">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="flex-1 rounded-t-md bg-gray-200" style={{ height: `${20 + ((i * 37) % 80)}%` }} />
+              <div key={i} className="flex-1 bg-gray-200" style={{ height: `${20 + ((i * 37) % 80)}%` }} />
             ))}
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <div className="space-y-2 border-b border-gray-100 p-5">
-            <div className="h-4 w-40 rounded bg-gray-200" />
-            <div className="h-3 w-56 rounded bg-gray-100" />
+        {/* table */}
+        <div>
+          <div className="mb-2 space-y-2 border-b border-gray-200 pb-4">
+            <div className="h-6 w-48 rounded bg-gray-200" />
+            <div className="h-3 w-72 rounded bg-gray-100" />
           </div>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between border-b border-gray-50 px-5 py-3.5 last:border-0">
+            <div key={i} className="flex items-center justify-between border-b border-gray-100 py-3.5">
               <div className="h-3.5 w-28 rounded bg-gray-200" />
               <div className="h-3.5 w-16 rounded bg-gray-100" />
               <div className="h-3.5 w-20 rounded bg-gray-200" />

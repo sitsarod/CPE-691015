@@ -150,35 +150,7 @@ export default function BillingIssueForm({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Form Column */}
-      <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        {/* Billing Mode Switcher */}
-        <div className="flex bg-slate-100 p-1.5 rounded-xl mb-6 max-w-md">
-          <button
-            type="button"
-            onClick={() => setBillingMode('individual')}
-            className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
-              billingMode === 'individual'
-                ? 'bg-white text-[#CD0D13] shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>ออกบิลรายบุคคล</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setBillingMode('group')}
-            className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
-              billingMode === 'group'
-                ? 'bg-white text-[#CD0D13] shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>ออกบิลแบบกลุ่ม (หารเฉลี่ย)</span>
-          </button>
-        </div>
-
+      <div className="lg:col-span-2 bg-white border border-gray-200 p-6">
         <form onSubmit={handleCreateBilling} className="space-y-5">
           {/* Student Selection Checklist (Multi-select) */}
           <div>
@@ -188,7 +160,7 @@ export default function BillingIssueForm({
                 <button
                   type="button"
                   onClick={handleSelectAllFiltered}
-                  className="text-xs text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] font-bold flex items-center space-x-1.5 cursor-pointer border border-[#CD0D13]/40 rounded-lg px-2.5 py-1.5 shadow-sm transition-colors"
+                  className="text-xs text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] font-bold flex items-center space-x-1.5 cursor-pointer border border-[#CD0D13]/40 rounded-lg px-2.5 py-1.5 transition-colors"
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
                   <span>เลือกทั้งหมดตามตัวกรอง</span>
@@ -203,13 +175,13 @@ export default function BillingIssueForm({
                 placeholder="ค้นหารายชื่อผู้เรียน..."
                 value={studentSearchQuery}
                 onChange={(e) => setStudentSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-sm text-slate-850"
+                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-sm text-slate-850"
               />
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             </div>
 
             {/* Scrollable Checklist */}
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-52 overflow-y-auto no-scrollbar space-y-2">
+            <div className="border border-gray-200 p-3 bg-gray-50 max-h-52 overflow-y-auto no-scrollbar space-y-2">
               {filteredStudents.length === 0 ? (
                 <div className="text-center text-slate-450 py-6 text-xs">
                   ไม่พบผู้เรียนที่ตรงกับคำค้นหา
@@ -222,7 +194,7 @@ export default function BillingIssueForm({
                       key={s.id}
                       className={`flex items-center p-2.5 rounded-lg border cursor-pointer transition-all ${
                         isChecked
-                          ? 'bg-red-50/50 border-[#CD0D13] text-slate-900 shadow-sm font-semibold'
+                          ? 'bg-red-50/50 border-[#CD0D13] text-slate-900 font-semibold'
                           : 'bg-white border-slate-100 hover:border-slate-350 text-slate-700'
                       }`}
                     >
@@ -254,7 +226,7 @@ export default function BillingIssueForm({
             </p>
           </div>
 
-          {/* Billing Type and Pricing Selection */}
+          {/* แถว: ประเภทค่าใช้จ่าย + วันครบกำหนด */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">ประเภทค่าใช้จ่าย <span className="text-red-500">*</span></label>
@@ -262,7 +234,7 @@ export default function BillingIssueForm({
                 <select
                   value={selectedBillingTypeId}
                   onChange={(e) => setSelectedBillingTypeId(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-slate-800 text-sm appearance-none"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-slate-800 text-sm appearance-none"
                   required
                 >
                   <option value="">-- เลือกประเภท --</option>
@@ -274,9 +246,48 @@ export default function BillingIssueForm({
                 <div className="absolute right-3.5 top-4 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-500 w-0 h-0"></div>
               </div>
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">วันครบกำหนดชำระเงิน <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
+                  required
+                />
+                <Calendar className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+              </div>
+            </div>
+          </div>
 
+          {/* Toggle วิธีคิดเงิน: ยอดต่อคน / จำนวน × อัตรา */}
+          <div className="flex border border-gray-200 p-1 max-w-md">
+            <button
+              type="button"
+              onClick={() => setBillingMode('individual')}
+              className={`flex-1 py-2 px-4 text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
+                billingMode === 'individual' ? 'bg-[#FFF0F0] text-[#CD0D13]' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>ยอดต่อคน</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingMode('group')}
+              className={`flex-1 py-2 px-4 text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
+                billingMode === 'group' ? 'bg-[#FFF0F0] text-[#CD0D13]' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>จำนวน × อัตรา (หารเฉลี่ย)</span>
+            </button>
+          </div>
+
+          {/* แถว: จำนวนเงิน + ราคารวม */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             {billingMode === 'individual' ? (
-              /* Individual Pricing */
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">จำนวนเงินเรียกเก็บต่อคน (บาท) <span className="text-red-500">*</span></label>
                 <div className="relative">
@@ -286,14 +297,13 @@ export default function BillingIssueForm({
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="ตัวอย่าง: 1500"
                     min="1"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
                     required
                   />
                   <span className="absolute left-3.5 top-3 text-slate-400 font-bold text-sm">฿</span>
                 </div>
               </div>
             ) : (
-              /* Group Pricing (Cost-Split Inputs) */
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">จำนวน <span className="text-red-500">*</span></label>
@@ -304,7 +314,7 @@ export default function BillingIssueForm({
                     placeholder="เช่น 10"
                     min="0.1"
                     step="any"
-                    className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
+                    className="w-full px-3 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
                     required
                   />
                 </div>
@@ -317,7 +327,7 @@ export default function BillingIssueForm({
                       onChange={(e) => setHourlyRate(e.target.value)}
                       placeholder="เช่น 100"
                       min="1"
-                      className="w-full pl-7 pr-2 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
+                      className="w-full pl-7 pr-2 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
                       required
                     />
                     <span className="absolute left-2.5 top-3.5 text-slate-400 font-bold text-xs">฿</span>
@@ -325,36 +335,41 @@ export default function BillingIssueForm({
                 </div>
               </div>
             )}
-          </div>
 
-          {billingMode === 'group' && (
-            /* Cost-splitting visual calculations box */
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 sm:gap-4 text-center">
-              <div>
-                <span className="text-xxs text-slate-400 block font-semibold uppercase tracking-wider">ราคารวมทั้งหมด</span>
-                <span className="text-sm font-bold text-slate-850 mt-1 block">
-                  ฿{((parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0)).toLocaleString()}
+            {/* กล่องยอดรวม/หารเฉลี่ย */}
+            {billingMode === 'individual' ? (
+              <div className="flex items-center justify-between border border-gray-200 bg-gray-50 px-4 py-3.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">ราคารวมทั้งหมด</span>
+                <span className="text-xl font-bold tabular-nums text-[#CD0D13]">
+                  ฿{((parseFloat(price) || 0) * selectedStudentIds.length).toLocaleString('th-TH')}
                 </span>
               </div>
-              <div>
-                <span className="text-xxs text-slate-400 block font-semibold uppercase tracking-wider">จำนวนผู้รับ</span>
-                <span className="text-sm font-bold text-slate-850 mt-1 block">
-                  {selectedStudentIds.length} คน
-                </span>
-              </div>
-              <div>
-                <span className="text-xxs text-[#CD0D13] block font-bold uppercase tracking-wider">หารเฉลี่ยตกคนละ</span>
-                <span className="text-lg font-black text-[#CD0D13] mt-0.5 block">
-                  ฿{perPersonRounded.toLocaleString('th-TH')}
-                </span>
-                {hasRounding && (
-                  <span className="text-[10px] font-medium text-amber-600 block mt-0.5">
-                    ปัดขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+            ) : (
+              <div className="grid grid-cols-3 gap-2 border border-gray-200 bg-gray-50 p-4 text-center sm:gap-4">
+                <div>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">ราคารวม</span>
+                  <span className="mt-1 block text-sm font-bold text-slate-800">
+                    ฿{((parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0)).toLocaleString()}
                   </span>
-                )}
+                </div>
+                <div>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">ผู้รับ</span>
+                  <span className="mt-1 block text-sm font-bold text-slate-800">{selectedStudentIds.length} คน</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#CD0D13]">คนละ</span>
+                  <span className="mt-0.5 block text-lg font-black tabular-nums text-[#CD0D13]">
+                    ฿{perPersonRounded.toLocaleString('th-TH')}
+                  </span>
+                  {hasRounding && (
+                    <span className="mt-0.5 block text-[10px] font-medium text-amber-600">
+                      ปัดขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Description */}
           <div>
@@ -364,55 +379,23 @@ export default function BillingIssueForm({
               value={billingDescription}
               onChange={(e) => setBillingDescription(e.target.value)}
               placeholder="เช่น ค่าลูกแบต หรือ ค่าเช่าสนาม"
-              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
+              className="w-full p-4 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
               required
             />
           </div>
 
-          {/* Due Date Picker */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">วันครบกำหนดชำระเงิน <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-                required
-              />
-              <Calendar className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
-            </div>
-          </div>
-
-          {/* Auto Calculated Summary Display */}
-          <div className="bg-rose-50/50 rounded-2xl p-5 border border-red-100 flex flex-col sm:flex-row items-center justify-between">
-            <div className="mb-4 sm:mb-0 text-center sm:text-left">
-              <span className="text-xs font-semibold text-[#CD0D13] uppercase tracking-wider block">
-                {billingMode === 'individual' ? 'ราคาเรียกเก็บต่อคน' : 'ราคาเฉลี่ยต่อคนหลังจากหาร'}
-              </span>
-              <h4 className="text-3xl font-extrabold text-slate-900 mt-1">
-                {billingMode === 'individual'
-                  ? (parseFloat(price) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })
-                  : perPersonRounded.toLocaleString('th-TH')} <span className="text-sm font-semibold text-slate-500 font-normal">บาท</span>
-              </h4>
-              {billingMode === 'group' && hasRounding && (
-                <span className="text-xs font-medium text-amber-600 mt-1 block">
-                  * ปัดเศษขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ต่อคน
-                </span>
-              )}
-            </div>
-            <button
-              type="submit"
-              className="w-full sm:w-auto bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg shadow-red-200 flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              <span>ออกบิลส่งบิลเก็บเงิน</span>
-            </button>
-          </div>
+          {/* Submit — เต็มความกว้าง */}
+          <button
+            type="submit"
+            className="w-full bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold px-8 py-3.5 rounded-xl transition-colors cursor-pointer"
+          >
+            {selectedStudentIds.length > 0 ? `ออกบิลให้ผู้เรียน ${selectedStudentIds.length} คน` : "ออกบิลส่งบิลเก็บเงิน"}
+          </button>
         </form>
       </div>
 
       {/* Invoices History Column */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col lg:h-[600px] self-start">
+      <div className="bg-white border border-gray-200 p-6 flex flex-col lg:h-[600px] self-start">
         <div className="mb-4 pb-3 border-b border-slate-100">
           <h3 className="text-md font-bold text-slate-800">ประวัติออกบิลล่าสุด</h3>
           <p className="text-xs text-slate-500 mt-0.5">รายการเรียกเก็บเงินที่สร้างส่งให้นักเรียน</p>

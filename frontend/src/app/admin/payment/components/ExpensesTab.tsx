@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Loader2, Calculator, Plus, X, QrCode, Copy } from 'lucide-react';
+import { Trash2, Loader2, Plus, X, QrCode, Copy } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
@@ -279,52 +279,50 @@ export default function ExpensesTab({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
       {/* Form Column */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 self-start">
+      <div className="bg-white border border-gray-200 p-6 self-start">
         <form onSubmit={handleSaveExpense} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">ประเภทรายจ่าย</label>
-            <select
-              value={expenseForm.expensetype}
-              onChange={(e) => handleTypeChange(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
-            >
-              <option value="court_rental">ค่าเช่าสนาม</option>
-              <option value="coach_wages">ค่าจ้างโค้ช</option>
-              <option value="equipment">ค่าอุปกรณ์</option>
-              <option value="advertising">ค่าโฆษณา</option>
-              <option value="other">อื่นๆ</option>
-            </select>
-          </div>
-
-          {isCoachWages && (
+          <div className={`grid grid-cols-1 gap-4 ${isCoachWages ? 'md:grid-cols-2' : ''}`}>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 block">เลือกโค้ช</label>
+              <label className="text-xs font-semibold text-slate-600 block">ประเภทรายจ่าย</label>
               <select
-                value={expenseForm.coach_id}
-                onChange={(e) => {
-                  const coachId = e.target.value;
-                  setExpenseForm(prev => ({ ...prev, coach_id: coachId }));
-                  loadCoachWage(coachId);
-                }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
+                value={expenseForm.expensetype}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800 font-medium"
               >
-                <option value="">-- กรุณาเลือกโค้ช --</option>
-                {coaches.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.nickname} ({c.firstName || ''} {c.lastName || ''})
-                  </option>
-                ))}
+                <option value="court_rental">ค่าเช่าสนาม</option>
+                <option value="coach_wages">ค่าจ้างโค้ช</option>
+                <option value="equipment">ค่าอุปกรณ์</option>
+                <option value="advertising">ค่าโฆษณา</option>
+                <option value="other">อื่นๆ</option>
               </select>
             </div>
-          )}
+
+            {isCoachWages && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 block">เลือกโค้ช</label>
+                <select
+                  value={expenseForm.coach_id}
+                  onChange={(e) => {
+                    const coachId = e.target.value;
+                    setExpenseForm(prev => ({ ...prev, coach_id: coachId }));
+                    loadCoachWage(coachId);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800 font-medium"
+                >
+                  <option value="">-- กรุณาเลือกโค้ช --</option>
+                  {coaches.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.nickname} ({c.firstName || ''} {c.lastName || ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
 
           {/* สรุปการคำนวณค่าจ้างค้างจ่าย — แสดงเมื่อเลือกโค้ชแล้ว */}
           {isCoachWages && expenseForm.coach_id && wageInfo && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-slate-700">
-                <Calculator className="w-3.5 h-3.5 text-[#CD0D13]" />
-                <span className="text-xs font-bold">การคำนวณค่าจ้างค้างจ่าย</span>
-              </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-1.5">
               {wageInfo.loading ? (
                 <div className="flex items-center gap-2 text-slate-500 text-xs py-1">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> กำลังคำนวณ...
@@ -332,18 +330,18 @@ export default function ExpensesTab({
               ) : wageInfo.error ? (
                 <p className="text-[11px] text-rose-600">{wageInfo.error}</p>
               ) : wageInfo.paymentType === 'monthly' ? (
-                <div className="text-[11px] text-slate-600 space-y-0.5">
+                <div className="text-[11px] text-slate-600 space-y-1.5">
                   <div className="flex justify-between">
-                    <span>โค้ชรายเดือน — อัตราต่อเดือน</span>
-                    <span className="font-semibold text-slate-800">฿{wageInfo.payRate.toLocaleString()}</span>
+                    <span>อัตราต่อเดือน</span>
+                    <span className="font-semibold text-slate-800 tabular-nums">฿{wageInfo.payRate.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>จ่ายแล้วเดือนนี้</span>
-                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
+                    <span>จ่ายไปแล้วทั้งหมด</span>
+                    <span className="font-semibold text-slate-800 tabular-nums">฿{wageInfo.alreadyPaid.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
-                    <span className="font-bold text-slate-700">คงค้างจ่าย</span>
-                    <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
+                  <div className="flex justify-between items-center border-t border-slate-200 pt-2 mt-0.5">
+                    <span className="text-xs font-bold text-slate-700">ค่าจ้างค้างจ่าย</span>
+                    <span className="text-lg font-black text-[#CD0D13] tabular-nums">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
                   {wageInfo.payRate === 0 && (
                     <p className="text-[10px] text-amber-600 pt-1">
@@ -352,55 +350,32 @@ export default function ExpensesTab({
                   )}
                 </div>
               ) : (
-                <div className="text-[11px] text-slate-600 space-y-0.5">
-                  {/* แยกตามอัตราที่บันทึกไว้ในแต่ละคาบ ไม่ใช่ "จำนวนคาบ × เรตปัจจุบัน"
-                      โค้ชที่เคยถูกปรับค่าจ้างจะเห็นหลายบรรทัด และตรวจย้อนได้ว่ายอดมาจากไหน */}
-                  {(wageInfo.rateBreakdown?.length ?? 0) > 0 ? (
-                    wageInfo.rateBreakdown!.map(line => (
-                      <div key={line.pay_rate} className="flex justify-between">
-                        <span>คาบที่สอนจริง × ค่าจ้างต่อคาบ</span>
-                        <span className="font-semibold text-slate-800">
-                          {line.sessions} × ฿{line.pay_rate.toLocaleString()}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex justify-between">
-                      <span>คาบที่สอนจริง</span>
-                      <span className="font-semibold text-slate-800">{wageInfo.sessionsDone} คาบ</span>
-                    </div>
-                  )}
+                <div className="text-[11px] text-slate-600 space-y-1.5">
                   <div className="flex justify-between">
                     <span>ค่าจ้างที่ควรได้ทั้งหมด</span>
-                    <span className="font-semibold text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
+                    <span className="font-semibold text-slate-800 tabular-nums">฿{wageInfo.expected.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>จ่ายไปแล้วทั้งหมด</span>
-                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
+                    <span className="font-semibold text-slate-800 tabular-nums">฿{wageInfo.alreadyPaid.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
-                    <span className="font-bold text-slate-700">คงค้างจ่าย</span>
-                    <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
+                  <div className="flex justify-between items-center border-t border-slate-200 pt-2 mt-0.5">
+                    <span className="text-xs font-bold text-slate-700">ค่าจ้างค้างจ่าย</span>
+                    <span className="text-lg font-black text-[#CD0D13] tabular-nums">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 pt-0.5">
-                    {wageInfo.periodNote ?? 'นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)'}
-                  </p>
-                  {/* คาบที่ไม่มีรอบเช็คชื่อจะไม่ถูกนับในยอดข้างบนเลย
-                      ถ้าไม่เตือนตรงนี้ แอดมินจะจ่ายตามยอดที่ขาดไปโดยไม่รู้ตัว */}
-                  {(wageInfo.unresolvedSessions ?? 0) > 0 && (
-                    <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5">
-                      <p className="text-[10px] font-semibold text-amber-800">
-                        ยังมีอีก {wageInfo.unresolvedSessions} คาบที่ไม่มีรอบเช็คชื่อ
-                        {(wageInfo.unresolvedAmount ?? 0) > 0 && ` (฿${wageInfo.unresolvedAmount!.toLocaleString()})`}
-                        {' '}จึงยังไม่ถูกนับในยอดนี้
+                  {/* ที่มาของยอด — แยกตามอัตราที่บันทึกไว้ในแต่ละคาบ ไม่ใช่ "จำนวนคาบ × เรตปัจจุบัน"
+                      โค้ชที่เคยถูกปรับค่าจ้างจะเห็นหลายช่วง และตรวจย้อนได้ว่ายอดมาจากไหน */}
+                  {(wageInfo.rateBreakdown?.length ?? 0) > 0 ? (
+                    <div className="pt-1.5">
+                      <p className="text-[10px] font-semibold text-slate-500">ที่มาของยอด</p>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        {wageInfo.rateBreakdown!.map(line => `${line.sessions} คาบ × ฿${line.pay_rate.toLocaleString()}`).join(' · ')}
                       </p>
-                      <a
-                        href="/admin/attendance/missed"
-                        className="text-[10px] font-medium text-amber-900 underline"
-                      >
-                        เคลียร์คาบที่ค้างก่อนจ่าย
-                      </a>
                     </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 pt-1">
+                      {wageInfo.periodNote ?? `คาบที่สอนจริง ${wageInfo.sessionsDone} คาบ · นับเฉพาะคาบที่ปิดรอบเช็คชื่อแล้ว`}
+                    </p>
                   )}
                   {wageInfo.payRate === 0 && (
                     <p className="text-[10px] text-amber-600 pt-1">
@@ -412,29 +387,33 @@ export default function ExpensesTab({
             </div>
           )}
 
+          {/* คาบที่ค้างรอบเช็คชื่อ — เตือนแยกนอกกล่องคำนวณ (design 5d)
+              ถ้าไม่เตือน แอดมินจะจ่ายตามยอดที่ขาดไปโดยไม่รู้ตัว */}
+          {isCoachWages && expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (wageInfo.unresolvedSessions ?? 0) > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+              <p className="text-[10px] font-semibold text-amber-800">
+                ยังมีอีก {wageInfo.unresolvedSessions} คาบที่ไม่มีรอบเช็คชื่อ
+                {(wageInfo.unresolvedAmount ?? 0) > 0 && ` (฿${wageInfo.unresolvedAmount!.toLocaleString()})`}
+                {' '}จึงยังไม่ถูกนับในยอดนี้
+              </p>
+              <a
+                href="/admin/attendance/missed"
+                className="text-[10px] font-medium text-amber-900 underline"
+              >
+                เคลียร์คาบที่ค้างก่อนจ่าย
+              </a>
+            </div>
+          )}
+
           {isCoachWages ? (
             <>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 block">
-                  ค่าจ้างค้างจ่าย (คำนวณอัตโนมัติ)
-                </label>
-                <input
-                  type="number"
-                  value={expenseForm.expenseamount}
-                  readOnly
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-250 rounded-xl text-xs outline-none text-slate-800 font-semibold cursor-not-allowed"
-                />
-                <p className="text-[10px] text-slate-400">คำนวณจากค่าจ้างที่ยังไม่ได้จ่ายโดยอัตโนมัติ</p>
-              </div>
-
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-600 block">รายได้ส่วนอื่น ๆ (กรอกเอง)</label>
                   <button
                     type="button"
                     onClick={addOtherIncome}
-                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] border border-[#CD0D13]/40 rounded-lg px-2.5 py-1 shadow-sm transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] border border-[#CD0D13]/40 rounded-lg px-2.5 py-1 transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
                   </button>
@@ -445,24 +424,13 @@ export default function ExpensesTab({
                 ) : (
                   <div className="space-y-2">
                     {otherIncomes.map((item, index) => (
-                      <div key={`other-income-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-500">รายการที่ {index + 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeOtherIncome(index)}
-                            className="p-1 rounded-full text-slate-400 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer"
-                            title="ลบรายการนี้"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <div key={`other-income-${index}`} className="flex items-center gap-2">
                         <input
                           type="text"
                           placeholder="รายละเอียด เช่น โบนัสผลงาน, ค่าเดินทาง"
                           value={item.description}
                           onChange={(e) => updateOtherIncome(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                          className="flex-1 min-w-0 px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                         />
                         <input
                           type="number"
@@ -470,18 +438,26 @@ export default function ExpensesTab({
                           placeholder="0.00"
                           value={item.amount}
                           onChange={(e) => updateOtherIncome(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                          className="w-28 shrink-0 px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800 text-right tabular-nums"
                         />
+                        <button
+                          type="button"
+                          onClick={() => removeOtherIncome(index)}
+                          className="shrink-0 p-1.5 rounded-full text-slate-400 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer"
+                          title="ลบรายการนี้"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="rounded-xl bg-[#FFF0F0] border border-rose-100 px-3 py-2.5 space-y-0.5">
+              <div className="border-t border-gray-200 pt-3 space-y-0.5">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-700">รวมยอดจ่ายทั้งสิ้น</span>
-                  <span className="text-sm font-black text-[#CD0D13]">฿{totalCoachPayout.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-slate-700">รวมยอดจ่ายทั้งสิ้น</span>
+                  <span className="text-xl font-black text-[#CD0D13] tabular-nums">฿{totalCoachPayout.toLocaleString()}</span>
                 </div>
                 {baseWage > 0 && otherIncomeNum > 0 && (
                   <p className="text-[10px] text-slate-400">จะบันทึกแยกเป็น {1 + otherIncomes.filter(i => (parseFloat(i.amount) || 0) > 0).length} รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่นรวม ฿{otherIncomeNum.toLocaleString()}</p>
@@ -496,70 +472,60 @@ export default function ExpensesTab({
                     <span className="text-xs font-bold">ช่องทางจ่ายเงินให้โค้ช</span>
                   </div>
 
-                  {/* QR พร้อมเพย์ */}
-                  {wageInfo.promptPay ? (
-                    totalCoachPayout > 0 ? (
-                      <div className="flex flex-col items-center gap-1.5">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`https://promptpay.io/${wageInfo.promptPay}/${totalCoachPayout.toFixed(2)}.png`}
-                          alt="PromptPay QR"
-                          className="w-40 h-40 rounded-lg border border-slate-100"
-                        />
-                        <p className="text-[10px] text-slate-400">
-                          สแกนด้วยแอปธนาคาร · ยอด ฿{totalCoachPayout.toLocaleString()}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-slate-400">ยอดจ่ายเป็น 0 — ยังไม่สร้าง QR</p>
-                    )
-                  ) : (
-                    <p className="text-[11px] text-amber-600">
-                      โค้ชยังไม่ได้ตั้งพร้อมเพย์ ใช้โอนผ่านเลขบัญชีด้านล่างแทน
-                    </p>
-                  )}
+                  {/* แนวนอน: QR ซ้าย · รายละเอียดบัญชีขวา (design 5d) */}
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0">
+                      {wageInfo.promptPay && totalCoachPayout > 0 ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`https://promptpay.io/${wageInfo.promptPay}/${totalCoachPayout.toFixed(2)}.png`}
+                            alt="PromptPay QR"
+                            className="w-28 h-28 rounded-lg border border-slate-100"
+                          />
+                        </>
+                      ) : (
+                        <div className="w-28 h-28 rounded-lg border border-dashed border-slate-200 grid place-items-center px-2 text-center">
+                          <span className="text-[9px] text-slate-400 leading-tight">
+                            {wageInfo.promptPay ? 'ยอดจ่ายเป็น 0 — ยังไม่สร้าง QR' : 'โค้ชยังไม่ได้ตั้งพร้อมเพย์'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* เลขบัญชี เผื่อไม่สะดวกสแกน */}
-                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-500">ธนาคาร</span>
-                      <span className="text-[11px] font-semibold text-slate-800 text-right">{wageInfo.bankName || "-"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-500">เลขบัญชี</span>
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-xs font-bold text-slate-800 tabular-nums truncate">{wageInfo.accountNo || "-"}</span>
-                        {wageInfo.accountNo && (
-                          <button
-                            type="button"
-                            onClick={() => copyText(wageInfo.accountNo!, 'เลขบัญชี')}
-                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="คัดลอกเลขบัญชี"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        {wageInfo.promptPay && totalCoachPayout > 0
+                          ? `สแกนด้วยแอปธนาคาร · ยอด ฿${totalCoachPayout.toLocaleString()}`
+                          : 'ใช้โอนผ่านเลขบัญชีด้านล่างแทน'}
+                      </p>
+
+                      {/* เลขบัญชี เผื่อไม่สะดวกสแกน */}
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-slate-500">เลขบัญชี · {wageInfo.bankName || "—"}</p>
+                            <p className="text-sm font-bold text-slate-800 tabular-nums truncate">{wageInfo.accountNo || "-"}</p>
+                            {wageInfo.promptPay && (
+                              <p className="text-[10px] text-slate-500 mt-0.5">พร้อมเพย์ {wageInfo.promptPay}</p>
+                            )}
+                          </div>
+                          {wageInfo.accountNo && (
+                            <button
+                              type="button"
+                              onClick={() => copyText(wageInfo.accountNo!, 'เลขบัญชี')}
+                              className="shrink-0 flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-[#CD0D13] transition-colors cursor-pointer"
+                              title="คัดลอกเลขบัญชี"
+                            >
+                              <Copy className="w-3 h-3" /> คัดลอก
+                            </button>
+                          )}
+                        </div>
+                        {!wageInfo.bankName && !wageInfo.accountNo && (
+                          <p className="text-[10px] text-amber-600 mt-1">โค้ชยังไม่ได้กรอกข้อมูลบัญชีรับเงิน</p>
                         )}
-                      </span>
-                    </div>
-                    {wageInfo.promptPay && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-500">พร้อมเพย์</span>
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] font-semibold text-slate-800 tabular-nums truncate">{wageInfo.promptPay}</span>
-                          <button
-                            type="button"
-                            onClick={() => copyText(wageInfo.promptPay!, 'พร้อมเพย์')}
-                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="คัดลอกพร้อมเพย์"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </span>
                       </div>
-                    )}
-                    {!wageInfo.bankName && !wageInfo.accountNo && (
-                      <p className="text-[10px] text-amber-600">โค้ชยังไม่ได้กรอกข้อมูลบัญชีรับเงิน</p>
-                    )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -573,32 +539,34 @@ export default function ExpensesTab({
                 placeholder="0.00"
                 value={expenseForm.expenseamount}
                 onChange={(e) => setExpenseForm(prev => ({ ...prev, expenseamount: e.target.value }))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                 required
               />
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">วันที่ทำรายการ</label>
-            <input
-              type="date"
-              value={expenseForm.expensedate}
-              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-55 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
-              required
-            />
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-600 block">วันที่ทำรายการ</label>
+              <input
+                type="date"
+                value={expenseForm.expensedate}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
+                className="w-full px-3 py-2 bg-slate-55 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                required
+              />
+            </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">รายละเอียด / คำอธิบายเพิ่มเติม</label>
-            <textarea
-              rows={3}
-              placeholder="ระบุข้อความคำอธิบายค่าใช้จ่าย..."
-              value={expenseForm.expensedescription}
-              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedescription: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-55 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 resize-none"
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-600 block">รายละเอียด / คำอธิบายเพิ่มเติม</label>
+              <input
+                type="text"
+                placeholder="ระบุข้อความคำอธิบายค่าใช้จ่าย..."
+                value={expenseForm.expensedescription}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedescription: e.target.value }))}
+                className="w-full px-3 py-2 bg-slate-55 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+              />
+            </div>
           </div>
 
           {/* Using the Global Reusable SlipUploader Component */}
@@ -620,7 +588,7 @@ export default function ExpensesTab({
       </div>
 
       {/* List Column */}
-      <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col self-start">
+      <div className="lg:col-span-2 bg-white border border-gray-200 overflow-hidden flex flex-col self-start">
         <div className="p-6 border-b border-slate-200">
           <h3 className="text-md font-bold text-slate-800">รายการบันทึกค่าใช้จ่ายทั้งหมด</h3>
         </div>
@@ -628,7 +596,7 @@ export default function ExpensesTab({
         <div ref={tableScrollRef} className="overflow-x-auto no-scrollbar">
           <table className="w-full md:min-w-[720px] text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+              <tr className="text-slate-500 text-[10px] font-medium uppercase tracking-[0.14em] border-b border-slate-200">
                 <th className="py-3 px-5">วันที่ทำรายการ</th>
                 <th className="py-3 px-5 hidden md:table-cell">หมวดหมู่</th>
                 <th className="py-3 px-5">รายละเอียด</th>
