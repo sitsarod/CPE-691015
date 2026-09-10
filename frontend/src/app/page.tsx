@@ -103,6 +103,9 @@ export default function Home() {
   const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
   // แกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) — เปิดจากปุ่ม "ดูข่าวทั้งหมด"
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  // แกลเลอรีภาพบรรยากาศ (facility) + lightbox รูปเดียวเต็มจอ
+  const [isFacilityOpen, setIsFacilityOpen] = useState(false);
+  const [facilityLightbox, setFacilityLightbox] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<Announcement[]>([]);
   const [isGalleryLoading, setIsGalleryLoading] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น
@@ -612,12 +615,13 @@ export default function Home() {
             title={content?.facility_title || "ภาพบรรยากาศ"}
             sub={content?.facility_subtitle || "Facility"}
             right={
-              <a
-                href="#facility"
+              <button
+                type="button"
+                onClick={() => setIsFacilityOpen(true)}
                 className="whitespace-nowrap border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
               >
                 ดูรูปทั้งหมด
-              </a>
+              </button>
             }
           />
           {/* มือถือ: ช่อง wide เต็มกว้าง ที่เหลือ 2 คอลัมน์ · md ขึ้นไป: 2fr 1fr 1fr สองแถว
@@ -1141,6 +1145,94 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ===== แกลเลอรีภาพบรรยากาศ (facility) ===== */}
+      {isFacilityOpen &&
+        (() => {
+          const photos = facilityTiles.filter((t) => t.image_url);
+          return (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              onClick={() => setIsFacilityOpen(false)}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <div
+                className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                style={kanitFont}
+              >
+                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {content?.facility_title || "ภาพบรรยากาศ"}
+                  </h3>
+                  <button
+                    onClick={() => setIsFacilityOpen(false)}
+                    className="grid h-9 w-9 place-items-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto px-5 py-5">
+                  {photos.length === 0 ? (
+                    <p className="py-16 text-center font-light text-gray-400">
+                      ยังไม่มีรูปภาพบรรยากาศ
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                      {photos.map((tile, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setFacilityLightbox(tile.image_url!)}
+                          className="group relative flex aspect-[4/3] overflow-hidden border border-gray-100 bg-gray-100"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={tile.image_url}
+                            alt={tile.label}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          {tile.label && (
+                            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 text-left text-xs font-light text-white">
+                              {tile.label}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* lightbox รูปเดียวเต็มจอ */}
+      {facilityLightbox && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+          onClick={() => setFacilityLightbox(null)}
+        >
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+          <button
+            onClick={() => setFacilityLightbox(null)}
+            className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+            aria-label="ปิด"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={facilityLightbox}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] max-w-[90vw] object-contain"
+          />
         </div>
       )}
 

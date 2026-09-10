@@ -131,12 +131,11 @@ export default function DashboardNotifications() {
   const recent = notifs.slice(0, MAX_ITEMS);
 
   return (
-    <div className="flex flex-col rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+    <div className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-          <Bell className="h-5 w-5 text-gray-400" />
-          การแจ้งเตือน
+      <div className="mb-1 flex items-center justify-between border-b border-gray-200 pb-4">
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">
+          ฟีดแจ้งเตือน
           {unread > 0 && (
             <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[#CC0000] px-1.5 py-0.5 text-[11px] font-bold leading-none text-white tabular-nums">
               {unread > 9 ? "9+" : unread}
@@ -146,7 +145,7 @@ export default function DashboardNotifications() {
         {unread > 0 && (
           <button
             onClick={markAll}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-gray-400 transition hover:text-[#CC0000]"
+            className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-[#CC0000]"
           >
             <Check className="h-3.5 w-3.5" />
             อ่านทั้งหมด
@@ -155,7 +154,7 @@ export default function DashboardNotifications() {
       </div>
 
       {/* List */}
-      <div className="mt-4 flex-1">
+      <div className="flex-1">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-400">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -174,7 +173,7 @@ export default function DashboardNotifications() {
               <li key={n.id}>
                 <button
                   onClick={() => openItem(n)}
-                  className={`flex w-full gap-3 border-t border-gray-50 px-6 py-3 text-left transition-colors hover:bg-gray-50 ${
+                  className={`flex w-full gap-3 border-t border-gray-100 px-2 py-3 text-left transition-colors hover:bg-gray-50 ${
                     !n.read ? "bg-[#FFF7F7]" : ""
                   }`}
                 >
@@ -201,7 +200,7 @@ export default function DashboardNotifications() {
       {/* Footer */}
       <Link
         href={VIEW_ALL_HREF}
-        className="flex items-center justify-center gap-1.5 border-t border-gray-100 px-6 py-3 text-sm font-semibold text-[#CC0000] transition-colors hover:bg-[#FFF0F0]"
+        className="flex items-center justify-center gap-1.5 border-t border-gray-200 px-2 py-3 text-sm font-medium text-[#CC0000] transition-colors hover:text-[#990000]"
       >
         <History className="h-4 w-4" />
         ดูประวัติการแจ้งเตือนทั้งหมด

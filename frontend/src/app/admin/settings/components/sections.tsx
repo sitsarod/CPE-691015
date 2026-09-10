@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { MapPin } from 'lucide-react';
+import { MapPin, ImagePlus, Loader2, X } from 'lucide-react';
 import { HomeContent, HeroSlide, PublicCoach } from '@/types/homeContent';
+import { homeContentAPI } from '@/services/homeContentAPI';
 import { SectionId } from '../useHomeContentDraft';
 import { SectionMeta } from '../registry';
 import { Field, SectionHeader, inputClass } from './primitives';
@@ -35,6 +36,75 @@ const UnsavedChip = () => (
     แก้ไขแล้ว ยังไม่บันทึก
   </span>
 );
+
+// ---- อัปโหลดรูปภาพประกอบ (แทนการวางลิงก์) ----
+function ImageUploadField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleImage = async (file: File) => {
+    try {
+      setUploading(true);
+      const url = await homeContentAPI.uploadImage(file);
+      onChange(url);
+    } catch (error) {
+      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <label
+        className={`relative flex h-24 w-40 flex-none items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:border-[#CC0000] ${
+          uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'
+        }`}
+        title="อัปโหลด/เปลี่ยนรูป"
+      >
+        {uploading ? (
+          <Loader2 size={20} className="animate-spin text-[#CC0000]" />
+        ) : value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="รูปภาพประกอบ" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-1.5 text-gray-400">
+            <ImagePlus size={22} />
+            <span className="text-xs">เลือกรูป</span>
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={uploading}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) handleImage(f);
+          }}
+        />
+      </label>
+      <div className="min-w-0 space-y-1">
+        <p className="text-xs text-gray-400">JPG / PNG · อัปโหลดจากเครื่อง</p>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="inline-flex items-center gap-1 text-sm text-red-500 hover:text-red-700"
+          >
+            <X size={14} /> ลบรูป
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ---- แต่ละหมวด (ส่วนหัวมาจาก meta) ----
 function HeaderFor(meta: SectionMeta, right?: React.ReactNode) {
@@ -138,13 +208,10 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
                   className={`${inputClass} resize-none`}
                 />
               </Field>
-              <Field label="รูปภาพประกอบ (URL)">
-                <input
-                  type="url"
+              <Field label="รูปภาพประกอบ">
+                <ImageUploadField
                   value={draft.about_image_url}
-                  onChange={(e) => setField('about_image_url', e.target.value)}
-                  placeholder="วางลิงก์รูปภาพ (ถ้ามี)"
-                  className={inputClass}
+                  onChange={(url) => setField('about_image_url', url)}
                 />
               </Field>
             </div>
