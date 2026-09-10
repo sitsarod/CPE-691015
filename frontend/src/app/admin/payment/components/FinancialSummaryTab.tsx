@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { CheckCircle2, Receipt, TrendingUp, Wallet, AlertCircle, Clock, Search, BarChart3, Image as ImageIcon } from 'lucide-react';
+import { Search, Image as ImageIcon } from 'lucide-react';
 import { BillingDTO, Expense } from './types';
-import StatsCard from '@/components/StatsCard';
 import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
@@ -36,7 +35,6 @@ function DonutBreakdown({ slices, total, centerValue }: { slices: DonutSlice[]; 
   const stroke = 18;
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;
-  let offset = 0;
   return (
     <div className="flex flex-col sm:flex-row items-center gap-5">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -46,7 +44,9 @@ function DonutBreakdown({ slices, total, centerValue }: { slices: DonutSlice[]; 
           {slices.map((s, i) => {
             const frac = total > 0 ? s.value / total : 0;
             const len = Math.max(frac * C - 2, 0); // เว้นช่อง 2px ระหว่างชิ้น (surface gap)
-            const seg = (
+            // ออฟเซ็ตสะสมแบบ functional (ไม่ reassign ตัวแปรระหว่าง render — เข้ากับ React compiler)
+            const offset = slices.slice(0, i).reduce((sum, p) => sum + (total > 0 ? (p.value / total) * C : 0), 0);
+            return (
               <circle
                 key={i}
                 cx={size / 2}
@@ -61,8 +61,6 @@ function DonutBreakdown({ slices, total, centerValue }: { slices: DonutSlice[]; 
                 <title>{`${s.label}: ฿${s.value.toLocaleString()} (${total > 0 ? Math.round(frac * 100) : 0}%)`}</title>
               </circle>
             );
-            offset += frac * C;
-            return seg;
           })}
         </svg>
         {/* ยอดรวมตรงกลาง */}
@@ -308,7 +306,7 @@ export default function FinancialSummaryTab({
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Timeframe Filter Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-white border border-gray-200 p-3 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {[
             { id: 'today' as const, label: 'วันนี้' },
@@ -322,8 +320,8 @@ export default function FinancialSummaryTab({
               onClick={() => setSummaryTimeframe(t.id)}
               className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 summaryTimeframe === t.id
-                  ? 'bg-[#CD0D13] text-white shadow-md'
-                  : 'bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100'
+                  ? 'bg-[#CD0D13] text-white'
+                  : 'bg-white border border-gray-300 text-slate-600 hover:bg-gray-50'
               }`}
             >
               {t.label}
@@ -336,56 +334,52 @@ export default function FinancialSummaryTab({
                 type="date"
                 value={summaryStartDate}
                 onChange={(e) => setSummaryStartDate(e.target.value)}
-                className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-[#CD0D13] text-slate-805"
+                className="px-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:border-[#CD0D13] text-slate-805"
               />
               <span className="text-slate-400 text-xs">ถึง</span>
               <input
                 type="date"
                 value={summaryEndDate}
                 onChange={(e) => setSummaryEndDate(e.target.value)}
-                className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-[#CD0D13] text-slate-805"
+                className="px-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:border-[#CD0D13] text-slate-805"
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* Stats Cards — จอเล็ก: เลื่อนแนวนอน (swipe) เริ่มจากใบสุดท้าย · จอใหญ่: grid ลำดับปกติ */}
-      <div ref={statsScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory [&>*]:min-w-[85%] [&>*]:snap-center sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-5 sm:overflow-visible sm:snap-none sm:[&>*]:min-w-0">
+      {/* Stats — แถบ 1px-gutter */}
+      <div ref={statsScrollRef} className="grid grid-cols-2 gap-px border border-gray-200 bg-gray-200 lg:grid-cols-3">
         {[
-          { title: "รายรับที่ชำระเงินแล้ว", value: summaryStats.totalPaid, icon: CheckCircle2, colorScheme: 'emerald' as const, order: 'order-6' },
-          { title: "รายจ่ายของสถาบันรวม", value: summaryStats.totalExpenses, icon: Receipt, colorScheme: 'rose' as const, order: 'order-5' },
-          { title: "รายรับสุทธิ (กำไร/ขาดทุน)", value: summaryStats.netRevenue, icon: TrendingUp, colorScheme: summaryStats.netRevenue >= 0 ? 'emerald' as const : 'rose' as const, order: 'order-4' },
-          { title: "ยอดเรียกเก็บทั้งหมด", value: summaryStats.totalInvoiced, icon: Wallet, colorScheme: 'blue' as const, order: 'order-3' },
-          { title: "ค้างยอดชำระ", value: summaryStats.totalUnpaid, icon: AlertCircle, colorScheme: 'amber' as const, order: 'order-2' },
-          { title: "รอการตรวจสอบ", value: summaryStats.totalPending, icon: Clock, colorScheme: 'slate' as const, order: 'order-1' }
+          { title: "รายรับที่ชำระเงินแล้ว", value: summaryStats.totalPaid, fig: "text-emerald-600" },
+          { title: "รายจ่ายของสถาบันรวม", value: summaryStats.totalExpenses, fig: "text-rose-600" },
+          { title: "รายรับสุทธิ (กำไร/ขาดทุน)", value: summaryStats.netRevenue, fig: summaryStats.netRevenue >= 0 ? "text-emerald-600" : "text-rose-600" },
+          { title: "ยอดเรียกเก็บทั้งหมด", value: summaryStats.totalInvoiced, fig: "text-slate-900" },
+          { title: "ค้างยอดชำระ", value: summaryStats.totalUnpaid, fig: "text-amber-600" },
+          { title: "รอการตรวจสอบ", value: summaryStats.totalPending, fig: "text-slate-500" },
         ].map((c) => (
-          <div key={c.title} className={`${c.order} sm:order-none`}>
-            <StatsCard title={c.title} value={c.value} icon={c.icon} colorScheme={c.colorScheme} />
+          <div key={c.title} className="flex flex-col gap-2 bg-white px-5 py-5">
+            <span className="text-xs font-light text-slate-500">{c.title}</span>
+            <span className={`text-2xl font-semibold leading-none tabular-nums sm:text-[27px] ${c.fig}`}>
+              ฿{c.value.toLocaleString()}
+            </span>
           </div>
         ))}
       </div>
 
       {/* Monthly income vs expense trend chart — ซ่อนบนมือถือ (อาศัย hover + แท่งแคบ) */}
-      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-md font-bold text-slate-800">แนวโน้มรายรับ–รายจ่าย 6 เดือนล่าสุด</h3>
-            </div>
-          </div>
+      <div className="hidden md:block">
+        <div className="mb-6 flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
+          <h3 className="text-xl font-semibold tracking-tight text-slate-900">แนวโน้มรายรับ–รายจ่าย 6 เดือนล่าสุด</h3>
           {/* Legend */}
-          <div className="flex items-center gap-4 self-start sm:self-center">
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLOR_INCOME }} />
-              <span className="text-xs font-semibold text-slate-600">รายรับ</span>
+              <span className="w-2.5 h-2.5" style={{ backgroundColor: COLOR_INCOME }} />
+              <span className="text-xs font-light text-slate-600">รายรับ</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLOR_EXPENSE }} />
-              <span className="text-xs font-semibold text-slate-600">รายจ่าย</span>
+              <span className="w-2.5 h-2.5" style={{ backgroundColor: COLOR_EXPENSE }} />
+              <span className="text-xs font-light text-slate-600">รายจ่าย</span>
             </div>
           </div>
         </div>
@@ -396,15 +390,8 @@ export default function FinancialSummaryTab({
           return (
             <>
               <div className="relative h-56">
-                {/* เส้นกริดอ้างอิง (4 ระดับ) วางหลังแท่ง */}
-                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                  {[0, 1, 2, 3, 4].map(i => (
-                    <div key={i} className="w-full border-t border-dashed border-slate-100" />
-                  ))}
-                </div>
-
                 {/* แท่ง */}
-                <div className="relative h-full flex items-end gap-3 sm:gap-5">
+                <div className="relative h-full flex items-end gap-4 sm:gap-6">
                   {monthlyTrend.buckets.map(b => {
                     const incPct = (b.income / chartMax) * 100;
                     const expPct = (b.expense / chartMax) * 100;
@@ -428,11 +415,11 @@ export default function FinancialSummaryTab({
                         </div>
 
                         <div
-                          className="w-[46%] max-w-[34px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
+                          className="w-full max-w-[26px] transition-all duration-500 group-hover/bar:brightness-110"
                           style={{ height: `${Math.max(incPct, b.income > 0 ? 2 : 0)}%`, backgroundColor: COLOR_INCOME }}
                         />
                         <div
-                          className="w-[46%] max-w-[34px] rounded-t-md transition-all duration-500 group-hover/bar:brightness-110"
+                          className="w-full max-w-[26px] transition-all duration-500 group-hover/bar:brightness-110"
                           style={{ height: `${Math.max(expPct, b.expense > 0 ? 2 : 0)}%`, backgroundColor: COLOR_EXPENSE }}
                         />
                       </div>
@@ -445,13 +432,13 @@ export default function FinancialSummaryTab({
               </div>
 
               {/* ป้ายเดือน — แถวล่าง เรียงตรงแนวแท่ง */}
-              <div className="flex gap-3 sm:gap-5 mt-2.5">
+              <div className="flex gap-4 sm:gap-6 mt-2.5">
                 {monthlyTrend.buckets.map(b => {
                   const isCurrent = b.year === new Date().getFullYear() && b.month === new Date().getMonth();
                   return (
                     <span
                       key={`${b.year}-${b.month}`}
-                      className={`flex-1 text-center text-[11px] ${isCurrent ? 'text-blue-600 font-black' : 'text-slate-500 font-semibold'}`}
+                      className={`flex-1 text-center text-[11px] ${isCurrent ? 'text-[#CD0D13] font-semibold' : 'text-slate-500 font-light'}`}
                     >
                       {MONTH_SHORT[b.month]}
                     </span>
@@ -462,21 +449,19 @@ export default function FinancialSummaryTab({
           );
         })()}
 
-        {/* Window totals */}
-        <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-100">
-          <div>
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">รายรับรวม 6 เดือน</p>
-            <p className="text-sm font-black mt-0.5" style={{ color: COLOR_INCOME }}>฿{monthlyTrend.totalIncome.toLocaleString()}</p>
+        {/* Window totals — 2 ช่อง เส้นคั่น 1px (ตามม็อก) */}
+        <div className="mt-6 grid grid-cols-2 gap-px border border-gray-200 bg-gray-200">
+          <div className="flex flex-col gap-1.5 bg-white px-5 py-4">
+            <span className="text-[11px] font-light uppercase tracking-wider text-slate-400">รายรับรวม 6 เดือน</span>
+            <span className="text-xl font-semibold tabular-nums" style={{ color: COLOR_INCOME }}>
+              ฿{monthlyTrend.totalIncome.toLocaleString()}
+            </span>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">รายจ่ายรวม 6 เดือน</p>
-            <p className="text-sm font-black mt-0.5" style={{ color: COLOR_EXPENSE }}>฿{monthlyTrend.totalExpense.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">คงเหลือสุทธิ</p>
-            <p className={`text-sm font-black mt-0.5 ${monthlyTrend.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {monthlyTrend.net >= 0 ? '+' : ''}฿{monthlyTrend.net.toLocaleString()}
-            </p>
+          <div className="flex flex-col gap-1.5 bg-white px-5 py-4">
+            <span className="text-[11px] font-light uppercase tracking-wider text-slate-400">รายจ่ายรวม 6 เดือน</span>
+            <span className="text-xl font-semibold tabular-nums" style={{ color: COLOR_EXPENSE }}>
+              ฿{monthlyTrend.totalExpense.toLocaleString()}
+            </span>
           </div>
         </div>
       </div>
@@ -484,7 +469,7 @@ export default function FinancialSummaryTab({
       {/* ตารางบิลกว้างเต็ม แล้วแยกส่วนแยกประเภทลงไปข้างล่าง */}
       <div className="space-y-6">
         {/* Invoices List Table — จอเล็ก: แสดงเฉพาะคอลัมน์สำคัญ (ผู้เรียน/ยอด/ครบกำหนด) · จอใหญ่: ครบทุกคอลัมน์ */}
-        <div className="flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col">
+        <div className="flex bg-white border border-gray-200 overflow-hidden flex-col">
           <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h3 className="text-md font-bold text-slate-800">รายการใบเรียกเก็บเงินในช่วงเวลา</h3>
@@ -497,7 +482,7 @@ export default function FinancialSummaryTab({
                   placeholder="ค้นหา..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white focus:border-[#CD0D13] text-slate-800"
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white focus:border-[#CD0D13] text-slate-800"
                 />
                 <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
               </div>
@@ -505,7 +490,7 @@ export default function FinancialSummaryTab({
               <select
                 value={summaryFilterStatus}
                 onChange={(e) => setSummaryFilterStatus(e.target.value as 'all' | 'pending' | 'paid' | 'unpaid')}
-                className="w-full sm:w-auto px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white text-slate-700"
+                className="w-full sm:w-auto px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-700"
               >
                 <option value="all">สถานะ: ทั้งหมด</option>
                 <option value="paid">ชำระแล้ว</option>
@@ -518,7 +503,7 @@ export default function FinancialSummaryTab({
           <div ref={tableScrollRef} className="overflow-x-auto no-scrollbar flex-1">
             <table className="w-full md:min-w-[720px] text-left border-collapse">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
+                <tr className="text-slate-500 text-[10px] font-medium uppercase tracking-[0.14em] border-b border-slate-200">
                   <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">รหัสบิล</th>
                   <th className="py-3 px-4 whitespace-nowrap">ชื่อผู้เรียน</th>
                   <th className="py-3 px-4 whitespace-nowrap hidden md:table-cell">ประเภทค่าใช้จ่าย</th>
@@ -615,7 +600,7 @@ export default function FinancialSummaryTab({
         {/* แยกตามประเภท — 2 คอลัมน์บนจอใหญ่ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Course Income Breakdown */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
+        <div className="bg-white border border-gray-200 p-6 flex flex-col justify-between">
           <div>
             <div className="mb-4 pb-3 border-b border-slate-100">
               <h3 className="text-md font-bold text-slate-800">รายรับแยกตามประเภท</h3>
@@ -638,7 +623,7 @@ export default function FinancialSummaryTab({
         </div>
 
         {/* Expense Breakdown */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
+        <div className="bg-white border border-gray-200 p-6 flex flex-col justify-between">
           <div>
             <div className="mb-4 pb-3 border-b border-slate-100">
               <h3 className="text-md font-bold text-slate-800">รายจ่ายแยกตามประเภท</h3>

@@ -142,14 +142,14 @@ export default function BankAccountsTab({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-fadeIn">
+    <div className="bg-white border border-gray-200 p-6 animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {bankAccounts.map(account => {
           const isCopied = copiedId === account.ID;
           return (
             <div
               key={account.ID}
-              className={`group relative rounded-3xl border bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col ${
+              className={`group relative border bg-white p-6 transition-all duration-300 hover:shadow-md flex flex-col ${
                 account.is_active ? 'border-red-200 ring-1 ring-red-100' : 'border-slate-200'
               }`}
             >
@@ -164,7 +164,7 @@ export default function BankAccountsTab({
               </div>
 
               {/* แผงข้อมูลบัญชี */}
-              <div className="mt-4 rounded-2xl bg-[#FFFFFF] p-5 space-y-3.5">
+              <div className="mt-4 border border-gray-100 bg-white p-5 space-y-3.5">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#CD0D13]">ชื่อบัญชี</span>
                   <p className="text-lg font-bold text-slate-900 mt-0.5 truncate">{account.account_name}</p>
@@ -276,9 +276,9 @@ export default function BankAccountsTab({
             setBankForm({ bank_name: '', account_name: '', account_no: '', promptpay_id: '', is_active: false, auto_verify_enabled: false });
             setIsBankModalOpen(true);
           }}
-          className="group rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/40 hover:border-red-200 hover:bg-red-50/30 transition-all duration-300 flex flex-col items-center justify-center text-center p-8 min-h-[260px] cursor-pointer"
+          className="group border-2 border-dashed border-slate-200 bg-slate-50/40 hover:border-red-200 hover:bg-red-50/30 transition-all duration-300 flex flex-col items-center justify-center text-center p-8 min-h-[260px] cursor-pointer"
         >
-          <div className="p-4 rounded-2xl bg-white shadow-sm text-slate-400 group-hover:text-[#CD0D13] transition-colors mb-4">
+          <div className="p-4 rounded-2xl bg-white text-slate-400 group-hover:text-[#CD0D13] transition-colors mb-4">
             <Landmark className="w-7 h-7" />
           </div>
           <span className="text-lg font-bold text-slate-800">เพิ่มบัญชีธนาคาร</span>
@@ -308,7 +308,7 @@ export default function BankAccountsTab({
                 <select
                   value={bankForm.bank_name}
                   onChange={(e) => setBankForm(prev => ({ ...prev, bank_name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                   required
                 >
                   <option value="">-- เลือกธนาคาร --</option>
@@ -329,7 +329,7 @@ export default function BankAccountsTab({
                   placeholder="ระบุชื่อภาษาไทย/อังกฤษ ตามหน้าสมุดบัญชี"
                   value={bankForm.account_name}
                   onChange={(e) => setBankForm(prev => ({ ...prev, account_name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                   required
                 />
               </div>
@@ -341,7 +341,7 @@ export default function BankAccountsTab({
                   placeholder="ตัวอย่าง: 0123456789 (เฉพาะตัวเลขเท่านั้น)"
                   value={bankForm.account_no}
                   onChange={(e) => setBankForm(prev => ({ ...prev, account_no: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                   required
                 />
               </div>
@@ -357,7 +357,7 @@ export default function BankAccountsTab({
                   placeholder="เบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก"
                   value={bankForm.promptpay_id}
                   onChange={(e) => setBankForm(prev => ({ ...prev, promptpay_id: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
                 />
                 <p className="text-[11px] text-slate-400 leading-snug">
                   ใช้เบอร์มือถือ/เลขบัตรที่ผูกพร้อมเพย์กับบัญชีนี้ ไม่ใช่เลขบัญชีธนาคาร หากเว้นว่างจะสแกนจ่ายผ่าน QR ไม่ได้ (ใช้โอนเงินได้ตามปกติ)

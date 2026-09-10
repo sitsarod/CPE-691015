@@ -196,7 +196,10 @@ export default function VerifySlipsTab({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
+    <div className="border border-gray-200 bg-white animate-fadeIn">
+     <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.05fr]">
+      {/* คอลัมน์ซ้าย: ค้นหา + ตัวกรอง + รายการ */}
+      <div className="min-w-0 lg:border-r lg:border-gray-200">
       <div className="p-6 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
           {/* Search Input */}
@@ -206,13 +209,13 @@ export default function VerifySlipsTab({
               value={slipSearchTerm}
               onChange={(e) => setSlipSearchTerm(e.target.value)}
               placeholder="ค้นหาชื่อผู้เรียน บิล หรือประเภท..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-55 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-xs text-slate-800"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-xs text-slate-800"
             />
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
           </div>
 
           {/* Status Filter Tab Buttons — จอเล็ก: grid 2x2 (ไม่ต้องเลื่อน) · จอใหญ่: แถวเดียว */}
-          <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl w-full sm:flex sm:gap-0 sm:w-auto">
+          <div className="grid grid-cols-2 gap-1 border border-gray-200 p-1 w-full sm:flex sm:flex-wrap sm:gap-1 sm:w-auto">
             {[
               { id: 'all' as const, label: 'ทั้งหมด (ส่งสลิป)' },
               { id: 'pending' as const, label: 'รอตรวจสอบ' },
@@ -225,7 +228,7 @@ export default function VerifySlipsTab({
                 onClick={() => setSlipFilter(f.id)}
                 className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[11px] font-semibold leading-tight transition-all whitespace-normal sm:whitespace-nowrap cursor-pointer text-center ${
                   slipFilter === f.id
-                    ? 'bg-white text-[#CD0D13] shadow-xs font-bold'
+                    ? 'bg-[#FFF0F0] text-[#CD0D13] font-bold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -237,9 +240,9 @@ export default function VerifySlipsTab({
       </div>
 
       {/* Card List Area */}
-      <div className="p-6 space-y-4">
+      <div className="px-6 py-2">
         {groupedWaitcheckBillings.length === 0 ? (
-          <div className="text-center py-16 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
+          <div className="text-center py-16 border border-gray-200 bg-gray-50 flex flex-col items-center justify-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
               <AlertCircle className="w-8 h-8" />
             </div>
@@ -270,32 +273,31 @@ export default function VerifySlipsTab({
             }
 
             return (
-              <div key={group.invoiceId ? `inv-${group.invoiceId}` : `bill-${group.billings[0]?.id}`} className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden transition-all">
-                {/* Invoice Card Header */}
-                <div 
+              <div key={group.invoiceId ? `inv-${group.invoiceId}` : `bill-${group.billings[0]?.id}`} className="relative border-b border-gray-100">
+                {/* Row header — ชื่อผู้เรียนขึ้นก่อน + แถบสถานะซ้าย (ตามม็อก) */}
+                <div
                   onClick={() => group.invoiceId && onToggleExpand(group.invoiceId)}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                  className="relative flex flex-col justify-between gap-4 py-4 pl-5 transition-colors hover:bg-slate-50/50 cursor-pointer md:flex-row md:items-center"
                 >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-black text-slate-900 text-base">{identifierText}</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-xs text-slate-500">{formatDate(group.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                        ผู้เรียน: {customerName} {group.customer?.nickname ? `(${group.customer.nickname})` : ""}
+                  <span className={`absolute inset-y-0 left-0 w-[3px] ${group.billingstatus === 'paid' ? 'bg-emerald-500' : group.billingstatus === 'waitcheck' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="text-[15px] font-medium text-slate-900">
+                        {customerName}{group.customer?.nickname ? ` (${group.customer.nickname})` : ""}
                       </span>
                       <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${statusBg}`}>
                         {statusText}
                       </span>
                     </div>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {identifierText} · {group.billings.length} บิล · แจ้งชำระ {formatDate(group.createdAt)}
+                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between md:justify-end gap-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between gap-5 md:justify-end" onClick={e => e.stopPropagation()}>
                     <div className="text-left md:text-right">
-                      <span className="text-[10px] font-bold text-slate-450 block">ยอดเงินโอนรวม:</span>
-                      <span className="text-lg font-black text-slate-950">
+                      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-400">ยอดเงินโอนรวม</span>
+                      <span className="text-lg font-semibold tabular-nums text-slate-900">
                         ฿{group.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -310,15 +312,15 @@ export default function VerifySlipsTab({
                           };
                           setReviewBilling(viewBilling);
                         }}
-                        className="px-3.5 py-1.5 bg-[#CD0D13] hover:bg-[#A30A0E] text-white text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-red-200"
+                        className="flex h-9 items-center rounded-lg bg-[#CD0D13] px-4 text-xs font-bold text-white transition-colors hover:bg-[#A30A0E] cursor-pointer"
                       >
-                        ดูสลิป & ตรวจสอบ
+                        ดูสลิป &amp; ตรวจสอบ
                       </button>
-                      
+
                       {group.invoiceId && (
                         <button
                           onClick={() => onToggleExpand(group.invoiceId!)}
-                          className="p-1 text-slate-400 hover:text-slate-655 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
                         >
                           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
@@ -333,7 +335,7 @@ export default function VerifySlipsTab({
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">รายการบิลย่อยที่รวมอยู่ในใบแจ้งหนี้ ({group.billings.length})</h4>
                     <div className="space-y-2">
                       {group.billings.map((b) => (
-                        <div key={`sub-bill-${b.id}`} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        <div key={`sub-bill-${b.id}`} className="flex items-center justify-between p-3.5 bg-white border border-gray-200">
                           <div>
                             <span className="text-[10px] font-bold text-slate-400">BILL-{b.id} • {b.billing_type?.billingtypename || "ทั่วไป"}</span>
                             <h5 className="font-bold text-slate-800 text-sm mt-0.5">{b.billingdescription}</h5>
@@ -383,175 +385,124 @@ export default function VerifySlipsTab({
         </div>
       )}
 
-      {/* Slip Review Detail Modal */}
-      {reviewBilling && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs transition-opacity duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] animate-fadeIn">
-            
-            {/* Left side: Slip mockup visualizer */}
-            <div className="md:w-1/2 bg-slate-100 p-6 flex flex-col items-center justify-center border-r border-slate-200 overflow-y-auto no-scrollbar">
-              <span className="text-xs font-bold text-slate-400 mb-3 block">หลักฐานสลิปการโอนเงิน (Image)</span>
-              <span className="text-xs font-bold text-slate-400 mb-3 block">สามารถเปิดแอปธนาคารและแสกน Qr code เพื่อตรวจสอบได้</span>
-              
+      </div>{/* /คอลัมน์ซ้าย */}
+
+      {/* คอลัมน์ขวา: รายละเอียดและผลตรวจสอบ (inline ตามดีไซน์) */}
+      <div className="min-w-0">
+        {!reviewBilling ? (
+          <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 p-6 text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-300">
+              <AlertCircle className="h-7 w-7" />
+            </div>
+            <p className="max-w-[240px] text-sm text-slate-400">
+              เลือกใบแจ้งหนี้ทางซ้ายเพื่อดูรายละเอียดและตรวจสอบสลิป
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5 p-6">
+            <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900">รายละเอียดและผลตรวจสอบ</h2>
+              <div className="flex items-center gap-3">
+                <span className="whitespace-nowrap text-xs text-slate-500">
+                  {reviewBilling.invoice_id ? `ใบแจ้งหนี้ #${reviewBilling.invoice_id}` : `BILL-${reviewBilling.id}`}
+                </span>
+                <button
+                  onClick={() => setReviewBilling(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  aria-label="ปิด"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* หลักฐานสลิป */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">หลักฐานสลิปการโอนเงิน</span>
               {reviewBilling.slipurl ? (
-                <div className="w-full max-w-[280px] bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-250 p-2">
+                <div className="border border-gray-200 p-2">
                   <img
                     src={reviewBilling.slipurl}
                     alt="หลักฐานสลิปการโอนเงิน"
-                    className="w-full h-auto object-contain rounded-xl max-h-[60vh]"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
+                    className="mx-auto h-auto max-h-[320px] w-auto object-contain"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
                 </div>
               ) : (
-                <div className="w-full max-w-[280px] bg-white rounded-2xl border border-dashed border-slate-300 p-8 flex flex-col items-center text-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3 border border-dashed border-gray-300 p-8 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                     <AlertCircle className="w-7 h-7" />
                   </div>
                   <h4 className="text-sm font-bold text-slate-700">ยังไม่มีสลิปแนบ</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <p className="text-xs leading-relaxed text-slate-500">
                     บิลนี้ยังไม่ได้ชำระเงิน หรือยังไม่มีการอัปโหลดสลิปโอนเงิน จึงยังไม่มีหลักฐานให้ตรวจสอบ
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Right side: Information and Actions */}
-            <div className="md:w-1/2 p-6 flex flex-col justify-between overflow-y-auto no-scrollbar">
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">รายละเอียดและผลตรวจสอบ</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">เลขที่อ้างอิงบิล: BILL-{reviewBilling.id}</p>
-                  </div>
-                  <button
-                    onClick={() => { setReviewBilling(null); }}
-                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
-                {/* Details list */}
-                <div className="space-y-4 text-sm border-b border-slate-200 pb-5">
-                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <span className="text-slate-550 text-xs font-semibold">ชื่อนักเรียน:</span>
-                    <span className="font-extrabold text-slate-900">
-                      {reviewBilling.customer ? `${reviewBilling.customer.firstName} ${reviewBilling.customer.lastName}` : "ผู้เรียน"}
-                      {reviewBilling.customer?.nickname ? ` (${reviewBilling.customer.nickname})` : ""}
-                    </span>
-                  </div>
-
-                  {/* Individual Billing Items list */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">รายการบิลในใบแจ้งหนี้ ({reviewBilling.groupedBillings?.length || 1})</span>
-                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar pr-1">
-                      {reviewBilling.groupedBillings ? (
-                        reviewBilling.groupedBillings.map((b) => (
-                          <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="p-3 bg-slate-50 rounded-xl border border-slate-250 text-xs flex justify-between items-start gap-4">
-                            <div className="space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400">BILL-{b.id} • {b.billing_type?.billingtypename || "ทั่วไป"}</span>
-                              <span className="font-bold text-slate-800 block">{b.billingdescription}</span>
-                              <span className="text-[10px] text-slate-500 block">ครบกำหนด: {b.billingdue_date?.split('T')[0]}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="font-bold text-slate-800 text-xs">฿{b.billingamount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-3 bg-slate-55 bg-slate-50 rounded-xl border border-slate-250 text-xs flex justify-between items-start gap-4">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-bold text-slate-400">BILL-{reviewBilling.id} • {reviewBilling.billing_type?.billingtypename || "ทั่วไป"}</span>
-                            <span className="font-bold text-slate-800 block">{reviewBilling.billingdescription}</span>
-                            <span className="text-[10px] text-slate-500 block">ครบกำหนด: {reviewBilling.billingdue_date?.split('T')[0]}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold text-slate-800 text-xs">฿{reviewBilling.billingamount.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Summary Totals */}
-                  <div className="pt-2 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-550 font-semibold">ยอดเงินเรียกเก็บรวม:</span>
-                      <span className="font-extrabold text-[#CD0D13] text-lg">฿{reviewBilling.billingamount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-550 font-semibold">สถานะบิล:</span>
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                        reviewBilling.billingstatus === 'paid'
-                          ? 'bg-emerald-55 bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          : reviewBilling.billingstatus === 'waitcheck'
-                          ? 'bg-amber-55 bg-amber-50 text-amber-600 border border-amber-100'
-                          : 'bg-rose-55 bg-rose-50 text-rose-600 border border-rose-100'
-                      }`}>
-                        {reviewBilling.billingstatus === 'paid' ? 'ชำระแล้ว' : reviewBilling.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {reviewBilling.transactionid && (
-                    <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-150 p-3 rounded-xl flex items-center justify-between">
-                      <span className="font-bold">Transaction Reference ID:</span>
-                      <code className="font-mono text-slate-800 select-all bg-slate-100 px-1.5 py-0.5 rounded">{reviewBilling.transactionid}</code>
-                    </div>
-                  )}
-                </div>
+            {/* รายละเอียด (แถวเส้นคั่น) */}
+            <div className="flex flex-col divide-y divide-gray-100 border-y border-gray-200">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <span className="text-xs text-slate-500">ผู้เรียน</span>
+                <span className="text-sm font-medium text-slate-900">
+                  {reviewBilling.customer ? `${reviewBilling.customer.firstName} ${reviewBilling.customer.lastName}` : "ผู้เรียน"}
+                  {reviewBilling.customer?.nickname ? ` (${reviewBilling.customer.nickname})` : ""}
+                </span>
               </div>
-
-              {/* Modal footer actions */}
-              <div className="mt-6 pt-4 border-t border-slate-200">
-                {reviewBilling.billingstatus === 'waitcheck' && reviewBilling.invoice_id ? (
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => handleRejectSlip(reviewBilling.invoice_id!)}
-                      className="flex-1 bg-slate-100 hover:bg-rose-50 hover:text-[#CD0D13] hover:border-red-250 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 transition-all flex items-center justify-center space-x-1.5 text-sm cursor-pointer"
-                    >
-                      <span>ปฏิเสธสลิป</span>
-                    </button>
-                    <button
-                      onClick={() => handleApproveSlip(reviewBilling.invoice_id!)}
-                      className="flex-1 bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-red-200 flex items-center justify-center space-x-1.5 text-sm cursor-pointer"
-                    >
-                      <span>อนุมัติยอดเงินโอน</span>
-                    </button>
+              {(reviewBilling.groupedBillings ?? [reviewBilling]).map((b) => (
+                <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="flex items-start justify-between gap-4 py-3">
+                  <div className="min-w-0">
+                    <span className="block text-[10px] font-bold text-slate-400">BILL-{b.id} • {b.billing_type?.billingtypename || "ทั่วไป"}</span>
+                    <span className="block text-sm text-slate-800">{b.billingdescription}</span>
+                    <span className="block text-[10px] text-slate-500">ครบกำหนด: {b.billingdue_date?.split('T')[0]}</span>
                   </div>
-                ) : (reviewBilling.billingstatus === 'unfunded' || reviewBilling.billingstatus === 'overdue') ? (
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => handleCashPayment(reviewBilling)}
-                      disabled={cashSubmitting}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center justify-center gap-1.5 text-sm cursor-pointer"
-                    >
-                      <Banknote className="w-4 h-4" />
-                      <span>{cashSubmitting ? 'กำลังบันทึก...' : 'ลูกค้าชำระแบบเงินสด'}</span>
-                    </button>
-                    <button
-                      onClick={() => { setReviewBilling(null); }}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 text-sm transition-all cursor-pointer"
-                    >
-                      ปิดหน้าต่าง
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setReviewBilling(null); }}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 text-sm transition-all cursor-pointer"
-                  >
-                    ปิดหน้าต่าง
-                  </button>
-                )}
+                  <span className="text-sm font-medium tabular-nums text-slate-800">฿{b.billingamount.toLocaleString()}</span>
+                </div>
+              ))}
+              <div className="flex items-baseline justify-between gap-4 py-4">
+                <span className="text-xs text-slate-500">ยอดเงินเรียกเก็บรวม</span>
+                <span className="text-2xl font-semibold tabular-nums text-[#CD0D13]">฿{reviewBilling.billingamount.toLocaleString()}</span>
               </div>
             </div>
 
+            {reviewBilling.transactionid && (
+              <div className="flex items-center justify-between border border-gray-200 p-3 text-[11px] text-slate-500">
+                <span className="font-bold">Transaction Reference ID</span>
+                <code className="select-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800">{reviewBilling.transactionid}</code>
+              </div>
+            )}
+
+            {/* Actions */}
+            {reviewBilling.billingstatus === 'waitcheck' && reviewBilling.invoice_id ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleRejectSlip(reviewBilling.invoice_id!)}
+                  className="flex-1 rounded-lg border border-gray-300 py-3 text-sm font-bold text-slate-700 transition-colors hover:border-[#CD0D13] hover:text-[#CD0D13] cursor-pointer"
+                >
+                  ปฏิเสธสลิป
+                </button>
+                <button
+                  onClick={() => handleApproveSlip(reviewBilling.invoice_id!)}
+                  className="flex-[1.4] rounded-lg bg-[#CD0D13] py-3 text-sm font-bold text-white transition-colors hover:bg-[#A30A0E] cursor-pointer"
+                >
+                  อนุมัติยอดเงินโอน
+                </button>
+              </div>
+            ) : (reviewBilling.billingstatus === 'unfunded' || reviewBilling.billingstatus === 'overdue') ? (
+              <button
+                onClick={() => handleCashPayment(reviewBilling)}
+                disabled={cashSubmitting}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Banknote className="w-4 h-4" />
+                {cashSubmitting ? 'กำลังบันทึก...' : 'ลูกค้าชำระแบบเงินสด'}
+              </button>
+            ) : null}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+     </div>{/* /grid */}
     </div>
   );
 }

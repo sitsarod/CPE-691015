@@ -127,22 +127,21 @@ export default function NotificationsHistory() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">การแจ้งเตือน</h1>
-            <p className="mt-0.5 text-sm text-gray-500">
-              {unread > 0 ? `มี ${unread} รายการที่ยังไม่ได้อ่าน` : "อ่านครบทุกรายการแล้ว"}
-            </p>
-          </div>
+      {/* Header (editorial) */}
+      <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CC0000]">Notifications</span>
+          <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-gray-900">การแจ้งเตือน</h1>
+          <p className="mt-1.5 text-[13px] font-light text-gray-500">
+            {unread > 0 ? `มี ${unread} รายการที่ยังไม่ได้อ่าน` : "อ่านครบทุกรายการแล้ว"} · อัปเดตสดอัตโนมัติ
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={handleMarkAll}
             disabled={busy || unread === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#CC0000]/40 hover:text-[#CC0000] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCheck className="h-4 w-4" />
             อ่านทั้งหมด
@@ -150,7 +149,7 @@ export default function NotificationsHistory() {
           <button
             onClick={handleClear}
             disabled={busy || notifs.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-rose-400 hover:text-rose-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-rose-400 hover:text-rose-600 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Trash2 className="h-4 w-4" />
             ล้างประวัติ
@@ -159,7 +158,7 @@ export default function NotificationsHistory() {
       </div>
 
       {/* List */}
-      <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm overflow-hidden">
+      <div>
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-400">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -173,12 +172,12 @@ export default function NotificationsHistory() {
             <p className="text-sm text-gray-400">ยังไม่มีการแจ้งเตือน</p>
           </div>
         ) : (
-          <ul>
+          <ul className="border-t border-gray-200">
             {notifs.map((n) => (
               <li key={n.id}>
                 <button
                   onClick={() => handleOpen(n)}
-                  className={`w-full text-left px-5 py-4 flex gap-3 border-b border-gray-50 last:border-0 transition-colors hover:bg-gray-50 ${
+                  className={`w-full text-left px-2 py-4 flex gap-4 border-b border-gray-100 transition-colors hover:bg-gray-50 ${
                     !n.read ? "bg-[#FFF7F7]" : ""
                   }`}
                 >

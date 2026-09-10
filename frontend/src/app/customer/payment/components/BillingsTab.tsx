@@ -126,7 +126,7 @@ export default function BillingsTab({
   return (
     <div className="space-y-5">
       {/* Search & Sort Panel */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 border border-gray-200 rounded-2xl shadow-sm">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -158,7 +158,7 @@ export default function BillingsTab({
       </div>
 
       {/* Select All Section */}
-      <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200">
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
         <div className="flex items-center gap-3">
           <input
             type="checkbox"
@@ -193,7 +193,7 @@ export default function BillingsTab({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="flex flex-col border-t border-gray-100">
           {processedBillings.map((b) => {
             const isSelected = selectedBillingIds.includes(b.id);
             const isUnpaid = b.billingstatus === "unfunded" || b.billingstatus === "overdue";
@@ -206,9 +206,9 @@ export default function BillingsTab({
               <div
                 key={`billing-${b.id}`}
                 onClick={() => isUnpaid && onSelectBilling(b.id)}
-                className={`relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border bg-white p-5 pl-6 transition-all md:flex-row md:items-center ${
-                  isUnpaid ? "cursor-pointer hover:border-gray-300 hover:shadow-md" : ""
-                } ${isSelected ? "border-[#CC0000] ring-1 ring-[#CC0000]" : "border-gray-200"}`}
+                className={`relative flex flex-col justify-between gap-4 border-b border-gray-100 py-5 pl-6 transition-colors md:flex-row md:items-center ${
+                  isUnpaid ? "cursor-pointer hover:bg-gray-50/60" : ""
+                } ${isSelected ? "bg-[#CC0000]/[0.03]" : ""}`}
               >
                 {/* แถบสถานะด้านซ้าย = เส้นข้างคอร์ต */}
                 <span className={`absolute inset-y-0 left-0 w-1 ${meta.bar}`} />
