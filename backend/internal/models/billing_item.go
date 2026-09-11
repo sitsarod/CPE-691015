@@ -29,8 +29,11 @@ type Billing struct {
 
 	CustomerID uint  `json:"customer_id"`
 	Customer   *User `json:"customer" gorm:"foreignKey:CustomerID"`
-	AdminID *uint `json:"admin_id"`
-	Admin   *User `json:"admin" gorm:"foreignKey:AdminID"`
+	// AdminID = แอดมินที่ออกบิลใบนี้ (ผู้สร้าง) · UpdatedByID = แอดมินที่แก้ไขล่าสุด (nil = ยังไม่เคยถูกแก้)
+	AdminID     *uint `json:"admin_id"`
+	Admin       *User `json:"admin" gorm:"foreignKey:AdminID"`
+	UpdatedByID *uint `json:"updated_by_id"`
+	UpdatedBy   *User `json:"updated_by" gorm:"foreignKey:UpdatedByID"`
 
 	PaymentItem []PaymentItem `json:"paymentitem" gorm:"foreignKey:BillingID"`
 	Enrollment  *Enrollment   `json:"enrollment" gorm:"foreignKey:BillingID"`

@@ -27,9 +27,16 @@ func (ctrl *BillingController) CreateBilling(c *gin.Context) {
 		return
 	}
 
-	err := ctrl.service.CreateBulkBillings(input.CustomerIDs, input.AdminID, input.BillingTypeID, input.Description, input.Amount, input.DueDate)
+	// คนออกบิลอ้างจาก JWT เท่านั้น ไม่รับจาก body (กันปลอม audit trail)
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	err := ctrl.service.CreateBulkBillings(input.CustomerIDs, adminID, input.BillingTypeID, input.Description, input.Amount, input.DueDate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -45,18 +52,25 @@ func (ctrl *BillingController) CreateSplitBilling(c *gin.Context) {
 		return
 	}
 
+	// คนออกบิลอ้างจาก JWT เท่านั้น ไม่รับจาก body (กันปลอม audit trail)
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
 	err := ctrl.service.CreateSplitBillingFromAttendance(
 		input.CourseID,
 		input.Date,
 		input.HourlyRate,
 		input.Hours,
-		input.AdminID,
+		adminID,
 		input.BillingTypeID,
 		input.Description,
 		input.DueDate,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -150,9 +164,16 @@ func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 		billingModel.BillingTypeID = *input.BillingTypeID
 	}
 
-	billing, err := ctrl.service.UpdateBilling(uint(id), billingModel)
+	// ผู้แก้ไขอ้างจาก JWT เท่านั้น (บันทึกเป็น UpdatedBy ของบิล)
+	actorID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	billing, err := ctrl.service.UpdateBilling(uint(id), billingModel, actorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -172,7 +193,7 @@ func (ctrl *BillingController) DeleteBilling(c *gin.Context) {
 
 	err = ctrl.service.DeleteBilling(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 

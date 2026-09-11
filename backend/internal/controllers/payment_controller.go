@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -36,7 +35,7 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 
 	invoice, err := ctrl.service.CreateInvoice(input.CustomerID, input.BillingIDs, models.PaymentMethod(input.Method))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -69,14 +68,7 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 
 	invoice, err := ctrl.service.UploadSlip(uint(id), input.SlipURL, userID, role)
 	if err != nil {
-		switch {
-		case errors.Is(err, services.ErrForbidden):
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		case errors.Is(err, services.ErrInvoiceNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
+		respondServiceError(c, err)
 		return
 	}
 
@@ -103,7 +95,7 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 
 	invoice, err := ctrl.service.ConfirmPayment(uint(id), &adminID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -147,7 +139,7 @@ func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 
 	invoice, err := ctrl.service.RejectPayment(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 
@@ -157,7 +149,7 @@ func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 	})
 }
 
-// CancelInvoice ยกเลิกใบแจ้งหนี้ (Customer/Admin/System)
+// CancelInvoice ยกเลิกใบแจ้งหนี้ (เจ้าของ หรือ Admin)
 func (ctrl *PaymentController) CancelInvoice(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -165,9 +157,15 @@ func (ctrl *PaymentController) CancelInvoice(c *gin.Context) {
 		return
 	}
 
-	invoice, err := ctrl.service.CancelInvoice(uint(id))
+	userID, role, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	invoice, err := ctrl.service.CancelInvoice(uint(id), userID, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondServiceError(c, err)
 		return
 	}
 

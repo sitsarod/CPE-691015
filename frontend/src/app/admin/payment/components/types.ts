@@ -41,6 +41,21 @@ export interface BillingDTO {
   billing_type?: {
     billingtypename: string;
   };
+  // แอดมินที่ออกบิลใบนี้ (มาจาก JWT ตอนออกบิล — ดู CreateBilling ฝั่ง backend)
+  admin_id?: number;
+  admin?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  // แอดมินที่แก้ไขบิลล่าสุด (ไม่มี = ยังไม่เคยถูกแก้หลังออกบิล)
+  updated_by?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
   slipurl?: string;
   invoice_id?: number;
   transactionid?: string;

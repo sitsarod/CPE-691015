@@ -638,12 +638,15 @@ export default function ExpensesTab({
                             ดูหลักฐาน
                           </button>
                         )}
-                        {(exp.created_by || exp.updated_by) && (
-                          <span className="mt-0.5 block text-[10.5px] text-slate-400">
-                            {exp.created_by && `เพิ่มโดย ${exp.created_by.firstName} ${exp.created_by.lastName}`}
-                            {exp.updated_by && `${exp.created_by ? ' · ' : ''}แก้ไขโดย ${exp.updated_by.firstName} ${exp.updated_by.lastName}`}
-                          </span>
-                        )}
+                        {(() => {
+                          // แสดงคนล่าสุดที่แตะรายการนี้พอ — แก้ล่าสุดถ้ามี ไม่งั้นก็คนที่บันทึกไว้
+                          const who = exp.updated_by || exp.created_by;
+                          return who ? (
+                            <span className="mt-0.5 block text-[10.5px] text-slate-400">
+                              แก้ไขล่าสุดโดย {who.firstName} {who.lastName}
+                            </span>
+                          ) : null;
+                        })()}
                       </td>
                       <td className="py-[14px] px-5 text-right font-medium tabular-nums text-slate-900 whitespace-nowrap">
                         ฿{exp.expenseamount.toLocaleString()}
