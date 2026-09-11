@@ -348,14 +348,15 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 	return &result, nil
 }
 
-const maxHistoryRows = 500
+// MaxHistoryRows = เพดานแถวต่อการดึงประวัติหนึ่งครั้ง
+const MaxHistoryRows = 500
 
 // withDeleted ใช้กับ Preload ของหน้าประวัติ เพื่อให้เห็นเจ้าของแถวที่ถูกลบไปแล้วด้วย
 func withDeleted(db *gorm.DB) *gorm.DB { return db.Unscoped() }
 
 func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.AttendanceHistoryItemDTO, error) {
 	query := s.db.Model(&models.StudentAttendance{}).
-		Limit(maxHistoryRows).
+		Limit(MaxHistoryRows).
 		Preload("Enrollment", withDeleted).
 		Preload("Enrollment.Customer", withDeleted).
 		Preload("Enrollment.Customer.User", withDeleted).
