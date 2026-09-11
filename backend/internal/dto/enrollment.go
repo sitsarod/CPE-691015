@@ -24,8 +24,10 @@ type CreateEnrollmentRes struct {
 
 // CreateEnrollmentData โครงสร้างข้อมูลที่ส่งกลับไปใน Data
 type CreateEnrollmentData struct {
-    EnrollmentID uint  `json:"enrollment_id"`
-    BillingID    *uint `json:"billing_id"`
+    EnrollmentID uint   `json:"enrollment_id"`
+    BillingID    *uint  `json:"billing_id"`
+    Status       string `json:"status"`
+    Waitlisted   bool   `json:"waitlisted"`
 }
 
 // UpdateEnrollmentReq รับข้อมูลตอนแอดมินต้องการแก้ไขสถานะหรือโควตา
@@ -35,6 +37,11 @@ type CreateEnrollmentData struct {
 // ปฏิเสธแบบเงียบ ๆ = นักเรียนสมัครซ้ำแบบเดิมเข้ามาอีก
 type RejectEnrollmentReq struct {
     Reason string `json:"reason" binding:"required,min=3,max=500"`
+}
+
+// ApproveEnrollmentReq — body ของการอนุมัติ ส่งมาหรือไม่ส่งก็ได้
+type ApproveEnrollmentReq struct {
+    AllowOverbook bool `json:"allow_overbook"`
 }
 
 type UpdateEnrollmentReq struct {
@@ -90,7 +97,11 @@ func DaysLeft(expiresAt *time.Time) *int {
 }
 const GracePeriodDays = 7
 
-func GraceDaysLeft(status string, expiresAt *time.Time, remainingSessions uint) *int {
+// GraceDaysLeft = เหลืออีกกี่วันที่แอดมินยังทบครั้งคงเหลือไปคอร์สหน้าให้ได้
+func GraceDaysLeft(status string, expiresAt *time.Time, remainingSessions uint, carriedOver bool) *int {
+	if carriedOver {
+		return nil
+	}
 	if status != string(models.EnrollmentStatusExpired) || expiresAt == nil || remainingSessions == 0 {
 		return nil
 	}
@@ -212,7 +223,7 @@ type AdminEnrollmentDTO struct {
 }
 
 
-func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
+func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver bool) AdminEnrollmentDTO {
     item := AdminEnrollmentDTO{
         ID:                e.ID,
         EnrollmentDate:    e.EnrollmentDate,
@@ -224,7 +235,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
         ExpiresAt:         e.ExpiresAt,
         DaysLeft:          DaysLeft(e.ExpiresAt),
         IsOverdue:         IsBillingOverdue(e.Billing),
-        GraceDaysLeft:     GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions),
+        GraceDaysLeft:     GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions, carriedOver),
     }
 
     if e.Customer != nil {
@@ -259,10 +270,11 @@ func ToAdminEnrollmentDTO(e *models.Enrollment) AdminEnrollmentDTO {
 }
 
 // ToAdminEnrollmentDTOs แปลงทั้งรายการ
-func ToAdminEnrollmentDTOs(enrollments []models.Enrollment) []AdminEnrollmentDTO {
+func ToAdminEnrollmentDTOs(enrollments []models.Enrollment, carriedOver map[uint]bool) []AdminEnrollmentDTO {
     result := make([]AdminEnrollmentDTO, 0, len(enrollments))
     for i := range enrollments {
-        result = append(result, ToAdminEnrollmentDTO(&enrollments[i]))
+        e := &enrollments[i]
+        result = append(result, ToAdminEnrollmentDTO(e, carriedOver[e.ID]))
     }
     return result
 }

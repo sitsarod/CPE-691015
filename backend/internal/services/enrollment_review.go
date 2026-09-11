@@ -27,6 +27,11 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 		return nil, ErrEnrollmentNotFound
 	}
 
+	carried, err := carriedOverEnrollmentIDs(s.db, []uint{enrollment.ID})
+	if err != nil {
+		return nil, err
+	}
+
 	result := &dto.EnrollmentReviewDTO{
 		Enrollment: dto.ReviewEnrollmentInfo{
 			ID:                enrollment.ID,
@@ -40,7 +45,8 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			ExpiresAt:         enrollment.ExpiresAt,
 			DaysLeft:          dto.DaysLeft(enrollment.ExpiresAt),
 			GraceDaysLeft: dto.GraceDaysLeft(
-				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions),
+				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions,
+				carried[enrollment.ID]),
 			RejectedReason: enrollment.RejectedReason,
 			RejectedAt:     enrollment.RejectedAt,
 		},

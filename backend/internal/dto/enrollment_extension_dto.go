@@ -14,9 +14,6 @@ type EnrollmentExtensionDTO struct {
 	ID           uint `json:"id"`
 	EnrollmentID uint `json:"enrollment_id"`
 
-	ExtendDays     uint `json:"extend_days"`
-	ExtendSessions uint `json:"extend_sessions"`
-
 	Reason string `json:"reason"`
 
 	PreviousExpiresAt *time.Time `json:"previous_expires_at"`
@@ -55,8 +52,6 @@ func ToEnrollmentExtensionDTO(e *models.EnrollmentExtension) EnrollmentExtension
 	return EnrollmentExtensionDTO{
 		ID:                    e.ID,
 		EnrollmentID:          e.EnrollmentID,
-		ExtendDays:            e.ExtendDays,
-		ExtendSessions:        e.ExtendSessions,
 		Reason:                e.Reason,
 		PreviousExpiresAt:     e.PreviousExpiresAt,
 		NewExpiresAt:          e.NewExpiresAt,

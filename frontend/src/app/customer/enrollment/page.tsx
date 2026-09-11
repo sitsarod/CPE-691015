@@ -173,7 +173,7 @@ export default function EnrollmentPage() {
         return;
       }
 
-      await enrollCourse(
+      const res = await enrollCourse(
         {
           customer_id: parseInt(customerId, 10),
           package_id: selected.pkg.id,
@@ -181,7 +181,7 @@ export default function EnrollmentPage() {
         token
       );
 
-      setSuccessMessage("สมัครคอร์สเรียนสำเร็จ! ระบบกำลังดำเนินการภายใน 3-7 วัน");
+      setSuccessMessage(res.message || "สมัครคอร์สเรียนสำเร็จ");
       setSelected(null);
       loadData(); // รีเฟรชข้อมูลคอร์สใหม่
     } catch (err: unknown) {
@@ -651,8 +651,8 @@ export default function EnrollmentPage() {
 
       {/* ---------------- Toast แจ้งเตือนสำเร็จ ---------------- */}
       {successMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center rounded-xl border border-green-200 bg-green-50 px-6 py-4 text-green-700 shadow-lg">
-          <CheckCircle2 className="mr-3 h-6 w-6 text-green-600" />
+        <div className="fixed bottom-6 right-6 z-50 flex max-w-md items-center rounded-xl border border-green-200 bg-green-50 px-6 py-4 text-green-700 shadow-lg">
+          <CheckCircle2 className="mr-3 h-6 w-6 shrink-0 text-green-600" />
           <span className="font-semibold">{successMessage}</span>
           <button
             onClick={() => setSuccessMessage(null)}

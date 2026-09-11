@@ -126,12 +126,12 @@ export default function AdminEnrollmentsPage() {
 
   // อนุมัติได้จากในแผงตรวจสอบเท่านั้น เพื่อบังคับให้แอดมินเห็นยอดค้างชำระ
   // ที่นั่งคงเหลือ และคอร์สอื่นที่ผู้สมัครเรียนอยู่ ก่อนตัดสินใจ
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: number, allowOverbook = false) => {
     setProcessingId(id);
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      await approveEnrollment(id, token);
+      await approveEnrollment(id, token, allowOverbook);
       setReviewingId(null);
       alert("อนุมัติสำเร็จ!");
       loadData();

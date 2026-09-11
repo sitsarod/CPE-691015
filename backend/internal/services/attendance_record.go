@@ -350,14 +350,17 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 
 const maxHistoryRows = 500
 
+// withDeleted ใช้กับ Preload ของหน้าประวัติ เพื่อให้เห็นเจ้าของแถวที่ถูกลบไปแล้วด้วย
+func withDeleted(db *gorm.DB) *gorm.DB { return db.Unscoped() }
+
 func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.AttendanceHistoryItemDTO, error) {
 	query := s.db.Model(&models.StudentAttendance{}).
 		Limit(maxHistoryRows).
-		Preload("Enrollment").
-		Preload("Enrollment.Customer").
-		Preload("Enrollment.Customer.User").
-		Preload("Enrollment.Package").
-		Preload("Enrollment.Package.Course").
+		Preload("Enrollment", withDeleted).
+		Preload("Enrollment.Customer", withDeleted).
+		Preload("Enrollment.Customer.User", withDeleted).
+		Preload("Enrollment.Package", withDeleted).
+		Preload("Enrollment.Package.Course", withDeleted).
 		Preload("AttendanceSession").
 		Order("check_in_time DESC")
 

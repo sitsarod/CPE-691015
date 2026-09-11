@@ -12,9 +12,6 @@ type EnrollmentExtension struct {
 	EnrollmentID uint        `json:"enrollment_id" gorm:"index;not null"`
 	Enrollment   *Enrollment `json:"-" gorm:"foreignKey:EnrollmentID"`
 
-	ExtendDays     uint `json:"extend_days"`
-	ExtendSessions uint `json:"extend_sessions"`
-
 	// Reason = เหตุผลที่ขยายให้ บังคับกรอกที่ชั้น service
 	Reason string `json:"reason" gorm:"type:text"`
 

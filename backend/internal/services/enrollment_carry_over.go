@@ -38,6 +38,27 @@ func bankCarryOver(
 	return &row, nil
 }
 
+// carriedOverEnrollmentIDs คืนเซ็ตของใบที่ถูกทบครั้งคงเหลือไปคอร์สหน้าแล้ว
+func carriedOverEnrollmentIDs(db *gorm.DB, enrollmentIDs []uint) (map[uint]bool, error) {
+	out := map[uint]bool{}
+	if len(enrollmentIDs) == 0 {
+		return out, nil
+	}
+
+	var ids []uint
+	if err := db.Model(&models.SessionCarryOver{}).
+		Where("from_enrollment_id IN ?", enrollmentIDs).
+		Distinct("from_enrollment_id").
+		Pluck("from_enrollment_id", &ids).Error; err != nil {
+		return nil, errors.New("ไม่สามารถตรวจสอบประวัติการทบครั้งคงเหลือได้")
+	}
+
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
 func consumeCarryOver(tx *gorm.DB, e *models.Enrollment) (uint, error) {
 	var prior int64
 	if err := tx.Model(&models.SessionCarryOver{}).
