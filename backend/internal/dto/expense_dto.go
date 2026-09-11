@@ -14,6 +14,16 @@ type CreateExpenseRequest struct {
 	ReceiptURL  string             `json:"receipturl"`
 }
 
+// UpdateExpenseRequest — ทุกฟิลด์เป็น optional (แก้เฉพาะที่ส่งมา)
+type UpdateExpenseRequest struct {
+	Amount      *float64            `json:"expenseamount"`
+	Type        *models.ExpenseType `json:"expensetype"`
+	Description *string             `json:"expensedescription"`
+	Date        *time.Time          `json:"expensedate"`
+	CoachID     *uint               `json:"coach_id"`
+	ReceiptURL  *string             `json:"receipturl"`
+}
+
 type CoachMinDTO struct {
 	ID        uint   `json:"id"`
 	Nickname  string `json:"nickname"`
@@ -31,7 +41,10 @@ type ExpenseDTO struct {
 	CoachID     *uint              `json:"coach_id,omitempty"`
 	Coach       *CoachMinDTO       `json:"coach,omitempty"`
 	ReceiptURL  string             `json:"receipturl"`
-	CreatedAt   time.Time          `json:"created_at"`
+	// ผู้ทำรายการ — created_by = คนเพิ่ม, updated_by = คนแก้ไขล่าสุด (ไม่มี = ยังไม่เคยแก้)
+	CreatedBy *UserMinDTO `json:"created_by,omitempty"`
+	UpdatedBy *UserMinDTO `json:"updated_by,omitempty"`
+	CreatedAt time.Time   `json:"created_at"`
 }
 
 // Map models.Expense to ExpenseDTO
@@ -62,6 +75,13 @@ func ToExpenseDTO(e *models.Expense) *ExpenseDTO {
 			dto.Coach.LastName = e.Coach.User.LastName
 			dto.Coach.Email = e.Coach.User.Email
 		}
+	}
+
+	if e.CreatedBy != nil {
+		dto.CreatedBy = ToUserMinDTO(e.CreatedBy)
+	}
+	if e.UpdatedBy != nil {
+		dto.UpdatedBy = ToUserMinDTO(e.UpdatedBy)
 	}
 
 	return dto

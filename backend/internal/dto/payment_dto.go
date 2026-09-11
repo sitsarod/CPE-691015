@@ -67,7 +67,16 @@ type BillingDTO struct {
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
 	TransactionID string          `json:"transactionid,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	// ผลตรวจสลิปอัตโนมัติ (SlipOK) ของใบแจ้งหนี้ที่ผูกกับบิลนี้
+	SlipOkChecked bool   `json:"slipok_checked"`
+	SlipOkPassed  bool   `json:"slipok_passed"`
+	SlipOkMessage string `json:"slipok_message,omitempty"`
+	// บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป)
+	ReceivingBankName  string `json:"receiving_bank_name,omitempty"`
+	ReceivingAccountNo string `json:"receiving_account_no,omitempty"`
+	// ConfirmedBy = แอดมินที่กดอนุมัติการชำระเงินจริง (nil = ระบบยืนยันอัตโนมัติ)
+	ConfirmedBy *UserMinDTO `json:"confirmed_by,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
 	// PaidAt = เวลาที่ยืนยันการชำระเงินจริง (invoice.UpdatedAt ตอนสถานะเป็น success)
 	// ใช้สำหรับจัดยอดรายรับให้อยู่ในช่วงเวลาที่จ่ายจริง ไม่ใช่วันที่ออกบิล
 	PaidAt *time.Time `json:"paid_at,omitempty"`
@@ -132,6 +141,14 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 		dto.InvoiceID = invoice.ID
 		dto.SlipImageUrl = invoice.SlipImageUrl
 		dto.TransactionID = invoice.TransactionID
+		dto.SlipOkChecked = invoice.SlipOkChecked
+		dto.SlipOkPassed = invoice.SlipOkPassed
+		dto.SlipOkMessage = invoice.SlipOkMessage
+		dto.ReceivingBankName = invoice.ReceivingBankName
+		dto.ReceivingAccountNo = invoice.ReceivingAccountNo
+		if invoice.ConfirmedBy != nil {
+			dto.ConfirmedBy = ToUserMinDTO(invoice.ConfirmedBy)
+		}
 
 		// Derive status from the invoice status for this specific transaction mapping
 		if invoice.Status == models.InvoiceSuccess {

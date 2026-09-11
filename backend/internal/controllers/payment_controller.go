@@ -94,7 +94,14 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 		return
 	}
 
-	invoice, err := ctrl.service.ConfirmPayment(uint(id))
+	// เก็บว่าแอดมินคนไหนเป็นผู้กดอนุมัติ (users.id จาก JWT)
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	invoice, err := ctrl.service.ConfirmPayment(uint(id), &adminID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

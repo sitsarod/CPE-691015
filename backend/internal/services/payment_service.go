@@ -152,10 +152,18 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, errors.New("บิลในใบแจ้งหนี้นี้ได้รับการชำระเงินผ่านใบแจ้งหนี้อื่นไปแล้ว")
 	}
 
+	// snapshot บัญชีปลายทางที่เปิดใช้งานอยู่ (บัญชีที่ลูกค้าโอนเข้า) เก็บไว้กับใบแจ้งหนี้
+	// เพื่อให้แอดมินเห็นว่าเงินเข้าบัญชีไหน แม้ภายหลังบัญชีจะถูกแก้/ปิดก็ตาม
+	var receivingAccount models.BankAccount
+	if err := s.db.Where("is_active = ?", true).Order("id ASC").First(&receivingAccount).Error; err == nil {
+		invoice.ReceivingBankName = receivingAccount.BankName
+		invoice.ReceivingAccountNo = receivingAccount.AccountNo
+	}
+
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		invoice.SlipImageUrl = slipURL
 		invoice.Status = models.InvoicePending
-		
+
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกข้อมูลสลิปได้")
 		}
@@ -212,6 +220,7 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 	var activeAccount models.BankAccount
 	if err := s.db.Where("is_active = ? AND auto_verify_enabled = ?", true, true).First(&activeAccount).Error; err != nil {
+		// ไม่มีบัญชีที่เปิด auto-verify → ไม่เคยตรวจ (SlipOkChecked ยังเป็น false) แอดมินต้องตรวจเอง
 		log.Printf("[SlipOK] invoice #%d: ไม่มีบัญชีธนาคารที่ is_active และ auto_verify_enabled เปิดพร้อมกัน ข้ามการตรวจอัตโนมัติ (%v)", invoiceID, err)
 		return
 	}
@@ -224,15 +233,19 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 
 	data, err := s.slipOk.VerifySlip(slipURL, invoice.TotalAmount)
 	if err != nil {
+		// ตรวจแล้วแต่ไม่ผ่าน/ยิงไม่ได้ — บันทึกเหตุผลไว้ให้แอดมินเห็น
+		s.recordSlipOk(invoiceID, false, err.Error())
 		log.Printf("[SlipOK] invoice #%d: เรียก SlipOK ไม่สำเร็จ/ถูกปฏิเสธ: %v", invoiceID, err)
 		return
 	}
 	if !data.Success {
+		s.recordSlipOk(invoiceID, false, data.Message)
 		log.Printf("[SlipOK] invoice #%d: SlipOK ตอบกลับ success=false, message=%q", invoiceID, data.Message)
 		return
 	}
 
 	if !MatchesBankAccount(data, activeAccount.AccountNo) {
+		s.recordSlipOk(invoiceID, false, "ยอดโอนถูกต้อง แต่บัญชีปลายทางบนสลิปไม่ตรงกับบัญชีรับเงินของสถาบัน")
 		log.Printf("[SlipOK] invoice #%d: ผู้รับปลายทางไม่ตรงกัน (account=%q, proxy=%q, บัญชีในระบบ=%q)",
 			invoiceID, data.Receiver.Account.Value, data.Receiver.Proxy.Value, activeAccount.AccountNo)
 		return
@@ -246,10 +259,12 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 		if err := s.db.Model(&models.Invoice{}).
 			Where("transaction_id = ? AND id <> ?", data.TransRef, invoiceID).
 			Count(&dupCount).Error; err != nil {
+			s.recordSlipOk(invoiceID, false, "ตรวจสอบสลิปซ้ำไม่สำเร็จ")
 			log.Printf("[SlipOK] invoice #%d: ตรวจสอบสลิปซ้ำไม่สำเร็จ: %v", invoiceID, err)
 			return
 		}
 		if dupCount > 0 {
+			s.recordSlipOk(invoiceID, false, "สลิปนี้ถูกใช้ยืนยันการชำระเงินกับใบแจ้งหนี้อื่นไปแล้ว")
 			log.Printf("[SlipOK] invoice #%d: สลิปนี้ (transRef=%s) ถูกใช้ยืนยันการชำระเงินกับใบแจ้งหนี้อื่นไปแล้ว ปฏิเสธการยืนยันอัตโนมัติ", invoiceID, data.TransRef)
 			return
 		}
@@ -257,10 +272,16 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 
 	// ถ้าบันทึก transaction_id ไม่สำเร็จ (เช่นโดน unique index จาก race กับอีก request) ต้องหยุด ไม่ยืนยันการชำระเงิน
 	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoiceID).Update("transaction_id", data.TransRef).Error; err != nil {
+		s.recordSlipOk(invoiceID, false, "บันทึกเลขอ้างอิงสลิปไม่สำเร็จ (อาจเป็นสลิปซ้ำ)")
 		log.Printf("[SlipOK] invoice #%d: บันทึก transaction_id ไม่สำเร็จ (อาจเป็นสลิปซ้ำ): %v", invoiceID, err)
 		return
 	}
-	if _, err := s.ConfirmPayment(invoiceID); err != nil {
+
+	// ตรวจผ่านครบทุกเงื่อนไข — บันทึกผล "ผ่าน" ก่อนยืนยัน (ConfirmPayment โหลดใบเดิมต่อ จึงเก็บผลไว้)
+	s.recordSlipOk(invoiceID, true, "ยอดและเวลาโอนตรงกับบิล ระบบยืนยันการชำระเงินอัตโนมัติแล้ว")
+
+	// ยืนยันอัตโนมัติโดยระบบ — ไม่มีแอดมินเป็นผู้กด จึงส่ง confirmedBy = nil
+	if _, err := s.ConfirmPayment(invoiceID, nil); err != nil {
 		log.Printf("[SlipOK] invoice #%d: ตรวจสลิปผ่านแล้วแต่ ConfirmPayment ล้มเหลว: %v", invoiceID, err)
 		return
 	}
@@ -278,8 +299,21 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 	)
 }
 
+// recordSlipOk บันทึกผลตรวจสลิปอัตโนมัติ (SlipOK) ลงใบแจ้งหนี้ เพื่อให้แอดมินเห็นตอนตรวจด้วยตนเอง
+// checked จะเป็น true เสมอเมื่อฟังก์ชันนี้ถูกเรียก (แปลว่า SlipOK ได้ตรวจใบนี้แล้ว)
+func (s *PaymentService) recordSlipOk(invoiceID uint, passed bool, message string) {
+	if err := s.db.Model(&models.Invoice{}).Where("id = ?", invoiceID).Updates(map[string]interface{}{
+		"slip_ok_checked": true,
+		"slip_ok_passed":  passed,
+		"slip_ok_message": message,
+	}).Error; err != nil {
+		log.Printf("[SlipOK] invoice #%d: บันทึกผลตรวจสลิปไม่สำเร็จ: %v", invoiceID, err)
+	}
+}
+
 // ConfirmPayment ยืนยันการชำระเงินโดยผู้ดูแลระบบ (Admin)
-func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error) {
+// confirmedByID = users.id ของแอดมินที่กดอนุมัติ (nil = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
+func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*models.Invoice, error) {
 	var invoice models.Invoice
 	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
@@ -291,6 +325,7 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint) (*models.Invoice, error)
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		invoice.Status = models.InvoiceSuccess
+		invoice.ConfirmedByID = confirmedByID
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถยืนยันยอดเงินได้")
 		}

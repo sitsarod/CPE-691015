@@ -39,8 +39,23 @@ type Invoice struct {
 
 	Method PaymentMethod `json:"paymentmethod"`
 
+	// ผลตรวจสลิปอัตโนมัติ (SlipOK) — เก็บไว้ให้แอดมินเห็นตอนตรวจด้วยตนเอง
+	// SlipOkChecked = ระบบ SlipOK ได้ตรวจใบนี้หรือยัง (false = บัญชีไม่ได้เปิด auto-verify จึงไม่เคยตรวจ)
+	// SlipOkPassed  = ผลตรวจผ่านหรือไม่ · SlipOkMessage = ข้อความ/เหตุผลจาก SlipOK
+	SlipOkChecked bool   `json:"slipok_checked" gorm:"default:false"`
+	SlipOkPassed  bool   `json:"slipok_passed" gorm:"default:false"`
+	SlipOkMessage string `json:"slipok_message"`
+
+	// บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป เผื่อบัญชีถูกแก้/ปิดภายหลัง)
+	ReceivingBankName  string `json:"receiving_bank_name"`
+	ReceivingAccountNo string `json:"receiving_account_no"`
+
 	CustomerID uint  `json:"customer_id"`
 	Customer   *User `json:"customer" gorm:"foreignKey:CustomerID"`
+
+	// ConfirmedBy = แอดมินที่กด "อนุมัติยอดเงินโอน" จริง (nil = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
+	ConfirmedByID *uint `json:"confirmed_by_id"`
+	ConfirmedBy   *User `json:"confirmed_by" gorm:"foreignKey:ConfirmedByID"`
 
 	PaymentItem []PaymentItem `json:"paymentitem" gorm:"foreignKey:InvoiceID"`
 }

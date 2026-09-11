@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { User, Users, Search, CheckSquare, Tag, Calendar, AlertCircle, Info, Pencil } from 'lucide-react';
+import { User, Users, Search, Tag, Calendar, Check, Pencil } from 'lucide-react';
 import { BackendUser, BillingDTO } from './types';
 import { createBilling } from "@/services/paymentAPI";
 
+// enum ประเภทค่าใช้จ่าย (เดิมในโค้ด — ไม่ hardcode ในดีไซน์)
 const BILLING_TYPES = [
   { id: 1, name: "ค่าเรียน / คอร์สเรียน" },
   { id: 2, name: "ค่าเช่าสนาม" },
@@ -41,82 +42,79 @@ export default function BillingIssueForm({
   const [hourlyRate, setHourlyRate] = useState('');
   const [billingDescription, setBillingDescription] = useState('');
   const [dueDate, setDueDate] = useState(getNextWeekDate());
+  const [submitted, setSubmitted] = useState(false);   // แตะปุ่มส่งแล้วหรือยัง (ใช้โชว์ validation ใต้ฟิลด์)
+  const [submitting, setSubmitting] = useState(false);
 
   // ยอดหารเฉลี่ยแบบกลุ่ม — ถ้ามีเศษให้ปัดขึ้นเป็นจำนวนเต็มบาท
   const groupTotal = (parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0);
-  const perPersonRaw =
-    selectedStudentIds.length > 0 ? groupTotal / selectedStudentIds.length : 0;
+  const perPersonRaw = selectedStudentIds.length > 0 ? groupTotal / selectedStudentIds.length : 0;
   const perPersonRounded = Math.ceil(perPersonRaw);
   const hasRounding = perPersonRounded !== perPersonRaw;
 
-  // Filter students based on search query in the form checklist
+  // ราคารวมทั้งหมด = ยอดต่อคน × จำนวนคนที่เลือก (คำนวณสดฝั่ง client เพื่อแสดงผลเท่านั้น)
+  const grandTotal = billingMode === 'individual'
+    ? (parseFloat(price) || 0) * selectedStudentIds.length
+    : perPersonRounded * selectedStudentIds.length;
+
+  // กรองรายชื่อผู้เรียนตามคำค้น
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const fullName = `${s.firstName || ''} ${s.lastName || ''}`.toLowerCase();
       const nickname = (s.nickname || '').toLowerCase();
+      const email = (s.email || '').toLowerCase();
       const query = studentSearchQuery.toLowerCase();
-      return fullName.includes(query) || nickname.includes(query);
+      return fullName.includes(query) || nickname.includes(query) || email.includes(query);
     });
   }, [students, studentSearchQuery]);
 
-  // Student checklist toggler
   const toggleSelectStudent = (id: number) => {
-    if (selectedStudentIds.includes(id)) {
-      setSelectedStudentIds(selectedStudentIds.filter(sid => sid !== id));
-    } else {
-      setSelectedStudentIds([...selectedStudentIds, id]);
-    }
+    setSelectedStudentIds(prev =>
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
   };
 
-  // Toggle select all filtered students
   const handleSelectAllFiltered = () => {
     const allFilteredIds = filteredStudents.map(s => s.id);
-    const areAllSelected = allFilteredIds.every(id => selectedStudentIds.includes(id));
-
+    const areAllSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedStudentIds.includes(id));
     if (areAllSelected) {
       setSelectedStudentIds(selectedStudentIds.filter(id => !allFilteredIds.includes(id)));
     } else {
       const newSelection = [...selectedStudentIds];
-      allFilteredIds.forEach(id => {
-        if (!newSelection.includes(id)) {
-          newSelection.push(id);
-        }
-      });
+      allFilteredIds.forEach(id => { if (!newSelection.includes(id)) newSelection.push(id); });
       setSelectedStudentIds(newSelection);
     }
   };
 
+  // ── validation ต่อฟิลด์ (แสดงหลังกดส่ง ไม่ใช้ alert) ─────────
+  const errStudents = submitted && selectedStudentIds.length === 0;
+  const errType = submitted && !selectedBillingTypeId;
+  const errDue = submitted && !dueDate;
+  const errDesc = submitted && !billingDescription.trim();
+  const errPrice = submitted && billingMode === 'individual' && !price;
+  const errHours = submitted && billingMode === 'group' && !hours;
+  const errRate = submitted && billingMode === 'group' && !hourlyRate;
+  const hasError = errStudents || errType || errDue || errDesc || errPrice || errHours || errRate;
+
+  const fieldBorder = (hasErr: boolean) =>
+    hasErr ? 'border-rose-400 focus:border-rose-500' : 'border-gray-300 focus:border-[#CD0D13]';
+
   const handleCreateBilling = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedStudentIds.length === 0) {
-      onTriggerToast('กรุณาเลือกผู้เรียนอย่างน้อยหนึ่งคน', 'error');
-      return;
-    }
+    setSubmitted(true);
 
-    if (billingMode === 'individual') {
-      if (!selectedBillingTypeId || !price || !billingDescription || !dueDate) {
-        onTriggerToast('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง', 'error');
-        return;
-      }
-    } else {
-      if (!selectedBillingTypeId || !hours || !hourlyRate || !billingDescription || !dueDate) {
-        onTriggerToast('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง', 'error');
-        return;
-      }
-    }
+    // เช็คความครบถ้วนแบบสด (ไม่พึ่ง state ที่เพิ่ง set)
+    const invalid =
+      selectedStudentIds.length === 0 || !selectedBillingTypeId || !dueDate || !billingDescription.trim() ||
+      (billingMode === 'individual' ? !price : (!hours || !hourlyRate));
+    if (invalid) return;
 
+    setSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       const adminIdStr = typeof window !== 'undefined' ? localStorage.getItem("user_id") : "1";
       const adminId = parseInt(adminIdStr || "1");
 
-      let calculatedAmount = 0;
-      if (billingMode === 'individual') {
-        calculatedAmount = parseFloat(price);
-      } else {
-        // ปัดขึ้นเป็นจำนวนเต็มบาทให้ตรงกับที่แสดงในฟอร์ม
-        calculatedAmount = perPersonRounded;
-      }
+      const calculatedAmount = billingMode === 'individual' ? parseFloat(price) : perPersonRounded;
 
       const payload = {
         customer_ids: selectedStudentIds,
@@ -128,168 +126,169 @@ export default function BillingIssueForm({
       };
 
       await createBilling(payload, token || "");
-
       onTriggerToast(`ออกบิลเรียกเก็บเงินสำเร็จจำนวน ${selectedStudentIds.length} รายการ`);
-      
-      // Reset form
+
+      // เคลียร์ฟอร์ม — คงประเภทและวันครบกำหนดไว้ให้ออกบิลชุดถัดไปต่อได้เลย
       setSelectedStudentIds([]);
-      setSelectedBillingTypeId('');
       setPrice('');
       setHours('');
       setHourlyRate('');
       setBillingDescription('');
-      setDueDate(getNextWeekDate());
       setStudentSearchQuery('');
+      setSubmitted(false);
 
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'ออกบิลไม่สำเร็จ', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const req = <span className="text-rose-500">*</span>;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Form Column */}
-      <div className="lg:col-span-2 bg-white border border-gray-200 p-6">
-        <form onSubmit={handleCreateBilling} className="space-y-5">
-          {/* Student Selection Checklist (Multi-select) */}
+    <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1.65fr_1fr] lg:gap-[34px]">
+
+      {/* ───────── คอลัมน์ซ้าย: ฟอร์มออกบิล ───────── */}
+      <div className="min-w-0 border border-gray-200 bg-white p-6">
+        <form onSubmit={handleCreateBilling} className="space-y-5" noValidate>
+
+          {/* 1) เลือกผู้เรียน + ลิงก์เลือกทั้งหมด */}
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
-              <label className="block text-sm font-semibold text-slate-700">เลือกผู้เรียน (เลือกพร้อมกันได้หลายคน) <span className="text-red-500">*</span></label>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllFiltered}
-                  className="text-xs text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] font-bold flex items-center space-x-1.5 cursor-pointer border border-[#CD0D13]/40 rounded-lg px-2.5 py-1.5 transition-colors"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  <span>เลือกทั้งหมดตามตัวกรอง</span>
-                </button>
-              </div>
+            <div className="mb-2 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+              <label className="block text-sm text-slate-700">เลือกผู้เรียน (เลือกพร้อมกันได้หลายคน) {req}</label>
+              <button
+                type="button"
+                onClick={handleSelectAllFiltered}
+                className="text-left text-[12.5px] font-semibold text-[#CD0D13] hover:underline sm:text-right"
+              >
+                เลือกทั้งหมดตามตัวกรอง
+              </button>
             </div>
 
-            {/* Search Bar for student list */}
+            {/* 2) ช่องค้นหา */}
             <div className="relative mb-3">
               <input
                 type="text"
                 placeholder="ค้นหารายชื่อผู้เรียน..."
                 value={studentSearchQuery}
                 onChange={(e) => setStudentSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-sm text-slate-850"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-4 text-sm text-slate-800 outline-none transition-all focus:border-[#CD0D13]"
               />
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             </div>
 
-            {/* Scrollable Checklist */}
-            <div className="border border-gray-200 p-3 bg-gray-50 max-h-52 overflow-y-auto no-scrollbar space-y-2">
+            {/* 3) ลิสต์ผู้เรียน (scroll ในกล่อง) */}
+            <div className={`max-h-[236px] overflow-y-auto no-scrollbar border ${errStudents ? 'border-rose-400' : 'border-gray-200'}`}>
               {filteredStudents.length === 0 ? (
-                <div className="text-center text-slate-450 py-6 text-xs">
+                <div className="flex min-h-[120px] items-center justify-center px-4 text-center text-xs text-slate-500">
                   ไม่พบผู้เรียนที่ตรงกับคำค้นหา
                 </div>
               ) : (
-                filteredStudents.map(s => {
-                  const isChecked = selectedStudentIds.includes(s.id);
-                  return (
-                    <label
-                      key={s.id}
-                      className={`flex items-center p-2.5 rounded-lg border cursor-pointer transition-all ${
-                        isChecked
-                          ? 'bg-red-50/50 border-[#CD0D13] text-slate-900 font-semibold'
-                          : 'bg-white border-slate-100 hover:border-slate-350 text-slate-700'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleSelectStudent(s.id)}
-                        className="w-4 h-4 text-[#CD0D13] rounded border-slate-300 focus:ring-[#CD0D13] accent-red-650 mr-3"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm block truncate">
-                          {s.firstName} {s.lastName}
-                          {s.nickname && ` (${s.nickname})`}
+                <div className="divide-y divide-gray-100">
+                  {filteredStudents.map(s => {
+                    const isChecked = selectedStudentIds.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex cursor-pointer items-center gap-3 px-4 py-[13px] transition-colors ${isChecked ? 'bg-rose-50/50' : 'hover:bg-slate-50'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectStudent(s.id)}
+                          className="sr-only"
+                        />
+                        <span className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[3px] border transition-colors ${
+                          isChecked ? 'border-[#CD0D13] bg-[#CD0D13]' : 'border-[1.6px] border-gray-300 bg-white'
+                        }`}>
+                          {isChecked && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
                         </span>
-                      </div>
-                    </label>
-                  );
-                })
+                        <span className={`min-w-0 flex-1 truncate text-[13.5px] ${isChecked ? 'font-medium text-slate-900' : 'text-slate-600'}`}>
+                          {s.firstName} {s.lastName}{s.nickname ? ` (${s.nickname})` : ''}
+                        </span>
+                        <span className="shrink-0 truncate text-[11.5px] text-slate-400">{s.email}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            <p className="text-xs text-slate-550 mt-1.5 flex items-center space-x-1">
-              <Info className="w-3.5 h-3.5 text-slate-400" />
-              <span>
-                เลือกไว้ทั้งหมด {selectedStudentIds.length} คน 
-                {billingMode === 'individual' 
-                  ? ' (ระบบจะสร้างบิลเก็บเงินเต็มจำนวนแยกแต่ละคน)' 
-                  : ' (ยอดเงินทั้งหมดจะถูกหารเฉลี่ยตามจำนวนผู้เรียนที่เลือก)'}
-              </span>
+
+            {/* 4) บรรทัดสรุปการเลือก */}
+            <p className="mt-2 text-[12.5px] text-[#CD0D13]">
+              เลือกไว้ทั้งหมด {selectedStudentIds.length} คน — {billingMode === 'individual'
+                ? 'ออกบิลคนละใบด้วยยอดเท่ากัน'
+                : 'หารยอดรวมเฉลี่ยตามจำนวนคนที่เลือก'}
             </p>
+            {errStudents && <p className="mt-1 text-[11.5px] text-rose-500">กรุณาเลือกผู้เรียนอย่างน้อยหนึ่งคน</p>}
           </div>
 
-          {/* แถว: ประเภทค่าใช้จ่าย + วันครบกำหนด */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 5) ประเภทค่าใช้จ่าย + วันครบกำหนด */}
+          <div className="grid grid-cols-1 gap-[22px] md:grid-cols-2">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">ประเภทค่าใช้จ่าย <span className="text-red-500">*</span></label>
+              <label className="mb-1.5 block text-sm text-slate-700">ประเภทค่าใช้จ่าย {req}</label>
               <div className="relative">
                 <select
                   value={selectedBillingTypeId}
                   onChange={(e) => setSelectedBillingTypeId(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-slate-800 text-sm appearance-none"
-                  required
+                  className={`h-[46px] w-full appearance-none rounded-lg border bg-white pl-10 pr-8 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errType)}`}
                 >
                   <option value="">-- เลือกประเภท --</option>
                   {BILLING_TYPES.map(type => (
                     <option key={type.id} value={type.id}>{type.name}</option>
                   ))}
                 </select>
-                <Tag className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
-                <div className="absolute right-3.5 top-4 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-500 w-0 h-0"></div>
+                <Tag className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="pointer-events-none absolute right-3.5 top-1/2 h-0 w-0 -translate-y-1/2 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-500" />
               </div>
+              {errType && <p className="mt-1 text-[11.5px] text-rose-500">กรุณาเลือกประเภทค่าใช้จ่าย</p>}
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">วันครบกำหนดชำระเงิน <span className="text-red-500">*</span></label>
+              <label className="mb-1.5 block text-sm text-slate-700">วันครบกำหนดชำระเงิน {req}</label>
               <div className="relative">
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-                  required
+                  className={`h-[46px] w-full rounded-lg border bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errDue)}`}
                 />
-                <Calendar className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+                <Calendar className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </div>
+              {errDue && <p className="mt-1 text-[11.5px] text-rose-500">กรุณาเลือกวันครบกำหนดชำระ</p>}
             </div>
           </div>
 
-          {/* Toggle วิธีคิดเงิน: ยอดต่อคน / จำนวน × อัตรา */}
-          <div className="flex border border-gray-200 p-1 max-w-md">
+          {/* 6) โหมดคิดยอด (segmented) */}
+          <div className="flex max-w-md border border-gray-200 p-1">
             <button
               type="button"
               onClick={() => setBillingMode('individual')}
-              className={`flex-1 py-2 px-4 text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
+              className={`flex flex-1 items-center justify-center gap-1.5 py-2 px-4 text-xs font-bold transition-all ${
                 billingMode === 'individual' ? 'bg-[#FFF0F0] text-[#CD0D13]' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <User className="w-3.5 h-3.5" />
+              <User className="h-3.5 w-3.5" />
               <span>ยอดต่อคน</span>
             </button>
             <button
               type="button"
               onClick={() => setBillingMode('group')}
-              className={`flex-1 py-2 px-4 text-xs font-bold transition-all text-center flex items-center justify-center space-x-1.5 cursor-pointer ${
+              className={`flex flex-1 items-center justify-center gap-1.5 py-2 px-4 text-xs font-bold transition-all ${
                 billingMode === 'group' ? 'bg-[#FFF0F0] text-[#CD0D13]' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>จำนวน × อัตรา (หารเฉลี่ย)</span>
+              <Users className="h-3.5 w-3.5" />
+              <span>จำนวน × อัตรา</span>
             </button>
           </div>
 
-          {/* แถว: จำนวนเงิน + ราคารวม */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+          {/* จำนวนเงิน + กล่องราคารวม */}
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
             {billingMode === 'individual' ? (
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">จำนวนเงินเรียกเก็บต่อคน (บาท) <span className="text-red-500">*</span></label>
+                <label className="mb-1.5 block text-sm text-slate-700">จำนวนเงินเรียกเก็บต่อคน (บาท) {req}</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -297,16 +296,16 @@ export default function BillingIssueForm({
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="ตัวอย่าง: 1500"
                     min="1"
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-                    required
+                    className={`h-[46px] w-full rounded-lg border bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errPrice)}`}
                   />
-                  <span className="absolute left-3.5 top-3 text-slate-400 font-bold text-sm">฿</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">฿</span>
                 </div>
+                {errPrice && <p className="mt-1 text-[11.5px] text-rose-500">กรุณากรอกจำนวนเงินต่อคน</p>}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">จำนวน <span className="text-red-500">*</span></label>
+                  <label className="mb-1.5 block text-xs text-slate-700">จำนวน {req}</label>
                   <input
                     type="number"
                     value={hours}
@@ -314,12 +313,12 @@ export default function BillingIssueForm({
                     placeholder="เช่น 10"
                     min="0.1"
                     step="any"
-                    className="w-full px-3 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-                    required
+                    className={`h-[46px] w-full rounded-lg border bg-white px-3 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errHours)}`}
                   />
+                  {errHours && <p className="mt-1 text-[11.5px] text-rose-500">กรุณากรอกจำนวน</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">อัตรา (บาท/จำนวน) <span className="text-red-500">*</span></label>
+                  <label className="mb-1.5 block text-xs text-slate-700">อัตรา (บาท/จำนวน) {req}</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -327,129 +326,120 @@ export default function BillingIssueForm({
                       onChange={(e) => setHourlyRate(e.target.value)}
                       placeholder="เช่น 100"
                       min="1"
-                      className="w-full pl-7 pr-2 py-3 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-                      required
+                      className={`h-[46px] w-full rounded-lg border bg-white pl-7 pr-2 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errRate)}`}
                     />
-                    <span className="absolute left-2.5 top-3.5 text-slate-400 font-bold text-xs">฿</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">฿</span>
                   </div>
+                  {errRate && <p className="mt-1 text-[11.5px] text-rose-500">กรุณากรอกอัตรา</p>}
                 </div>
               </div>
             )}
 
-            {/* กล่องยอดรวม/หารเฉลี่ย */}
-            {billingMode === 'individual' ? (
-              <div className="flex items-center justify-between border border-gray-200 bg-gray-50 px-4 py-3.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">ราคารวมทั้งหมด</span>
-                <span className="text-xl font-bold tabular-nums text-[#CD0D13]">
-                  ฿{((parseFloat(price) || 0) * selectedStudentIds.length).toLocaleString('th-TH')}
+            {/* กล่องราคารวมทั้งหมด */}
+            <div className="flex flex-col justify-center border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">ราคารวมทั้งหมด</span>
+              <span className="mt-0.5 text-[22px] font-bold tabular-nums text-[#CD0D13]">
+                ฿{grandTotal.toLocaleString('th-TH')}
+              </span>
+              {billingMode === 'group' && selectedStudentIds.length > 0 && (
+                <span className="mt-0.5 text-[11px] text-slate-500">
+                  หารเฉลี่ยคนละ ฿{perPersonRounded.toLocaleString('th-TH')}
+                  {hasRounding && ` (ปัดขึ้นจาก ฿${perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })})`}
                 </span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 border border-gray-200 bg-gray-50 p-4 text-center sm:gap-4">
-                <div>
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">ราคารวม</span>
-                  <span className="mt-1 block text-sm font-bold text-slate-800">
-                    ฿{((parseFloat(hours) || 0) * (parseFloat(hourlyRate) || 0)).toLocaleString()}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">ผู้รับ</span>
-                  <span className="mt-1 block text-sm font-bold text-slate-800">{selectedStudentIds.length} คน</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#CD0D13]">คนละ</span>
-                  <span className="mt-0.5 block text-lg font-black tabular-nums text-[#CD0D13]">
-                    ฿{perPersonRounded.toLocaleString('th-TH')}
-                  </span>
-                  {hasRounding && (
-                    <span className="mt-0.5 block text-[10px] font-medium text-amber-600">
-                      ปัดขึ้นจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Description */}
+          {/* 7) คำอธิบายรายละเอียดบิล */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">คำอธิบายรายละเอียดบิล <span className="text-red-500">*</span></label>
+            <label className="mb-1.5 block text-sm text-slate-700">คำอธิบายรายละเอียดบิล {req}</label>
             <textarea
               rows={2}
               value={billingDescription}
               onChange={(e) => setBillingDescription(e.target.value)}
               placeholder="เช่น ค่าลูกแบต หรือ ค่าเช่าสนาม"
-              className="w-full p-4 bg-white border border-gray-300 rounded-lg focus:bg-white focus:border-[#CD0D13] focus:ring-2 focus:ring-red-100 transition-all outline-none text-sm text-slate-800"
-              required
+              className={`w-full rounded-lg border bg-white p-4 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errDesc)}`}
             />
+            {errDesc && <p className="mt-1 text-[11.5px] text-rose-500">กรุณากรอกคำอธิบายรายละเอียดบิล</p>}
           </div>
 
-          {/* Submit — เต็มความกว้าง */}
+          {/* 8) ปุ่มส่ง */}
           <button
             type="submit"
-            className="w-full bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold px-8 py-3.5 rounded-xl transition-colors cursor-pointer"
+            disabled={selectedStudentIds.length === 0 || submitting || hasError}
+            className="h-[52px] w-full rounded-xl bg-[#CD0D13] text-[15px] font-bold text-white transition-colors hover:bg-[#A30A0E] disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {selectedStudentIds.length > 0 ? `ออกบิลให้ผู้เรียน ${selectedStudentIds.length} คน` : "ออกบิลส่งบิลเก็บเงิน"}
+            {submitting
+              ? 'กำลังออกบิล…'
+              : selectedStudentIds.length > 0
+                ? `ออกบิลให้ผู้เรียน ${selectedStudentIds.length} คน`
+                : 'เลือกผู้เรียนก่อน'}
           </button>
         </form>
       </div>
 
-      {/* Invoices History Column */}
-      <div className="bg-white border border-gray-200 p-6 flex flex-col lg:h-[600px] self-start">
-        <div className="mb-4 pb-3 border-b border-slate-100">
-          <h3 className="text-md font-bold text-slate-800">ประวัติออกบิลล่าสุด</h3>
-          <p className="text-xs text-slate-500 mt-0.5">รายการเรียกเก็บเงินที่สร้างส่งให้นักเรียน</p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-1">
-          {billings.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
-              <AlertCircle className="w-8 h-8 mb-2" />
-              <p className="text-xs">ยังไม่มีรายการออกบิล</p>
-            </div>
-          ) : (
-            billings.slice(0, 15).map(b => (
-              <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:border-slate-350 transition-all flex flex-col justify-between">
-                <div className="flex items-start justify-between gap-1">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[10px] font-bold text-slate-400 block">BILL-{b.id} • {b.billingdue_date?.split('T')[0]}</span>
-                    <span className="text-sm font-bold text-slate-800 block truncate mt-0.5">
-                      {b.customer ? `${b.customer.firstName} ${b.customer.lastName}` : "ผู้เรียน"}
-                    </span>
-                    <span className="text-xs text-slate-600 block truncate mt-0.5">{b.billingdescription}</span>
-                  </div>
-                  <div className="flex flex-col items-end space-y-1.5">
-                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                      b.billingstatus === 'paid'
-                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-250'
-                        : b.billingstatus === 'waitcheck'
-                        ? 'bg-amber-50 text-amber-600 border border-amber-250'
-                        : 'bg-rose-50 text-rose-600 border border-rose-250'
-                    }`}>
-                      {b.billingstatus === 'paid' ? 'ชำระแล้ว' : b.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
-                    </span>
-                    {(b.billingstatus !== 'paid' && b.billingstatus !== 'waitcheck') && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenEditBilling(b)}
-                        className="text-[10px] font-bold text-slate-405 text-slate-400 hover:text-[#CD0D13] flex items-center space-x-0.5 cursor-pointer mt-1"
-                        title="แก้ไขข้อมูลบิล"
-                      >
-                        <Pencil className="w-2.5 h-2.5" />
-                        <span>แก้ไข</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-end justify-between mt-3 pt-2 border-t border-slate-100">
-                  <span className="text-[10px] text-slate-500">ประเภท: {b.billing_type?.billingtypename || "ทั่วไป"}</span>
-                  <span className="text-sm font-bold text-slate-800">฿{b.billingamount.toLocaleString()}</span>
-                </div>
-              </div>
-            ))
+      {/* ───────── คอลัมน์ขวา: บิลที่ออกล่าสุด ───────── */}
+      <div className="min-w-0 border border-gray-200 bg-white p-6">
+        <div className="flex items-baseline justify-between gap-3 border-b border-gray-200 pb-4">
+          <h3 className="text-lg font-semibold text-slate-900">บิลที่ออกล่าสุด</h3>
+          {billings.length > 0 && (
+            <span className="whitespace-nowrap text-xs text-slate-500">{billings.length} ใบ</span>
           )}
         </div>
+
+        {billings.length === 0 ? (
+          <div className="flex min-h-[160px] items-center justify-center text-center">
+            <p className="text-xs text-slate-500">ยังไม่มีบิลที่ออก</p>
+          </div>
+        ) : (
+          <div className="max-h-[560px] divide-y divide-gray-100 overflow-y-auto no-scrollbar">
+            {billings.slice(0, 20).map(b => {
+              const isPaid = b.billingstatus === 'paid';
+              const isWait = b.billingstatus === 'waitcheck';
+              const canEdit = !isPaid && !isWait;
+              const chip = isPaid
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                : isWait
+                  ? 'border-amber-200 bg-amber-50 text-amber-600'
+                  : 'border-rose-200 bg-rose-50 text-rose-600';
+              const chipText = isPaid ? 'ชำระแล้ว' : isWait ? 'รอตรวจสอบ' : 'ค้างชำระ';
+
+              return (
+                <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="py-[15px]">
+                  {/* บรรทัด 1: ชื่อ + chip */}
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-slate-900">
+                      {b.customer ? `${b.customer.firstName} ${b.customer.lastName}` : "ผู้เรียน"}
+                    </span>
+                    <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold ${chip}`}>
+                      {chipText}
+                    </span>
+                  </div>
+                  {/* บรรทัด 2: คำอธิบาย · ประเภท */}
+                  <p className="mt-0.5 truncate text-[11.5px] text-slate-500">
+                    {b.billingdescription} · ประเภท: {b.billing_type?.billingtypename || "ทั่วไป"}
+                  </p>
+                  {/* บรรทัด 3: ยอด + ลิงก์แก้ไข */}
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span className="text-[14px] font-medium tabular-nums text-slate-900">
+                      ฿{b.billingamount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => canEdit && onOpenEditBilling(b)}
+                      disabled={!canEdit}
+                      title={canEdit ? "แก้ไขข้อมูลบิล" : "บิลที่ชำระแล้วหรือรอตรวจสอบแก้ไขไม่ได้"}
+                      className={`flex items-center gap-0.5 text-[12px] ${canEdit ? 'text-[#CD0D13] hover:underline' : 'cursor-not-allowed text-slate-400'}`}
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                      <span>แก้ไข</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
