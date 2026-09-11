@@ -482,6 +482,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			expensesGroup.GET("/", expenseController.GetAllExpenses)
 			expensesGroup.POST("/", expenseController.CreateExpense)
+			expensesGroup.PATCH("/:id", expenseController.UpdateExpense)
 			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
 		}
 

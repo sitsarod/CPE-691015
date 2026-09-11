@@ -5,6 +5,7 @@ import {
   CreateBillingReq,
   UpdateBillingReq,
   CreateExpenseReq,
+  UpdateExpenseReq,
   BankAccountReq
 } from "@/types/payment";
 
@@ -153,6 +154,23 @@ export async function createExpense(payload: CreateExpenseReq, token: string): P
   const resData = await response.json();
   if (!response.ok) {
     throw new Error(resData.error || "บันทึกค่าใช้จ่ายไม่สำเร็จ");
+  }
+  return resData;
+}
+
+// Update expense (แก้ไข)
+export async function updateExpense(id: number, payload: UpdateExpenseReq, token: string): Promise<{ message?: string; data: Expense }> {
+  const response = await fetch(`${BASE_URL}/expenses/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "แก้ไขค่าใช้จ่ายไม่สำเร็จ");
   }
   return resData;
 }

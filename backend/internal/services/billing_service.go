@@ -300,6 +300,7 @@ func (s *BillingService) GetAllBillings() ([]models.Billing, error) {
 		Preload("Admin").
 		Preload("PaymentItem").
 		Preload("PaymentItem.Invoice").
+		Preload("PaymentItem.Invoice.ConfirmedBy").
 		Order("id DESC").
 		Find(&billings).Error
 	return billings, err

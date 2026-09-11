@@ -25,4 +25,10 @@ type Expense struct {
 	CoachID     *uint       `json:"coach_id"`
 	Coach       *Coach      `gorm:"foreignKey:CoachID" json:"coach,omitempty"`
 	ReceiptURL  string      `gorm:"type:varchar(255)" json:"receipturl"`
+
+	// ผู้ทำรายการ — CreatedBy = แอดมินที่บันทึกครั้งแรก, UpdatedBy = แอดมินที่แก้ไขล่าสุด (nil = ยังไม่เคยแก้)
+	CreatedByID *uint `json:"created_by_id"`
+	CreatedBy   *User `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedByID *uint `json:"updated_by_id"`
+	UpdatedBy   *User `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }

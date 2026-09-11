@@ -23,7 +23,7 @@ func NewExpenseService(db *gorm.DB) *ExpenseService {
 // ⚠️ ค่าใช้จ่ายประเภท coach_wages ถูกตรวจยอดที่นี่ก่อนบันทึกเสมอ
 // เดิมรับ Amount มาเท่าไหร่ก็บันทึกลงตารางตรง ๆ ไม่เคยตรวจอะไร — ยิง API ตรง
 // (หรือแก้ช่องกรอกใน devtools) ด้วยยอดเท่าไหร่ก็ผ่าน
-func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest) (*models.Expense, error) {
+func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest, actorID uint) (*models.Expense, error) {
 	expense := models.Expense{
 		Amount:      req.Amount,
 		Type:        req.Type,
@@ -31,6 +31,9 @@ func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest) (*models.Ex
 		Date:        req.Date,
 		CoachID:     req.CoachID,
 		ReceiptURL:  req.ReceiptURL,
+	}
+	if actorID != 0 {
+		expense.CreatedByID = &actorID
 	}
 
 	if req.CoachID != nil {
@@ -127,10 +130,83 @@ func (s *ExpenseService) GetCoachPayroll(coachID uint, userID uint, role string)
 
 func (s *ExpenseService) GetAllExpenses() ([]models.Expense, error) {
 	var expenses []models.Expense
-	if err := s.db.Preload("Coach").Preload("Coach.User").Order("date DESC, id DESC").Find(&expenses).Error; err != nil {
+	if err := s.db.Preload("Coach").Preload("Coach.User").Preload("CreatedBy").Preload("UpdatedBy").Order("date DESC, id DESC").Find(&expenses).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงข้อมูลค่าใช้จ่ายได้")
 	}
 	return expenses, nil
+}
+
+// UpdateExpense แก้ไขค่าใช้จ่ายที่มีอยู่ (แอดมิน) และบันทึกว่าใครเป็นผู้แก้ไขล่าสุด
+//
+// สำหรับ coach_wages: ตรวจว่ายอดใหม่ไม่เกิน "ค้างจ่ายจริง + ยอดเดิมของรายการนี้"
+// (ยอดเดิมถูกนับเป็นจ่ายไปแล้วอยู่ จึงต้องบวกกลับเป็นเพดานที่แก้ได้ ไม่งั้นแก้ยอดตัวเองไม่ได้เลย)
+func (s *ExpenseService) UpdateExpense(id uint, req dto.UpdateExpenseRequest, actorID uint) (*models.Expense, error) {
+	var expense models.Expense
+	if err := s.db.First(&expense, id).Error; err != nil {
+		return nil, errors.New("ไม่พบข้อมูลค่าใช้จ่าย")
+	}
+
+	prevAmount := expense.Amount
+
+	// รวมค่าที่แก้เข้ากับของเดิมเพื่อได้สถานะสุดท้าย แล้วค่อยตรวจกฎ
+	if req.Amount != nil {
+		expense.Amount = *req.Amount
+	}
+	if req.Type != nil {
+		expense.Type = *req.Type
+	}
+	if req.Description != nil {
+		expense.Description = *req.Description
+	}
+	if req.Date != nil {
+		expense.Date = *req.Date
+	}
+	if req.ReceiptURL != nil {
+		expense.ReceiptURL = *req.ReceiptURL
+	}
+	if req.CoachID != nil {
+		expense.CoachID = req.CoachID
+	}
+
+	if expense.Amount <= 0 {
+		return nil, errors.New("จำนวนเงินต้องมากกว่า 0")
+	}
+
+	if expense.CoachID != nil {
+		var coach models.Coach
+		if err := s.db.First(&coach, *expense.CoachID).Error; err != nil {
+			return nil, errors.New("ไม่พบข้อมูลโค้ชที่ระบุ")
+		}
+	}
+
+	// ตรวจเพดานค่าจ้างเฉพาะ coach_wages (เพดาน = ค้างจ่าย + ยอดเดิม)
+	if expense.Type == models.ExpenseTypeCoach {
+		if expense.CoachID == nil || *expense.CoachID == 0 {
+			return nil, ErrPayrollNeedsCoach
+		}
+		payroll, err := ComputeCoachPayroll(s.db, *expense.CoachID, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		ceiling := payroll.Unpaid + prevAmount
+		if expense.Amount > ceiling+payrollEpsilon {
+			return nil, fmt.Errorf("%w (แก้ได้ไม่เกิน %.2f บาท แต่กรอกมา %.2f บาท)",
+				ErrPayrollExceeds, ceiling, expense.Amount)
+		}
+	}
+
+	if actorID != 0 {
+		expense.UpdatedByID = &actorID
+	}
+
+	if err := s.db.Save(&expense).Error; err != nil {
+		return nil, errors.New("ไม่สามารถบันทึกการแก้ไขค่าใช้จ่ายได้")
+	}
+
+	if err := s.db.Preload("Coach").Preload("Coach.User").Preload("CreatedBy").Preload("UpdatedBy").First(&expense, expense.ID).Error; err != nil {
+		return nil, err
+	}
+	return &expense, nil
 }
 
 // GetByCoachID ดึงประวัติค่าจ้างของ coach คนเดียว ใช้กับหน้า "การเงิน" ที่โค้ชดูรายได้ตัวเอง
