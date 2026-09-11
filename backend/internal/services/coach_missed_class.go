@@ -85,8 +85,9 @@ func (s *AttendanceService) ListMissedClasses() ([]dto.MissedClassDTO, error) {
 
 	var rows []models.WorkSchedule
 	if err := unresolvedScheduleScope(s.db, todayStr).
-		Preload("Coach.User").
-		Preload("Course").
+		Preload("Coach", withDeleted).
+		Preload("Coach.User", withDeleted).
+		Preload("Course", withDeleted).
 		Order("work_schedules.date DESC, work_schedules.start_time ASC, work_schedules.id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายการคาบที่ยังไม่มีรอบเช็คชื่อได้")

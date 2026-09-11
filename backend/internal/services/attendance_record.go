@@ -30,7 +30,7 @@ func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto
 // closeSessionTx คือเนื้อของการปิดรอบ ใช้ร่วมกันทั้งแอดมินกดเองและงานปิดอัตโนมัติ
 //
 // closedBy = nil แปลว่าระบบเป็นคนปิด เก็บเป็น NULL ไว้ตอบตอนมีคนทักท้วงย้อนหลัง
-// ว่าการหักโควตาครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
+// ว่าการมาร์คขาดครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
 func (s *AttendanceService) closeSessionTx(
 	tx *gorm.DB,
 	sessionID uint,
@@ -139,7 +139,7 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 
 // AutoCloseStaleSessions ปิดรอบที่เลยเวลาคาบแล้วแต่ไม่มีใครกดปิด คืนจำนวนที่ปิดไป
 //
-// ⚠️ หักโควตาคนที่ไม่มาโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
+// ⚠️ มาร์คขาดเรียน/ขาดงานโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
 // (ตัวเดียวกับที่กันการสแกน) เพื่อให้แอดมินมีช่วงเข้ามาจัดการเองก่อนทุกครั้ง
 func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 	var sessions []models.AttendanceSession
