@@ -27,6 +27,10 @@ var (
 	ErrEnrollmentBillingLocked = errors.New("ไม่สามารถยกเลิกได้ เนื่องจากบิลที่เกี่ยวข้องถูกชำระหรือกำลังตรวจสอบอยู่ กรุณาจัดการการชำระเงินก่อน")
 
 	ErrPackageNotFound = errors.New("ไม่พบข้อมูลแพ็กเกจที่เลือก")
+	ErrCourseNotOpen   = errors.New("คอร์สนี้ยังไม่เปิดรับสมัคร")
+
+	ErrEnrollmentDuplicateActive = errors.New("ลูกค้ารายนี้มีใบลงทะเบียนของแพ็กเกจนี้ที่ยังใช้งานอยู่แล้ว")
+
 	ErrAlreadyEnrolled = errors.New("คุณได้สมัครแพ็กเกจนี้ไว้แล้ว กรุณารอการอนุมัติหรือตรวจสอบคอร์สของคุณ")
 
 	ErrEnrollmentRejectReason   = errors.New("กรุณาระบุเหตุผลในการปฏิเสธ (อย่างน้อย 3 ตัวอักษร)")
@@ -251,6 +255,12 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		return nil, ErrPackageNotFound
 	}
 
+	// ⚠️ ด่านนี้อยู่ที่การกระทำ ไม่ใช่แค่ที่การแสดงผล — GetAvailableCourses กรอง
+	// เฉพาะคอร์ส active ก็จริง แต่ package_id เป็นเลขเรียงที่เดาแล้วยิงตรงมาได้
+	if pkg.Course == nil || pkg.Course.Status != models.CourseStatusActive {
+		return nil, ErrCourseNotOpen
+	}
+
 	customerID, err := s.toCustomerID(userID)
 	if err != nil {
 		return nil, err
@@ -293,6 +303,9 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 
 			newEnrollment.Status = models.EnrollmentStatusPending
 			if err := tx.Create(&newEnrollment).Error; err != nil {
+				if isUniqueViolation(err) {
+					return ErrAlreadyEnrolled
+				}
 				return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
 			}
 
@@ -313,6 +326,9 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		}
 
 		if err := tx.Create(&newEnrollment).Error; err != nil {
+			if isUniqueViolation(err) {
+				return ErrAlreadyEnrolled
+			}
 			return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
 		}
 		newEnrollment.Package = &pkg
@@ -472,8 +488,8 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 	expireStaleEnrollments(s.db)
 
 	var enrollments []models.Enrollment
-	err = s.db.Preload("Package").
-		Preload("Package.Course").
+	err = s.db.Preload("Package", withDeleted).
+		Preload("Package.Course", withDeleted).
 		Preload("Package.Schedules").
 		Preload("Billing").
 		Where("customer_id = ?", customerID).
@@ -570,10 +586,10 @@ func (s *EnrollmentService) GetAllEnrollments() ([]dto.AdminEnrollmentDTO, error
 	var enrollments []models.Enrollment
 	expireStaleEnrollments(s.db)
 
-	if err := s.db.Preload("Customer").
-		Preload("Customer.User").
-		Preload("Package").
-		Preload("Package.Course").
+	if err := s.db.Preload("Customer", withDeleted).
+		Preload("Customer.User", withDeleted).
+		Preload("Package", withDeleted).
+		Preload("Package.Course", withDeleted).
 		Preload("Package.Schedules").
 		Preload("Billing").
 		Order("created_at desc").
@@ -598,6 +614,22 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 	var enrollment models.Enrollment
 	if err := s.db.First(&enrollment, id).Error; err != nil {
 		return nil, ErrEnrollmentNotFound
+	}
+
+	// กำลังจะตั้งเป็นสถานะที่กินที่นั่ง ต้องไม่ชนกับใบอื่นของลูกค้าคนเดียวกัน
+	// (uniq_enrollment_customer_package กันไว้ที่ฐานอยู่แล้ว ตรงนี้มีไว้บอกสาเหตุให้ชัด
+	// แทนที่จะปล่อยให้ error ดิบจากฐานโผล่ออกไปเป็น 500)
+	if req.Status != nil && seatHoldingStatus(models.EnrollmentStatus(*req.Status)) {
+		var n int64
+		if err := s.db.Model(&models.Enrollment{}).
+			Where("customer_id = ? AND package_id = ? AND id <> ? AND status IN ?",
+				enrollment.CustomerID, enrollment.PackageID, enrollment.ID, enrollmentSeatStatuses).
+			Count(&n).Error; err != nil {
+			return nil, errors.New("ไม่สามารถตรวจสอบใบลงทะเบียนที่ซ้ำได้")
+		}
+		if n > 0 {
+			return nil, ErrEnrollmentDuplicateActive
+		}
 	}
 
 	if req.Status != nil && models.EnrollmentStatus(*req.Status) == models.EnrollmentStatusCancelled {

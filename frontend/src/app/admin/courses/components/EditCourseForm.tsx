@@ -33,6 +33,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         const loadedPackages = (data.packages || []).map((pkg: CoursePackageDTO) => ({
           id: pkg.id?.toString(),
           isNew: false,
+          current_enrollments: pkg.current_enrollments ?? 0,
           sessions_count: pkg.sessions_count,
           hours_count: pkg.hours_count,
           max_seats: pkg.max_seats ?? ("" as const),
@@ -59,7 +60,31 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
 
   const addPackage = () => setPackages([...packages, { id: `temp-${Date.now()}`, isNew: true, sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }]);
   
-  const removePackage = (pkgId: string) => setPackages(packages.filter((pkg) => pkg.id !== pkgId));
+  // แพ็กเกจที่มีคนเรียนอยู่ลบไม่ได้ — backend ปฏิเสธด้วย 409 อยู่แล้ว แต่ต้องกันตั้งแต่
+  // ตรงนี้ ไม่งั้นแอดมินจะรู้ตอนกดบันทึก ซึ่งตอนนั้นคอร์สถูกแก้ไปแล้วครึ่งทาง
+  const removePackage = (pkgId: string) => {
+    const target = packages.find((pkg) => pkg.id === pkgId);
+
+    if (target && !target.isNew) {
+      const enrolled = target.current_enrollments ?? 0;
+      if (enrolled > 0) {
+        alert(
+          `ลบแพ็กเกจนี้ไม่ได้ — ยังมีนักเรียนลงทะเบียนอยู่ ${enrolled} คน\n\n` +
+            `ต้องยกเลิกการลงทะเบียนของทุกคนก่อน จึงจะลบแพ็กเกจได้`
+        );
+        return;
+      }
+      if (
+        !window.confirm(
+          "ลบแพ็กเกจนี้ใช่หรือไม่?\n\nตารางเรียนของแพ็กเกจจะถูกลบถาวร กู้คืนไม่ได้"
+        )
+      ) {
+        return;
+      }
+    }
+
+    setPackages(packages.filter((pkg) => pkg.id !== pkgId));
+  };
   
   const updatePackageField = (pkgId: string, field: keyof PackageFormInput, value: string | number | boolean) => {
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, [field]: value } : pkg));

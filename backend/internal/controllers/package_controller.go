@@ -64,6 +64,10 @@ func (ctrl *PackageController) UpdatePackage(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if errors.Is(err, services.ErrMaxSeatsBelowEnrolled) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -81,6 +85,10 @@ func (ctrl *PackageController) DeletePackage(c *gin.Context) {
 	}
 
 	if err := ctrl.packageService.DeletePackage(uint(packageID)); err != nil {
+		if errors.Is(err, services.ErrPackageHasActiveEnrollments) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

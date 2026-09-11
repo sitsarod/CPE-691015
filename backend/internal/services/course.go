@@ -2,9 +2,11 @@ package services
 
 import (
 	"errors"
+	"strings"
+
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
-	
+
 	"gorm.io/gorm"
 )
 
@@ -28,7 +30,62 @@ var enrollmentApprovedStatuses = []models.EnrollmentStatus{
 var (
 	ErrInvalidCourseStatus = errors.New("สถานะคอร์สไม่ถูกต้อง (ต้องเป็น active, inactive หรือ draft)")
 	ErrCourseHasActiveEnrollments = errors.New("ไม่สามารถลบคอร์สได้ เนื่องจากยังมีนักเรียนลงทะเบียนอยู่ กรุณายกเลิกการลงทะเบียนที่ค้างก่อน")
+	ErrCourseNameTaken = errors.New("ชื่อคอร์สเรียนนี้มีอยู่ในระบบแล้ว")
+	ErrCourseNameRequired = errors.New("ชื่อคอร์สเรียนต้องไม่เป็นค่าว่าง")
 )
+
+// validateCourseName ตรวจชื่อคอร์สก่อนบันทึก (excludeID = 0 ตอนสร้างใหม่)
+//
+// ⚠️ ตรวจที่นี่ ไม่พึ่งแท็ก binding — ฝั่งแก้เป็น *string ที่ไม่มี binding เลย และต่อให้
+// ใส่ omitempty ก็ยังปล่อย "" ผ่าน เพราะ validator ถือว่าสตริงว่างคือ "ไม่มีค่า"
+// แล้วข้ามกฎที่เหลือ · ส่วนฝั่งสร้างมี required ซึ่งกันได้แค่ "" ไม่กันช่องว่างล้วน
+func validateCourseName(db *gorm.DB, name string, excludeID uint) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrCourseNameRequired
+	}
+
+	q := db.Model(&models.Course{}).Where("course_name = ?", name)
+	if excludeID != 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+
+	var n int64
+	if err := q.Count(&n).Error; err != nil {
+		return errors.New("ไม่สามารถตรวจสอบชื่อคอร์สซ้ำได้")
+	}
+	if n > 0 {
+		return ErrCourseNameTaken
+	}
+	return nil
+}
+
+// packagesHaveEnrollments บอกว่ายังมีใบลงทะเบียนที่กินที่นั่งของแพ็กเกจเหล่านี้อยู่ไหม
+func packagesHaveEnrollments(db *gorm.DB, packageIDs []uint) (bool, error) {
+	if len(packageIDs) == 0 {
+		return false, nil
+	}
+
+	// กันนับใบที่หมดอายุแล้วแต่สถานะยังค้างเป็น active ว่าเป็นคนที่ยังเรียนอยู่
+	expireStaleEnrollments(db)
+
+	var n int64
+	if err := db.Model(&models.Enrollment{}).
+		Where("package_id IN ? AND status IN ?", packageIDs, enrollmentSeatStatuses).
+		Count(&n).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจสอบการลงทะเบียนของแพ็กเกจได้")
+	}
+	return n > 0, nil
+}
+
+// seatHoldingStatus บอกว่าสถานะนี้ถือว่ายึดที่นั่งของแพ็กเกจไว้หรือไม่
+func seatHoldingStatus(s models.EnrollmentStatus) bool {
+	for _, st := range enrollmentSeatStatuses {
+		if st == s {
+			return true
+		}
+	}
+	return false
+}
 
 func isValidCourseStatus(s models.CourseStatus) bool {
 	switch s {
@@ -105,10 +162,8 @@ func (s *CourseService) GetCourseByID(id uint, onlyActive bool) (*dto.CourseDTO,
 
 // CreateCourse 
 func (s *CourseService) CreateCourse(course *models.Course) error {
-	var existingCourse models.Course
-	err := s.db.Select("id").Where("course_name = ?", course.CourseName).First(&existingCourse).Error
-	if err == nil {
-		return errors.New("ชื่อคอร์สเรียนนี้มีอยู่ในระบบแล้ว")
+	if err := validateCourseName(s.db, course.CourseName, 0); err != nil {
+		return err
 	}
 
 	return s.db.Create(course).Error
@@ -130,6 +185,9 @@ func (s *CourseService) UpdateCourse(id uint, input dto.UpdateCourseReq) (*dto.C
 
 	updateData := make(map[string]interface{})
 	if input.CourseName != nil {
+		if cerr := validateCourseName(s.db, *input.CourseName, id); cerr != nil {
+			return nil, cerr
+		}
 		updateData["course_name"] = *input.CourseName
 	}
 	if input.Description != nil {
@@ -173,16 +231,12 @@ func (s *CourseService) DeleteCourse(id uint) error {
 	}
 
 	// กันลบคอร์สที่ยังมีการลงทะเบียน pending/active ค้างอยู่
-	if len(packageIDs) > 0 {
-		var activeEnroll int64
-		if err := s.db.Model(&models.Enrollment{}).
-			Where("package_id IN ? AND status IN ?", packageIDs, enrollmentSeatStatuses).
-			Count(&activeEnroll).Error; err != nil {
-			return err
-		}
-		if activeEnroll > 0 {
-			return ErrCourseHasActiveEnrollments
-		}
+	taken, err := packagesHaveEnrollments(s.db, packageIDs)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return ErrCourseHasActiveEnrollments
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {

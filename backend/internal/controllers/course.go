@@ -117,8 +117,14 @@ func (ctrl *CourseController) CreateCourse(c *gin.Context) {
 	}
 
 	if err := ctrl.courseService.CreateCourse(&courseInput); err != nil {
-		// เช็ก Business Error ที่ส่งมาจากชั้น Service
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, services.ErrCourseNameRequired):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCourseNameTaken):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -155,6 +161,10 @@ func (ctrl *CourseController) UpdateCourse(c *gin.Context) {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลคอร์สเรียน"})
 		case errors.Is(err, services.ErrInvalidCourseStatus): // (C4)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCourseNameTaken):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCourseNameRequired):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})
