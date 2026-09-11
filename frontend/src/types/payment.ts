@@ -1,8 +1,8 @@
 // frontend/src/types/payment.ts
 
+// ไม่มี admin_id — backend อ้างคนออกบิลจาก JWT ให้เอง (เดิมส่งจาก localStorage ซึ่งปลอมได้)
 export interface CreateBillingReq {
   customer_ids: number[];
-  admin_id: number;
   billingtype_id: number;
   billingdescription: string;
   billingamount: number;

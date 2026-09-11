@@ -133,9 +133,6 @@ export default function AdminDashboardPage() {
       {/* ---------- header ---------- */}
       <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CC0000]">
-            Admin Overview
-          </span>
           <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-gray-900">แดชบอร์ด</h1>
           <p className="mt-1.5 text-[13px] font-light text-gray-500">
             {todayLabel} · ข้อมูลอัปเดตอัตโนมัติเมื่อกลับมาที่หน้านี้

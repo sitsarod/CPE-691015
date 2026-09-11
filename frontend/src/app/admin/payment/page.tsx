@@ -227,7 +227,6 @@ export default function FinancialPortal() {
 
       {/* header (editorial) */}
       <div className="mb-6 border-b border-gray-200 pb-6">
-        <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CD0D13]">Financial</span>
         <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-slate-900">การเงิน</h1>
         <p className="mt-1.5 text-[13px] font-light text-slate-500">
           ศูนย์การเงิน · ตรวจสลิป ออกบิล สรุปรายรับ-รายจ่าย และจัดการบัญชีรับเงิน

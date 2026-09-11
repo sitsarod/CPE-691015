@@ -27,6 +27,8 @@ interface InvoiceGroup {
   receivingBankName?: string;
   receivingAccountNo?: string;
   confirmedBy?: BillingDTO['confirmed_by'];
+  admin?: BillingDTO['admin'];
+  updatedBy?: BillingDTO['updated_by'];
   dueDate: string;
   createdAt: string;
   paidAt?: string;
@@ -120,6 +122,8 @@ export default function VerifySlipsTab({
           receivingBankName: b.receiving_bank_name,
           receivingAccountNo: b.receiving_account_no,
           confirmedBy: b.confirmed_by,
+          admin: b.admin,
+          updatedBy: b.updated_by,
           dueDate: b.billingdue_date,
           createdAt: b.created_at,
           paidAt: b.paid_at,
@@ -544,6 +548,23 @@ export default function VerifySlipsTab({
                   <span className="text-xs text-slate-500">ครบกำหนดชำระ</span>
                   <span className="text-right text-[13.5px] tabular-nums text-slate-800">{formatDateOnly(selectedGroup.dueDate)}</span>
                 </div>
+
+                {/* ผู้ออกบิล + ผู้แก้ไขล่าสุด (audit) */}
+                {(selectedGroup.admin || selectedGroup.updatedBy) && (
+                  <div className="flex items-start justify-between gap-4 py-[13px]">
+                    <span className="shrink-0 text-xs text-slate-500">ผู้ออกบิล</span>
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[13.5px] text-slate-800">
+                        {selectedGroup.admin ? `${selectedGroup.admin.firstName} ${selectedGroup.admin.lastName}` : '-'}
+                      </span>
+                      {selectedGroup.updatedBy && (
+                        <span className="text-[11px] text-slate-400">
+                          แก้ไขล่าสุดโดย {selectedGroup.updatedBy.firstName} {selectedGroup.updatedBy.lastName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-start justify-between gap-4 py-[13px]">
                   <span className="shrink-0 text-xs text-slate-500">บัญชีที่โอนเข้า</span>

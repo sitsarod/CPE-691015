@@ -443,12 +443,15 @@ func SetupRoutes(r *gin.Engine) {
 			paymentGroup.POST("/invoices", paymentController.CreateInvoice)
 			paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
 			paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
+			// ยกเลิกใบแจ้งหนี้ที่ยังรอดำเนินการ — เจ้าของยกเลิกของตัวเองได้ (admin ยกเลิกได้ทุกใบ)
+			// service ตรวจความเป็นเจ้าของกัน IDOR เอง จึงอยู่ใต้ protected ไม่ใช่ adminOnly
+			// ปิด dead-end เดิม: ลูกค้าสร้างใบแล้วเปลี่ยนใจ ต้องยกเลิกเองได้ ไม่งั้นบิลค้างสร้างใบใหม่ไม่ได้
+			paymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 		adminPaymentGroup := adminOnly.Group("/payments")
 		{
 			adminPaymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
 			adminPaymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
-			adminPaymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 
 		billingGroup := protected.Group("/billings")

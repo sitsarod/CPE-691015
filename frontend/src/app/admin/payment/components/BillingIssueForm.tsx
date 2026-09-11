@@ -111,14 +111,12 @@ export default function BillingIssueForm({
     setSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      const adminIdStr = typeof window !== 'undefined' ? localStorage.getItem("user_id") : "1";
-      const adminId = parseInt(adminIdStr || "1");
 
       const calculatedAmount = billingMode === 'individual' ? parseFloat(price) : perPersonRounded;
 
+      // ไม่ส่ง admin_id — backend อ้างคนออกบิลจาก JWT ให้เอง
       const payload = {
         customer_ids: selectedStudentIds,
-        admin_id: adminId,
         billingtype_id: parseInt(selectedBillingTypeId),
         billingdescription: billingDescription,
         billingamount: calculatedAmount,
@@ -344,7 +342,10 @@ export default function BillingIssueForm({
               {billingMode === 'group' && selectedStudentIds.length > 0 && (
                 <span className="mt-0.5 text-[11px] text-slate-500">
                   หารเฉลี่ยคนละ ฿{perPersonRounded.toLocaleString('th-TH')}
-                  {hasRounding && ` (ปัดขึ้นจาก ฿${perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })})`}
+                  {hasRounding && (
+                    <> · ปัดขึ้นเป็นจำนวนเต็มบาทจาก ฿{perPersonRaw.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                    {' '}(เก็บรวม ฿{grandTotal.toLocaleString('th-TH')} จากต้นทุน ฿{groupTotal.toLocaleString('th-TH')} — ส่วนต่าง ฿{(grandTotal - groupTotal).toLocaleString('th-TH', { maximumFractionDigits: 2 })} เข้าสถาบัน)</>
+                  )}
                 </span>
               )}
             </div>
@@ -419,6 +420,17 @@ export default function BillingIssueForm({
                   <p className="mt-0.5 truncate text-[11.5px] text-slate-500">
                     {b.billingdescription} · ประเภท: {b.billing_type?.billingtypename || "ทั่วไป"}
                   </p>
+                  {/* บรรทัด 2.5: ผู้ออกบิล + ผู้แก้ไขล่าสุด */}
+                  {b.admin && (
+                    <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                      ออกโดย {b.admin.firstName} {b.admin.lastName}
+                    </p>
+                  )}
+                  {b.updated_by && (
+                    <p className="truncate text-[11px] text-slate-400">
+                      แก้ไขล่าสุดโดย {b.updated_by.firstName} {b.updated_by.lastName}
+                    </p>
+                  )}
                   {/* บรรทัด 3: ยอด + ลิงก์แก้ไข */}
                   <div className="mt-1 flex items-center justify-between gap-3">
                     <span className="text-[14px] font-medium tabular-nums text-slate-900">

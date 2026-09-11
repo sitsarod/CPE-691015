@@ -15,8 +15,19 @@ import (
 // (เดิม error ทุกชนิดถูกตอบกลับเป็น 500 หมด ทำให้แยก "ไม่มีสิทธิ์" กับ "ระบบพัง" ไม่ออก)
 var (
 	ErrInvoiceNotFound = errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+	ErrBillingNotFound = errors.New("ไม่พบข้อมูลบิล")
 	ErrForbidden       = errors.New("ไม่มีสิทธิ์ดำเนินการกับใบแจ้งหนี้นี้")
 )
+
+// BusinessError คือความผิดพลาดจาก "กติกาทางธุรกิจ/สถานะไม่พร้อม" (เช่น บิลชำระแล้ว, มีใบค้างอยู่,
+// วิธีชำระเงินไม่ถูกต้อง) ไม่ใช่ระบบพัง — controller จะ map เป็น HTTP 409 (Conflict)
+// เพื่อให้หน้าบ้านแยกออกจาก 500 ที่แปลว่าเซิร์ฟเวอร์มีปัญหาจริง แล้วแสดงข้อความให้ผู้ใช้แก้ได้ถูก
+type BusinessError struct{ Msg string }
+
+func (e *BusinessError) Error() string { return e.Msg }
+
+// businessErr ห่อข้อความกติกาทางธุรกิจให้เป็น *BusinessError (ใช้ errors.As จับที่ controller)
+func businessErr(msg string) error { return &BusinessError{Msg: msg} }
 
 type PaymentService struct {
 	db     *gorm.DB
@@ -27,11 +38,53 @@ func NewPaymentService(db *gorm.DB, slipOk *SlipOkService) *PaymentService {
 	return &PaymentService{db: db, slipOk: slipOk}
 }
 
+// stalePendingInvoiceTTL คือระยะเวลาที่ยอมให้ใบแจ้งหนี้ค้างสถานะ pending โดย "ยังไม่แนบสลิป"
+// ก่อนถือว่าลูกค้าละทิ้งใบนั้นแล้ว จึงปิดใบให้อัตโนมัติเพื่อปลดล็อกบิลให้ออกใบใหม่ได้
+const stalePendingInvoiceTTL = 3 * 24 * time.Hour
+
+// slipAmountEpsilon เผื่อความคลาดเคลื่อนทศนิยมตอนเทียบยอดเงินจากสลิป (หน่วยบาท)
+const slipAmountEpsilon = 0.01
+
+// ExpireStalePendingInvoices ปิดใบแจ้งหนี้ที่ค้าง pending และยังไม่แนบสลิปเกินกำหนด (best-effort)
+//
+// เดิมถ้าลูกค้าสร้างใบแจ้งหนี้แล้วเปลี่ยนใจ/หายไปโดยไม่ยกเลิก บิลในใบนั้นจะถูกล็อกไม่ให้ออกใบใหม่
+// ตลอดไป (CreateInvoice บล็อกบิลที่มีใบ pending ค้างอยู่) — ตัวนี้เป็นทางออกอัตโนมัติของ dead-end นั้น
+//
+// ปิดเฉพาะใบที่ "ยังไม่แนบสลิป" เท่านั้น — ใบที่แนบสลิปแล้ว (บิลเป็น waitcheck) ต้องรอแอดมินตรวจ ห้ามปิดเอง
+// บิลของใบที่ยังไม่แนบสลิปยังเป็น unfunded/overdue อยู่แล้ว จึงไม่ต้องแตะสถานะบิล
+func (s *PaymentService) ExpireStalePendingInvoices() (int64, error) {
+	cutoff := time.Now().Add(-stalePendingInvoiceTTL)
+	res := s.db.Model(&models.Invoice{}).
+		Where("status = ? AND (slip_image_url = '' OR slip_image_url IS NULL) AND created_at < ?",
+			models.InvoicePending, cutoff).
+		Update("status", models.InvoiceExpired)
+	return res.RowsAffected, res.Error
+}
+
+// sweepStalePendingInvoices เรียก ExpireStalePendingInvoices แบบ best-effort ก่อนออกใบใหม่/อ่านรายการใบ
+// เพื่อให้สถานะตรงกับความจริงเสมอ แม้ไม่มี background job (ระบบใช้ lazy sweep แบบเดียวกับบิลเกินกำหนด)
+func (s *PaymentService) sweepStalePendingInvoices() {
+	if _, err := s.ExpireStalePendingInvoices(); err != nil {
+		log.Printf("[payment] ปิดใบแจ้งหนี้ค้างที่หมดอายุไม่สำเร็จ: %v", err)
+	}
+}
+
 // CreateInvoice สร้างใบแจ้งหนี้จากรายการบิลที่เลือก
 func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, method models.PaymentMethod) (*models.Invoice, error) {
 	if len(billingIDs) == 0 {
-		return nil, errors.New("กรุณาระบุรายการบิลอย่างน้อย 1 รายการ")
+		return nil, businessErr("กรุณาระบุรายการบิลอย่างน้อย 1 รายการ")
 	}
+
+	// รับเฉพาะวิธีชำระเงินที่ระบบรองรับเท่านั้น (เดิมรับ string อะไรก็ได้แล้วเก็บลง DB ตรง ๆ)
+	switch method {
+	case models.MethodQR, models.MethodBankTransfer, models.MethodCard, models.MethodCash:
+	default:
+		return nil, businessErr("วิธีการชำระเงินไม่ถูกต้อง")
+	}
+
+	// ปิดใบแจ้งหนี้เก่าที่ค้าง pending และหมดอายุก่อน เพื่อปลดล็อกบิลที่ลูกค้าเคยสร้างใบแล้วทิ้งไว้
+	// (ไม่งั้นจะเจอ "บิลนี้มีใบแจ้งหนี้ที่รอดำเนินการอยู่แล้ว" ทั้งที่ใบเก่าถูกทิ้งไปนานแล้ว)
+	s.sweepStalePendingInvoices()
 
 	// ตัดบิล ID ที่ซ้ำออกก่อน กันยอดถูกคิดซ้ำและ PaymentItem ซ้ำ
 	// (เดิมวน billingIDs ตรง ๆ ถ้า client ส่ง [5,5] มา ยอดจะเป็น 2 เท่าและได้ item ชี้บิลเดิมสองอัน)
@@ -57,21 +110,21 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 			// ล็อกแถวบิล (FOR UPDATE) เพื่อให้คำขอสร้างใบแจ้งหนี้สำหรับบิลเดียวกันที่เข้ามาพร้อมกัน
 			// ถูกจัดคิวทีละอัน ไม่งั้นสองคำขอจะอ่านสถานะเดิมพร้อมกันแล้วสร้างใบซ้อนได้ (race)
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&billing, billingID).Error; err != nil {
-				return errors.New("ไม่พบข้อมูลบิล")
+				return ErrBillingNotFound
 			}
 
 			// ตรวจสอบสิทธิ์ว่าบิลนี้เป็นของลูกค้ารายนี้หรือไม่
 			if billing.CustomerID != customerID {
-				return errors.New("บิลนี้ไม่ใช่ของลูกค้าท่านนี้")
+				return ErrForbidden
 			}
 
 			// ออกใบแจ้งหนี้ได้เฉพาะบิลที่ยังไม่ได้เริ่มชำระเท่านั้น
 			// paid = จ่ายแล้ว, waitcheck = แนบสลิปรอตรวจอยู่ (ผ่านใบแจ้งหนี้อื่น) → ห้ามออกซ้อน
 			switch billing.Status {
 			case models.StatusPaid:
-				return errors.New("บิลนี้ชำระเงินเรียบร้อยแล้ว")
+				return businessErr("บิลนี้ชำระเงินเรียบร้อยแล้ว")
 			case models.StatusWaitCheck:
-				return errors.New("บิลนี้มีสลิปรอตรวจสอบการชำระเงินอยู่แล้ว")
+				return businessErr("บิลนี้มีสลิปรอตรวจสอบการชำระเงินอยู่แล้ว")
 			}
 
 			// กันบิลถูกออกใบแจ้งหนี้ซ้อนกับใบที่ยัง active (pending) อยู่
@@ -84,7 +137,7 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 				return err
 			}
 			if activeInvoiceCount > 0 {
-				return errors.New("บิลนี้มีใบแจ้งหนี้ที่รอดำเนินการอยู่แล้ว กรุณาชำระหรือยกเลิกใบเดิมก่อน")
+				return businessErr("บิลนี้มีใบแจ้งหนี้ที่รอดำเนินการอยู่แล้ว กรุณาชำระหรือยกเลิกใบเดิมก่อน")
 			}
 
 			totalAmount += billing.Amount
@@ -134,10 +187,10 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 	}
 
 	if invoice.Status == models.InvoiceSuccess {
-		return nil, errors.New("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
+		return nil, businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
 	}
 	if invoice.Status == models.InvoiceCancelled {
-		return nil, errors.New("ใบแจ้งหนี้นี้ถูกยกเลิกไปแล้ว ไม่สามารถแนบสลิปได้")
+		return nil, businessErr("ใบแจ้งหนี้นี้ถูกยกเลิกไปแล้ว ไม่สามารถแนบสลิปได้")
 	}
 
 	// กันไม่ให้แนบสลิปกับใบแจ้งหนี้เก่าที่บิลถูกชำระผ่านใบแจ้งหนี้อื่นไปแล้ว
@@ -149,15 +202,20 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, err
 	}
 	if paidElsewhereCount > 0 {
-		return nil, errors.New("บิลในใบแจ้งหนี้นี้ได้รับการชำระเงินผ่านใบแจ้งหนี้อื่นไปแล้ว")
+		return nil, businessErr("บิลในใบแจ้งหนี้นี้ได้รับการชำระเงินผ่านใบแจ้งหนี้อื่นไปแล้ว")
 	}
 
-	// snapshot บัญชีปลายทางที่เปิดใช้งานอยู่ (บัญชีที่ลูกค้าโอนเข้า) เก็บไว้กับใบแจ้งหนี้
-	// เพื่อให้แอดมินเห็นว่าเงินเข้าบัญชีไหน แม้ภายหลังบัญชีจะถูกแก้/ปิดก็ตาม
-	var receivingAccount models.BankAccount
-	if err := s.db.Where("is_active = ?", true).Order("id ASC").First(&receivingAccount).Error; err == nil {
-		invoice.ReceivingBankName = receivingAccount.BankName
-		invoice.ReceivingAccountNo = receivingAccount.AccountNo
+	// เลือกบัญชีปลายทางที่ใช้งานอยู่ "ครั้งเดียว" แล้วใช้ทั้งการ snapshot และการตรวจสลิปอัตโนมัติ
+	// จากบัญชีเดียวกันนี้ — กันกรณีบันทึกว่าเงินเข้าบัญชีหนึ่ง แต่ไปตรวจ (match) กับอีกบัญชี
+	// หากวันใดมีบัญชี is_active พร้อมกันหลายใบ (ปกติระบบบังคับให้ active ได้ทีละใบ)
+	//
+	// snapshot เก็บไว้กับใบแจ้งหนี้เพื่อให้แอดมินเห็นว่าเงินเข้าบัญชีไหน แม้ภายหลังบัญชีจะถูกแก้/ปิดก็ตาม
+	var receivingAccount *models.BankAccount
+	var activeAccount models.BankAccount
+	if err := s.db.Where("is_active = ?", true).Order("id ASC").First(&activeAccount).Error; err == nil {
+		receivingAccount = &activeAccount
+		invoice.ReceivingBankName = activeAccount.BankName
+		invoice.ReceivingAccountNo = activeAccount.AccountNo
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -187,11 +245,11 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, err
 	}
 
-	// ตรวจสลิปอัตโนมัติผ่าน SlipOK ถ้าบัญชีธนาคารหลักที่ใช้งานอยู่เปิดใช้งานฟีเจอร์นี้ไว้
-	// ตรวจผ่าน + เลขบัญชีปลายทางตรงกัน จะยืนยันการชำระเงินให้ทันที ถ้าตรวจไม่ผ่านหรือเกิดข้อผิดพลาด
-	// จะปล่อยให้สถานะยังคงเป็น waitcheck เพื่อรอแอดมินตรวจสอบด้วยตนเองต่อไป
-	if s.slipOk != nil && s.slipOk.Enabled() {
-		s.autoVerifySlip(invoiceID, slipURL)
+	// ตรวจสลิปอัตโนมัติผ่าน SlipOK เฉพาะเมื่อบัญชีปลายทางที่ลูกค้าโอนเข้า (ตัวที่ snapshot ไว้ข้างบน)
+	// เปิดฟีเจอร์นี้ไว้ ตรวจผ่าน + เลขบัญชีปลายทางตรงกัน จะยืนยันการชำระเงินให้ทันที ถ้าตรวจไม่ผ่าน
+	// หรือเกิดข้อผิดพลาด จะปล่อยให้สถานะยังคงเป็น waitcheck เพื่อรอแอดมินตรวจสอบด้วยตนเองต่อไป
+	if receivingAccount != nil && receivingAccount.AutoVerifyEnabled && s.slipOk != nil && s.slipOk.Enabled() {
+		s.autoVerifySlip(invoiceID, slipURL, receivingAccount)
 	}
 
 	var result models.Invoice
@@ -214,16 +272,18 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 	return &result, nil
 }
 
-// autoVerifySlip เรียก SlipOK เพื่อตรวจสอบสลิปกับบัญชีธนาคารหลักที่เปิด auto_verify_enabled ไว้
-// หากตรวจผ่านและเลขบัญชีปลายทางตรงกันจะยืนยันการชำระเงินให้อัตโนมัติ ข้อผิดพลาดใด ๆ จะถูกปล่อยผ่านเงียบ ๆ
-// เพื่อให้ใบแจ้งหนี้ยังคงสถานะรอตรวจสอบไว้ให้แอดมินตรวจด้วยตนเอง
-func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
-	var activeAccount models.BankAccount
-	if err := s.db.Where("is_active = ? AND auto_verify_enabled = ?", true, true).First(&activeAccount).Error; err != nil {
-		// ไม่มีบัญชีที่เปิด auto-verify → ไม่เคยตรวจ (SlipOkChecked ยังเป็น false) แอดมินต้องตรวจเอง
-		log.Printf("[SlipOK] invoice #%d: ไม่มีบัญชีธนาคารที่ is_active และ auto_verify_enabled เปิดพร้อมกัน ข้ามการตรวจอัตโนมัติ (%v)", invoiceID, err)
+// autoVerifySlip เรียก SlipOK เพื่อตรวจสอบสลิปกับบัญชีปลายทาง account (บัญชีเดียวกับที่ snapshot ไว้
+// ตอนแนบสลิป และเปิด auto_verify_enabled แล้ว — ผู้เรียกเป็นคนคัดกรองมาให้) หากตรวจผ่านและเลขบัญชี
+// ปลายทางตรงกันจะยืนยันการชำระเงินให้อัตโนมัติ ข้อผิดพลาดใด ๆ จะถูกปล่อยผ่านเงียบ ๆ เพื่อให้ใบแจ้งหนี้
+// ยังคงสถานะรอตรวจสอบไว้ให้แอดมินตรวจด้วยตนเอง
+//
+// รับ account เข้ามาแทนการ query เองซ้ำ เพื่อให้ "บัญชีที่บันทึกว่าเงินเข้า" กับ "บัญชีที่เอาไปตรวจ match"
+// เป็นใบเดียวกันเสมอ (เดิม snapshot กับ auto-verify query คนละเงื่อนไข อาจได้คนละบัญชีถ้ามีหลาย active)
+func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string, account *models.BankAccount) {
+	if account == nil {
 		return
 	}
+	activeAccount := *account
 
 	var invoice models.Invoice
 	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
@@ -241,6 +301,15 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string) {
 	if !data.Success {
 		s.recordSlipOk(invoiceID, false, data.Message)
 		log.Printf("[SlipOK] invoice #%d: SlipOK ตอบกลับ success=false, message=%q", invoiceID, data.Message)
+		return
+	}
+
+	// ตรวจยอดเงินซ้ำเองอีกชั้น — แม้ส่ง expectedAmount ให้ SlipOK ตรวจแล้ว แต่กันกรณี SlipOK คืน
+	// success โดยยอดบนสลิปน้อยกว่ายอดบิล (เช่น API เปลี่ยน semantics ของพารามิเตอร์ amount ในอนาคต)
+	// จ่ายเท่ากับหรือมากกว่ายอดบิลถือว่าผ่าน · จ่ายขาดห้ามยืนยันอัตโนมัติ ปล่อยให้แอดมินตรวจเอง
+	if data.Amount+slipAmountEpsilon < invoice.TotalAmount {
+		s.recordSlipOk(invoiceID, false, fmt.Sprintf("ยอดโอนบนสลิป (%.2f บาท) น้อยกว่ายอดที่ต้องชำระ (%.2f บาท)", data.Amount, invoice.TotalAmount))
+		log.Printf("[SlipOK] invoice #%d: ยอดโอนน้อยกว่ายอดบิล (slip=%.2f, invoice=%.2f) ข้ามการยืนยันอัตโนมัติ", invoiceID, data.Amount, invoice.TotalAmount)
 		return
 	}
 
@@ -316,11 +385,11 @@ func (s *PaymentService) recordSlipOk(invoiceID uint, passed bool, message strin
 func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*models.Invoice, error) {
 	var invoice models.Invoice
 	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
+		return nil, ErrInvoiceNotFound
 	}
 
 	if invoice.Status == models.InvoiceSuccess {
-		return nil, errors.New("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
+		return nil, businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -393,6 +462,9 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*m
 
 // GetCustomerInvoices ดึงประวัติใบแจ้งหนี้ของนักเรียน/ลูกค้า
 func (s *PaymentService) GetCustomerInvoices(customerID uint) ([]models.Invoice, error) {
+	// ปิดใบที่ค้าง pending หมดอายุก่อน เพื่อให้สถานะที่ส่งออกไปตรงจริง แม้ไม่มี background job
+	s.sweepStalePendingInvoices()
+
 	var invoices []models.Invoice
 	err := s.db.Preload("PaymentItem").
 		Preload("PaymentItem.Billing").
@@ -404,28 +476,41 @@ func (s *PaymentService) GetCustomerInvoices(customerID uint) ([]models.Invoice,
 // RejectPayment ปฏิเสธการชำระเงินโดยผู้ดูแลระบบ (Admin)
 func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) {
 	var invoice models.Invoice
-	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
-	}
-
-	if invoice.Status == models.InvoiceSuccess {
-		return nil, errors.New("ไม่สามารถปฏิเสธใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
-	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// ล็อกแถวใบแจ้งหนี้ก่อนอ่านสถานะ กันแอดมินสองคน (หรือ auto-verify) เข้ามาพร้อมกัน
+		// แล้วต่างคนต่างอ่านสถานะเดิม จนปฏิเสธซ้อนกับการยืนยัน/ยกเลิก
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invoice, invoiceID).Error; err != nil {
+			return ErrInvoiceNotFound
+		}
+
+		// ปฏิเสธได้เฉพาะใบที่ยัง "รอดำเนินการ" (pending) เท่านั้น
+		// ถ้าใบถูกยืนยัน/ยกเลิก/ปฏิเสธไปแล้ว ห้ามทำซ้ำ ไม่งั้นจะไปรีเซ็ตสถานะบิล
+		// ที่อาจถูกชำระผ่านใบอื่นไปแล้วให้กลับมาค้างชำระ = เปิดช่องให้จ่ายซ้ำ
+		if invoice.Status == models.InvoiceSuccess {
+			return businessErr("ไม่สามารถปฏิเสธใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
+		}
+		if invoice.Status != models.InvoicePending {
+			return businessErr("ใบแจ้งหนี้นี้ถูกปิดไปแล้ว ไม่สามารถปฏิเสธซ้ำได้")
+		}
+
 		invoice.Status = models.InvoiceRejected
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกสถานะปฏิเสธการชำระเงินได้")
 		}
 
 		// ดึง PaymentItem ทั้งหมดเพื่อคืนสถานะ Billing เป็น unfunded (ยังไม่ชำระ)
+		// คืนเฉพาะบิลที่กำลัง "รอตรวจสอบ" (waitcheck) ของใบนี้เท่านั้น (guard สถานะ)
+		// กันเผลอไปทับบิลที่ถูกชำระผ่านใบอื่นจนเป็น paid ไปแล้วให้กลับมาค้างชำระ
 		var items []models.PaymentItem
 		if err := tx.Where("invoice_id = ?", invoiceID).Find(&items).Error; err != nil {
 			return err
 		}
 
 		for _, item := range items {
-			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusUnfunded).Error; err != nil {
+			if err := tx.Model(&models.Billing{}).
+				Where("id = ? AND status = ?", item.BillingID, models.StatusWaitCheck).
+				Update("status", models.StatusUnfunded).Error; err != nil {
 				return errors.New("ไม่สามารถอัปเดตสถานะบิลกลับเป็นยังไม่ชำระได้")
 			}
 		}
@@ -455,31 +540,51 @@ func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) 
 	return &result, nil
 }
 
-// CancelInvoice ยกเลิกใบแจ้งหนี้โดยลูกค้าหรือระบบ
-func (s *PaymentService) CancelInvoice(invoiceID uint) (*models.Invoice, error) {
+// CancelInvoice ยกเลิกใบแจ้งหนี้โดยลูกค้า (เจ้าของ) หรือแอดมิน
+//
+// userID/role มาจาก JWT — ลูกค้ายกเลิกได้เฉพาะใบแจ้งหนี้ของตัวเอง ส่วนแอดมินยกเลิกได้ทุกใบ
+// (กัน IDOR: :id เป็นเลขเรียงที่เดาต่อได้ จึงต้องเทียบความเป็นเจ้าของที่ชั้น service เสมอ)
+func (s *PaymentService) CancelInvoice(invoiceID uint, userID uint, role string) (*models.Invoice, error) {
 	var invoice models.Invoice
-	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
-		return nil, errors.New("ไม่พบข้อมูลใบแจ้งหนี้")
-	}
-
-	if invoice.Status == models.InvoiceSuccess {
-		return nil, errors.New("ไม่สามารถยกเลิกใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
-	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// ล็อกแถวใบแจ้งหนี้ก่อนอ่านสถานะ กันการยกเลิกซ้อนกับการยืนยัน/ปฏิเสธที่เข้ามาพร้อมกัน
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invoice, invoiceID).Error; err != nil {
+			return ErrInvoiceNotFound
+		}
+
+		// Invoice.CustomerID อ้างถึง User.ID จึงเทียบกับ userID จาก JWT ได้ตรง
+		if role != string(models.AdminRole) && invoice.CustomerID != userID {
+			return ErrForbidden
+		}
+
+		// ยกเลิกได้เฉพาะใบที่ยัง "รอดำเนินการ" (pending) เท่านั้น
+		// ถ้าใบถูกยืนยัน/ยกเลิก/ปฏิเสธไปแล้ว ห้ามยกเลิกซ้ำ ไม่งั้นจะไปรีเซ็ตสถานะบิล
+		// ที่อาจถูกชำระผ่านใบอื่นไปแล้วให้กลับมาค้างชำระ = เปิดช่องให้จ่ายซ้ำ
+		if invoice.Status == models.InvoiceSuccess {
+			return businessErr("ไม่สามารถยกเลิกใบแจ้งหนี้ที่ชำระเงินสำเร็จแล้วได้")
+		}
+		if invoice.Status != models.InvoicePending {
+			return businessErr("ใบแจ้งหนี้นี้ถูกปิดไปแล้ว ไม่สามารถยกเลิกซ้ำได้")
+		}
+
 		invoice.Status = models.InvoiceCancelled
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกสถานะยกเลิกใบแจ้งหนี้ได้")
 		}
 
 		// ดึง PaymentItem ทั้งหมดเพื่อคืนสถานะ Billing เป็น unfunded (ยังไม่ชำระ)
+		// คืนเฉพาะบิลที่กำลัง "รอตรวจสอบ" (waitcheck) ของใบนี้เท่านั้น (guard สถานะ)
+		// กันเผลอไปทับบิลที่ถูกชำระผ่านใบอื่นจนเป็น paid ไปแล้วให้กลับมาค้างชำระ
 		var items []models.PaymentItem
 		if err := tx.Where("invoice_id = ?", invoiceID).Find(&items).Error; err != nil {
 			return err
 		}
 
 		for _, item := range items {
-			if err := tx.Model(&models.Billing{}).Where("id = ?", item.BillingID).Update("status", models.StatusUnfunded).Error; err != nil {
+			if err := tx.Model(&models.Billing{}).
+				Where("id = ? AND status = ?", item.BillingID, models.StatusWaitCheck).
+				Update("status", models.StatusUnfunded).Error; err != nil {
 				return errors.New("ไม่สามารถอัปเดตสถานะบิลกลับเป็นยังไม่ชำระได้")
 			}
 		}

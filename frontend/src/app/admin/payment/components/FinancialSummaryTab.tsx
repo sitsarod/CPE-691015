@@ -526,6 +526,13 @@ export default function FinancialSummaryTab({
                         <span className="mt-0.5 block max-w-xs truncate text-[11.5px] text-slate-500" title={b.billingdescription}>
                           {b.billingdescription}
                         </span>
+                        {/* ผู้ออกบิล + ผู้แก้ไขล่าสุด (audit) */}
+                        {(b.admin || b.updated_by) && (
+                          <span className="mt-0.5 block max-w-xs truncate text-[10.5px] text-slate-400">
+                            {b.admin && `ออกโดย ${b.admin.firstName} ${b.admin.lastName}`}
+                            {b.updated_by && `${b.admin ? ' · ' : ''}แก้ไขล่าสุดโดย ${b.updated_by.firstName} ${b.updated_by.lastName}`}
+                          </span>
+                        )}
                       </td>
                       <td className="py-[15px] px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">{b.billing_type?.billingtypename || "ทั่วไป"}</td>
                       <td className={`py-[15px] px-4 whitespace-nowrap tabular-nums hidden md:table-cell ${isOverdue ? 'text-rose-500' : 'text-slate-500'}`}>

@@ -104,6 +104,10 @@ export default function InvoicesTab({
             } else if (invoiceStatus === "cancelled") {
               statusBg = "bg-gray-100 text-gray-600 border-gray-200";
               statusText = "ยกเลิกแล้ว";
+            } else if (invoiceStatus === "expired") {
+              // ระบบปิดใบให้อัตโนมัติเมื่อค้างไว้เกินกำหนดโดยไม่แนบสลิป — บิลกลับไปพร้อมออกใบใหม่แล้ว
+              statusBg = "bg-gray-100 text-gray-600 border-gray-200";
+              statusText = "หมดอายุ (ปิดอัตโนมัติ)";
             }
 
             // แถบ accent ด้านซ้ายของการ์ด ให้โทนเดียวกับป้ายสถานะ
@@ -114,7 +118,8 @@ export default function InvoicesTab({
                 waitcheck: "bg-blue-400",
                 pending: "bg-amber-400",
                 rejected: "bg-rose-400",
-                cancelled: "bg-gray-300"
+                cancelled: "bg-gray-300",
+                expired: "bg-gray-300"
               } as Record<string, string>)[invoiceStatus] ?? "bg-gray-300";
 
             return (

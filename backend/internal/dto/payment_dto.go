@@ -64,6 +64,8 @@ type BillingDTO struct {
 	Customer      *UserMinDTO     `json:"customer,omitempty"`
 	AdminID       *uint           `json:"admin_id"`
 	Admin         *UserMinDTO     `json:"admin,omitempty"`
+	// UpdatedBy = แอดมินที่แก้ไขบิลล่าสุด (nil = ยังไม่เคยถูกแก้หลังออกบิล)
+	UpdatedBy     *UserMinDTO     `json:"updated_by,omitempty"`
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
 	TransactionID string          `json:"transactionid,omitempty"`
@@ -135,6 +137,9 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 	}
 	if b.Admin != nil {
 		dto.Admin = ToUserMinDTO(b.Admin)
+	}
+	if b.UpdatedBy != nil {
+		dto.UpdatedBy = ToUserMinDTO(b.UpdatedBy)
 	}
 
 	if invoice != nil {
@@ -282,9 +287,11 @@ func ToInvoiceDTOs(invoices []models.Invoice) []InvoiceDTO {
 }
 
 // CreateBillingRequest represents the request payload for creating bulk or single billing
+//
+// ไม่มี admin_id ในนี้โดยตั้งใจ — คนออกบิลถูกอ้างจาก JWT ที่ฝั่ง controller เสมอ
+// (เดิมรับจาก body ทำให้ปลอมว่าใครเป็นคนออกบิลได้ แม้ route จะเป็น adminOnly ก็ตาม)
 type CreateBillingRequest struct {
 	CustomerIDs   []uint    `json:"customer_ids" binding:"required"`
-	AdminID       uint      `json:"admin_id" binding:"required"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
 	Amount        float64   `json:"billingamount" binding:"required"`
@@ -292,12 +299,13 @@ type CreateBillingRequest struct {
 }
 
 // CreateSplitBillingRequest represents the request payload for splitting billing based on attendance
+//
+// ไม่มี admin_id ในนี้โดยตั้งใจ — คนออกบิลถูกอ้างจาก JWT ที่ฝั่ง controller เสมอ
 type CreateSplitBillingRequest struct {
 	CourseID      uint      `json:"course_id" binding:"required"`
 	Date          string    `json:"date" binding:"required"` // format: YYYY-MM-DD
 	HourlyRate    float64   `json:"hourly_rate" binding:"required"`
 	Hours         float64   `json:"hours" binding:"required"`
-	AdminID       uint      `json:"admin_id" binding:"required"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
 	DueDate       time.Time `json:"billingdue_date" binding:"required"`
