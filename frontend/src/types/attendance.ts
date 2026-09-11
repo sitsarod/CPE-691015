@@ -285,6 +285,12 @@ export interface MissedClassCoach {
   is_emergency: boolean;
 }
 
+export interface MissedClassStudent {
+  customer_id: number;
+  full_name: string;
+  nickname: string;
+}
+
 // หนึ่งรายการ = หนึ่ง "คลาส" ไม่ใช่หนึ่งโค้ช — คลาสเดียวมีโค้ชหลายคนได้
 // และต้องตัดสินใจพร้อมกันทั้งคลาส เพราะการสร้างรอบขึ้นมาหนึ่งรอบ
 // มีผลกับค่าจ้างของทุกคนในคลาสนั้นทันที
@@ -298,6 +304,9 @@ export interface MissedClass {
   end_time: string;
 
   coaches: MissedClassCoach[];
+
+  // นักเรียนที่กดยืนยันว่าจะมาเรียนคาบนี้ไว้
+  students: MissedClassStudent[];
 }
 
 export interface ResolveMissedClassResult {

@@ -22,6 +22,13 @@ type MissedClassCoachDTO struct {
 //
 // คลาสเดียวมีโค้ชได้หลายคน (co-teach) และการเคลียร์ต้องตัดสินใจพร้อมกันทั้งคลาส
 // เพราะการสร้างรอบเช็คชื่อขึ้นมาหนึ่งรอบ มีผลกับค่าจ้างของทุกคนในคลาสนั้นทันที
+// MissedClassStudentDTO คือนักเรียนที่ยืนยันว่าจะมาเรียนคาบที่ค้างอยู่
+type MissedClassStudentDTO struct {
+	CustomerID uint   `json:"customer_id"`
+	FullName   string `json:"full_name"`
+	Nickname   string `json:"nickname"`
+}
+
 type MissedClassDTO struct {
 	// WorkScheduleID = ตารางงานตัวแทนของคลาสนี้ ใช้ส่งกลับมาตอนเคลียร์
 	WorkScheduleID uint `json:"work_schedule_id"`
@@ -34,6 +41,9 @@ type MissedClassDTO struct {
 	EndTime   string `json:"end_time"`
 
 	Coaches []MissedClassCoachDTO `json:"coaches"`
+
+	// นักเรียนที่ยืนยันว่าจะมาเรียนคาบนี้ — ไม่ได้ใช้ตัดสินใจอะไร มีไว้ให้เห็นว่าใครกระทบ
+	Students []MissedClassStudentDTO `json:"students"`
 }
 
 // ResolveMissedClassCoachReq คือคำตัดสินของแอดมินสำหรับโค้ชหนึ่งคน

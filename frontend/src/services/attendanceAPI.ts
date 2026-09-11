@@ -18,6 +18,13 @@ import type {
 interface Envelope<T> {
   data: T;
   message?: string;
+  truncated?: boolean;
+}
+
+// ผลที่อาจถูกตัดเพราะชนเพดานแถวของ backend
+export interface HistoryPage<T> {
+  items: T[];
+  truncated: boolean;
 }
 
 const ALREADY_CHECKED_IN_HINTS = ["เช็คชื่อในรอบนี้ไปแล้ว", "เช็คชื่อคาบนี้ไปแล้ว"];
@@ -186,18 +193,19 @@ export async function updateAttendanceStatus(
 
 // [GET] ประวัติย้อนหลัง กรองตามคอร์สและวันได้
 //
-// backend จำกัดไว้ 500 แถวต่อครั้ง (maxHistoryRows) จึงควรส่งวันมาด้วยเสมอ
+// backend จำกัดไว้ 500 แถวต่อครั้ง (MaxHistoryRows) จึงควรส่งวันมาด้วยเสมอ
+// truncated = ชนเพดานแล้ว ผลที่ได้ไม่ครบ ต้องบอกผู้ใช้ ไม่ใช่ปล่อยให้เข้าใจว่าครบ
 export async function fetchHistory(params?: {
   courseId?: number;
   date?: string;
-}): Promise<AttendanceHistoryItem[]> {
+}): Promise<HistoryPage<AttendanceHistoryItem>> {
   const qs = new URLSearchParams();
   if (params?.courseId) qs.set("course_id", String(params.courseId));
   if (params?.date) qs.set("date", params.date);
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<AttendanceHistoryItem[]>>(`/attendance/history${suffix}`);
-  return res.data ?? [];
+  return { items: res.data ?? [], truncated: res.truncated ?? false };
 }
 
 // [GET] ประวัติเข้าสอนของโค้ช — ใช้ตัวกรองชุดเดียวกับ fetchHistory
@@ -206,14 +214,14 @@ export async function fetchHistory(params?: {
 export async function fetchCoachHistory(params?: {
   courseId?: number;
   date?: string;
-}): Promise<CoachHistoryItem[]> {
+}): Promise<HistoryPage<CoachHistoryItem>> {
   const qs = new URLSearchParams();
   if (params?.courseId) qs.set("course_id", String(params.courseId));
   if (params?.date) qs.set("date", params.date);
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<CoachHistoryItem[]>>(`/attendance/coach-history${suffix}`);
-  return res.data ?? [];
+  return { items: res.data ?? [], truncated: res.truncated ?? false };
 }
 
 // ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
