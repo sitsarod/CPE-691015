@@ -92,6 +92,9 @@ export interface ScheduleFormInput {
 export interface PackageFormInput {
   id: string;
   isNew?: boolean;
+
+  // จำนวนคนที่ลงทะเบียนอยู่ ณ ตอนโหลดฟอร์ม — ใช้กันลบแพ็กเกจที่ยังมีคนเรียน
+  current_enrollments?: number;
   sessions_count: number | "";
   hours_count: number | "";
   max_seats: number | "";

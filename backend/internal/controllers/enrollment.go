@@ -38,6 +38,7 @@ func mapEnrollmentError(c *gin.Context, err error) {
 
 	// สถานะไม่เอื้อให้ทำตอนนี้ — ยิงซ้ำก็ไม่ช่วย
 	case errors.Is(err, services.ErrAlreadyEnrolled),
+		errors.Is(err, services.ErrCourseNotOpen),
 		errors.Is(err, services.ErrPackageSeatsFull),
 		errors.Is(err, services.ErrEnrollmentNotPending),
 		errors.Is(err, services.ErrEnrollmentNotCancellable),
@@ -349,7 +350,8 @@ func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
             c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-        case errors.Is(err, services.ErrEnrollmentBillingLocked):
+        case errors.Is(err, services.ErrEnrollmentBillingLocked),
+            errors.Is(err, services.ErrEnrollmentDuplicateActive):
             c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
         default:
             c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

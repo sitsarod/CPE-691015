@@ -20,6 +20,10 @@ func NewPackageService(db *gorm.DB) *PackageService {
 var (
 	ErrInvalidDuration        = errors.New("ระยะเวลาของแพ็กเกจต้องอยู่ระหว่าง 1 ถึง 366 วัน")
 	ErrPackageScheduleInvalid = errors.New("ตารางเรียนไม่ถูกต้อง")
+
+	ErrPackageHasActiveEnrollments = errors.New("ไม่สามารถลบแพ็กเกจนี้ได้ เนื่องจากยังมีนักเรียนลงทะเบียนอยู่ กรุณายกเลิกการลงทะเบียนที่ค้างก่อน")
+
+	ErrMaxSeatsBelowEnrolled = errors.New("จำนวนที่นั่งสูงสุดน้อยกว่าจำนวนนักเรียนที่รับไปแล้ว")
 )
 
 // validatePackageSchedules ตรวจตารางเรียนก่อนบันทึก
@@ -123,6 +127,13 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 			pkg.HoursCount = *req.HoursCount
 		}
 		if req.MaxSeats != nil {
+			taken, err := seatsTaken(tx, pkg.ID)
+			if err != nil {
+				return err
+			}
+			if taken > *req.MaxSeats {
+				return fmt.Errorf("%w (ตอนนี้รับไปแล้ว %d คน)", ErrMaxSeatsBelowEnrolled, taken)
+			}
 			pkg.MaxSeats = *req.MaxSeats
 		}
 		if req.Price != nil {
@@ -142,6 +153,13 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 		if req.Schedules != nil {
 			if err := tx.Where("package_id = ?", pkg.ID).Delete(&models.PackageSchedule{}).Error; err != nil {
 				return errors.New("ไม่สามารถเคลียร์ตารางเรียนเดิมได้")
+			}
+
+			// ตารางงานโค้ชที่อ้าง id เดิมอยู่ต้องล้างทิ้ง ไม่ใช่ปล่อยให้ชี้ไปที่แถวที่ไม่มีแล้ว
+			if err := tx.Model(&models.WorkSchedule{}).
+				Where("package_id = ?", pkg.ID).
+				Update("package_schedule_id", gorm.Expr("NULL")).Error; err != nil {
+				return errors.New("ไม่สามารถล้างการอ้างอิงตารางเรียนเดิมได้")
 			}
 
 			var newSchedules []models.PackageSchedule
@@ -172,8 +190,20 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 }
 
 // [DELETE] ลบแพ็กเกจ
+//
+// ⚠️ ด่านกันนักเรียนค้างต้องอยู่ที่นี่ ไม่ใช่แค่ที่ DeleteCourse
+// ลบทีละแพ็กเกจจนหมดคือทางอ้อมที่ข้ามด่านระดับคอร์สไปได้ทั้งดุ้น
+// และ FK constraint ช่วยไม่ได้เพราะ soft delete ยิง UPDATE ไม่ใช่ DELETE
 func (s *PackageService) DeletePackage(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		taken, err := packagesHaveEnrollments(tx, []uint{id})
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrPackageHasActiveEnrollments
+		}
+
 		if err := tx.Where("package_id = ?", id).Delete(&models.PackageSchedule{}).Error; err != nil {
 			return errors.New("ไม่สามารถลบตารางเรียนที่ผูกกับแพ็กเกจนี้ได้")
 		}
