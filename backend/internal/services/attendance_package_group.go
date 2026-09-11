@@ -190,6 +190,7 @@ func (s *AttendanceService) openSessionForSlot(
 	tx *gorm.DB,
 	packageIDs []uint,
 	dayStart, dayEnd string,
+	startTime string,
 ) (*models.AttendanceSession, error) {
 	if len(packageIDs) == 0 {
 		return nil, nil
@@ -198,6 +199,7 @@ func (s *AttendanceService) openSessionForSlot(
 	var existing models.AttendanceSession
 	err := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
 		packageIDs, dayStart, dayEnd).
+		Where("COALESCE(schedule_start_time, '') = '' OR schedule_start_time = ?", startTime).
 		Order("id ASC").
 		First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

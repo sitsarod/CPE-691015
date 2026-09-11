@@ -106,6 +106,12 @@ func main() {
 		log.Fatalf("สร้าง index กันเช็คชื่อซ้ำต่อคนไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.DropLegacyAttendanceSessionIndex(db); err != nil {
+		log.Fatalf("รื้อ index รอบเช็คชื่อรุ่นเก่าไม่สำเร็จ: %v", err)
+	}
+
+	services.WarnInvalidPackageSchedules(db)
+
 	// ถ้าล้มต้องหยุด — แปลว่าตอนนี้ไม่มีอะไรกันสมัครแพ็กเกจเดิมซ้ำซ้อนเลย
 	if err := services.EnsureEnrollmentUniqueIndexes(db); err != nil {
 		log.Fatalf("สร้าง index กันสมัครซ้ำไม่สำเร็จ: %v", err)

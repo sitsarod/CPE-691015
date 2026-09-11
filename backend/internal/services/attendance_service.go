@@ -139,7 +139,7 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			item.Packages = pkgs
 		}
 
-		if existing, err := s.openSessionForSlot(s.db, ids, dayStart, dayEnd); err == nil && existing != nil {
+		if existing, err := s.openSessionForSlot(s.db, ids, dayStart, dayEnd, key.start); err == nil && existing != nil {
 			id := existing.ID
 			item.ExistingSessionID = &id
 			item.ExistingSessionStatus = string(existing.Status)
@@ -182,7 +182,7 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	dayStart, dayEnd := dayBounds(now)
-	if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd); e == nil && existing != nil {
+	if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd, sch.StartTime); e == nil && existing != nil {
 		return s.GetSession(existing.ID)
 	}
 
@@ -193,7 +193,7 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	if err := s.db.Create(&session).Error; err != nil {
-		if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd); e == nil && existing != nil {
+		if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd, sch.StartTime); e == nil && existing != nil {
 			return s.GetSession(existing.ID)
 		}
 		return nil, errors.New("ไม่สามารถเปิดรอบเช็คชื่อได้")

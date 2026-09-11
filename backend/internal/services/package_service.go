@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -67,6 +68,42 @@ func resolvePackageDuration(days uint) (uint, error) {
 		return 0, ErrInvalidDuration
 	}
 	return days, nil
+}
+
+// WarnInvalidPackageSchedules ฟ้องตารางเรียนที่เวลาจบไม่ได้อยู่หลังเวลาเริ่ม (ไม่ขวางการ migrate)
+func WarnInvalidPackageSchedules(db *gorm.DB) {
+	type bad struct {
+		ID        uint
+		PackageID uint
+		DayOfWeek string
+		StartTime string
+		EndTime   string
+	}
+
+	var rows []bad
+	if err := db.Raw(`
+		SELECT id, package_id, day_of_week, start_time, end_time
+		FROM package_schedules
+		ORDER BY package_id, id
+	`).Scan(&rows).Error; err != nil {
+		log.Printf("[package] ตรวจตารางเรียนที่เวลาผิดไม่สำเร็จ: %v", err)
+		return
+	}
+
+	found := 0
+	for _, r := range rows {
+		start, errStart := timeToMinutesWS(r.StartTime)
+		end, errEnd := timeToMinutesWS(r.EndTime)
+		if errStart != nil || errEnd != nil || end <= start {
+			log.Printf("[package] ⚠️ ตารางเรียนเวลาผิด: แถว #%d แพ็กเกจ #%d %s %s–%s — คาบนี้เปิดรอบเช็คชื่อไม่ได้",
+				r.ID, r.PackageID, r.DayOfWeek, r.StartTime, r.EndTime)
+			found++
+		}
+	}
+
+	if found > 0 {
+		log.Printf("[package] พบตารางเรียนเวลาผิด %d แถว — แก้เวลาให้ถูกก่อน ไม่งั้นคาบพวกนี้เช็คชื่อไม่ได้", found)
+	}
 }
 
 // [CREATE] สร้างแพ็กเกจใหม่ พร้อมตารางเรียนหลายวัน
