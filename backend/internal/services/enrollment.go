@@ -52,8 +52,8 @@ func resolveDurationDays(pkg *models.Package, enrollmentID uint) uint {
 	return pkg.DurationDays
 }
 func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) error {
-	now := time.Now()
-	expiresAt := now.AddDate(0, 0, int(resolveDurationDays(pkg, e.ID)))
+	now := nowLocal()
+	expiresAt := endOfLocalDay(now.AddDate(0, 0, int(resolveDurationDays(pkg, e.ID))))
 	if err := tx.Model(&models.Enrollment{}).
 		Where("id = ?", e.ID).
 		Updates(map[string]interface{}{
@@ -156,20 +156,29 @@ func hasStudiedCourse(tx *gorm.DB, customerID uint, courseID uint) (bool, error)
 	return count > 0, nil
 }
 
-func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
+// seatsTaken นับที่นั่งที่ถูกยึดแล้ว (อนุมัติแล้ว) ของแพ็กเกจหนึ่ง
+func seatsTaken(tx *gorm.DB, packageID uint) (uint, error) {
 	var taken int64
 	if err := tx.Model(&models.Enrollment{}).
 		Where("package_id = ? AND status IN ?", packageID, enrollmentApprovedStatuses).
 		Count(&taken).Error; err != nil {
-		return false, errors.New("ไม่สามารถตรวจสอบจำนวนที่นั่งคงเหลือได้")
+		return 0, errors.New("ไม่สามารถตรวจสอบจำนวนที่นั่งคงเหลือได้")
 	}
-	return uint(taken) >= maxSeats, nil
+	return uint(taken), nil
+}
+
+func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
+	taken, err := seatsTaken(tx, packageID)
+	if err != nil {
+		return false, err
+	}
+	return taken >= maxSeats, nil
 }
 
 func expireStaleEnrollments(db *gorm.DB) {
 	if err := db.Model(&models.Enrollment{}).
 		Where("status = ? AND expires_at IS NOT NULL AND expires_at < ?",
-			models.EnrollmentStatusActive, time.Now()).
+			models.EnrollmentStatusActive, startOfLocalDay(nowLocal())).
 		Update("status", models.EnrollmentStatusExpired).Error; err != nil {
 		log.Printf("[enrollment] อัปเดตสถานะใบที่หมดอายุไม่สำเร็จ: %v", err)
 	}
@@ -228,8 +237,14 @@ func (s *EnrollmentService) GetAvailableCourses() ([]dto.CourseDTO, error) {
 	return ToCourseDTOs(courses), nil
 }
 
+// EnrollResult คือผลของการสมัคร · Waitlisted = เข้าคิวสำรองเพราะที่นั่งเต็ม
+type EnrollResult struct {
+	Enrollment *models.Enrollment
+	Waitlisted bool
+}
+
 // [POST] ลงทะเบียนคอร์สเรียน
-func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.Enrollment, error) {
+func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollResult, error) {
 	var pkg models.Package
 
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
@@ -249,6 +264,8 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 		RemainingSessions: pkg.SessionsCount,
 	}
 
+	waitlisted := false
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 
 		expireStaleEnrollments(tx)
@@ -264,6 +281,9 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 			return ErrAlreadyEnrolled
 		}
 
+		// ⚠️ เกณฑ์ "รายคอร์ส" ตั้งใจให้ต่างจาก hasStudiedAnything ใน ApproveEnrollment
+		// ที่นี่ถามว่า "ต้องให้แอดมินตรวจอีกไหม" — แอดมินเคยตรวจคนนี้กับคอร์สนี้ไปแล้ว
+		// จึงข้ามได้ ส่วนคอร์สที่ยังไม่เคยเรียนต้องผ่านการตรวจเสมอแม้เป็นลูกค้าเก่า
 		studiedCourse, err := hasStudiedCourse(tx, customerID, pkg.CourseID)
 		if err != nil {
 			return err
@@ -275,6 +295,12 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 			if err := tx.Create(&newEnrollment).Error; err != nil {
 				return errors.New("ไม่สามารถบันทึกการลงทะเบียนได้")
 			}
+
+			taken, err := seatsTaken(tx, packageID)
+			if err != nil {
+				return err
+			}
+			waitlisted = taken >= pkg.MaxSeats
 			return nil
 		}
 
@@ -324,11 +350,11 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*models.E
 		)
 	}
 
-	return &newEnrollment, nil
+	return &EnrollResult{Enrollment: &newEnrollment, Waitlisted: waitlisted}, nil
 }
 
-// [POST] อนุมัติการลงทะเบียนและสร้างบิล
-func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (*models.Enrollment, error) {
+// [POST] อนุมัติการลงทะเบียนและสร้างบิล · allowOverbook = รับเกินที่นั่งแล้วขยาย max_seats ให้
+func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, allowOverbook bool) (*models.Enrollment, error) {
 	var enrollment models.Enrollment
 
 	if err := s.db.Preload("Package").Preload("Package.Course").First(&enrollment, enrollmentID).Error; err != nil {
@@ -349,13 +375,26 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 		expireStaleEnrollments(tx)
 
 		// ⚠️ ต้องเช็คที่นั่งก่อนจองสถานะ — awaiting_payment อยู่ใน enrollmentApprovedStatuses
-		// ถ้าจองก่อน seatsFull จะนับใบนี้เป็นที่นั่งที่ยึดแล้ว แล้วตอบว่าเต็มทั้งที่ยังว่าง
-		full, err := seatsFull(tx, enrollment.PackageID, enrollment.Package.MaxSeats)
+		// ถ้าจองก่อน จะนับใบนี้เป็นที่นั่งที่ยึดแล้ว แล้วตอบว่าเต็มทั้งที่ยังว่าง
+		taken, err := seatsTaken(tx, enrollment.PackageID)
 		if err != nil {
 			return err
 		}
-		if full {
-			return ErrPackageSeatsFull
+		if taken >= enrollment.Package.MaxSeats {
+			if !allowOverbook {
+				return ErrPackageSeatsFull
+			}
+
+			expanded := taken + 1
+			if err := tx.Model(&models.Package{}).
+				Where("id = ?", enrollment.PackageID).
+				Update("max_seats", expanded).Error; err != nil {
+				return errors.New("ไม่สามารถขยายจำนวนที่นั่งของแพ็กเกจได้")
+			}
+			enrollment.Package.MaxSeats = expanded
+
+			log.Printf("[enrollment] #%d: แอดมิน #%d อนุมัติเกินที่นั่ง แพ็กเกจ #%d ขยาย %d → %d",
+				enrollment.ID, adminID, enrollment.PackageID, taken, expanded)
 		}
 
 		// จองใบนี้ก่อนแตะอะไรที่เกี่ยวกับเงิน — ⚠️ ห้ามย้ายไปหลัง createEnrollmentBilling
@@ -378,6 +417,9 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint) (
 			return err
 		}
 
+		// ⚠️ เกณฑ์ "รายคน" ตั้งใจให้ต่างจาก hasStudiedCourse ใน EnrollCourse
+		// ที่นี่ถามว่า "ต้องเก็บเงินก่อนให้เรียนไหม" ซึ่งเป็นเรื่องความน่าเชื่อถือของตัวคน
+		// ไม่ใช่ของคอร์ส — เคยเรียนคอร์สไหนมาก่อนก็ถือว่ารู้จักกันแล้ว
 		studiedBefore, err := hasStudiedAnything(tx, enrollment.CustomerID, enrollment.ID)
 		if err != nil {
 			return err
@@ -441,7 +483,16 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 		return nil, err
 	}
 
-	return toCustomerEnrollmentDTOs(enrollments), nil
+	ids := make([]uint, 0, len(enrollments))
+	for i := range enrollments {
+		ids = append(ids, enrollments[i].ID)
+	}
+	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return toCustomerEnrollmentDTOs(enrollments, carried), nil
 }
 
 // toCustomerEnrollmentDTOs แปลงเป็น DTO แทนการส่ง models.Enrollment ดิบ
@@ -449,7 +500,7 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 // เหตุผลที่ไม่ส่ง model ดิบ: relation ที่ Preload มาจะติดไปทั้งก้อน และถ้าวันไหน
 // มีคนเพิ่ม Preload("...User") เข้ามา bcrypt hash จะรั่วทันที
 // (models.User.Password ยังใช้ tag json:"password" ไม่ใช่ json:"-")
-func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnrollmentDTO {
+func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]bool) []dto.CustomerEnrollmentDTO {
 	items := make([]dto.CustomerEnrollmentDTO, 0, len(enrollments))
 
 	for i := range enrollments {
@@ -466,7 +517,7 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 			ExpiresAt:         e.ExpiresAt,
 			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
 			IsOverdue:         dto.IsBillingOverdue(e.Billing),
-			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions),
+			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions, carried[e.ID]),
 			RejectedReason:    e.RejectedReason,
 			RejectedAt:        e.RejectedAt,
 		}
@@ -515,19 +566,31 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment) []dto.CustomerEnr
 
 // [READ] ดึงข้อมูลการลงทะเบียนทั้งหมด (สำหรับแอดมิน)
 
-func (s *EnrollmentService) GetAllEnrollments() ([]models.Enrollment, error) {
+func (s *EnrollmentService) GetAllEnrollments() ([]dto.AdminEnrollmentDTO, error) {
 	var enrollments []models.Enrollment
 	expireStaleEnrollments(s.db)
 
-	err := s.db.Preload("Customer").
+	if err := s.db.Preload("Customer").
 		Preload("Customer.User").
 		Preload("Package").
 		Preload("Package.Course").
 		Preload("Package.Schedules").
 		Preload("Billing").
 		Order("created_at desc").
-		Find(&enrollments).Error
-	return enrollments, err
+		Find(&enrollments).Error; err != nil {
+		return nil, err
+	}
+
+	ids := make([]uint, 0, len(enrollments))
+	for i := range enrollments {
+		ids = append(ids, enrollments[i].ID)
+	}
+	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.ToAdminEnrollmentDTOs(enrollments, carried), nil
 }
 
 // [UPDATE] แก้ไขข้อมูลการลงทะเบียน

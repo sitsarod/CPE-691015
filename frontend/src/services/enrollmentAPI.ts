@@ -224,15 +224,20 @@ export async function updateEnrollment(id: number, data: UpdateEnrollmentReq, to
   return resData.data;
 }
 
-// [PATCH] อนุมัติการลงทะเบียนและสร้างบิล
-export async function approveEnrollment(id: number, token: string): Promise<Enrollment> {
+// [PATCH] อนุมัติการลงทะเบียนและสร้างบิล · allowOverbook = รับเกินที่นั่งแล้วขยายที่นั่งให้
+export async function approveEnrollment(
+  id: number,
+  token: string,
+  allowOverbook = false
+): Promise<Enrollment> {
   const cleanToken = token.trim().replace(/[\r\n]/g, '');
   const response = await fetch(`${BASE_URL}/enrollments/${id}/approve`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${cleanToken}`
-    }
+    },
+    body: JSON.stringify({ allow_overbook: allowOverbook })
   });
 
   const resData: ApiResponse<Enrollment> = await response.json();

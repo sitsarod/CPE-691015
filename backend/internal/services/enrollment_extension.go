@@ -24,6 +24,7 @@ var (
 		"เลยช่วงผ่อนผัน %d วันหลังหมดอายุแล้ว จึงขยายสิทธิ์ให้ไม่ได้", dto.GracePeriodDays)
 )
 
+// ExtendEnrollment ⚠️ ไม่ได้ขยายเวลาให้ใบนี้ — ทบครึ่งหนึ่งของครั้งคงเหลือไปคอร์สหน้า ที่เหลือริบ
 func (s *EnrollmentService) ExtendEnrollment(
 	enrollmentID uint,
 	adminUserID uint,

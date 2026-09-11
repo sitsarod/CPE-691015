@@ -457,7 +457,8 @@ func (s *AttendanceService) UpdateCoachAttendanceStatus(
 func (s *AttendanceService) GetCoachHistory(courseID uint, date string) ([]dto.CoachHistoryItemDTO, error) {
 	query := s.db.Model(&models.CoachAttendance{}).
 		Limit(maxHistoryRows).
-		Preload("Coach.User").
+		Preload("Coach", withDeleted).
+		Preload("Coach.User", withDeleted).
 		Order("check_in_time DESC")
 
 	if date != "" {
