@@ -256,7 +256,7 @@ func sortClasses(items []dto.UpcomingClassDTO) {
 //
 // ยืนยันกับยกเลิกต้องผ่านด่านชุดเดียวกัน (เป็นเจ้าของ · ใบยังใช้งานอยู่ ·
 // อยู่ในช่วง 7 วัน · ยังไม่พ้นเส้นตาย) แยกเขียนสองที่แล้วจะแก้หลุดข้างเดียว
-func (s *ClassConfirmationService) checkedClass(userID, enrollmentID uint, classDateStr string) (*models.Enrollment, models.PackageSchedule, time.Time, error) {
+func (s *ClassConfirmationService) checkedClass(userID, enrollmentID uint, classDateStr, startTime string) (*models.Enrollment, models.PackageSchedule, time.Time, error) {
 	var zero models.PackageSchedule
 
 	customerID, err := ResolveCustomerID(s.db, userID)
@@ -300,8 +300,8 @@ func (s *ClassConfirmationService) checkedClass(userID, enrollmentID uint, class
 		return nil, zero, time.Time{}, ErrClassOutOfRange
 	}
 
-	// วันที่ที่ส่งมาต้องเป็นวันที่แพ็กเกจนี้มีคาบจริง ไม่ใช่วันไหนก็ได้
-	sch, ok := scheduleOn(enrollment.Package, classDate)
+	// วันและเวลาที่ส่งมาต้องเป็นคาบที่แพ็กเกจนี้มีจริง ไม่ใช่วันไหนเวลาไหนก็ได้
+	sch, ok := scheduleAt(enrollment.Package, classDate, startTime)
 	if !ok {
 		return nil, zero, time.Time{}, ErrClassNotFound
 	}
@@ -341,7 +341,7 @@ func classDTO(e *models.Enrollment, sch models.PackageSchedule, classDate time.T
 //
 // ยิงซ้ำตอนไม่มีแถวก็ไม่ error ผลลัพธ์คือ "ยังไม่ตอบ" เหมือนกัน
 func (s *ClassConfirmationService) CancelConfirmation(userID uint, req dto.CancelClassReq) (*dto.UpcomingClassDTO, error) {
-	enrollment, sch, classDate, err := s.checkedClass(userID, req.EnrollmentID, req.ClassDate)
+	enrollment, sch, classDate, err := s.checkedClass(userID, req.EnrollmentID, req.ClassDate, req.StartTime)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +383,7 @@ func (s *ClassConfirmationService) Confirm(userID uint, req dto.ConfirmClassReq)
 		return nil, ErrClassConfirmBadStatus
 	}
 
-	enrollment, sch, classDate, err := s.checkedClass(userID, req.EnrollmentID, req.ClassDate)
+	enrollment, sch, classDate, err := s.checkedClass(userID, req.EnrollmentID, req.ClassDate, req.StartTime)
 	if err != nil {
 		return nil, err
 	}
@@ -411,14 +411,31 @@ func (s *ClassConfirmationService) Confirm(userID uint, req dto.ConfirmClassReq)
 	return classDTO(enrollment, sch, classDate, req.Status), nil
 }
 
-// scheduleOn หาคาบของแพ็กเกจที่ตรงกับวันในสัปดาห์ของวันที่ให้มา
-func scheduleOn(pkg *models.Package, date time.Time) (models.PackageSchedule, bool) {
+// schedulesOn คืนคาบทุกคาบของแพ็กเกจที่ตรงกับวันในสัปดาห์ของวันที่ให้มา เรียงตามเวลาเริ่ม
+func schedulesOn(pkg *models.Package, date time.Time) []models.PackageSchedule {
 	if pkg == nil {
-		return models.PackageSchedule{}, false
+		return nil
 	}
+
 	weekday := date.Weekday().String()
+	out := make([]models.PackageSchedule, 0, len(pkg.Schedules))
 	for _, sch := range pkg.Schedules {
 		if string(sch.DayOfWeek) == weekday {
+			out = append(out, sch)
+		}
+	}
+
+	sort.Slice(out, func(a, b int) bool { return out[a].StartTime < out[b].StartTime })
+	return out
+}
+
+// scheduleAt หาคาบที่ตรงทั้งวันในสัปดาห์และเวลาเริ่ม
+func scheduleAt(pkg *models.Package, date time.Time, startTime string) (models.PackageSchedule, bool) {
+	if startTime == "" {
+		return models.PackageSchedule{}, false
+	}
+	for _, sch := range schedulesOn(pkg, date) {
+		if sch.StartTime == startTime {
 			return sch, true
 		}
 	}
@@ -488,30 +505,27 @@ func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, err
 		for i := range packages {
 			pkg := &packages[i]
 
-			sch, ok := scheduleOn(pkg, date)
-			if !ok || string(sch.DayOfWeek) != weekday {
-				continue
-			}
-
-			key := slotKey{date.Format("2006-01-02"), pkg.CourseID, sch.StartTime, sch.EndTime}
-			sl, seen := slots[key]
-			if !seen {
-				sl = &slot{anchor: pkg, sch: sch, weekday: weekday,
-					people: map[uint]bool{}, going: map[uint]bool{}}
-				slots[key] = sl
-				order = append(order, key)
-			}
-			if pkg.ID < sl.anchor.ID {
-				sl.anchor = pkg
-			}
-
-			for _, e := range byPackage[pkg.ID] {
-				if !canAttend(e, date) {
-					continue
+			for _, sch := range schedulesOn(pkg, date) {
+				key := slotKey{date.Format("2006-01-02"), pkg.CourseID, sch.StartTime, sch.EndTime}
+				sl, seen := slots[key]
+				if !seen {
+					sl = &slot{anchor: pkg, sch: sch, weekday: weekday,
+						people: map[uint]bool{}, going: map[uint]bool{}}
+					slots[key] = sl
+					order = append(order, key)
 				}
-				sl.people[e.CustomerID] = true
-				if answered[keyOf(e.ID, date, sch.StartTime)] == models.ClassConfirmationGoing {
-					sl.going[e.CustomerID] = true
+				if pkg.ID < sl.anchor.ID {
+					sl.anchor = pkg
+				}
+
+				for _, e := range byPackage[pkg.ID] {
+					if !canAttend(e, date) {
+						continue
+					}
+					sl.people[e.CustomerID] = true
+					if answered[keyOf(e.ID, date, sch.StartTime)] == models.ClassConfirmationGoing {
+						sl.going[e.CustomerID] = true
+					}
 				}
 			}
 		}
@@ -565,7 +579,7 @@ func (s *ClassConfirmationService) GetHeadcounts() ([]dto.ClassHeadcountDTO, err
 //
 // ⚠️ ต้องยืนยันว่าแพ็กเกจมีคาบในวันนั้นจริงก่อนเสมอ ไม่งั้นส่งวันที่มั่วมาจะได้
 // รายชื่อ pending ทั้งหมดของ "คาบที่ไม่มีอยู่จริง" ซึ่งชวนให้เข้าใจผิด
-func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string) (*dto.ClassRosterDTO, error) {
+func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr, startTime string) (*dto.ClassRosterDTO, error) {
 	date, err := time.ParseInLocation("2006-01-02", dateStr, appLocation())
 	if err != nil {
 		return nil, ErrClassConfirmBadDate
@@ -577,7 +591,7 @@ func (s *ClassConfirmationService) GetClassRoster(packageID uint, dateStr string
 		return nil, ErrPackageNotFound
 	}
 
-	sch, ok := scheduleOn(&pkg, classDate)
+	sch, ok := scheduleAt(&pkg, classDate, startTime)
 	if !ok {
 		return nil, ErrClassNotFound
 	}

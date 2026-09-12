@@ -30,7 +30,7 @@ func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto
 // closeSessionTx คือเนื้อของการปิดรอบ ใช้ร่วมกันทั้งแอดมินกดเองและงานปิดอัตโนมัติ
 //
 // closedBy = nil แปลว่าระบบเป็นคนปิด เก็บเป็น NULL ไว้ตอบตอนมีคนทักท้วงย้อนหลัง
-// ว่าการหักโควตาครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
+// ว่าการมาร์คขาดครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
 func (s *AttendanceService) closeSessionTx(
 	tx *gorm.DB,
 	sessionID uint,
@@ -139,7 +139,7 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 
 // AutoCloseStaleSessions ปิดรอบที่เลยเวลาคาบแล้วแต่ไม่มีใครกดปิด คืนจำนวนที่ปิดไป
 //
-// ⚠️ หักโควตาคนที่ไม่มาโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
+// ⚠️ มาร์คขาดเรียน/ขาดงานโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
 // (ตัวเดียวกับที่กันการสแกน) เพื่อให้แอดมินมีช่วงเข้ามาจัดการเองก่อนทุกครั้ง
 func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 	var sessions []models.AttendanceSession
@@ -348,16 +348,20 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 	return &result, nil
 }
 
-const maxHistoryRows = 500
+// MaxHistoryRows = เพดานแถวต่อการดึงประวัติหนึ่งครั้ง
+const MaxHistoryRows = 500
+
+// withDeleted ใช้กับ Preload ของหน้าประวัติ เพื่อให้เห็นเจ้าของแถวที่ถูกลบไปแล้วด้วย
+func withDeleted(db *gorm.DB) *gorm.DB { return db.Unscoped() }
 
 func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.AttendanceHistoryItemDTO, error) {
 	query := s.db.Model(&models.StudentAttendance{}).
-		Limit(maxHistoryRows).
-		Preload("Enrollment").
-		Preload("Enrollment.Customer").
-		Preload("Enrollment.Customer.User").
-		Preload("Enrollment.Package").
-		Preload("Enrollment.Package.Course").
+		Limit(MaxHistoryRows).
+		Preload("Enrollment", withDeleted).
+		Preload("Enrollment.Customer", withDeleted).
+		Preload("Enrollment.Customer.User", withDeleted).
+		Preload("Enrollment.Package", withDeleted).
+		Preload("Enrollment.Package.Course", withDeleted).
 		Preload("AttendanceSession").
 		Order("check_in_time DESC")
 

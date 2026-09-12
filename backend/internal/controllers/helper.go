@@ -2,12 +2,36 @@ package controllers
 
 import (
 	"errors"
+	"net/http"
 
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
+
+// respondServiceError แปลง error จากชั้น service เป็น HTTP status ให้ถูกประเภท
+//
+// เดิม handler ส่วนใหญ่ตอบ 500 กับทุก error ทำให้หน้าบ้านแยกไม่ออกว่า "กรอกผิด/สถานะไม่พร้อม"
+// (ผู้ใช้แก้เองได้) กับ "เซิร์ฟเวอร์พัง" (ต้องแจ้งแอดมิน) ตอนนี้:
+//   - *services.BusinessError → 409 Conflict (กติกาทางธุรกิจ/สถานะไม่พร้อม)
+//   - ErrForbidden            → 403
+//   - ErrInvoiceNotFound / ErrBillingNotFound → 404
+//   - ที่เหลือ                → 500
+func respondServiceError(c *gin.Context, err error) {
+	var be *services.BusinessError
+	switch {
+	case errors.As(err, &be):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrForbidden):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrInvoiceNotFound), errors.Is(err, services.ErrBillingNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+}
 
 // fieldLabelTH แปลงชื่อฟิลด์ใน DTO เป็นชื่อภาษาไทยที่ผู้ใช้เข้าใจ
 //

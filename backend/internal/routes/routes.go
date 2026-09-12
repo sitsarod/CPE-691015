@@ -36,6 +36,13 @@ func SetupRoutes(r *gin.Engine) {
 
 	slipOkService := services.NewSlipOkService()
 	paymentService := services.NewPaymentService(db, slipOkService)
+	// เมื่อ deploy ใช้ Cloudinary เก็บสลิป URL จะเป็น res.cloudinary.com/<cloud>/... (ไม่มี /uploads/)
+	// จึงต้องบอก cloud name ให้ทั้งสอง service: payment รับ slip_url จาก Cloudinary,
+	// และ slipOk ดึงรูปจาก Cloudinary มาตรวจ auto-verify ได้
+	if cloudinaryService != nil {
+		paymentService.WithCloudinaryCloudName(cloudinaryService.CloudName())
+		slipOkService.WithCloudName(cloudinaryService.CloudName())
+	}
 	paymentController := controllers.NewPaymentController(paymentService)
 
 	billingService := services.NewBillingService(db)
@@ -113,13 +120,14 @@ func SetupRoutes(r *gin.Engine) {
 	// ตัวแปลงรูปเป็น embedding (face-service) — ใช้ร่วมกันทั้งเช็คชื่อด้วยใบหน้าและจำแนกคนในรูปโพสต์
 	faceEngine := services.NewHTTPFaceEngine()
 
+	// จำแนกนักเรียนในรูป/วิดีโอที่โค้ชอัปโหลด — ใช้ roster ของ evaluationService เป็นกติกาว่าเทียบกับใครได้บ้าง
+	faceTaggingService := services.NewFaceTaggingService(db, faceEngine, evaluationService)
+
 	videoService := services.NewDetectedVideoService(db)
-	videoController := controllers.NewVideoController(videoService, mediaStorage, db)
+	videoController := controllers.NewVideoController(videoService, faceTaggingService, mediaStorage, db)
 
 	photoPostService := services.NewDetectedPhotoService(db)
-	// จำแนกนักเรียนในรูปที่โค้ชอัปโหลด — ใช้ roster ของ evaluationService เป็นกติกาว่าเทียบกับใครได้บ้าง
-	photoTaggingService := services.NewPhotoTaggingService(db, faceEngine, evaluationService)
-	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, photoTaggingService, mediaStorage, db)
+	photoPostController := controllers.NewPhotoPostController(photoPostService, videoService, faceTaggingService, mediaStorage, db)
 
 	// การลงทะเบียนใบหน้า — ไฟล์เก็บบน Cloudinary โหมด authenticated เท่านั้น
 	faceImageService := services.NewFaceImageService(db, cloudinaryService)
@@ -448,12 +456,15 @@ func SetupRoutes(r *gin.Engine) {
 			paymentGroup.POST("/invoices", paymentController.CreateInvoice)
 			paymentGroup.POST("/invoices/:id/slip", paymentController.UploadSlip)
 			paymentGroup.GET("/invoices/customer/:id", paymentController.GetCustomerInvoices)
+			// ยกเลิกใบแจ้งหนี้ที่ยังรอดำเนินการ — เจ้าของยกเลิกของตัวเองได้ (admin ยกเลิกได้ทุกใบ)
+			// service ตรวจความเป็นเจ้าของกัน IDOR เอง จึงอยู่ใต้ protected ไม่ใช่ adminOnly
+			// ปิด dead-end เดิม: ลูกค้าสร้างใบแล้วเปลี่ยนใจ ต้องยกเลิกเองได้ ไม่งั้นบิลค้างสร้างใบใหม่ไม่ได้
+			paymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 		adminPaymentGroup := adminOnly.Group("/payments")
 		{
 			adminPaymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
 			adminPaymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)
-			adminPaymentGroup.PATCH("/invoices/:id/cancel", paymentController.CancelInvoice)
 		}
 
 		billingGroup := protected.Group("/billings")
@@ -490,6 +501,7 @@ func SetupRoutes(r *gin.Engine) {
 			expensesGroup.GET("/", expenseController.GetAllExpenses)
 			expensesGroup.POST("/", expenseController.CreateExpense)
 			expensesGroup.POST("/batch", expenseController.CreateExpensesBatch) // หลายรายการในทรานแซกชันเดียว (ค่าจ้าง + โบนัส)
+			expensesGroup.PATCH("/:id", expenseController.UpdateExpense)
 			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
 		}
 

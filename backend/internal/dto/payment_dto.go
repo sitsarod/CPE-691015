@@ -64,10 +64,21 @@ type BillingDTO struct {
 	Customer      *UserMinDTO     `json:"customer,omitempty"`
 	AdminID       *uint           `json:"admin_id"`
 	Admin         *UserMinDTO     `json:"admin,omitempty"`
+	// UpdatedBy = แอดมินที่แก้ไขบิลล่าสุด (nil = ยังไม่เคยถูกแก้หลังออกบิล)
+	UpdatedBy     *UserMinDTO     `json:"updated_by,omitempty"`
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
 	TransactionID string          `json:"transactionid,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	// ผลตรวจสลิปอัตโนมัติ (SlipOK) ของใบแจ้งหนี้ที่ผูกกับบิลนี้
+	SlipOkChecked bool   `json:"slipok_checked"`
+	SlipOkPassed  bool   `json:"slipok_passed"`
+	SlipOkMessage string `json:"slipok_message,omitempty"`
+	// บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป)
+	ReceivingBankName  string `json:"receiving_bank_name,omitempty"`
+	ReceivingAccountNo string `json:"receiving_account_no,omitempty"`
+	// ConfirmedBy = แอดมินที่กดอนุมัติการชำระเงินจริง (nil = ระบบยืนยันอัตโนมัติ)
+	ConfirmedBy *UserMinDTO `json:"confirmed_by,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
 	// PaidAt = เวลาที่ยืนยันการชำระเงินจริง (invoice.UpdatedAt ตอนสถานะเป็น success)
 	// ใช้สำหรับจัดยอดรายรับให้อยู่ในช่วงเวลาที่จ่ายจริง ไม่ใช่วันที่ออกบิล
 	PaidAt *time.Time `json:"paid_at,omitempty"`
@@ -127,11 +138,22 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 	if b.Admin != nil {
 		dto.Admin = ToUserMinDTO(b.Admin)
 	}
+	if b.UpdatedBy != nil {
+		dto.UpdatedBy = ToUserMinDTO(b.UpdatedBy)
+	}
 
 	if invoice != nil {
 		dto.InvoiceID = invoice.ID
 		dto.SlipImageUrl = invoice.SlipImageUrl
 		dto.TransactionID = invoice.TransactionID
+		dto.SlipOkChecked = invoice.SlipOkChecked
+		dto.SlipOkPassed = invoice.SlipOkPassed
+		dto.SlipOkMessage = invoice.SlipOkMessage
+		dto.ReceivingBankName = invoice.ReceivingBankName
+		dto.ReceivingAccountNo = invoice.ReceivingAccountNo
+		if invoice.ConfirmedBy != nil {
+			dto.ConfirmedBy = ToUserMinDTO(invoice.ConfirmedBy)
+		}
 
 		// Derive status from the invoice status for this specific transaction mapping
 		if invoice.Status == models.InvoiceSuccess {
@@ -265,22 +287,27 @@ func ToInvoiceDTOs(invoices []models.Invoice) []InvoiceDTO {
 }
 
 // CreateBillingRequest represents the request payload for creating bulk or single billing
+//
+// ไม่มี admin_id ในนี้โดยตั้งใจ — คนออกบิลถูกอ้างจาก JWT ที่ฝั่ง controller เสมอ
+// (เดิมรับจาก body ทำให้ปลอมว่าใครเป็นคนออกบิลได้ แม้ route จะเป็น adminOnly ก็ตาม)
 type CreateBillingRequest struct {
 	CustomerIDs   []uint    `json:"customer_ids" binding:"required"`
-	AdminID       uint      `json:"admin_id" binding:"required"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
-	Amount        float64   `json:"billingamount" binding:"required"`
+	// gt=0 กันยอดติดลบ/ศูนย์ (เดิมใช้แค่ required ทำให้ยอดติดลบผ่าน แล้วไปลดยอดรวมของ invoice ได้)
+	Amount        float64   `json:"billingamount" binding:"required,gt=0"`
 	DueDate       time.Time `json:"billingdue_date" binding:"required"`
 }
 
 // CreateSplitBillingRequest represents the request payload for splitting billing based on attendance
+//
+// ไม่มี admin_id ในนี้โดยตั้งใจ — คนออกบิลถูกอ้างจาก JWT ที่ฝั่ง controller เสมอ
 type CreateSplitBillingRequest struct {
 	CourseID      uint      `json:"course_id" binding:"required"`
 	Date          string    `json:"date" binding:"required"` // format: YYYY-MM-DD
-	HourlyRate    float64   `json:"hourly_rate" binding:"required"`
-	Hours         float64   `json:"hours" binding:"required"`
-	AdminID       uint      `json:"admin_id" binding:"required"`
+	// gt=0 กันอัตรา/จำนวนติดลบ ที่จะทำให้ยอดหารเฉลี่ยติดลบ
+	HourlyRate    float64   `json:"hourly_rate" binding:"required,gt=0"`
+	Hours         float64   `json:"hours" binding:"required,gt=0"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
 	DueDate       time.Time `json:"billingdue_date" binding:"required"`
@@ -301,7 +328,8 @@ type UploadSlipRequest struct {
 // UpdateBillingRequest represents the request payload for updating billing details
 type UpdateBillingRequest struct {
 	Description   *string    `json:"billingdescription"`
-	Amount        *float64   `json:"billingamount"`
+	// omitempty = แก้เฉพาะเมื่อส่งมา, gt=0 = ถ้าส่งมาต้องเป็นบวก (กันแก้ยอดเป็นติดลบ)
+	Amount        *float64   `json:"billingamount" binding:"omitempty,gt=0"`
 	DueDate       *time.Time `json:"billingdue_date"`
 	Status        *string    `json:"billingstatus"`
 	BillingTypeID *uint      `json:"billingtype_id"`

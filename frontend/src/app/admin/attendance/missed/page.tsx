@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CalendarDays, Clock, Loader2, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  Clock,
+  Loader2,
+  ShieldAlert,
+  Users,
+} from "lucide-react";
 
 import { fetchMissedClasses, resolveMissedClass } from "@/services/attendanceAPI";
 import type { AttendanceStatus, MissedClass } from "@/types/attendance";
@@ -32,7 +41,7 @@ function classKey(item: MissedClass) {
   return `${item.course_id}|${item.date}|${item.start_time}|${item.end_time}`;
 }
 
-function coachName(c: { full_name: string; nickname: string }) {
+function personName(c: { full_name: string; nickname: string }) {
   return c.nickname ? `${c.full_name} (${c.nickname})` : c.full_name || "ไม่ทราบชื่อ";
 }
 
@@ -54,6 +63,7 @@ export default function MissedClassesPage() {
   // จะกลายเป็นการเดาในทางที่ตัดเงินคนที่ทำงานจริง
   const [decisions, setDecisions] = useState<Record<string, Record<number, AttendanceStatus>>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [openStudents, setOpenStudents] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
 
   // โหลดผ่าน refreshTick แทนการเรียกฟังก์ชันตรง ๆ ใน effect
@@ -232,6 +242,51 @@ export default function MissedClassesPage() {
                     </span>
                   </div>
 
+                  {(() => {
+                    const students = item.students ?? [];
+                    if (students.length === 0) {
+                      return (
+                        <p className="mb-3 inline-flex items-center gap-1 text-sm text-gray-500">
+                          <Users className="h-4 w-4" />
+                          ไม่มีนักเรียนยืนยันว่าจะมาเรียนคาบนี้
+                        </p>
+                      );
+                    }
+
+                    const isOpen = openStudents[key] ?? false;
+                    return (
+                      <div className="mb-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenStudents((prev) => ({ ...prev, [key]: !prev[key] }))
+                          }
+                          className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-sm text-gray-700 transition hover:bg-gray-100"
+                        >
+                          <Users className="h-4 w-4" />
+                          นักเรียนยืนยันไว้{" "}
+                          <span className="font-semibold text-gray-900">{students.length}</span> คน
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </button>
+
+                        {isOpen && (
+                          <ul className="mt-1 flex flex-wrap gap-1.5 px-2">
+                            {students.map((student) => (
+                              <li
+                                key={student.customer_id}
+                                className="rounded bg-blue-50 px-2 py-0.5 text-sm text-blue-800"
+                              >
+                                {personName(student)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div className="space-y-2">
                     {item.coaches.map((coach) => {
                       const status = chosen[coach.coach_id] ?? "present";
@@ -242,7 +297,7 @@ export default function MissedClassesPage() {
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-gray-900">
-                              {coachName(coach)}
+                              {personName(coach)}
                               {coach.is_emergency && (
                                 <span className="ml-2 inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-xs font-normal text-orange-700">
                                   <ShieldAlert className="h-3 w-3" />

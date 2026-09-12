@@ -22,21 +22,24 @@ export interface DetectCourse {
 export interface Detection {
   uid: string;
   predictedNickname: string | null; // ชื่อที่ AI คาดเดา (null = โค้ชเพิ่มเองภายหลัง)
-  confidence: number | null; // ระบบจริงยังไม่มีคะแนนความมั่นใจ (mock ฝั่ง backend) จึงเป็น null เสมอตอนนี้
+  confidence: number | null; // null เฉพาะรายการที่โค้ชเพิ่มเอง (AI เดาให้เสมอมีคะแนน ทั้งรูปและวิดีโอ)
   studentId: number | ''; // ผู้เรียนที่ผูกไว้ตอนนี้ (หลังยืนยัน/แก้ไข)
   status: DetectionStatus;
-  /** กรอบใบหน้าบนรูปต้นฉบับ [x1, y1, x2, y2] พิกเซล — ใช้วาดกรอบ/ชื่อทับตอนตรวจทานเท่านั้น
-   * ไม่มีถ้าเป็นวิดีโอ (ยังไม่มี bbox) หรือโค้ชเพิ่มเอง */
+  /** กรอบใบหน้า [x1, y1, x2, y2] พิกเซล — ของไฟล์รูปต้นฉบับ (ฝั่งรูป) หรือของ frameImage
+   * ด้านล่าง (ฝั่งวิดีโอ) ใช้วาดกรอบ/ชื่อทับตอนตรวจทานเท่านั้น ไม่มีถ้าโค้ชเพิ่มเอง */
   bbox: [number, number, number, number] | null;
+  /** เฟรมวิดีโอที่ย่อขนาดแล้ว (JPEG base64 ไม่มี data URL prefix) ที่แมตช์ได้ — มีเฉพาะวิดีโอ
+   * (รูปไม่ต้องใช้ เพราะมีไฟล์ต้นฉบับอยู่แล้ว) วาดกรอบทับด้วย bbox ข้างบนได้เหมือนฝั่งรูปทุกอย่าง */
+  frameImage: string | null;
 }
 
 // MAX_BATCH_FILES จำกัดจำนวนไฟล์ต่อการอัปโหลดหนึ่งครั้ง — วิเคราะห์ทีละไฟล์ผ่าน face-service
-// ซึ่งกินเวลา 1-3 วิ/ไฟล์ ถ้าไม่จำกัดโค้ชเลือกทีละหลายสิบไฟล์แล้วเครื่อง (โดยเฉพาะโน้ตบุ๊คที่ไม่แรง)
-// จะค้างรอนานเกินไป
+// รูปกินเวลา 1-3 วิ/ไฟล์ ส่วนวิดีโอช้ากว่ามาก (ถอดหลายเฟรมมาตรวจ อาจถึงหลักสิบวิ/ไฟล์)
+// ถ้าไม่จำกัดโค้ชเลือกทีละหลายสิบไฟล์แล้วเครื่อง (โดยเฉพาะโน้ตบุ๊คที่ไม่แรง) จะค้างรอนานเกินไป
 export const MAX_BATCH_FILES = 10;
 
 // AUTO_CONFIRM_THRESHOLD — ผลจำแนกที่มั่นใจตั้งแต่ % นี้ขึ้นไปจะ "ยืนยันให้อัตโนมัติ" โดยไม่ต้องกด
-// (ลดงานกดของโค้ชในเคสที่ชัดเจน) ที่เหลือ (ต่ำกว่านี้ หรือวิดีโอที่ไม่มีคะแนนความมั่นใจเลย)
+// (ลดงานกดของโค้ชในเคสที่ชัดเจน) ใช้เกณฑ์เดียวกันทั้งรูปและวิดีโอ ที่เหลือ (ต่ำกว่านี้)
 // ยังต้องตรวจทานเองอยู่ — เป็นค่าเริ่มต้นที่ยังไม่เคย calibrate จากข้อมูลจริง ปรับได้ถ้าเดาพลาดบ่อยไป
 export const AUTO_CONFIRM_THRESHOLD = 65;
 
@@ -199,44 +202,40 @@ export function useDetect() {
     for (const item of pending) {
       updateItem(item.uid, { analyzing: true, error: null });
       try {
-        if (item.isVideo) {
-          const result = await uploadDetectVideo(item.file);
-          updateItem(item.uid, {
-            analyzing: false,
-            rawId: result.raw_video_id,
-            faceCount: 0,
-            detections: result.student_ids.map((id) => {
-              const match = students.find((s) => s.id === id);
-              return {
-                uid: nextUid(),
-                predictedNickname: match?.nickname ?? `ผู้เรียน #${id} (ไม่อยู่ในรายชื่อของคุณ)`,
-                confidence: null,
-                studentId: id,
-                status: 'pending' as DetectionStatus,
-                bbox: null,
-              };
-            }),
-          });
-        } else {
-          const result = await uploadDetectPhoto(item.file, selectedCourseId);
-          updateItem(item.uid, {
-            analyzing: false,
-            rawId: result.raw_photo_id,
-            faceCount: result.face_count,
-            detections: result.students.map((s) => {
-              const confidence = Math.round(s.confidence);
-              return {
-                uid: nextUid(),
-                predictedNickname: s.nickname,
-                confidence,
-                studentId: s.customer_id,
-                // มั่นใจสูงพอ = ยืนยันให้เลยอัตโนมัติ ไม่ต้องรอโค้ชกด (ยังกดแก้ไข/ลบทีหลังได้เหมือนเดิม)
-                status: (confidence >= AUTO_CONFIRM_THRESHOLD ? 'confirmed' : 'pending') as DetectionStatus,
-                bbox: s.bbox ?? null,
-              };
-            }),
-          });
-        }
+        // รูปและวิดีโอคืนผลลัพธ์รูปแบบเดียวกันแล้ว (face_count + students[]) — ต่างกันแค่ endpoint
+        // และชื่อฟิลด์ raw id เท่านั้น ดึงมาเป็นรูปทรงเดียวกันก่อนใช้ต่อ (กัน TS union ไม่ narrow ให้)
+        const { rawId, faceCount, students: detectedStudents } = item.isVideo
+          ? await uploadDetectVideo(item.file, selectedCourseId).then((r) => ({
+              rawId: r.raw_video_id,
+              faceCount: r.face_count,
+              students: r.students,
+            }))
+          : await uploadDetectPhoto(item.file, selectedCourseId).then((r) => ({
+              rawId: r.raw_photo_id,
+              faceCount: r.face_count,
+              students: r.students,
+            }));
+
+        updateItem(item.uid, {
+          analyzing: false,
+          rawId,
+          faceCount,
+          detections: detectedStudents.map((s) => {
+            const confidence = Math.round(s.confidence);
+            return {
+              uid: nextUid(),
+              predictedNickname: s.nickname,
+              confidence,
+              studentId: s.customer_id,
+              // มั่นใจสูงพอ = ยืนยันให้เลยอัตโนมัติ ไม่ต้องรอโค้ชกด (ยังกดแก้ไข/ลบทีหลังได้เหมือนเดิม)
+              status: (confidence >= AUTO_CONFIRM_THRESHOLD ? 'confirmed' : 'pending') as DetectionStatus,
+              // ฝั่งรูป bbox อ้างอิงไฟล์ต้นฉบับที่มีอยู่แล้ว ฝั่งวิดีโอ bbox อ้างอิง frameImage
+              // ที่ backend ส่งมาคู่กันเสมอ (คนละรูปอ้างอิงกัน แยกไว้จะได้ไม่ใช้ผิดคู่กัน)
+              bbox: s.bbox ?? null,
+              frameImage: item.isVideo ? s.frame_image ?? null : null,
+            };
+          }),
+        });
       } catch (err) {
         updateItem(item.uid, {
           analyzing: false,
@@ -316,6 +315,7 @@ export function useDetect() {
                   studentId: '' as const,
                   status: 'pending' as DetectionStatus,
                   bbox: null,
+                  frameImage: null,
                 },
               ],
             }

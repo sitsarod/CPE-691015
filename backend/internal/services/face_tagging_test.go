@@ -14,10 +14,11 @@ import (
 
 // fakeFaceEngine ปลอม face-service ให้คุมผลลัพธ์ได้โดยไม่ต้องมี Python service จริง
 type fakeFaceEngine struct {
-	enabled   bool
-	allResult *FaceEmbedAllResult
-	allErr    error
-	allCalls  int
+	enabled    bool
+	allResult  *FaceEmbedAllResult
+	allErr     error
+	allCalls   int
+	videoCalls int
 }
 
 func (f *fakeFaceEngine) Embed(context.Context, []byte) (*FaceEmbedResult, error) {
@@ -29,13 +30,18 @@ func (f *fakeFaceEngine) EmbedAll(context.Context, []byte) (*FaceEmbedAllResult,
 	return f.allResult, f.allErr
 }
 
+func (f *fakeFaceEngine) EmbedAllVideo(context.Context, []byte) (*FaceEmbedAllResult, error) {
+	f.videoCalls++
+	return f.allResult, f.allErr
+}
+
 func (f *fakeFaceEngine) Enabled() bool { return f.enabled }
 
 // ยังไม่ได้ตั้งค่า face-service ต้องบอกให้ชัดว่าใช้ไม่ได้ ไม่ใช่เงียบแล้วคืนรายชื่อว่าง
 // (ผู้เรียกจะได้แยกออกว่า "ระบบไม่พร้อม" ต่างจาก "ในรูปไม่มีใครที่รู้จัก")
 func TestDetectStudentsInPhotoRequiresEngine(t *testing.T) {
 	db := evalTestDB(t)
-	svc := NewPhotoTaggingService(db, &fakeFaceEngine{enabled: false}, NewEvaluationService(db))
+	svc := NewFaceTaggingService(db, &fakeFaceEngine{enabled: false}, NewEvaluationService(db))
 
 	_, _, err := svc.DetectStudentsInPhoto(context.Background(), 100, 1, []byte("รูป"))
 	if !errors.Is(err, ErrFaceTaggingUnavailable) {
@@ -47,7 +53,7 @@ func TestDetectStudentsInPhotoRequiresEngine(t *testing.T) {
 func TestDetectStudentsInPhotoSkipsModelWhenRosterEmpty(t *testing.T) {
 	db := evalTestDB(t)
 	engine := &fakeFaceEngine{enabled: true}
-	svc := NewPhotoTaggingService(db, engine, NewEvaluationService(db))
+	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
 
 	coachID := seedCoachFor(t, db, 100, "uid-tag-empty")
 	pkgID := seedCourseTaughtBy(t, db, coachID)
@@ -84,7 +90,7 @@ func TestDetectStudentsInPhotoSkipsLowQualityFaces(t *testing.T) {
 			},
 		},
 	}
-	svc := NewPhotoTaggingService(db, engine, NewEvaluationService(db))
+	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
 
 	coachID := seedCoachFor(t, db, 100, "uid-tag-lowq")
 	pkgID := seedCourseTaughtBy(t, db, coachID)
@@ -107,8 +113,88 @@ func TestDetectStudentsInPhotoSkipsLowQualityFaces(t *testing.T) {
 	}
 }
 
+// เส้นทางวิดีโอต้องเรียก EmbedAllVideo (ไม่ใช่ EmbedAll) และใช้ตรรกะกรอง/จับคู่ชุดเดียวกับรูป
+func TestDetectStudentsInVideoRequiresEngine(t *testing.T) {
+	db := evalTestDB(t)
+	svc := NewFaceTaggingService(db, &fakeFaceEngine{enabled: false}, NewEvaluationService(db))
+
+	_, _, err := svc.DetectStudentsInVideo(context.Background(), 100, 1, []byte("วิดีโอ"))
+	if !errors.Is(err, ErrFaceTaggingUnavailable) {
+		t.Fatalf("ควรได้ ErrFaceTaggingUnavailable แต่ได้: %v", err)
+	}
+}
+
+func TestDetectStudentsInVideoSkipsModelWhenRosterEmpty(t *testing.T) {
+	db := evalTestDB(t)
+	engine := &fakeFaceEngine{enabled: true}
+	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
+
+	coachID := seedCoachFor(t, db, 100, "uid-tag-video-empty")
+	pkgID := seedCourseTaughtBy(t, db, coachID)
+
+	var pkg models.Package
+	if err := db.First(&pkg, pkgID).Error; err != nil {
+		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
+	}
+
+	matches, faceCount, err := svc.DetectStudentsInVideo(context.Background(), 100, pkg.CourseID, []byte("วิดีโอ"))
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+	if len(matches) != 0 || faceCount != 0 {
+		t.Fatalf("ควรได้ผลว่างเปล่า แต่ได้ matches=%d faceCount=%d", len(matches), faceCount)
+	}
+	if engine.videoCalls != 0 {
+		t.Fatalf("ไม่ควรเรียกโมเดลเลยเมื่อไม่มีนักเรียนในคอร์ส แต่เรียกไป %d ครั้ง", engine.videoCalls)
+	}
+	if engine.allCalls != 0 {
+		t.Fatalf("เส้นทางวิดีโอต้องไม่เรียก EmbedAll (รูป) เลย แต่เรียกไป %d ครั้ง", engine.allCalls)
+	}
+}
+
+// ใบหน้าคนเดิมโผล่ในหลายเฟรมที่สุ่มตรวจมาต้องถูกรวมเป็นแถวเดียว (คะแนนดีที่สุด) ไม่ใช่เสนอซ้ำ
+func TestDetectStudentsInVideoMergesSamePersonAcrossFrames(t *testing.T) {
+	db := evalTestDB(t)
+
+	coachID := seedCoachFor(t, db, 100, "uid-tag-video-merge")
+	pkgID := seedCourseTaughtBy(t, db, coachID)
+	seedEnrolledCustomer(t, db, pkgID, models.EnrollmentStatusActive, "qr-tag-video-merge")
+
+	var pkg models.Package
+	if err := db.First(&pkg, pkgID).Error; err != nil {
+		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
+	}
+
+	// สองหน้านี้ไม่มีใครลงทะเบียนใบหน้าไว้เลย (ทดสอบ pgvector จริงต้องใช้ Postgres — ดูคอมเมนต์
+	// บนสุดของไฟล์) แต่ยังยืนยันได้ว่าเส้นทางวิดีโอเรียก EmbedAllVideo ครั้งเดียวไม่ว่าจะมีกี่เฟรม
+	engine := &fakeFaceEngine{
+		enabled: true,
+		allResult: &FaceEmbedAllResult{
+			FaceCount: 3,
+			Model:     "buffalo_l",
+			Faces: []DetectedFaceEmbedding{
+				{Embedding: make([]float32, faceEmbedDimensions), Quality: 0.9},
+				{Embedding: make([]float32, faceEmbedDimensions), Quality: 0.9},
+				{Embedding: make([]float32, faceEmbedDimensions), Quality: 0.9},
+			},
+		},
+	}
+	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
+
+	_, faceCount, err := svc.DetectStudentsInVideo(context.Background(), 100, pkg.CourseID, []byte("วิดีโอ"))
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+	if faceCount != 3 {
+		t.Fatalf("ต้องรายงานจำนวนใบหน้าดิบทั้งหมดจากทุกเฟรม แต่ได้ %d", faceCount)
+	}
+	if engine.videoCalls != 1 {
+		t.Fatalf("ควรเรียก EmbedAllVideo ครั้งเดียว แต่เรียกไป %d ครั้ง", engine.videoCalls)
+	}
+}
+
 func TestSortMatchesByConfidence(t *testing.T) {
-	matches := []PhotoFaceMatch{
+	matches := []FaceMatch{
 		{CustomerID: 1, Confidence: 0.42},
 		{CustomerID: 2, Confidence: 0.91},
 		{CustomerID: 3, Confidence: 0.67},

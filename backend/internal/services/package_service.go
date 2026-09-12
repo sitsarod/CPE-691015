@@ -2,6 +2,8 @@ package services
 
 import (
 	"errors"
+	"fmt"
+	"log"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -16,7 +18,45 @@ func NewPackageService(db *gorm.DB) *PackageService {
 	return &PackageService{db: db}
 }
 
-var ErrInvalidDuration = errors.New("ระยะเวลาของแพ็กเกจต้องอยู่ระหว่าง 1 ถึง 366 วัน")
+var (
+	ErrInvalidDuration        = errors.New("ระยะเวลาของแพ็กเกจต้องอยู่ระหว่าง 1 ถึง 366 วัน")
+	ErrPackageScheduleInvalid = errors.New("ตารางเรียนไม่ถูกต้อง")
+
+	ErrPackageHasActiveEnrollments = errors.New("ไม่สามารถลบแพ็กเกจนี้ได้ เนื่องจากยังมีนักเรียนลงทะเบียนอยู่ กรุณายกเลิกการลงทะเบียนที่ค้างก่อน")
+
+	ErrMaxSeatsBelowEnrolled = errors.New("จำนวนที่นั่งสูงสุดน้อยกว่าจำนวนนักเรียนที่รับไปแล้ว")
+)
+
+// validatePackageSchedules ตรวจตารางเรียนก่อนบันทึก
+func validatePackageSchedules(schedules []dto.PackageScheduleReq) error {
+	seen := make(map[string]bool, len(schedules))
+
+	for _, sch := range schedules {
+		start, err := timeToMinutesWS(sch.StartTime)
+		if err != nil {
+			return fmt.Errorf("%w: เวลาเริ่ม %q ต้องเป็นรูปแบบ HH:MM", ErrPackageScheduleInvalid, sch.StartTime)
+		}
+
+		end, err := timeToMinutesWS(sch.EndTime)
+		if err != nil {
+			return fmt.Errorf("%w: เวลาจบ %q ต้องเป็นรูปแบบ HH:MM", ErrPackageScheduleInvalid, sch.EndTime)
+		}
+
+		if end <= start {
+			return fmt.Errorf("%w: คาบ %s %s–%s เวลาจบต้องอยู่หลังเวลาเริ่ม (คาบข้ามเที่ยงคืนยังไม่รองรับ)",
+				ErrPackageScheduleInvalid, sch.DayOfWeek, sch.StartTime, sch.EndTime)
+		}
+
+		key := sch.DayOfWeek + " " + sch.StartTime
+		if seen[key] {
+			return fmt.Errorf("%w: มีคาบ %s %s ซ้ำกันสองแถว",
+				ErrPackageScheduleInvalid, sch.DayOfWeek, sch.StartTime)
+		}
+		seen[key] = true
+	}
+
+	return nil
+}
 
 const maxPackageDurationDays = 366
 
@@ -30,8 +70,48 @@ func resolvePackageDuration(days uint) (uint, error) {
 	return days, nil
 }
 
+// WarnInvalidPackageSchedules ฟ้องตารางเรียนที่เวลาจบไม่ได้อยู่หลังเวลาเริ่ม (ไม่ขวางการ migrate)
+func WarnInvalidPackageSchedules(db *gorm.DB) {
+	type bad struct {
+		ID        uint
+		PackageID uint
+		DayOfWeek string
+		StartTime string
+		EndTime   string
+	}
+
+	var rows []bad
+	if err := db.Raw(`
+		SELECT id, package_id, day_of_week, start_time, end_time
+		FROM package_schedules
+		ORDER BY package_id, id
+	`).Scan(&rows).Error; err != nil {
+		log.Printf("[package] ตรวจตารางเรียนที่เวลาผิดไม่สำเร็จ: %v", err)
+		return
+	}
+
+	found := 0
+	for _, r := range rows {
+		start, errStart := timeToMinutesWS(r.StartTime)
+		end, errEnd := timeToMinutesWS(r.EndTime)
+		if errStart != nil || errEnd != nil || end <= start {
+			log.Printf("[package] ⚠️ ตารางเรียนเวลาผิด: แถว #%d แพ็กเกจ #%d %s %s–%s — คาบนี้เปิดรอบเช็คชื่อไม่ได้",
+				r.ID, r.PackageID, r.DayOfWeek, r.StartTime, r.EndTime)
+			found++
+		}
+	}
+
+	if found > 0 {
+		log.Printf("[package] พบตารางเรียนเวลาผิด %d แถว — แก้เวลาให้ถูกก่อน ไม่งั้นคาบพวกนี้เช็คชื่อไม่ได้", found)
+	}
+}
+
 // [CREATE] สร้างแพ็กเกจใหม่ พร้อมตารางเรียนหลายวัน
 func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Package, error) {
+	if err := validatePackageSchedules(req.Schedules); err != nil {
+		return nil, err
+	}
+
 	var schedules []models.PackageSchedule
 	for _, sch := range req.Schedules {
 		schedules = append(schedules, models.PackageSchedule{
@@ -64,6 +144,12 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 
 // [UPDATE] แก้ไขแพ็กเกจและตารางเวลา
 func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*models.Package, error) {
+	if req.Schedules != nil {
+		if err := validatePackageSchedules(*req.Schedules); err != nil {
+			return nil, err
+		}
+	}
+
 	var pkg models.Package
 	if err := s.db.Preload("Schedules").First(&pkg, id).Error; err != nil {
 		return nil, errors.New("ไม่พบข้อมูลแพ็กเกจนี้ในระบบ")
@@ -78,6 +164,13 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 			pkg.HoursCount = *req.HoursCount
 		}
 		if req.MaxSeats != nil {
+			taken, err := seatsTaken(tx, pkg.ID)
+			if err != nil {
+				return err
+			}
+			if taken > *req.MaxSeats {
+				return fmt.Errorf("%w (ตอนนี้รับไปแล้ว %d คน)", ErrMaxSeatsBelowEnrolled, taken)
+			}
 			pkg.MaxSeats = *req.MaxSeats
 		}
 		if req.Price != nil {
@@ -99,6 +192,13 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 				return errors.New("ไม่สามารถเคลียร์ตารางเรียนเดิมได้")
 			}
 
+			// ตารางงานโค้ชที่อ้าง id เดิมอยู่ต้องล้างทิ้ง ไม่ใช่ปล่อยให้ชี้ไปที่แถวที่ไม่มีแล้ว
+			if err := tx.Model(&models.WorkSchedule{}).
+				Where("package_id = ?", pkg.ID).
+				Update("package_schedule_id", gorm.Expr("NULL")).Error; err != nil {
+				return errors.New("ไม่สามารถล้างการอ้างอิงตารางเรียนเดิมได้")
+			}
+
 			var newSchedules []models.PackageSchedule
 			for _, sch := range *req.Schedules {
 				newSchedules = append(newSchedules, models.PackageSchedule{
@@ -108,7 +208,7 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 					EndTime:   sch.EndTime,
 				})
 			}
-			
+
 			if len(newSchedules) > 0 {
 				if err := tx.Create(&newSchedules).Error; err != nil {
 					return errors.New("ไม่สามารถบันทึกตารางเรียนใหม่ได้")
@@ -127,12 +227,24 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 }
 
 // [DELETE] ลบแพ็กเกจ
+//
+// ⚠️ ด่านกันนักเรียนค้างต้องอยู่ที่นี่ ไม่ใช่แค่ที่ DeleteCourse
+// ลบทีละแพ็กเกจจนหมดคือทางอ้อมที่ข้ามด่านระดับคอร์สไปได้ทั้งดุ้น
+// และ FK constraint ช่วยไม่ได้เพราะ soft delete ยิง UPDATE ไม่ใช่ DELETE
 func (s *PackageService) DeletePackage(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		taken, err := packagesHaveEnrollments(tx, []uint{id})
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrPackageHasActiveEnrollments
+		}
+
 		if err := tx.Where("package_id = ?", id).Delete(&models.PackageSchedule{}).Error; err != nil {
 			return errors.New("ไม่สามารถลบตารางเรียนที่ผูกกับแพ็กเกจนี้ได้")
 		}
-		
+
 		if err := tx.Delete(&models.Package{}, id).Error; err != nil {
 			return errors.New("ไม่สามารถลบแพ็กเกจได้ หรือแพ็กเกจนี้ถูกใช้งานอยู่")
 		}

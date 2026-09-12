@@ -144,7 +144,7 @@ func TestCreateExpensesBatchIsAllOrNothing(t *testing.T) {
 		{Amount: 500, Type: models.ExpenseTypeCoachOther, Date: time.Now(), CoachID: &coachID},
 		// ค่าจ้างเกินยอดค้าง (ค้างจริง 300) — ต้องทำให้ทั้งก้อนตกไป
 		{Amount: 9999, Type: models.ExpenseTypeCoach, Date: time.Now(), CoachID: &coachID},
-	})
+	}, 0)
 	if !errors.Is(err, ErrPayrollExceeds) {
 		t.Fatalf("ยอดค่าจ้างเกินต้องถูกปฏิเสธ แต่ได้ error: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestCreateExpensesBatchRejectsTwoWagesForSameCoach(t *testing.T) {
 	_, err := NewExpenseService(db).CreateExpenses([]dto.CreateExpenseRequest{
 		{Amount: 600, Type: models.ExpenseTypeCoach, Date: time.Now(), CoachID: &coachID},
 		{Amount: 600, Type: models.ExpenseTypeCoach, Date: time.Now(), CoachID: &coachID},
-	})
+	}, 0)
 	if !errors.Is(err, ErrPayrollExceeds) {
 		t.Fatalf("ค่าจ้างของโค้ชคนเดียวกันซ้อนกันต้องถูกปฏิเสธ แต่ได้ error: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestCreateExpensesBatchWritesEverythingOnSuccess(t *testing.T) {
 	created, err := NewExpenseService(db).CreateExpenses([]dto.CreateExpenseRequest{
 		{Amount: 300, Type: models.ExpenseTypeCoach, Date: time.Now(), CoachID: &coachID},
 		{Amount: 500, Type: models.ExpenseTypeCoachOther, Date: time.Now(), CoachID: &coachID},
-	})
+	}, 0)
 	if err != nil {
 		t.Fatalf("บันทึกก้อนที่ถูกต้องไม่สำเร็จ: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestMonthlyWageCannotBeOverpaidViaBackdating(t *testing.T) {
 		_, err := svc.CreateExpense(dto.CreateExpenseRequest{
 			Amount: amount, Type: models.ExpenseTypeCoach,
 			Date: lastMonth, CoachID: &coachID,
-		})
+		}, 0)
 		return err
 	}
 
@@ -457,7 +457,7 @@ func TestExpenseRejectsUnknownType(t *testing.T) {
 	_, err := NewExpenseService(db).CreateExpense(dto.CreateExpenseRequest{
 		Amount: 999999, Type: models.ExpenseType("อะไรก็ได้"),
 		Date: time.Now(), CoachID: &coachID,
-	})
+	}, 0)
 	if !errors.Is(err, ErrExpenseUnknownType) {
 		t.Fatalf("ประเภทที่ระบบไม่รู้จักต้องถูกปฏิเสธ แต่ได้ error: %v", err)
 	}

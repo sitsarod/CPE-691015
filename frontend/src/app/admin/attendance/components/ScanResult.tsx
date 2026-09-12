@@ -9,7 +9,11 @@ export type ScanOutcome = {
   ok: boolean;
   title: string;
   detail?: string;
+  repeat?: boolean;
 };
+
+const BEEP_TIMES_DEFAULT = 1;
+const BEEP_TIMES_REPEAT = 3;
 
 interface Props {
   outcome: ScanOutcome;
@@ -18,7 +22,9 @@ interface Props {
   variant?: "banner" | "overlay" | "fullscreen";
 }
 
-function beep(ok: boolean) {
+const BEEP_GAP_SECONDS = 0.09;
+
+function beep(ok: boolean, times: number) {
   try {
     const Ctor =
       window.AudioContext ||
@@ -26,22 +32,33 @@ function beep(ok: boolean) {
     if (!Ctor) return;
 
     const ctx = new Ctor();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
     // สำเร็จ = เสียงสูงสั้น · ล้มเหลว = เสียงต่ำยาว แยกออกจากกันโดยไม่ต้องมอง
-    osc.frequency.value = ok ? 880 : 220;
-    gain.gain.value = 0.15;
+    const duration = ok ? 0.12 : 0.4;
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + (ok ? 0.12 : 0.4));
+    for (let i = 0; i < times; i++) {
+      const startAt = ctx.currentTime + i * (duration + BEEP_GAP_SECONDS);
 
-    osc.onended = () => ctx.close();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.frequency.value = ok ? 880 : 220;
+      gain.gain.value = 0.15;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startAt);
+      osc.stop(startAt + duration);
+
+      if (i === times - 1) {
+        osc.onended = () => ctx.close();
+      }
+    }
   } catch {
   }
 }
+
+let lastBeepedOutcome: ScanOutcome | null = null;
 
 export default function ScanResultBanner({
   outcome,
@@ -49,7 +66,10 @@ export default function ScanResultBanner({
   variant = "banner",
 }: Props) {
   useEffect(() => {
-    beep(outcome.ok);
+    if (lastBeepedOutcome !== outcome) {
+      lastBeepedOutcome = outcome;
+      beep(outcome.ok, outcome.repeat ? BEEP_TIMES_REPEAT : BEEP_TIMES_DEFAULT);
+    }
     const timer = setTimeout(onDismiss, AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
   }, [outcome, onDismiss]);

@@ -225,6 +225,14 @@ export default function FinancialPortal() {
         />
       )}
 
+      {/* header (editorial) */}
+      <div className="mb-6 border-b border-gray-200 pb-6">
+        <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-slate-900">การเงิน</h1>
+        <p className="mt-1.5 text-[13px] font-light text-slate-500">
+          ศูนย์การเงิน · ตรวจสลิป ออกบิล สรุปรายรับ-รายจ่าย และจัดการบัญชีรับเงิน
+        </p>
+      </div>
+
       {/* แถบสถานะตอน refetch เบื้องหลัง — ลอยใต้ topbar ไม่บังเนื้อหา */}
       {isRefreshing && (
         <div className="fixed left-1/2 top-[104px] z-30 -translate-x-1/2 animate-fadeIn">
@@ -256,7 +264,7 @@ export default function FinancialPortal() {
       </div>
 
       {/* Desktop tab row */}
-      <div className="hidden sm:block bg-white border-b border-slate-200 rounded-xl mb-6 shadow-sm overflow-hidden">
+      <div className="hidden sm:block border-b border-gray-200 mb-6 overflow-hidden">
         <div ref={tabRowRef} className="flex overflow-x-auto no-scrollbar">
           {subTabs.map((tab) => {
             const Icon = tab.icon;
@@ -383,7 +391,7 @@ function TabSkeleton({ tab }: { tab: 'issue' | 'slips' | 'summary' | 'banks' | '
   );
 }
 
-const CARD = "bg-white rounded-2xl border border-slate-200 shadow-sm";
+const CARD = "border border-gray-200 bg-white";
 
 // แจ้งค่าใช้จ่าย/ออกบิล — ฟอร์มใหญ่ (2 คอลัมน์) + คอลัมน์รายการด้านข้าง
 function IssueSkeleton() {

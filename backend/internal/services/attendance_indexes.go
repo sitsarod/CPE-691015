@@ -16,6 +16,11 @@ func EnsureAttendanceUniqueIndexes(db *gorm.DB) error {
 	`).Error
 }
 
+// DropLegacyAttendanceSessionIndex รื้อ unique index รุ่นเก่าที่คีย์เป็น (แพ็กเกจ, วัน)
+func DropLegacyAttendanceSessionIndex(db *gorm.DB) error {
+	return db.Exec(`DROP INDEX IF EXISTS idx_attendance_session_pkg_date`).Error
+}
+
 func EnsureClassConfirmationIndexes(db *gorm.DB) error {
 	if err := db.Exec(`DROP INDEX IF EXISTS idx_class_confirmation_enrollment_date`).Error; err != nil {
 		log.Printf("ข้ามการรื้อ index ยืนยันตัวเก่า (ปกติถ้าเป็นฐานที่สร้างใหม่): %v", err)

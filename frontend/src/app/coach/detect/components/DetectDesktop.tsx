@@ -362,11 +362,12 @@ function ItemReviewPanel({
             คนที่ AI มั่นใจสูง (≥{AUTO_CONFIRM_THRESHOLD}%) ยืนยันให้อัตโนมัติแล้ว ที่เหลือกด &quot;ถูกต้อง&quot;
             เพื่อยืนยัน หรือเลือกชื่อใหม่ถ้า AI จำแนกผิด
           </p>
-          {/* บอกให้รู้ว่ามีหน้าที่ระบบเห็นแต่จับคู่ไม่ได้ จะได้ไม่เข้าใจผิดว่าเจอครบแล้ว */}
+          {/* บอกให้รู้ว่ามีหน้าที่ระบบเห็นแต่จับคู่ไม่ได้ จะได้ไม่เข้าใจผิดว่าเจอครบแล้ว
+              (วิดีโอนับใบหน้าซ้ำได้ถ้าคนเดิมโผล่หลายเฟรมที่สุ่มตรวจ ไม่ใช่จำนวนคนจริงเป๊ะ) */}
           {item.faceCount > detections.length && (
             <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-600">
               <CircleAlert size={13} />
-              เจอ {item.faceCount} ใบหน้าในรูป แต่จับคู่กับผู้เรียนได้ {detections.length} คน —
+              เจอ {item.faceCount} ใบหน้า{item.isVideo ? '' : 'ในรูป'} แต่จับคู่กับผู้เรียนได้ {detections.length} คน —
               ที่เหลือต้องเพิ่มเองด้านล่าง (อาจเป็นคนที่ยังไม่ได้ลงทะเบียนใบหน้า หรือไม่ได้อยู่ในคอร์สนี้)
             </p>
           )}
@@ -524,12 +525,12 @@ function DetectionRow({
   onReassign: (studentId: number) => void;
   onRemove: () => void;
 }) {
-  const { predictedNickname, confidence, studentId, status } = detection;
+  const { predictedNickname, confidence, studentId, status, bbox, frameImage } = detection;
   const currentStudent = students.find((s) => s.id === studentId) ?? null;
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+      className={`flex flex-col gap-3 rounded-xl border p-4 ${
         status === 'confirmed'
           ? 'border-emerald-200 bg-emerald-50/50'
           : status === 'edited'
@@ -537,85 +538,149 @@ function DetectionRow({
           : 'border-gray-200 bg-white'
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100">
-          <UserRound size={22} />
-        </div>
-        <div>
-          {predictedNickname ? (
-            <p className="text-sm font-semibold text-gray-800">
-              AI คาดว่าคือ <span className="text-gray-900">{predictedNickname}</span>
-            </p>
-          ) : (
-            <p className="text-sm font-semibold text-gray-800">เพิ่มโดยโค้ช</p>
-          )}
-          <div className="mt-1 flex items-center gap-2">
-            {confidence != null && (
-              <span
-                className={`text-xs font-bold ${
-                  confidence >= 80 ? 'text-emerald-600' : confidence >= 60 ? 'text-amber-600' : 'text-rose-500'
-                }`}
-              >
-                ความมั่นใจ {confidence}%
-              </span>
+      {/* เฟรมวิดีโอที่แมตช์ได้ พร้อมกรอบมาร์กแบบเดียวกับฝั่งรูป — ให้โค้ชเห็นภาพจริงยืนยัน
+          แทนที่จะเห็นแค่เปอร์เซ็นต์มั่นใจลอย ๆ */}
+      {frameImage && bbox && <VideoFrameMark frameImage={frameImage} bbox={bbox} label={predictedNickname} />}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100">
+            <UserRound size={22} />
+          </div>
+          <div>
+            {predictedNickname ? (
+              <p className="text-sm font-semibold text-gray-800">
+                AI คาดว่าคือ <span className="text-gray-900">{predictedNickname}</span>
+              </p>
+            ) : (
+              <p className="text-sm font-semibold text-gray-800">เพิ่มโดยโค้ช</p>
             )}
-            {status === 'confirmed' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                <BadgeCheck size={11} />
-                ยืนยันแล้ว
-              </span>
-            )}
-            {status === 'edited' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-                <PencilLine size={11} />
-                แก้ไขแล้ว
-              </span>
-            )}
-            {status === 'pending' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                รอตรวจสอบ
-              </span>
-            )}
+            <div className="mt-1 flex items-center gap-2">
+              {confidence != null && (
+                <span
+                  className={`text-xs font-bold ${
+                    confidence >= 80 ? 'text-emerald-600' : confidence >= 60 ? 'text-amber-600' : 'text-rose-500'
+                  }`}
+                >
+                  ความมั่นใจ {confidence}%
+                </span>
+              )}
+              {status === 'confirmed' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  <BadgeCheck size={11} />
+                  ยืนยันแล้ว
+                </span>
+              )}
+              {status === 'edited' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                  <PencilLine size={11} />
+                  แก้ไขแล้ว
+                </span>
+              )}
+              {status === 'pending' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                  รอตรวจสอบ
+                </span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 sm:flex-shrink-0">
-        {status !== 'confirmed' && predictedNickname && (
+        <div className="flex items-center gap-2 sm:flex-shrink-0">
+          {status !== 'confirmed' && predictedNickname && (
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800"
+            >
+              <BadgeCheck size={14} />
+              ถูกต้อง
+            </button>
+          )}
+
+          <select
+            value={currentStudent?.id ?? ''}
+            onChange={(e) => onReassign(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+          >
+            <option value="" disabled>
+              {predictedNickname ? 'เลือกชื่อใหม่...' : 'เลือกผู้เรียน...'}
+            </option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nickname}
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
-            onClick={onConfirm}
-            className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white hover:bg-gray-800"
+            onClick={onRemove}
+            className="rounded-lg p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-500"
+            title="ไม่ใช่ผู้เรียน / ลบรายการนี้"
           >
-            <BadgeCheck size={14} />
-            ถูกต้อง
+            <Trash2 size={15} />
           </button>
-        )}
-
-        <select
-          value={currentStudent?.id ?? ''}
-          onChange={(e) => onReassign(Number(e.target.value))}
-          className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-        >
-          <option value="" disabled>
-            {predictedNickname ? 'เลือกชื่อใหม่...' : 'เลือกผู้เรียน...'}
-          </option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nickname}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="button"
-          onClick={onRemove}
-          className="rounded-lg p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-500"
-          title="ไม่ใช่ผู้เรียน / ลบรายการนี้"
-        >
-          <Trash2 size={15} />
-        </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ==================== เฟรมวิดีโอพร้อมกรอบมาร์ก (สำหรับ detection แถวหนึ่งในวิดีโอ) ====================
+// ต่างจาก PhotoPreviewWithMarks ตรงที่ภาพนี้เป็นของ "การจับคู่หนึ่งรายการ" ไม่ใช่ภาพเดียวที่ใช้ร่วมกัน
+// ทั้งไฟล์ — เพราะแต่ละคนที่ตรวจพบในวิดีโออาจมาจากคนละเฟรมกัน bbox ที่ backend ส่งมาสเกลตาม
+// frameImage นี้แล้ว (ไม่ใช่เฟรมต้นฉบับก่อนย่อ) จึงคำนวณตำแหน่ง % แบบเดียวกับฝั่งรูปได้ตรงเป๊ะ
+function VideoFrameMark({
+  frameImage,
+  bbox,
+  label,
+}: {
+  frameImage: string;
+  bbox: [number, number, number, number];
+  label: string | null;
+}) {
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [bx1, by1, bx2, by2] = bbox;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+      {/* ⚠️ ห้ามใส่ max-height/object-contain ตรงนี้ — จะเกิดขอบว่าง (letterbox) ทำให้กรอบ %
+          เพี้ยนไปจากใบหน้าจริง เหตุผลเดียวกับ PhotoPreviewWithMarks */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- data URI จาก base64 ใช้ next/image ไม่ได้ */}
+      <img
+        src={`data:image/jpeg;base64,${frameImage}`}
+        alt=""
+        className="block w-full"
+        onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+      />
+      {naturalSize &&
+        (() => {
+          const padX = (bx2 - bx1) * 0.35;
+          const padY = (by2 - by1) * 0.15;
+          const x1 = Math.max(0, bx1 - padX);
+          const y1 = Math.max(0, by1 - padY);
+          const x2 = Math.min(naturalSize.w, bx2 + padX);
+          const y2 = Math.min(naturalSize.h, by2 + padY);
+
+          return (
+            <div
+              className="absolute"
+              style={{
+                left: `${(x1 / naturalSize.w) * 100}%`,
+                top: `${(y1 / naturalSize.h) * 100}%`,
+                width: `${((x2 - x1) / naturalSize.w) * 100}%`,
+                height: `${((y2 - y1) / naturalSize.h) * 100}%`,
+              }}
+            >
+              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
+              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2.5 py-1 text-sm font-black text-white shadow-md">
+                {label ?? 'ไม่ทราบชื่อ'}
+              </span>
+            </div>
+          );
+        })()}
     </div>
   );
 }

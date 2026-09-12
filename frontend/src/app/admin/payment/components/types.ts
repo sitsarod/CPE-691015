@@ -41,9 +41,39 @@ export interface BillingDTO {
   billing_type?: {
     billingtypename: string;
   };
+  // แอดมินที่ออกบิลใบนี้ (มาจาก JWT ตอนออกบิล — ดู CreateBilling ฝั่ง backend)
+  admin_id?: number;
+  admin?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  // แอดมินที่แก้ไขบิลล่าสุด (ไม่มี = ยังไม่เคยถูกแก้หลังออกบิล)
+  updated_by?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
   slipurl?: string;
   invoice_id?: number;
   transactionid?: string;
+  // ผลตรวจสลิปอัตโนมัติ (SlipOK) ของใบแจ้งหนี้
+  // slipok_checked = false แปลว่าบัญชีไม่ได้เปิดตรวจอัตโนมัติ จึงยังไม่เคยตรวจ (ต้องตรวจเอง)
+  slipok_checked?: boolean;
+  slipok_passed?: boolean;
+  slipok_message?: string;
+  // บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป)
+  receiving_bank_name?: string;
+  receiving_account_no?: string;
+  // แอดมินที่กดอนุมัติการชำระเงินจริง (ไม่มี = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
+  confirmed_by?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
   created_at: string;
   paid_at?: string; // เวลาที่ยืนยันชำระเงินจริง (มีเฉพาะบิลที่ paid)
 }
@@ -75,5 +105,18 @@ export interface Expense {
   coach_id?: number;
   coach?: Coach;
   receipturl: string;
+  // ผู้ทำรายการ — created_by = คนเพิ่ม, updated_by = คนแก้ไขล่าสุด (ไม่มี = ยังไม่เคยแก้)
+  created_by?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  updated_by?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
   created_at: string;
 }

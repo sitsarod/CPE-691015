@@ -4,14 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// maxSlipImageBytes จำกัดขนาดรูปสลิปที่ดึงจาก Cloudinary มาตรวจ (กันไฟล์ใหญ่ผิดปกติ)
+const maxSlipImageBytes = 10 << 20 // 10 MB
 
 // SlipOkReceiverAccount คือเลขบัญชีปลายทางที่ SlipOK ส่งกลับมา (บาง digit จะถูก mask)
 type SlipOkReceiverAccount struct {
@@ -53,6 +59,9 @@ type SlipOkService struct {
 	branchID string
 	client   *http.Client
 	baseURL  string // แยกออกมาเป็น field เพื่อให้ test แทนที่ด้วย httptest server ได้ ไม่ต้องยิง SlipOK จริง
+	// cloudName = ชื่อ Cloudinary cloud ของสถาบัน (ตั้งเมื่อ deploy เก็บสลิปบน Cloudinary)
+	// ใช้อนุญาตให้ดึงรูปสลิปจาก Cloudinary ของเราเองมาตรวจ นอกจากไฟล์ใน /uploads
+	cloudName string
 }
 
 func NewSlipOkService() *SlipOkService {
@@ -62,6 +71,13 @@ func NewSlipOkService() *SlipOkService {
 		client:   &http.Client{Timeout: 15 * time.Second},
 		baseURL:  slipOkBaseURL,
 	}
+}
+
+// WithCloudName บอก service ว่า cloud ของสถาบันชื่ออะไร เพื่อให้ดึงสลิปจาก Cloudinary มาตรวจได้
+// (เรียกตอน wire router เมื่อ Cloudinary ถูกตั้งค่า) คืน service ตัวเดิมเพื่อ chain ต่อได้
+func (s *SlipOkService) WithCloudName(name string) *SlipOkService {
+	s.cloudName = name
+	return s
 }
 
 // Enabled บอกว่าตั้งค่า SlipOK ไว้ครบหรือยัง
@@ -75,7 +91,7 @@ func (s *SlipOkService) VerifySlip(slipURL string, expectedAmount float64) (*Sli
 		return nil, errors.New("ยังไม่ได้ตั้งค่า SLIPOK_API_KEY / SLIPOK_BRANCH_ID")
 	}
 
-	imageBytes, filename, err := loadSlipImage(slipURL)
+	imageBytes, filename, err := s.loadSlipImage(slipURL)
 	if err != nil {
 		return nil, err
 	}
@@ -167,26 +183,86 @@ func digitsOnly(s string) string {
 	return b.String()
 }
 
-// loadSlipImage โหลดไฟล์สลิปจากดิสก์ของระบบเอง (โฟลเดอร์ ./uploads)
+// loadSlipImage โหลดไฟล์สลิปมาตรวจ รองรับสองแหล่งเก็บที่ระบบใช้จริง:
+//   1. ไฟล์ในเครื่อง (โฟลเดอร์ ./uploads) — อ่านจากดิสก์ตรง ๆ
+//   2. Cloudinary ของสถาบัน — ดึงผ่าน HTTP หลังตรวจ host/scheme/path เข้มก่อน (กัน SSRF)
 //
 // ⚠️ ตั้งใจไม่ fetch URL ภายนอกตามอำเภอใจ เพราะ slip_url มาจาก client ได้โดยตรง
 // ถ้าเอาไป http.Get ตรง ๆ ผู้ใช้จะชี้ไปยังปลายทางภายใน (เช่น metadata endpoint / บริการหลังบ้าน)
-// แล้วให้เซิร์ฟเวอร์ยิงแทนได้ = ช่องโหว่ SSRF สลิปทุกใบถูกอัปโหลดเข้ามาที่ /uploads/ อยู่แล้ว
-// จึงอ่านจากดิสก์ได้เสมอ URL ที่ไม่มี /uploads/ ถือว่าไม่ถูกต้อง
-func loadSlipImage(slipURL string) ([]byte, string, error) {
-	_, relative, found := strings.Cut(slipURL, "/uploads/")
-	if !found {
-		return nil, "", errors.New("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดในระบบเท่านั้น")
+// แล้วให้เซิร์ฟเวอร์ยิงแทนได้ = ช่องโหว่ SSRF จึงยอมให้ดึงได้เฉพาะ Cloudinary cloud ของเราเท่านั้น
+func (s *SlipOkService) loadSlipImage(slipURL string) ([]byte, string, error) {
+	// (1) ไฟล์ในเครื่อง
+	if _, relative, found := strings.Cut(slipURL, "/uploads/"); found {
+		// filepath.Clean บนพาธที่ขึ้นต้นด้วย "/" จะ resolve ../ ทั้งหมดแล้วบังคับให้อยู่ใต้ราก
+		// กัน path traversal ไต่ออกนอก uploads (เช่น /uploads/../../.env)
+		relative = filepath.Clean("/" + relative)
+		localPath := filepath.Join("uploads", relative)
+		data, err := os.ReadFile(localPath)
+		if err != nil {
+			return nil, "", errors.New("ไม่สามารถอ่านรูปสลิปเพื่อตรวจสอบได้")
+		}
+		return data, filepath.Base(localPath), nil
 	}
 
-	// filepath.Clean บนพาธที่ขึ้นต้นด้วย "/" จะ resolve ../ ทั้งหมดแล้วบังคับให้อยู่ใต้ราก
-	// กัน path traversal ไต่ออกนอก uploads (เช่น /uploads/../../.env)
-	relative = filepath.Clean("/" + relative)
-	localPath := filepath.Join("uploads", relative)
+	// (2) Cloudinary ของสถาบัน (ตรวจเข้มก่อน fetch)
+	if isOwnCloudinaryURL(slipURL, s.cloudName) {
+		return s.fetchRemoteSlip(slipURL)
+	}
 
-	data, err := os.ReadFile(localPath)
+	return nil, "", errors.New("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดในระบบเท่านั้น")
+}
+
+// fetchRemoteSlip ดึงรูปสลิปจาก URL (ที่ถูกตรวจว่าเป็น Cloudinary ของเราแล้ว) มาเป็น bytes
+// พร้อมจำกัดขนาดกันไฟล์ใหญ่ผิดปกติ
+func (s *SlipOkService) fetchRemoteSlip(rawURL string) ([]byte, string, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", errors.New("ที่อยู่สลิปไม่ถูกต้อง")
+	}
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, "", errors.New("ไม่สามารถดึงรูปสลิปจาก Cloudinary เพื่อตรวจสอบได้")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", errors.New("ไม่สามารถดึงรูปสลิปจาก Cloudinary เพื่อตรวจสอบได้")
+	}
+
+	// อ่านเกินเพดานไป 1 ไบต์เพื่อตรวจจับว่าไฟล์ใหญ่เกินกำหนด
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSlipImageBytes+1))
 	if err != nil {
 		return nil, "", errors.New("ไม่สามารถอ่านรูปสลิปเพื่อตรวจสอบได้")
 	}
-	return data, filepath.Base(localPath), nil
+	if len(data) > maxSlipImageBytes {
+		return nil, "", errors.New("ไฟล์สลิปมีขนาดใหญ่เกินกำหนด")
+	}
+
+	// ตั้งชื่อไฟล์จาก path ของ URL (SlipOK ต้องการชื่อไฟล์ในฟอร์ม multipart)
+	name := "slip.jpg"
+	if u, err := url.Parse(rawURL); err == nil {
+		if base := path.Base(u.Path); base != "." && base != "/" && base != "" {
+			name = base
+		}
+	}
+	return data, name, nil
+}
+
+// isOwnCloudinaryURL ตรวจว่า URL เป็นของ Cloudinary cloud ที่ระบุแบบเข้มงวด
+//
+// parse จริงแล้วเทียบ scheme/host/path (ไม่ใช้ strings.Contains ที่หลอกได้ด้วย
+// URL แบบ https://attacker.com/res.cloudinary.com/<cloud>/x.jpg) — สำคัญเพราะฟังก์ชันนี้
+// เป็นด่านตัดสินว่าจะยอมให้เซิร์ฟเวอร์ยิง HTTP ไปที่ URL นั้นหรือไม่ (กัน SSRF)
+func isOwnCloudinaryURL(rawURL, cloudName string) bool {
+	if cloudName == "" {
+		return false
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "https" &&
+		u.Host == "res.cloudinary.com" &&
+		strings.HasPrefix(u.Path, "/"+cloudName+"/")
 }

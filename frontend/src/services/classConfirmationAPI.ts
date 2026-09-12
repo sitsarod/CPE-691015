@@ -48,13 +48,19 @@ export async function fetchClassHeadcounts(): Promise<ClassHeadcount[]> {
 }
 
 // [GET] รายชื่อนักเรียนของคาบหนึ่ง (แอดมิน)
-// ระบุคาบด้วยแพ็กเกจ + วันที่ ไม่ใช่ id เดี่ยว ๆ จึงส่งผ่าน query
+// ระบุคาบด้วยแพ็กเกจ + วันที่ + เวลาเริ่ม ไม่ใช่ id เดี่ยว ๆ จึงส่งผ่าน query
 export async function fetchClassRoster(
   packageId: number,
-  classDate: string
+  classDate: string,
+  startTime: string
 ): Promise<ClassRoster> {
+  const qs = new URLSearchParams({
+    package_id: String(packageId),
+    date: classDate,
+    start_time: startTime,
+  });
   const res = await apiFetch<{ data: ClassRoster }>(
-    `/admin/class-confirmations/roster?package_id=${packageId}&date=${classDate}`
+    `/admin/class-confirmations/roster?${qs}`
   );
   return res.data;
 }

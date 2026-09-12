@@ -9,6 +9,7 @@ import {
   markAllNotificationsRead,
   type NotificationDTO,
 } from "@/services/notificationAPI";
+import { OPEN_CHAT_EVENT } from "@/components/ChatWidget";
 
 // ยิง event นี้ทุกครั้งที่ SSE stream ของ Notification ทั่วไปส่งสัญญาณ "มีแจ้งเตือนใหม่" มา
 // ให้ badge อื่นๆ ในหน้าเว็บ (เช่น badge ห้องแชท "สอบถาม" ของแอดมิน) อาศัย event นี้รีเฟรชตัวเอง
@@ -138,6 +139,11 @@ export default function NotificationBell({
   const openItem = (n: NotificationDTO) => {
     markRead(n);
     setOpen(false);
+    // แชทเป็นวิดเจ็ตลอย ไม่มีหน้า route → เปิดกล่องแชทผ่าน event กลางแทนการนำทาง
+    if (n.type === "chat_reply") {
+      window.dispatchEvent(new Event(OPEN_CHAT_EVENT));
+      return;
+    }
     if (n.href) router.push(n.href);
   };
 

@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Search, AlertCircle, X, ChevronDown, ChevronUp, Banknote } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, X } from 'lucide-react';
 import { BillingDTO } from './types';
 import { confirmSlip, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
@@ -11,6 +11,31 @@ export interface VerifySlipsTabProps {
   initialFilter?: 'all' | 'pending' | 'approved' | 'rejected' | 'unpaid';
 }
 
+// กลุ่มหนึ่ง = หนึ่งใบแจ้งหนี้ (invoice) สร้างจากข้อมูล billings ที่มีอยู่ ไม่มี endpoint ใหม่
+interface InvoiceGroup {
+  invoiceId?: number;
+  customer?: BillingDTO['customer'];
+  customerId: number;
+  billings: BillingDTO[];
+  totalAmount: number;
+  billingstatus: BillingDTO['billingstatus'];
+  slipurl?: string;
+  transactionid?: string;
+  slipokChecked?: boolean;
+  slipokPassed?: boolean;
+  slipokMessage?: string;
+  receivingBankName?: string;
+  receivingAccountNo?: string;
+  confirmedBy?: BillingDTO['confirmed_by'];
+  admin?: BillingDTO['admin'];
+  updatedBy?: BillingDTO['updated_by'];
+  dueDate: string;
+  createdAt: string;
+  paidAt?: string;
+}
+
+const groupKey = (g: InvoiceGroup) => g.invoiceId ? `invoice-${g.invoiceId}` : `bill-${g.billings[0]?.id}`;
+
 export default function VerifySlipsTab({
   billings,
   onFetchData,
@@ -19,31 +44,28 @@ export default function VerifySlipsTab({
 }: VerifySlipsTabProps) {
   const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid'>(initialFilter ?? 'pending');
   const [slipSearchTerm, setSlipSearchTerm] = useState('');
-  const [reviewBilling, setReviewBilling] = useState<(BillingDTO & { groupedBillings?: BillingDTO[] }) | null>(null);
-  const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Record<number, boolean>>({});
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [allDone, setAllDone] = useState(false);
+  const [submitting, setSubmitting] = useState<'approve' | 'reject' | 'cash' | null>(null);
+  const [slipImgError, setSlipImgError] = useState(false);
+  const [imgReloadToken, setImgReloadToken] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const advanceRef = useRef(false);
 
-  // Toggle card expansion
-  const onToggleExpand = (id: number) => {
-    setExpandedInvoiceIds(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
-
-  // Format date helper
-  const formatDate = (dateStr: string) => {
+  // ── ฟอร์แมตช่วย ─────────────────────────────────────────────
+  const fmtBaht = (n: number) => `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
+    return new Date(dateStr).toLocaleDateString("th-TH", {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
     });
   };
+  const formatDateOnly = (dateStr?: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
+  };
 
-  // Filtered Slips (waitcheck status) for Tab 2 list
+  // แถวที่ตรงกับตัวกรอง + คำค้น (logic เดิม — ไม่แตะ)
   const waitcheckBillings = useMemo(() => {
     return billings.filter(b => {
       let matchesStatus = false;
@@ -67,9 +89,9 @@ export default function VerifySlipsTab({
       const invoiceIdNumStr = b.invoice_id ? `#${b.invoice_id}`.toLowerCase() : '';
       const query = slipSearchTerm.toLowerCase();
 
-      const matchesSearch = studentName.includes(query) || 
-                            desc.includes(query) || 
-                            typeName.includes(query) || 
+      const matchesSearch = studentName.includes(query) ||
+                            desc.includes(query) ||
+                            typeName.includes(query) ||
                             idStr.includes(query) ||
                             invoiceIdStr.includes(query) ||
                             invoiceIdNumStr.includes(query);
@@ -78,19 +100,9 @@ export default function VerifySlipsTab({
     });
   }, [billings, slipFilter, slipSearchTerm]);
 
-  // Group billings by invoice_id to show them together
-  const groupedWaitcheckBillings = useMemo(() => {
-    const groups: Record<string, {
-      invoiceId?: number;
-      customer?: BillingDTO['customer'];
-      customerId: number;
-      billings: BillingDTO[];
-      totalAmount: number;
-      billingstatus: BillingDTO['billingstatus'];
-      slipurl?: string;
-      dueDate: string;
-      createdAt: string;
-    }> = {};
+  // จัดกลุ่มตาม invoice_id (logic เดิม — ไม่แตะ)
+  const groupedWaitcheckBillings = useMemo<InvoiceGroup[]>(() => {
+    const groups: Record<string, InvoiceGroup> = {};
 
     waitcheckBillings.forEach(b => {
       const key = b.invoice_id ? `invoice-${b.invoice_id}` : `bill-${b.id}`;
@@ -103,8 +115,18 @@ export default function VerifySlipsTab({
           totalAmount: 0,
           billingstatus: b.billingstatus,
           slipurl: b.slipurl,
+          transactionid: b.transactionid,
+          slipokChecked: b.slipok_checked,
+          slipokPassed: b.slipok_passed,
+          slipokMessage: b.slipok_message,
+          receivingBankName: b.receiving_bank_name,
+          receivingAccountNo: b.receiving_account_no,
+          confirmedBy: b.confirmed_by,
+          admin: b.admin,
+          updatedBy: b.updated_by,
           dueDate: b.billingdue_date,
           createdAt: b.created_at,
+          paidAt: b.paid_at,
         };
       }
       groups[key].billings.push(b);
@@ -112,24 +134,15 @@ export default function VerifySlipsTab({
     });
 
     return Object.values(groups).sort((a, b) => {
-      // 1. Sort by invoiceId descending if both have it
-      if (a.invoiceId && b.invoiceId) {
-        return b.invoiceId - a.invoiceId;
-      }
-      // 2. If one or both lack invoiceId, fallback to sorting by creation time descending (newest first)
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
+      if (a.invoiceId && b.invoiceId) return b.invoiceId - a.invoiceId;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [waitcheckBillings]);
 
-  // แบ่งหน้ารายการ 10 รายการ/หน้า (เหมือนตารางใบเรียกเก็บเงินในหน้าสรุปการเงิน)
+  // แบ่งหน้ารายการ 10 รายการ/หน้า (logic เดิม)
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(1);
-  // รีเซ็ตกลับหน้าแรกเมื่อฟิลเตอร์/คำค้นเปลี่ยน
-  useEffect(() => {
-    setPage(1);
-  }, [slipFilter, slipSearchTerm]);
+  useEffect(() => { setPage(1); }, [slipFilter, slipSearchTerm]);
   const totalPages = Math.max(1, Math.ceil(groupedWaitcheckBillings.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pagedGroups = useMemo(
@@ -137,421 +150,539 @@ export default function VerifySlipsTab({
     [groupedWaitcheckBillings, safePage]
   );
 
-  // Slip Approvals
+  // กลุ่มที่ถูกเลือกอยู่ (คำนวณสดจากข้อมูลล่าสุด เพื่อให้ auto-advance หลัง refetch ทำงานได้)
+  const selectedGroup = useMemo(
+    () => groupedWaitcheckBillings.find(g => groupKey(g) === selectedKey) ?? null,
+    [groupedWaitcheckBillings, selectedKey]
+  );
+
+  // รีเซ็ตสถานะรูปทุกครั้งที่เปลี่ยนรายการที่เลือก
+  useEffect(() => { setSlipImgError(false); setImgReloadToken(0); setLightboxOpen(false); }, [selectedKey]);
+
+  // หลังตัดสินเสร็จ + refetch → เลื่อนไปรายการรอตรวจถัดไปอัตโนมัติ ถ้าหมดให้ขึ้น empty "ครบทุกรายการ"
+  useEffect(() => {
+    if (!advanceRef.current) return;
+    advanceRef.current = false;
+    const next = groupedWaitcheckBillings[0];
+    if (next) {
+      setSelectedKey(groupKey(next));
+      setAllDone(false);
+    } else {
+      setSelectedKey(null);
+      setAllDone(true);
+    }
+  }, [groupedWaitcheckBillings]);
+
+  const selectGroup = (g: InvoiceGroup) => { setSelectedKey(groupKey(g)); setAllDone(false); };
+
+  // ── การตัดสิน (API เดิมทั้งหมด) ─────────────────────────────
   const handleApproveSlip = async (invoiceId: number) => {
+    setSubmitting('approve');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       await confirmSlip(invoiceId, token || "");
-
       onTriggerToast('อนุมัติยอดเงินโอนเข้าเรียนเรียบร้อยแล้ว');
-      setReviewBilling(null);
+      advanceRef.current = true;
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'อนุมัติสลิปไม่สำเร็จ', 'error');
+    } finally {
+      setSubmitting(null);
     }
   };
 
   const handleRejectSlip = async (invoiceId: number) => {
+    setSubmitting('reject');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       await rejectSlip(invoiceId, token || "");
-
       onTriggerToast('ปฏิเสธหลักฐานการแนบสลิปเรียบร้อยแล้ว');
-      setReviewBilling(null);
+      advanceRef.current = true;
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'ปฏิเสธสลิปไม่สำเร็จ', 'error');
+    } finally {
+      setSubmitting(null);
     }
   };
 
-  // ลูกค้าจ่ายเงินสด: บิลค้างชำระที่ยังไม่มีใบแจ้งหนี้ จะสร้างใบแจ้งหนี้แบบ "cash" แล้วยืนยันให้เลย
-  // ถ้ามีใบแจ้งหนี้อยู่แล้ว (เช่นสลิปเคยถูกปฏิเสธ) ให้ยืนยันใบเดิม
-  const [cashSubmitting, setCashSubmitting] = useState(false);
-  const handleCashPayment = async (billing: BillingDTO & { groupedBillings?: BillingDTO[] }) => {
+  // ปฏิเสธต้องถามเหตุผลก่อนเสมอ (ห้ามปฏิเสธทันที) — ใช้ prompt เดิมของ browser
+  const requestReject = (invoiceId: number) => {
+    const reason = window.prompt('ระบุเหตุผลการปฏิเสธสลิป (ผู้เรียนจะได้รับแจ้งเหตุผลนี้)');
+    if (reason === null) return;                       // กดยกเลิก
+    if (!reason.trim()) {
+      onTriggerToast('กรุณาระบุเหตุผลการปฏิเสธก่อน', 'error');
+      return;
+    }
+    handleRejectSlip(invoiceId);
+  };
+
+  // ลูกค้าจ่ายเงินสด (logic เดิม)
+  const handleCashPayment = async (group: InvoiceGroup) => {
     if (!window.confirm(
-      `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ฿${billing.billingamount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ใช่หรือไม่?`
+      `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ${fmtBaht(group.totalAmount)} ใช่หรือไม่?`
     )) return;
 
-    setCashSubmitting(true);
+    setSubmitting('cash');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      let invoiceId = billing.invoice_id;
+      let invoiceId = group.invoiceId;
       if (!invoiceId) {
-        const billingIds = billing.groupedBillings?.length
-          ? billing.groupedBillings.map(b => b.id)
-          : [billing.id];
-        const invoice = await createInvoice(billing.customer_id, billingIds, 'cash', token || "");
+        const billingIds = group.billings.map(b => b.id);
+        const invoice = await createInvoice(group.customerId, billingIds, 'cash', token || "");
         invoiceId = invoice.id;
       }
       await confirmSlip(invoiceId, token || "");
-
       onTriggerToast('บันทึกการชำระเงินสดเรียบร้อยแล้ว');
-      setReviewBilling(null);
+      advanceRef.current = true;
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'บันทึกการชำระเงินสดไม่สำเร็จ', 'error');
     } finally {
-      setCashSubmitting(false);
+      setSubmitting(null);
     }
   };
 
+  // ── สี/ข้อความตามสถานะของแถว (ธีมเดิม) ─────────────────────
+  const statusMeta = (g: InvoiceGroup) => {
+    if (g.billingstatus === 'paid') {
+      return { bar: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'อนุมัติแล้ว' };
+    }
+    if (g.billingstatus === 'waitcheck') {
+      return { bar: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-200', label: 'รอตรวจสอบ' };
+    }
+    if ((g.billingstatus === 'unfunded' || g.billingstatus === 'overdue') && g.slipurl) {
+      return { bar: 'bg-rose-500', chip: 'bg-rose-50 text-rose-700 border-rose-200', label: 'ปฏิเสธแล้ว' };
+    }
+    return { bar: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-slate-200', label: 'ค้างชำระ' };
+  };
+
+  const metaLine = (g: InvoiceGroup) => {
+    const id = g.invoiceId ? `ใบแจ้งหนี้ #${g.invoiceId}` : `บิล #BILL-${g.billings[0]?.id}`;
+    const base = `${id} · ${g.billings.length} บิล`;
+    if (g.billingstatus === 'paid') {
+      const who = g.confirmedBy ? `${g.confirmedBy.firstName} ${g.confirmedBy.lastName}` : 'ระบบอัตโนมัติ';
+      return `${base} · อนุมัติเมื่อ ${formatDateOnly(g.paidAt || g.createdAt)} โดย ${who}`;
+    }
+    return `${base} · แจ้งชำระ ${formatDateTime(g.createdAt)}`;
+  };
+
+  // ปุ่มตัวกรอง — mobile ตัด "ทั้งหมด" ออก (เหลือ 4)
+  const filters: { id: typeof slipFilter; label: string; mobile: boolean }[] = [
+    { id: 'all', label: 'ทั้งหมด', mobile: false },
+    { id: 'pending', label: 'รอตรวจสอบ', mobile: true },
+    { id: 'approved', label: 'อนุมัติแล้ว', mobile: true },
+    { id: 'rejected', label: 'ปฏิเสธแล้ว', mobile: true },
+    { id: 'unpaid', label: 'ค้างชำระ', mobile: true },
+  ];
+
+  const isSubmitting = submitting !== null;
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
-      <div className="p-6 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
-          {/* Search Input */}
-          <div className="relative w-full sm:w-64">
+    <div className="border border-gray-200 bg-white animate-fadeIn">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.05fr]">
+
+        {/* ───────────── คอลัมน์ซ้าย: คิวรายการ ───────────── */}
+        <div className="min-w-0 p-6 lg:border-r lg:border-gray-200">
+          {/* 1) ช่องค้นหา */}
+          <div className="relative">
             <input
               type="text"
               value={slipSearchTerm}
               onChange={(e) => setSlipSearchTerm(e.target.value)}
               placeholder="ค้นหาชื่อผู้เรียน บิล หรือประเภท..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-55 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#CD0D13] transition-all outline-none text-xs text-slate-800"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 text-xs text-slate-800 outline-none transition-all focus:border-[#CD0D13]"
             />
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           </div>
 
-          {/* Status Filter Tab Buttons — จอเล็ก: grid 2x2 (ไม่ต้องเลื่อน) · จอใหญ่: แถวเดียว */}
-          <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl w-full sm:flex sm:gap-0 sm:w-auto">
-            {[
-              { id: 'all' as const, label: 'ทั้งหมด (ส่งสลิป)' },
-              { id: 'pending' as const, label: 'รอตรวจสอบ' },
-              { id: 'approved' as const, label: 'อนุมัติแล้ว' },
-              { id: 'rejected' as const, label: 'ปฏิเสธแล้ว' },
-              { id: 'unpaid' as const, label: 'ค้างชำระ' }
-            ].map(f => (
-              <button
-                key={f.id}
-                onClick={() => setSlipFilter(f.id)}
-                className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[11px] font-semibold leading-tight transition-all whitespace-normal sm:whitespace-nowrap cursor-pointer text-center ${
-                  slipFilter === f.id
-                    ? 'bg-white text-[#CD0D13] shadow-xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Card List Area */}
-      <div className="p-6 space-y-4">
-        {groupedWaitcheckBillings.length === 0 ? (
-          <div className="text-center py-16 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
-              <AlertCircle className="w-8 h-8" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800">ไม่มีรายการโอนเงินสลิป</h3>
-            <p className="text-slate-500 text-xs max-w-xs">
-              ไม่พบประวัติรายการโอนเงินสลิปที่ต้องอนุมัติในระบบ ณ ขณะนี้
-            </p>
-          </div>
-        ) : (
-          pagedGroups.map(group => {
-            const isExpanded = !!expandedInvoiceIds[group.invoiceId || 0];
-            const identifierText = group.invoiceId ? `ใบแจ้งหนี้ #${group.invoiceId}` : `บิล #BILL-${group.billings[0]?.id}`;
-            const customerName = group.customer ? `${group.customer.firstName} ${group.customer.lastName}` : "ผู้เรียน";
-
-            // Status styling based on billing status
-            let statusBg = "bg-slate-100 text-slate-700 border-slate-200";
-            let statusText = "ไม่ทราบสถานะ";
-            if (group.billingstatus === 'paid') {
-              statusBg = "bg-emerald-50 text-emerald-700 border-emerald-250";
-              statusText = "อนุมัติแล้ว";
-            } else if (group.billingstatus === 'waitcheck') {
-              statusBg = "bg-amber-50 text-amber-700 border-amber-250";
-              statusText = "รอตรวจสอบ";
-            } else if (group.billingstatus === 'unfunded' || group.billingstatus === 'overdue') {
-              statusBg = "bg-rose-50 text-rose-700 border-rose-250";
-              // มีสลิปแนบมาแต่ไม่ผ่าน = "สลิปไม่ผ่าน" · ไม่มีสลิป = ยังค้างชำระ
-              statusText = group.slipurl ? "สลิปไม่ผ่าน" : "ค้างชำระ";
-            }
-
-            return (
-              <div key={group.invoiceId ? `inv-${group.invoiceId}` : `bill-${group.billings[0]?.id}`} className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden transition-all">
-                {/* Invoice Card Header */}
-                <div 
-                  onClick={() => group.invoiceId && onToggleExpand(group.invoiceId)}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors"
+          {/* 2) ตัวกรองสถานะ */}
+          <div className="mt-4 flex gap-1 border border-gray-200 p-1">
+            {filters.map(f => {
+              const active = slipFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setSlipFilter(f.id)}
+                  className={`flex-1 rounded-lg px-1.5 py-2 text-[11px] leading-tight transition-all ${f.mobile ? '' : 'hidden sm:block'} ${
+                    active
+                      ? 'bg-[#FFF0F0] font-bold text-[#CD0D13]'
+                      : 'font-medium text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-black text-slate-900 text-base">{identifierText}</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-xs text-slate-500">{formatDate(group.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                        ผู้เรียน: {customerName} {group.customer?.nickname ? `(${group.customer.nickname})` : ""}
-                      </span>
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${statusBg}`}>
-                        {statusText}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between md:justify-end gap-6" onClick={e => e.stopPropagation()}>
-                    <div className="text-left md:text-right">
-                      <span className="text-[10px] font-bold text-slate-450 block">ยอดเงินโอนรวม:</span>
-                      <span className="text-lg font-black text-slate-950">
-                        ฿{group.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const viewBilling = {
-                            ...group.billings[0],
-                            billingamount: group.totalAmount,
-                            billingdescription: group.billings.map(b => b.billingdescription).join(" + "),
-                            groupedBillings: group.billings
-                          };
-                          setReviewBilling(viewBilling);
-                        }}
-                        className="px-3.5 py-1.5 bg-[#CD0D13] hover:bg-[#A30A0E] text-white text-xs font-black rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-red-200"
-                      >
-                        ดูสลิป & ตรวจสอบ
-                      </button>
-                      
-                      {group.invoiceId && (
-                        <button
-                          onClick={() => onToggleExpand(group.invoiceId!)}
-                          className="p-1 text-slate-400 hover:text-slate-655 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                        >
-                          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded items detailing the billings */}
-                {isExpanded && (
-                  <div className="border-t border-slate-150 bg-slate-50/50 p-5 space-y-4">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">รายการบิลย่อยที่รวมอยู่ในใบแจ้งหนี้ ({group.billings.length})</h4>
-                    <div className="space-y-2">
-                      {group.billings.map((b) => (
-                        <div key={`sub-bill-${b.id}`} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-400">BILL-{b.id} • {b.billing_type?.billingtypename || "ทั่วไป"}</span>
-                            <h5 className="font-bold text-slate-800 text-sm mt-0.5">{b.billingdescription}</h5>
-                            <span className="text-[10px] text-slate-500 block mt-0.5">
-                              ครบกำหนด: {b.billingdue_date?.split('T')[0]}
-                            </span>
-                          </div>
-                          <span className="font-bold text-slate-900 text-sm">
-                            ฿{b.billingamount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Pagination controls */}
-      {groupedWaitcheckBillings.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-t border-slate-200 text-xs">
-          <span className="text-slate-500">
-            แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, groupedWaitcheckBillings.length)} จาก {groupedWaitcheckBillings.length} รายการ
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              ก่อนหน้า
-            </button>
-            <span className="text-slate-600 font-semibold whitespace-nowrap">หน้า {safePage}/{totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              ถัดไป
-            </button>
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {/* Slip Review Detail Modal */}
-      {reviewBilling && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs transition-opacity duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] animate-fadeIn">
-            
-            {/* Left side: Slip mockup visualizer */}
-            <div className="md:w-1/2 bg-slate-100 p-6 flex flex-col items-center justify-center border-r border-slate-200 overflow-y-auto no-scrollbar">
-              <span className="text-xs font-bold text-slate-400 mb-3 block">หลักฐานสลิปการโอนเงิน (Image)</span>
-              <span className="text-xs font-bold text-slate-400 mb-3 block">สามารถเปิดแอปธนาคารและแสกน Qr code เพื่อตรวจสอบได้</span>
-              
-              {reviewBilling.slipurl ? (
-                <div className="w-full max-w-[280px] bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-250 p-2">
-                  <img
-                    src={reviewBilling.slipurl}
-                    alt="หลักฐานสลิปการโอนเงิน"
-                    className="w-full h-auto object-contain rounded-xl max-h-[60vh]"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="w-full max-w-[280px] bg-white rounded-2xl border border-dashed border-slate-300 p-8 flex flex-col items-center text-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
-                    <AlertCircle className="w-7 h-7" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-700">ยังไม่มีสลิปแนบ</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    บิลนี้ยังไม่ได้ชำระเงิน หรือยังไม่มีการอัปโหลดสลิปโอนเงิน จึงยังไม่มีหลักฐานให้ตรวจสอบ
-                  </p>
-                </div>
-              )}
-            </div>
+          {/* 3) ลิสต์ — หนึ่งแถว = หนึ่งใบแจ้งหนี้ */}
+          <div className="mt-2">
+            {groupedWaitcheckBillings.length === 0 ? (
+              // empty ตามตัวกรอง (คงตัวกรอง + ช่องค้นหาไว้ให้เห็น)
+              <div className="mt-4 flex min-h-[160px] items-center justify-center border border-gray-200 bg-gray-50 px-4 text-center">
+                <p className="text-xs text-slate-500">ไม่มีรายการในสถานะนี้</p>
+              </div>
+            ) : (
+              pagedGroups.map((group, idx) => {
+                const meta = statusMeta(group);
+                const isSelected = groupKey(group) === selectedKey;
+                const isLast = idx === pagedGroups.length - 1;
+                const isApproved = group.billingstatus === 'paid';
+                const isClosed = group.billingstatus !== 'waitcheck';
 
-            {/* Right side: Information and Actions */}
-            <div className="md:w-1/2 p-6 flex flex-col justify-between overflow-y-auto no-scrollbar">
-              <div>
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">รายละเอียดและผลตรวจสอบ</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">เลขที่อ้างอิงบิล: BILL-{reviewBilling.id}</p>
-                  </div>
-                  <button
-                    onClick={() => { setReviewBilling(null); }}
-                    className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                return (
+                  <div
+                    key={groupKey(group)}
+                    className={`relative flex flex-col gap-3 py-[18px] pl-4 md:flex-row md:items-center md:gap-[18px] ${isLast ? 'border-b border-gray-200' : 'border-b border-gray-100'} ${isSelected ? 'bg-rose-50/40' : ''}`}
                   >
-                    <X className="w-6 h-6" />
+                    {/* แถบสีสถานะซ้าย */}
+                    <span className={`absolute left-0 top-1/2 h-14 w-[3px] -translate-y-1/2 ${meta.bar}`} />
+
+                    {/* กลาง */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="text-[15px] font-medium text-slate-900">
+                          {group.customer ? `${group.customer.firstName} ${group.customer.lastName}` : "ผู้เรียน"}
+                          {group.customer?.nickname ? ` (${group.customer.nickname})` : ""}
+                        </span>
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${meta.chip}`}>
+                          {meta.label}
+                        </span>
+                      </div>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {metaLine(group)}
+                      </span>
+                    </div>
+
+                    {/* ขวา: ยอด + ปุ่ม */}
+                    <div className="flex items-center justify-between gap-4 md:justify-end">
+                      <div className="text-left md:text-right">
+                        <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-400">ยอดเงินโอนรวม</span>
+                        <span className={`text-[17px] font-semibold tabular-nums ${isClosed ? 'text-slate-400' : 'text-slate-900'}`}>
+                          {fmtBaht(group.totalAmount)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => selectGroup(group)}
+                        className={`flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-lg px-4 text-xs font-bold transition-colors ${
+                          isSelected
+                            ? 'bg-[#CD0D13] text-white hover:bg-[#A30A0E]'
+                            : 'border border-gray-300 text-slate-700 hover:border-[#CD0D13] hover:text-[#CD0D13]'
+                        }`}
+                      >
+                        {isApproved ? 'ดูสลิป' : 'ดูสลิป & ตรวจสอบ'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Pagination (logic เดิม) */}
+          {groupedWaitcheckBillings.length > 0 && (
+            <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-3 text-xs sm:flex-row">
+              <span className="text-slate-500">
+                แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, groupedWaitcheckBillings.length)} จาก {groupedWaitcheckBillings.length} รายการ
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  title={safePage <= 1 ? 'อยู่หน้าแรกแล้ว' : 'หน้าก่อนหน้า'}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ก่อนหน้า
+                </button>
+                <span className="whitespace-nowrap font-semibold text-slate-600">หน้า {safePage}/{totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  title={safePage >= totalPages ? 'อยู่หน้าสุดท้ายแล้ว' : 'หน้าถัดไป'}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ถัดไป
+                </button>
+              </div>
+            </div>
+          )}
+        </div>{/* /คอลัมน์ซ้าย */}
+
+        {/* ───────────── คอลัมน์ขวา: แผงตรวจสอบ ─────────────
+            desktop: อยู่ในกริด · mobile: เปิดเต็มจอเมื่อเลือกรายการ */}
+        <div
+          className={`min-w-0 ${
+            selectedGroup
+              ? 'fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-white lg:static lg:z-auto lg:min-h-0 lg:overflow-visible'
+              : 'hidden lg:block'
+          }`}
+        >
+          {!selectedGroup ? (
+            // ยังไม่เลือกอะไร (desktop) / ตรวจครบทุกรายการแล้ว
+            <div className="flex min-h-[420px] items-center justify-center p-6 text-center">
+              <p className="max-w-[260px] text-sm text-slate-400">
+                {allDone ? 'ตรวจสลิปครบทุกรายการแล้ว' : 'เลือกใบแจ้งหนี้จากรายการด้านซ้ายเพื่อตรวจสอบสลิป'}
+              </p>
+            </div>
+          ) : (
+            <div className="flex min-h-full flex-1 flex-col gap-5 p-6">
+              {/* 1) หัวแผง */}
+              <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">รายละเอียดและผลตรวจสอบ</h2>
+                <div className="flex items-center gap-3">
+                  <span className="whitespace-nowrap text-xs text-slate-500">
+                    {selectedGroup.invoiceId ? `ใบแจ้งหนี้ #${selectedGroup.invoiceId}` : `BILL-${selectedGroup.billings[0]?.id}`}
+                  </span>
+                  <button
+                    onClick={() => setSelectedKey(null)}
+                    className="cursor-pointer p-1 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
-
-                {/* Details list */}
-                <div className="space-y-4 text-sm border-b border-slate-200 pb-5">
-                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <span className="text-slate-550 text-xs font-semibold">ชื่อนักเรียน:</span>
-                    <span className="font-extrabold text-slate-900">
-                      {reviewBilling.customer ? `${reviewBilling.customer.firstName} ${reviewBilling.customer.lastName}` : "ผู้เรียน"}
-                      {reviewBilling.customer?.nickname ? ` (${reviewBilling.customer.nickname})` : ""}
-                    </span>
-                  </div>
-
-                  {/* Individual Billing Items list */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">รายการบิลในใบแจ้งหนี้ ({reviewBilling.groupedBillings?.length || 1})</span>
-                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar pr-1">
-                      {reviewBilling.groupedBillings ? (
-                        reviewBilling.groupedBillings.map((b) => (
-                          <div key={b.invoice_id ? `bill-${b.id}-inv-${b.invoice_id}` : `bill-${b.id}`} className="p-3 bg-slate-50 rounded-xl border border-slate-250 text-xs flex justify-between items-start gap-4">
-                            <div className="space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400">BILL-{b.id} • {b.billing_type?.billingtypename || "ทั่วไป"}</span>
-                              <span className="font-bold text-slate-800 block">{b.billingdescription}</span>
-                              <span className="text-[10px] text-slate-500 block">ครบกำหนด: {b.billingdue_date?.split('T')[0]}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="font-bold text-slate-800 text-xs">฿{b.billingamount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-3 bg-slate-55 bg-slate-50 rounded-xl border border-slate-250 text-xs flex justify-between items-start gap-4">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-bold text-slate-400">BILL-{reviewBilling.id} • {reviewBilling.billing_type?.billingtypename || "ทั่วไป"}</span>
-                            <span className="font-bold text-slate-800 block">{reviewBilling.billingdescription}</span>
-                            <span className="text-[10px] text-slate-500 block">ครบกำหนด: {reviewBilling.billingdue_date?.split('T')[0]}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold text-slate-800 text-xs">฿{reviewBilling.billingamount.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Summary Totals */}
-                  <div className="pt-2 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-550 font-semibold">ยอดเงินเรียกเก็บรวม:</span>
-                      <span className="font-extrabold text-[#CD0D13] text-lg">฿{reviewBilling.billingamount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-550 font-semibold">สถานะบิล:</span>
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                        reviewBilling.billingstatus === 'paid'
-                          ? 'bg-emerald-55 bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          : reviewBilling.billingstatus === 'waitcheck'
-                          ? 'bg-amber-55 bg-amber-50 text-amber-600 border border-amber-100'
-                          : 'bg-rose-55 bg-rose-50 text-rose-600 border border-rose-100'
-                      }`}>
-                        {reviewBilling.billingstatus === 'paid' ? 'ชำระแล้ว' : reviewBilling.billingstatus === 'waitcheck' ? 'รอตรวจสอบ' : 'ค้างชำระ'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {reviewBilling.transactionid && (
-                    <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-150 p-3 rounded-xl flex items-center justify-between">
-                      <span className="font-bold">Transaction Reference ID:</span>
-                      <code className="font-mono text-slate-800 select-all bg-slate-100 px-1.5 py-0.5 rounded">{reviewBilling.transactionid}</code>
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {/* Modal footer actions */}
-              <div className="mt-6 pt-4 border-t border-slate-200">
-                {reviewBilling.billingstatus === 'waitcheck' && reviewBilling.invoice_id ? (
-                  <div className="flex space-x-3">
+              {/* 2) รูปสลิป */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">หลักฐานสลิปการโอนเงิน</span>
+                {selectedGroup.slipurl && !slipImgError ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    title="กดเพื่อดูสลิปขนาดเต็ม"
+                    className="flex h-[460px] w-full cursor-zoom-in items-center justify-center border border-gray-200 p-2"
+                  >
+                    <img
+                      key={imgReloadToken}
+                      src={selectedGroup.slipurl}
+                      alt="หลักฐานสลิปการโอนเงิน"
+                      className="mx-auto max-h-full w-auto object-contain"
+                      onError={() => setSlipImgError(true)}
+                    />
+                  </button>
+                ) : selectedGroup.slipurl && slipImgError ? (
+                  // สลิปโหลดไม่ขึ้น
+                  <div className="flex h-[460px] w-full flex-col items-center justify-center gap-2 border border-rose-300 bg-rose-50/60 text-center">
+                    <p className="text-sm font-semibold text-rose-600">โหลดรูปสลิปไม่สำเร็จ</p>
                     <button
-                      onClick={() => handleRejectSlip(reviewBilling.invoice_id!)}
-                      className="flex-1 bg-slate-100 hover:bg-rose-50 hover:text-[#CD0D13] hover:border-red-250 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 transition-all flex items-center justify-center space-x-1.5 text-sm cursor-pointer"
+                      type="button"
+                      onClick={() => { setSlipImgError(false); setImgReloadToken(t => t + 1); }}
+                      className="text-xs font-semibold text-[#CD0D13] underline underline-offset-2"
                     >
-                      <span>ปฏิเสธสลิป</span>
-                    </button>
-                    <button
-                      onClick={() => handleApproveSlip(reviewBilling.invoice_id!)}
-                      className="flex-1 bg-[#CD0D13] hover:bg-[#A30A0E] text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-red-200 flex items-center justify-center space-x-1.5 text-sm cursor-pointer"
-                    >
-                      <span>อนุมัติยอดเงินโอน</span>
-                    </button>
-                  </div>
-                ) : (reviewBilling.billingstatus === 'unfunded' || reviewBilling.billingstatus === 'overdue') ? (
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => handleCashPayment(reviewBilling)}
-                      disabled={cashSubmitting}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center justify-center gap-1.5 text-sm cursor-pointer"
-                    >
-                      <Banknote className="w-4 h-4" />
-                      <span>{cashSubmitting ? 'กำลังบันทึก...' : 'ลูกค้าชำระแบบเงินสด'}</span>
-                    </button>
-                    <button
-                      onClick={() => { setReviewBilling(null); }}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 text-sm transition-all cursor-pointer"
-                    >
-                      ปิดหน้าต่าง
+                      ลองใหม่
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => { setReviewBilling(null); }}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl border border-slate-300 text-sm transition-all cursor-pointer"
-                  >
-                    ปิดหน้าต่าง
-                  </button>
+                  // ไม่มีสลิปแนบ
+                  <div className="flex h-[460px] w-full items-center justify-center border border-dashed border-gray-300 text-center">
+                    <p className="text-sm text-slate-500">ยังไม่มีการอัปโหลดสลิปสำหรับรายการนี้</p>
+                  </div>
                 )}
+                <span className="text-[11.5px] text-slate-500">
+                  กดที่รูปเพื่อดูขนาดเต็ม · สามารถเปิดแอปธนาคารและสแกน QR code บนสลิปเพื่อตรวจสอบได้
+                </span>
+              </div>
+
+              {/* Lightbox — ดูสลิปขนาดเต็มในหน้าเดียวกัน (ไม่เปิดแท็บใหม่) */}
+              {lightboxOpen && selectedGroup.slipurl && (
+                <div
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+                  onClick={() => setLightboxOpen(false)}
+                  role="dialog"
+                  aria-modal="true"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(false)}
+                    className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                  <img
+                    src={selectedGroup.slipurl}
+                    alt="หลักฐานสลิปการโอนเงิน (ขนาดเต็ม)"
+                    className="max-h-[90vh] max-w-[92vw] object-contain"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+
+              {/* 3) ตารางรายละเอียด */}
+              <div className="flex flex-col divide-y divide-gray-100 border-y border-gray-200">
+                <div className="flex items-center justify-between gap-4 py-[13px]">
+                  <span className="text-xs text-slate-500">ผู้เรียน</span>
+                  <span className="text-right text-[13.5px] font-medium text-slate-900">
+                    {selectedGroup.customer ? `${selectedGroup.customer.firstName} ${selectedGroup.customer.lastName}` : "ผู้เรียน"}
+                    {selectedGroup.customer?.nickname ? ` (${selectedGroup.customer.nickname})` : ""}
+                  </span>
+                </div>
+
+                {/* รายละเอียดบิล — หลายบิลแตกเป็นลิสต์ย่อย */}
+                <div className="flex items-start justify-between gap-4 py-[13px]">
+                  <span className="shrink-0 text-xs text-slate-500">รายละเอียดบิล</span>
+                  <div className="flex min-w-0 flex-col items-end gap-1.5">
+                    {selectedGroup.billings.map(b => (
+                      <div key={`bill-${b.id}`} className="flex w-full items-start justify-end gap-4 text-right">
+                        <span className="text-[13.5px] text-slate-800">{b.billingdescription}</span>
+                        {selectedGroup.billings.length > 1 && (
+                          <span className="shrink-0 text-[13.5px] tabular-nums text-slate-500">{fmtBaht(b.billingamount)}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 py-[13px]">
+                  <span className="text-xs text-slate-500">ประเภทค่าใช้จ่าย</span>
+                  <span className="text-right text-[13.5px] text-slate-800">
+                    {Array.from(new Set(selectedGroup.billings.map(b => b.billing_type?.billingtypename).filter(Boolean))).join(' · ') || '-'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 py-[13px]">
+                  <span className="text-xs text-slate-500">ครบกำหนดชำระ</span>
+                  <span className="text-right text-[13.5px] tabular-nums text-slate-800">{formatDateOnly(selectedGroup.dueDate)}</span>
+                </div>
+
+                {/* ผู้ออกบิล + ผู้แก้ไขล่าสุด (audit) */}
+                {(selectedGroup.admin || selectedGroup.updatedBy) && (
+                  <div className="flex items-start justify-between gap-4 py-[13px]">
+                    <span className="shrink-0 text-xs text-slate-500">ผู้ออกบิล</span>
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[13.5px] text-slate-800">
+                        {selectedGroup.admin ? `${selectedGroup.admin.firstName} ${selectedGroup.admin.lastName}` : '-'}
+                      </span>
+                      {selectedGroup.updatedBy && (
+                        <span className="text-[11px] text-slate-400">
+                          แก้ไขล่าสุดโดย {selectedGroup.updatedBy.firstName} {selectedGroup.updatedBy.lastName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-start justify-between gap-4 py-[13px]">
+                  <span className="shrink-0 text-xs text-slate-500">บัญชีที่โอนเข้า</span>
+                  <div className="flex flex-col items-end text-right">
+                    <span className="text-[13.5px] text-slate-800">
+                      {selectedGroup.receivingBankName
+                        ? `${selectedGroup.receivingBankName}${selectedGroup.receivingAccountNo ? ` · ${selectedGroup.receivingAccountNo}` : ''}`
+                        : (selectedGroup.slipurl ? 'โอนผ่านธนาคาร / PromptPay' : '-')}
+                    </span>
+                    {selectedGroup.transactionid && (
+                      <span className="text-[11px] tabular-nums text-slate-400">อ้างอิง: {selectedGroup.transactionid}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ผู้อนุมัติ — แสดงเมื่อบิลอนุมัติแล้ว */}
+                {selectedGroup.billingstatus === 'paid' && (
+                  <div className="flex items-start justify-between gap-4 py-[13px]">
+                    <span className="shrink-0 text-xs text-slate-500">ผู้อนุมัติ</span>
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[13.5px] font-medium text-slate-900">
+                        {selectedGroup.confirmedBy
+                          ? `${selectedGroup.confirmedBy.firstName} ${selectedGroup.confirmedBy.lastName}`
+                          : 'ระบบอัตโนมัติ (SlipOK)'}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-slate-400">
+                        อนุมัติเมื่อ {formatDateOnly(selectedGroup.paidAt || selectedGroup.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* แถวยอดรวม */}
+                <div className="flex items-baseline justify-between gap-4 py-4">
+                  <span className="text-xs text-slate-500">ยอดเงินเรียกเก็บรวม</span>
+                  <span className="text-2xl font-semibold tabular-nums text-[#CD0D13]">{fmtBaht(selectedGroup.totalAmount)}</span>
+                </div>
+              </div>
+
+              {/* 4) ผลตรวจสลิปอัตโนมัติ (SlipOK) — 3 กรณีตามข้อมูลจริงจาก backend */}
+              {!selectedGroup.slipokChecked ? (
+                // ยังไม่เคยตรวจ (บัญชีไม่ได้เปิด auto-verify)
+                <div className="flex items-start gap-3 border border-gray-200 bg-slate-50 px-4 py-3.5">
+                  <span className="mt-[6px] block h-2 w-2 shrink-0 rounded-full bg-slate-400" />
+                  <p className="text-[12.5px] leading-relaxed text-slate-600">
+                    สลิปนี้ไม่ได้เปิดตรวจสลิปอัตโนมัติ กรุณาตรวจด้วยตนเอง
+                  </p>
+                </div>
+              ) : selectedGroup.slipokPassed ? (
+                // ตรวจผ่าน
+                <div className="flex items-start gap-3 border border-emerald-200 bg-emerald-50/60 px-4 py-3.5">
+                  <span className="mt-[6px] block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                  <p className="text-[12.5px] leading-relaxed text-slate-600">
+                    ตรวจสลิปอัตโนมัติ (SlipOK): {selectedGroup.slipokMessage || 'ยอดและเวลาโอนตรงกับบิล'}
+                  </p>
+                </div>
+              ) : (
+                // ตรวจแล้วไม่ผ่าน
+                <div className="flex items-start gap-3 border border-rose-300 bg-rose-50/60 px-4 py-3.5">
+                  <span className="mt-[6px] block h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+                  <p className="text-[12.5px] leading-relaxed text-slate-600">
+                    ตรวจสลิปอัตโนมัติ (SlipOK) ไม่ผ่าน{selectedGroup.slipokMessage ? `: ${selectedGroup.slipokMessage}` : ' — กรุณาตรวจด้วยตนเอง'}
+                  </p>
+                </div>
+              )}
+
+              {/* 5) ปุ่มตัดสิน — ชิดล่างสุด */}
+              <div className="mt-auto pt-2">
+                {selectedGroup.billingstatus === 'waitcheck' && selectedGroup.invoiceId ? (
+                  <>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => requestReject(selectedGroup.invoiceId!)}
+                        disabled={isSubmitting}
+                        className="h-[50px] flex-1 rounded-lg border border-gray-300 text-sm font-bold text-slate-700 transition-colors hover:border-[#CD0D13] hover:text-[#CD0D13] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {submitting === 'reject' ? 'กำลังปฏิเสธ…' : 'ปฏิเสธสลิป'}
+                      </button>
+                      <button
+                        onClick={() => handleApproveSlip(selectedGroup.invoiceId!)}
+                        disabled={isSubmitting}
+                        className="h-[50px] flex-[1.4] rounded-lg bg-[#CD0D13] text-[14.5px] font-bold text-white transition-colors hover:bg-[#A30A0E] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {submitting === 'approve' ? 'กำลังอนุมัติ…' : 'อนุมัติยอดเงินโอน'}
+                      </button>
+                    </div>
+                    <p className="mt-3 text-[11.5px] text-slate-500">
+                      หรือ
+                      <button
+                        type="button"
+                        onClick={() => handleCashPayment(selectedGroup)}
+                        disabled={isSubmitting}
+                        className="mx-1 font-semibold text-emerald-700 underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {submitting === 'cash' ? 'กำลังบันทึก…' : 'ยืนยันว่าลูกค้าชำระด้วยเงินสด'}
+                      </button>
+                      — ระบบจะสร้างใบแจ้งหนี้และปิดบิลให้
+                    </p>
+                  </>
+                ) : (selectedGroup.billingstatus === 'unfunded' || selectedGroup.billingstatus === 'overdue') ? (
+                  <p className="text-[11.5px] text-slate-500">
+                    รายการนี้ยังไม่ได้ชำระ —
+                    <button
+                      type="button"
+                      onClick={() => handleCashPayment(selectedGroup)}
+                      disabled={isSubmitting}
+                      className="mx-1 font-semibold text-emerald-700 underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {submitting === 'cash' ? 'กำลังบันทึก…' : 'ยืนยันว่าลูกค้าชำระด้วยเงินสด'}
+                    </button>
+                    ระบบจะสร้างใบแจ้งหนี้และปิดบิลให้
+                  </p>
+                ) : null}
               </div>
             </div>
-
-          </div>
-        </div>
-      )}
+          )}
+        </div>{/* /คอลัมน์ขวา */}
+      </div>
     </div>
   );
 }

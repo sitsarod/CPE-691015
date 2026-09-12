@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Loader2, Calculator, Plus, X, QrCode, Copy } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
+import ExpenseEditModal from './ExpenseEditModal';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
-import { createExpensesBatch, deleteExpense } from "@/services/paymentAPI";
+import { createExpensesBatch, updateExpense, deleteExpense } from "@/services/paymentAPI";
 import { fetchCoachById, fetchCoachPayroll } from "@/services/coachAPI";
 import type { CoachPayrollLine } from "@/services/coachAPI";
-import { CreateExpenseReq } from "@/types/payment";
+import { CreateExpenseReq, UpdateExpenseReq } from "@/types/payment";
 
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
 interface CoachWageInfo {
@@ -28,8 +29,10 @@ interface CoachWageInfo {
   unresolvedSessions?: number;
   unresolvedAmount?: number;
 
-  // จ่ายเกินไปเท่าไร — ต้องแสดงเสมอเมื่อ > 0
-  // ยอด "คงค้างจ่าย" ถูก clamp ที่ 0 จึงบอกไม่ได้ว่าจ่ายครบพอดีหรือจ่ายเกิน
+  // จ่ายเกินไปเท่าไร (0 ถ้าไม่เกิน)
+  //
+  // ⚠️ "ค่าจ้างค้างจ่าย" ถูก clamp ที่ 0 ฝั่ง backend เพราะเป็นเพดานของยอดที่จ่ายได้
+  // ถ้าไม่มีตัวนี้ "จ่ายครบพอดี" กับ "จ่ายเกินเก้าพัน" จะแสดงเป็น ฿0 เหมือนกัน
   overpaid?: number;
 
   // "8 คาบ × ฿300" + "4 คาบ × ฿400" — ทำให้แอดมินตรวจได้ว่ายอดรวมมาจากไหน
@@ -173,6 +176,12 @@ export default function ExpensesTab({
   const otherIncomeNum = otherIncomes.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const totalCoachPayout = baseWage + otherIncomeNum;
 
+  // ยอดรวมที่จะบันทึกจริง = ค่าจ้าง+รายได้อื่น (โหมดโค้ช) หรือจำนวนเงินที่กรอก (โหมดทั่วไป)
+  // ถ้าเป็น 0 → ปิดปุ่มบันทึก (spec: title "ไม่มียอดให้บันทึก")
+  const nothingToSave = isCoachWages
+    ? totalCoachPayout <= 0
+    : (parseFloat(expenseForm.expenseamount) || 0) <= 0;
+
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -244,11 +253,10 @@ export default function ExpensesTab({
     setIsSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-
       // ⚠️ ส่งเป็นก้อนเดียว ห้ามวนลูปยิงทีละรายการ
       //
-      // เดิมวนลูป ถ้าค่าจ้างลงแล้วแต่โบนัสพัง จะเหลือผลลัพธ์ครึ่ง ๆ ที่แอดมิน
-      // ไม่รู้ว่าอันไหนบันทึกไปแล้ว จะกดซ้ำก็ไม่กล้า
+      // หน้านี้บันทึก "ค่าจ้าง + โบนัสหลายรายการ" พร้อมกัน ถ้าวนลูปแล้วพังกลางทาง
+      // จะเหลือผลลัพธ์ครึ่ง ๆ ที่แอดมินไม่รู้ว่าอันไหนลงไปแล้ว จะกดซ้ำก็ไม่กล้า
       // backend คุมทั้งก้อนเป็นทรานแซกชันเดียว สำเร็จหมดหรือไม่สำเร็จเลย
       await createExpensesBatch(reqBodies, token || "");
 
@@ -271,8 +279,25 @@ export default function ExpensesTab({
     }
   };
 
+  // รายการที่กำลังแก้ไขอยู่ใน modal (null = ปิด)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  const handleUpdateExpense = async (id: number, payload: UpdateExpenseReq) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+    try {
+      await updateExpense(id, payload, token || "");
+      onTriggerToast("แก้ไขรายการค่าใช้จ่ายสำเร็จเรียบร้อย");
+      onFetchData();
+    } catch (err: unknown) {
+      onTriggerToast(err instanceof Error ? err.message : 'แก้ไขรายการไม่สำเร็จ', 'error');
+      throw err; // ให้ modal รู้ว่าไม่สำเร็จ จะได้ไม่ปิด
+    }
+  };
+
   const handleDeleteExpense = async (id: number) => {
-    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?")) return;
+    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?")) {
+      throw new Error('cancelled'); // ผู้ใช้ยกเลิก — ไม่ปิด modal
+    }
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
@@ -282,164 +307,99 @@ export default function ExpensesTab({
       onFetchData();
     } catch (err: unknown) {
       onTriggerToast(err instanceof Error ? err.message : 'ลบรายการไม่สำเร็จ', 'error');
+      throw err;
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-      {/* Form Column */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 self-start">
-        <form onSubmit={handleSaveExpense} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">ประเภทรายจ่าย</label>
-            <select
-              value={expenseForm.expensetype}
-              onChange={(e) => handleTypeChange(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
-            >
-              <option value="court_rental">ค่าเช่าสนาม</option>
-              <option value="coach_wages">ค่าจ้างโค้ช</option>
-              <option value="equipment">ค่าอุปกรณ์</option>
-              <option value="advertising">ค่าโฆษณา</option>
-              <option value="other">อื่นๆ</option>
-            </select>
-          </div>
+    <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_1.3fr] lg:gap-[34px] animate-fadeIn">
+      {/* ───────── คอลัมน์ซ้าย: ฟอร์ม ───────── */}
+      <div className="min-w-0 self-start border border-gray-200 bg-white p-6">
+        <form onSubmit={handleSaveExpense} className="space-y-5">
 
-          {isCoachWages && (
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 block">เลือกโค้ช</label>
+          {/* 1) ประเภทรายจ่าย + เลือกโค้ช */}
+          <div className={`grid grid-cols-1 gap-[18px] ${isCoachWages ? 'md:grid-cols-2' : ''}`}>
+            <div>
+              <label className="mb-1.5 block text-sm text-slate-700">ประเภทรายจ่าย</label>
               <select
-                value={expenseForm.coach_id}
-                onChange={(e) => {
-                  const coachId = e.target.value;
-                  setExpenseForm(prev => ({ ...prev, coach_id: coachId }));
-                  loadCoachWage(coachId);
-                }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
+                value={expenseForm.expensetype}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
               >
-                <option value="">-- กรุณาเลือกโค้ช --</option>
-                {coaches.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.nickname} ({c.firstName || ''} {c.lastName || ''})
-                  </option>
-                ))}
+                <option value="court_rental">ค่าเช่าสนาม</option>
+                <option value="coach_wages">ค่าจ้างโค้ช</option>
+                <option value="equipment">ค่าอุปกรณ์</option>
+                <option value="advertising">ค่าโฆษณา</option>
+                <option value="other">อื่นๆ</option>
               </select>
             </div>
-          )}
 
-          {/* สรุปการคำนวณค่าจ้างค้างจ่าย — แสดงเมื่อเลือกโค้ชแล้ว */}
-          {isCoachWages && expenseForm.coach_id && wageInfo && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-slate-700">
-                <Calculator className="w-3.5 h-3.5 text-[#CD0D13]" />
-                <span className="text-xs font-bold">การคำนวณค่าจ้างค้างจ่าย</span>
+            {isCoachWages && (
+              <div>
+                <label className="mb-1.5 block text-sm text-slate-700">เลือกโค้ช</label>
+                <select
+                  value={expenseForm.coach_id}
+                  onChange={(e) => {
+                    const coachId = e.target.value;
+                    setExpenseForm(prev => ({ ...prev, coach_id: coachId }));
+                    loadCoachWage(coachId);
+                  }}
+                  className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
+                >
+                  <option value="">-- กรุณาเลือกโค้ช --</option>
+                  {coaches.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.nickname} ({c.firstName || ''} {c.lastName || ''})
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
+          </div>
+
+          {/* 2) กล่องยอดค่าจ้าง — เฉพาะโหมดค่าจ้างโค้ช */}
+          {isCoachWages && expenseForm.coach_id && wageInfo && (
+            <div className="border border-gray-200 bg-slate-50 p-[18px]">
               {wageInfo.loading ? (
-                <div className="flex items-center gap-2 text-slate-500 text-xs py-1">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> กำลังคำนวณ...
+                // loading — 3 skeleton แถว ห้ามแสดง ฿0
+                <div className="space-y-2.5">
+                  {[0, 1, 2].map(i => <div key={i} className={`h-4 animate-pulse bg-slate-200/70 ${i === 2 ? 'w-2/5' : 'w-full'}`} />)}
                 </div>
               ) : wageInfo.error ? (
                 <p className="text-[11px] text-rose-600">{wageInfo.error}</p>
-              ) : wageInfo.paymentType === 'monthly' ? (
-                <div className="text-[11px] text-slate-600 space-y-0.5">
-                  <div className="flex justify-between">
-                    <span>โค้ชรายเดือน — อัตราต่อเดือน</span>
-                    <span className="font-semibold text-slate-800">฿{wageInfo.payRate.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>จ่ายแล้วเดือนนี้</span>
-                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
-                    <span className="font-bold text-slate-700">คงค้างจ่าย</span>
-                    <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
-                  </div>
-                  {/* ยอดคงค้างถูก clamp ที่ 0 จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน"
-                      ถ้าไม่บอกตรงนี้ เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
-                  {(wageInfo.overpaid ?? 0) > 0 && (
-                    <div className="mt-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1.5">
-                      <p className="text-[11px] font-bold text-rose-700">
-                        จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
-                      </p>
-                      <p className="text-[10px] text-rose-600">
-                        จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
-                        หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
-                      </p>
-                    </div>
-                  )}
-                  {wageInfo.payRate === 0 && (
-                    <p className="text-[10px] text-amber-600 pt-1">
-                      ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อเดือนของโค้ชคนนี้ ยอดจึงเป็น 0
-                    </p>
-                  )}
-                </div>
               ) : (
-                <div className="text-[11px] text-slate-600 space-y-0.5">
-                  {/* แยกตามอัตราที่บันทึกไว้ในแต่ละคาบ ไม่ใช่ "จำนวนคาบ × เรตปัจจุบัน"
-                      โค้ชที่เคยถูกปรับค่าจ้างจะเห็นหลายบรรทัด และตรวจย้อนได้ว่ายอดมาจากไหน */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[12.5px] text-slate-500">ค่าจ้างที่ควรได้ทั้งหมด</span>
+                    <span className="text-[13.5px] font-medium tabular-nums text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[12.5px] text-slate-500">จ่ายไปแล้วทั้งหมด</span>
+                    <span className="text-[13.5px] font-medium tabular-nums text-slate-800">฿{wageInfo.alreadyPaid.toLocaleString()}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-4 border-t border-gray-200 pt-2.5">
+                    <span className="text-[13px] font-medium text-slate-700">ค่าจ้างค้างจ่าย</span>
+                    <span className={`text-[22px] font-bold tabular-nums ${wageInfo.unpaid > 0 ? 'text-[#CD0D13]' : 'text-slate-900'}`}>฿{wageInfo.unpaid.toLocaleString()}</span>
+                  </div>
+                  {/* ที่มาของยอด — ต้องมาจาก breakdown ที่ API ส่งมา ถ้าไม่มีให้ซ่อน (ห้ามเดา) */}
                   {(wageInfo.rateBreakdown?.length ?? 0) > 0 ? (
-                    wageInfo.rateBreakdown!.map(line => (
-                      <div key={line.pay_rate} className="flex justify-between">
-                        <span>คาบที่สอนจริง × ค่าจ้างต่อคาบ</span>
-                        <span className="font-semibold text-slate-800">
-                          {line.sessions} × ฿{line.pay_rate.toLocaleString()}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex justify-between">
-                      <span>คาบที่สอนจริง</span>
-                      <span className="font-semibold text-slate-800">{wageInfo.sessionsDone} คาบ</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>ค่าจ้างที่ควรได้ทั้งหมด</span>
-                    <span className="font-semibold text-slate-800">฿{wageInfo.expected.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>จ่ายไปแล้วทั้งหมด</span>
-                    <span className="font-semibold text-slate-800">−฿{wageInfo.alreadyPaid.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
-                    <span className="font-bold text-slate-700">คงค้างจ่าย</span>
-                    <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
-                  </div>
-                  {/* ยอดคงค้างถูก clamp ที่ 0 จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน"
-                      ถ้าไม่บอกตรงนี้ เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
-                  {(wageInfo.overpaid ?? 0) > 0 && (
-                    <div className="mt-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1.5">
-                      <p className="text-[11px] font-bold text-rose-700">
-                        จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
-                      </p>
-                      <p className="text-[10px] text-rose-600">
-                        จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
-                        หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
+                    <div className="pt-1.5">
+                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">ที่มาของยอด</p>
+                      <p className="text-[12px] leading-relaxed text-slate-600">
+                        {wageInfo.rateBreakdown!.map(line => `${line.sessions} คาบ × ฿${line.pay_rate.toLocaleString()}`).join(' · ')}
                       </p>
                     </div>
-                  )}
-                  <p className="text-[10px] text-slate-400 pt-0.5">
-                    {wageInfo.periodNote ?? 'นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)'}
-                  </p>
-                  {/* คาบที่ไม่มีรอบเช็คชื่อจะไม่ถูกนับในยอดข้างบนเลย
-                      ถ้าไม่เตือนตรงนี้ แอดมินจะจ่ายตามยอดที่ขาดไปโดยไม่รู้ตัว */}
-                  {(wageInfo.unresolvedSessions ?? 0) > 0 && (
-                    <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5">
-                      <p className="text-[10px] font-semibold text-amber-800">
-                        ยังมีอีก {wageInfo.unresolvedSessions} คาบที่ไม่มีรอบเช็คชื่อ
-                        {(wageInfo.unresolvedAmount ?? 0) > 0 && ` (฿${wageInfo.unresolvedAmount!.toLocaleString()})`}
-                        {' '}จึงยังไม่ถูกนับในยอดนี้
-                      </p>
-                      <a
-                        href="/admin/attendance/missed"
-                        className="text-[10px] font-medium text-amber-900 underline"
-                      >
-                        เคลียร์คาบที่ค้างก่อนจ่าย
-                      </a>
+                  ) : wageInfo.periodNote ? (
+                    <div className="pt-1.5">
+                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">ที่มาของยอด</p>
+                      <p className="text-[12px] leading-relaxed text-slate-600">{wageInfo.periodNote}</p>
                     </div>
-                  )}
+                  ) : null}
                   {wageInfo.payRate === 0 && (
-                    <p className="text-[10px] text-amber-600 pt-1">
-                      ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบของโค้ชคนนี้ ยอดจึงเป็น 0
+                    <p className="pt-1 text-[10px] text-amber-600">
+                      {wageInfo.paymentType === 'monthly'
+                        ? 'ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อเดือนของโค้ชคนนี้ ยอดจึงเป็น 0'
+                        : 'ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อคาบของโค้ชคนนี้ ยอดจึงเป็น 0'}
                     </p>
                   )}
                 </div>
@@ -447,57 +407,52 @@ export default function ExpensesTab({
             </div>
           )}
 
+          {/* 3) คำเตือนจ่ายเกิน — ยอด "ค่าจ้างค้างจ่าย" ถูก clamp ที่ 0
+              จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน" ถ้าไม่บอกตรงนี้
+              เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
+          {isCoachWages && expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (wageInfo.overpaid ?? 0) > 0 && (
+            <div className="border border-rose-300 bg-rose-50 px-4 py-3">
+              <p className="text-[12.5px] font-bold text-rose-700">
+                จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
+              </p>
+              <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-600">
+                จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
+                หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
+              </p>
+            </div>
+          )}
+
+          {/* 4) คำเตือนคาบที่ยังไม่ปิดรอบ */}
+          {isCoachWages && expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (wageInfo.unresolvedSessions ?? 0) > 0 && (
+            <div className="border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-[12.5px] font-medium text-amber-800">
+                มี {wageInfo.unresolvedSessions} คาบที่ยังไม่ปิดรอบเช็คชื่อ
+                {(wageInfo.unresolvedAmount ?? 0) > 0 && ` (฿${wageInfo.unresolvedAmount!.toLocaleString()})`}
+              </p>
+              <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-600">
+                จึงยังไม่ถูกนับในยอดนี้ — ปิดรอบเช็คชื่อก่อนจ่ายเพื่อไม่ให้ยอดขาด
+              </p>
+              <a href="/admin/attendance/missed" className="mt-1 inline-block text-[11.5px] font-medium text-amber-900 underline">
+                เคลียร์คาบที่ค้างก่อนจ่าย
+              </a>
+            </div>
+          )}
+
           {isCoachWages ? (
             <>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 block">
-                  ค่าจ้างค้างจ่าย (คำนวณอัตโนมัติ)
-                </label>
-                <input
-                  type="number"
-                  value={expenseForm.expenseamount}
-                  readOnly
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-250 rounded-xl text-xs outline-none text-slate-800 font-semibold cursor-not-allowed"
-                />
-                <p className="text-[10px] text-slate-400">คำนวณจากค่าจ้างที่ยังไม่ได้จ่ายโดยอัตโนมัติ</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-600 block">รายได้ส่วนอื่น ๆ (กรอกเอง)</label>
-                  <button
-                    type="button"
-                    onClick={addOtherIncome}
-                    className="flex items-center gap-1 text-[11px] font-bold text-[#CD0D13] hover:text-white hover:bg-[#CD0D13] border border-[#CD0D13]/40 rounded-lg px-2.5 py-1 shadow-sm transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> เพิ่มรายการ
-                  </button>
-                </div>
-
-                {otherIncomes.length === 0 ? (
-                  <p className="text-[10px] text-slate-400">เช่น โบนัส หรือรายได้อื่นที่ต้องการจ่ายเพิ่ม กด &quot;เพิ่มรายการ&quot; เพื่อระบุได้หลายรายการ</p>
-                ) : (
-                  <div className="space-y-2">
+              {/* 4) รายได้ส่วนอื่น ๆ (กรอกเอง) */}
+              <div className="space-y-2.5">
+                <label className="block text-sm text-slate-700">รายได้ส่วนอื่น ๆ (กรอกเอง)</label>
+                {otherIncomes.length > 0 && (
+                  <div className="space-y-2.5">
                     {otherIncomes.map((item, index) => (
-                      <div key={`other-income-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-500">รายการที่ {index + 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeOtherIncome(index)}
-                            className="p-1 rounded-full text-slate-400 hover:bg-rose-50 hover:text-[#CD0D13] cursor-pointer"
-                            title="ลบรายการนี้"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <div key={`other-income-${index}`} className="flex items-center gap-2.5">
                         <input
                           type="text"
                           placeholder="รายละเอียด เช่น โบนัสผลงาน, ค่าเดินทาง"
                           value={item.description}
                           onChange={(e) => updateOtherIncome(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                          className="h-11 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
                         />
                         <input
                           type="number"
@@ -505,138 +460,133 @@ export default function ExpensesTab({
                           placeholder="0.00"
                           value={item.amount}
                           onChange={(e) => updateOtherIncome(index, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-250 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+                          className="h-11 w-[120px] shrink-0 rounded-lg border border-gray-300 bg-white px-3 text-right text-sm tabular-nums text-slate-800 outline-none focus:border-[#CD0D13]"
                         />
+                        <button
+                          type="button"
+                          onClick={() => removeOtherIncome(index)}
+                          className="shrink-0 p-1.5 text-slate-400 hover:text-[#CD0D13] cursor-pointer"
+                          title="ลบรายการนี้"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={addOtherIncome}
+                  className="text-[12.5px] font-medium text-[#CD0D13] hover:underline cursor-pointer"
+                >
+                  + เพิ่มรายการ
+                </button>
               </div>
 
-              <div className="rounded-xl bg-[#FFF0F0] border border-rose-100 px-3 py-2.5 space-y-0.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-700">รวมยอดจ่ายทั้งสิ้น</span>
-                  <span className="text-sm font-black text-[#CD0D13]">฿{totalCoachPayout.toLocaleString()}</span>
+              {/* 5) รวมยอดจ่ายทั้งสิ้น */}
+              <div>
+                <div className="flex items-center justify-between gap-4 border-y border-gray-200 py-4">
+                  <span className="text-sm font-medium text-slate-700">รวมยอดจ่ายทั้งสิ้น</span>
+                  <span className="text-[28px] font-bold tabular-nums text-[#CD0D13]">฿{totalCoachPayout.toLocaleString()}</span>
                 </div>
                 {baseWage > 0 && otherIncomeNum > 0 && (
-                  <p className="text-[10px] text-slate-400">จะบันทึกแยกเป็น {1 + otherIncomes.filter(i => (parseFloat(i.amount) || 0) > 0).length} รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่นรวม ฿{otherIncomeNum.toLocaleString()}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">จะบันทึกแยกเป็น {1 + otherIncomes.filter(i => (parseFloat(i.amount) || 0) > 0).length} รายการ: ค่าจ้าง ฿{baseWage.toLocaleString()} และรายได้ส่วนอื่นรวม ฿{otherIncomeNum.toLocaleString()}</p>
                 )}
               </div>
 
-              {/* ช่องทางจ่ายเงินให้โค้ช: QR พร้อมเพย์ (ยอด = ยอดจ่ายรวม) + เลขบัญชีเผื่อสแกนไม่สะดวก */}
+              {/* 6) QR + เลขบัญชีของโค้ช */}
               {expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (
-                <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
-                  <div className="flex items-center gap-1.5 text-slate-700">
-                    <QrCode className="w-3.5 h-3.5 text-[#CD0D13]" />
-                    <span className="text-xs font-bold">ช่องทางจ่ายเงินให้โค้ช</span>
-                  </div>
-
-                  {/* QR พร้อมเพย์ */}
-                  {wageInfo.promptPay ? (
-                    totalCoachPayout > 0 ? (
-                      <div className="flex flex-col items-center gap-1.5">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`https://promptpay.io/${wageInfo.promptPay}/${totalCoachPayout.toFixed(2)}.png`}
-                          alt="PromptPay QR"
-                          className="w-40 h-40 rounded-lg border border-slate-100"
-                        />
-                        <p className="text-[10px] text-slate-400">
-                          สแกนด้วยแอปธนาคาร · ยอด ฿{totalCoachPayout.toLocaleString()}
-                        </p>
-                      </div>
+                <div className="grid grid-cols-[124px_1fr] gap-[18px]">
+                  {/* QR */}
+                  <div className="grid h-[124px] w-[124px] shrink-0 place-items-center border border-gray-300 p-1">
+                    {wageInfo.promptPay && totalCoachPayout > 0 ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={`https://promptpay.io/${wageInfo.promptPay}/${totalCoachPayout.toFixed(2)}.png`}
+                        alt="PromptPay QR"
+                        className="h-full w-full object-contain"
+                      />
                     ) : (
-                      <p className="text-[11px] text-slate-400">ยอดจ่ายเป็น 0 — ยังไม่สร้าง QR</p>
-                    )
-                  ) : (
-                    <p className="text-[11px] text-amber-600">
-                      โค้ชยังไม่ได้ตั้งพร้อมเพย์ ใช้โอนผ่านเลขบัญชีด้านล่างแทน
+                      <span className="px-2 text-center text-[11px] leading-tight text-slate-400">
+                        {wageInfo.promptPay ? 'ยอดจ่ายเป็น 0 — ยังไม่สร้าง QR' : 'โค้ชยังไม่ได้ตั้งค่าพร้อมเพย์'}
+                      </span>
+                    )}
+                  </div>
+                  {/* รายละเอียดบัญชี */}
+                  <div className="min-w-0">
+                    <p className="text-[12px] text-slate-500">
+                      {wageInfo.promptPay && totalCoachPayout > 0
+                        ? `สแกนด้วยแอปธนาคาร · ยอด ฿${totalCoachPayout.toLocaleString()}`
+                        : 'ใช้โอนผ่านเลขบัญชีด้านล่างแทน'}
                     </p>
-                  )}
-
-                  {/* เลขบัญชี เผื่อไม่สะดวกสแกน */}
-                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-500">ธนาคาร</span>
-                      <span className="text-[11px] font-semibold text-slate-800 text-right">{wageInfo.bankName || "-"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-500">เลขบัญชี</span>
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-xs font-bold text-slate-800 tabular-nums truncate">{wageInfo.accountNo || "-"}</span>
+                    <div className="mt-2 border border-gray-300 px-3.5 py-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[10.5px] text-slate-500">เลขบัญชี · {wageInfo.bankName || "—"}</p>
+                          <p className="truncate text-[13.5px] font-medium tabular-nums text-slate-800">{wageInfo.accountNo || "-"}</p>
+                          {wageInfo.promptPay && (
+                            <p className="mt-0.5 text-[10.5px] text-slate-500">พร้อมเพย์ {wageInfo.promptPay}</p>
+                          )}
+                        </div>
                         {wageInfo.accountNo && (
                           <button
                             type="button"
                             onClick={() => copyText(wageInfo.accountNo!, 'เลขบัญชี')}
-                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
+                            className="shrink-0 text-[12px] font-medium text-[#CD0D13] hover:underline cursor-pointer"
                             title="คัดลอกเลขบัญชี"
                           >
-                            <Copy className="w-3 h-3" />
+                            คัดลอก
                           </button>
                         )}
-                      </span>
-                    </div>
-                    {wageInfo.promptPay && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-500">พร้อมเพย์</span>
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] font-semibold text-slate-800 tabular-nums truncate">{wageInfo.promptPay}</span>
-                          <button
-                            type="button"
-                            onClick={() => copyText(wageInfo.promptPay!, 'พร้อมเพย์')}
-                            className="p-1 rounded-md text-slate-400 hover:text-[#CD0D13] hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="คัดลอกพร้อมเพย์"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </span>
                       </div>
-                    )}
-                    {!wageInfo.bankName && !wageInfo.accountNo && (
-                      <p className="text-[10px] text-amber-600">โค้ชยังไม่ได้กรอกข้อมูลบัญชีรับเงิน</p>
-                    )}
+                      {!wageInfo.bankName && !wageInfo.accountNo && (
+                        <p className="mt-1 text-[10px] text-amber-600">โค้ชยังไม่ได้กรอกข้อมูลบัญชีรับเงิน</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-600 block">จำนวนเงิน (บาท)</label>
+            <div>
+              <label className="mb-1.5 block text-sm text-slate-700">จำนวนเงิน (บาท)</label>
               <input
                 type="number"
                 step="0.01"
                 placeholder="0.00"
                 value={expenseForm.expenseamount}
                 onChange={(e) => setExpenseForm(prev => ({ ...prev, expenseamount: e.target.value }))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
                 required
               />
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">วันที่ทำรายการ</label>
-            <input
-              type="date"
-              value={expenseForm.expensedate}
-              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-55 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
-              required
-            />
+          {/* 7) วันที่ทำรายการ + รายละเอียดเพิ่มเติม */}
+          <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm text-slate-700">วันที่ทำรายการ</label>
+              <input
+                type="date"
+                value={expenseForm.expensedate}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm text-slate-700">รายละเอียด / คำอธิบายเพิ่มเติม</label>
+              <input
+                type="text"
+                placeholder="ระบุข้อความคำอธิบายค่าใช้จ่าย..."
+                value={expenseForm.expensedescription}
+                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedescription: e.target.value }))}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600 block">รายละเอียด / คำอธิบายเพิ่มเติม</label>
-            <textarea
-              rows={3}
-              placeholder="ระบุข้อความคำอธิบายค่าใช้จ่าย..."
-              value={expenseForm.expensedescription}
-              onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedescription: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-55 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 resize-none"
-            />
-          </div>
-
-          {/* Using the Global Reusable SlipUploader Component */}
+          {/* แนบหลักฐาน (คงไว้จากของเดิม) */}
           <SlipUploader
             label="แนบหลักฐานชำระเงิน (ควรมี)"
             currentUrl={expenseForm.receipturl}
@@ -644,40 +594,43 @@ export default function ExpensesTab({
             onError={(msg) => onTriggerToast(msg, 'error')}
           />
 
+          {/* 8) ปุ่มบันทึก */}
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-[#CD0D13] hover:bg-[#A30A0E] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md hover:shadow-lg cursor-pointer text-center"
+            disabled={isSubmitting || nothingToSave}
+            title={nothingToSave ? 'ไม่มียอดให้บันทึก' : undefined}
+            className="h-[52px] w-full rounded-xl bg-[#CD0D13] text-[15px] font-bold text-white transition-colors hover:bg-[#A30A0E] disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกค่าใช้จ่าย'}
+            {isSubmitting ? 'กำลังบันทึก…' : 'บันทึกค่าใช้จ่าย'}
           </button>
         </form>
       </div>
 
-      {/* List Column */}
-      <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col self-start">
-        <div className="p-6 border-b border-slate-200">
-          <h3 className="text-md font-bold text-slate-800">รายการบันทึกค่าใช้จ่ายทั้งหมด</h3>
+      {/* ───────── คอลัมน์ขวา: ตารางรายการทั้งหมด ───────── */}
+      <div className="min-w-0 flex flex-col self-start border border-gray-200 bg-white">
+        <div className="flex items-baseline justify-between gap-3 border-b border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-900">รายการบันทึกค่าใช้จ่ายทั้งหมด</h3>
+          {expenses.length > 0 && (
+            <span className="whitespace-nowrap text-xs text-slate-500">หน้า {safePage} / {totalPages}</span>
+          )}
         </div>
 
         <div ref={tableScrollRef} className="overflow-x-auto no-scrollbar">
-          <table className="w-full md:min-w-[720px] text-left border-collapse">
+          <table className="w-full md:min-w-[560px] text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-600 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">
-                <th className="py-3 px-5">วันที่ทำรายการ</th>
-                <th className="py-3 px-5 hidden md:table-cell">หมวดหมู่</th>
-                <th className="py-3 px-5">รายละเอียด</th>
-                <th className="py-3 px-5 hidden md:table-cell">ผู้รับเงิน (โค้ช)</th>
-                <th className="py-3 px-5 text-right">ยอดจ่าย</th>
-                <th className="py-3 px-5 hidden md:table-cell">หลักฐาน</th>
-                <th className="py-3 px-5 text-center">จัดการ</th>
+              <tr className="text-slate-500 text-[11px] font-normal uppercase tracking-[0.12em] border-b border-slate-200">
+                <th className="py-3 px-5 font-normal w-[110px]">วันที่</th>
+                <th className="py-3 px-5 font-normal w-[130px] hidden md:table-cell">ประเภท</th>
+                <th className="py-3 px-5 font-normal">รายละเอียด</th>
+                <th className="py-3 px-5 font-normal text-right w-[110px]">ยอดจ่าย</th>
+                <th className="py-3 px-5 font-normal text-right w-[64px]">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100">
               {expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400">
-                    <p className="text-xs">ยังไม่มีรายการบันทึกค่าใช้จ่ายในขณะนี้</p>
+                  <td colSpan={5} className="py-16 text-center">
+                    <p className="text-xs text-slate-400">ยังไม่มีรายการค่าใช้จ่าย</p>
                   </td>
                 </tr>
               ) : (
@@ -690,52 +643,47 @@ export default function ExpensesTab({
                   else if (exp.expensetype === "advertising") displayName = "ค่าโฆษณา";
                   else if (exp.expensetype === "other") displayName = "อื่นๆ";
 
+                  // ชื่อโค้ชพับรวมในคอลัมน์รายละเอียด (ตาม spec — ตารางไม่มีคอลัมน์ผู้รับเงินแยก)
+                  const coachSuffix = exp.coach ? ` — ${exp.coach.nickname}` : '';
+
                   return (
-                    <tr key={exp.id} className="hover:bg-slate-50/50 text-xs transition-colors">
-                      <td className="py-3.5 px-5 text-slate-550 font-semibold">{exp.expensedate?.split('T')[0]}</td>
-                      <td className="py-3.5 px-5 font-bold text-slate-700 hidden md:table-cell">
-                        <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-[9px] ${
-                          exp.expensetype === 'coach_wages'
-                            ? 'bg-rose-50 text-rose-600 border border-rose-100'
-                            : exp.expensetype === 'coach_other'
-                            ? 'bg-violet-50 text-violet-600 border border-violet-100'
-                            : exp.expensetype === 'court_rental'
-                            ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                            : 'bg-slate-50 text-slate-600 border border-slate-200'
-                        }`}>
-                          {displayName}
+                    <tr key={exp.id} className="hover:bg-slate-50/60 text-xs transition-colors">
+                      <td className="py-[14px] px-5 whitespace-nowrap tabular-nums text-slate-500">{exp.expensedate?.split('T')[0]}</td>
+                      <td className="py-[14px] px-5 text-slate-800 hidden md:table-cell">{displayName}</td>
+                      <td className="py-[14px] px-5 text-slate-600">
+                        <span className="block max-w-xs truncate" title={exp.expensedescription}>
+                          {(exp.expensedescription || "-") + coachSuffix}
                         </span>
-                      </td>
-                      <td className="py-3.5 px-5 text-slate-550 max-w-xs truncate" title={exp.expensedescription}>
-                        {exp.expensedescription || "-"}
-                      </td>
-                      <td className="py-3.5 px-5 font-medium text-slate-800 hidden md:table-cell">
-                        {exp.coach ? `${exp.coach.nickname}` : "-"}
-                      </td>
-                      <td className="py-3.5 px-5 text-right font-bold text-slate-900">
-                        ฿{exp.expenseamount.toLocaleString()}
-                      </td>
-                      <td className="py-3.5 px-5 hidden md:table-cell">
-                        {exp.receipturl ? (
+                        {exp.receipturl && (
                           <button
                             type="button"
                             onClick={() => setReceiptUrl(exp.receipturl)}
-                            className="text-[#CD0D13] hover:underline font-bold text-[10px] flex items-center space-x-0.5 cursor-pointer"
+                            className="mt-0.5 mr-2 text-[11px] font-medium text-[#CD0D13] hover:underline cursor-pointer"
                           >
-                            <span>เปิดดูรูป</span>
+                            ดูหลักฐาน
                           </button>
-                        ) : (
-                          <span className="text-slate-400 text-[10px]">-</span>
                         )}
+                        {(() => {
+                          // แสดงคนล่าสุดที่แตะรายการนี้พอ — แก้ล่าสุดถ้ามี ไม่งั้นก็คนที่บันทึกไว้
+                          const who = exp.updated_by || exp.created_by;
+                          return who ? (
+                            <span className="mt-0.5 block text-[10.5px] text-slate-400">
+                              แก้ไขล่าสุดโดย {who.firstName} {who.lastName}
+                            </span>
+                          ) : null;
+                        })()}
                       </td>
-                      <td className="py-3.5 px-5 text-center">
+                      <td className="py-[14px] px-5 text-right font-medium tabular-nums text-slate-900 whitespace-nowrap">
+                        ฿{exp.expenseamount.toLocaleString()}
+                      </td>
+                      <td className="py-[14px] px-5 text-right">
                         <button
                           type="button"
-                          onClick={() => handleDeleteExpense(exp.id)}
-                          className="p-1.5 rounded-full hover:bg-rose-50 text-slate-405 text-slate-405 hover:text-[#CD0D13] transition-colors cursor-pointer"
-                          title="ลบรายการค่าใช้จ่าย"
+                          onClick={() => setEditingExpense(exp)}
+                          className="text-[12px] font-medium text-[#CD0D13] hover:underline cursor-pointer"
+                          title="แก้ไข / ลบรายการค่าใช้จ่าย"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          แก้ไข
                         </button>
                       </td>
                     </tr>
@@ -746,27 +694,28 @@ export default function ExpensesTab({
           </table>
         </div>
 
-        {/* Pagination controls */}
+        {/* Pagination */}
         {expenses.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 text-xs">
             <span className="text-slate-500">
-              แสดง {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, expenses.length)} จาก {expenses.length} รายการ
+              แสดง {pagedExpenses.length} จาก {expenses.length} รายการ
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title={safePage <= 1 ? 'อยู่หน้าแรกแล้ว' : 'หน้าก่อนหน้า'}
+                className="rounded-lg border border-slate-200 px-3.5 py-[7px] font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
               >
                 ก่อนหน้า
               </button>
-              <span className="text-slate-600 font-semibold whitespace-nowrap">หน้า {safePage}/{totalPages}</span>
               <button
                 type="button"
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title={safePage >= totalPages ? 'อยู่หน้าสุดท้ายแล้ว' : 'หน้าถัดไป'}
+                className="rounded-lg border border-slate-200 px-3.5 py-[7px] font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
               >
                 ถัดไป
               </button>
@@ -777,6 +726,15 @@ export default function ExpensesTab({
 
       {/* ป็อปอัพดูรูปหลักฐาน/ใบเสร็จ — ไม่เปิดแท็บใหม่ */}
       <ImageLightbox url={receiptUrl} onClose={() => setReceiptUrl(null)} alt="หลักฐานการชำระเงิน" />
+
+      {/* modal แก้ไข/ลบรายการค่าใช้จ่าย */}
+      <ExpenseEditModal
+        isOpen={!!editingExpense}
+        expense={editingExpense}
+        onClose={() => setEditingExpense(null)}
+        onSave={handleUpdateExpense}
+        onDelete={handleDeleteExpense}
+      />
     </div>
   );
 }

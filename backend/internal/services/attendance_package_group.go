@@ -205,25 +205,21 @@ func (s *AttendanceService) openSessionForSlot(
 	tx *gorm.DB,
 	packageIDs []uint,
 	dayStart, dayEnd string,
-	startTime, endTime string,
+	startTime string,
 ) (*models.AttendanceSession, error) {
 	if len(packageIDs) == 0 {
 		return nil, nil
 	}
 
-	q := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
-		packageIDs, dayStart, dayEnd)
-
-	if startTime != "" && endTime != "" {
-		q = q.Where(`(
-			COALESCE(schedule_start_time, '') = ''
-			OR COALESCE(schedule_end_time, '') = ''
-			OR (schedule_start_time = ? AND schedule_end_time = ?)
-		)`, startTime, endTime)
-	}
-
 	var existing models.AttendanceSession
-	err := q.Order("id ASC").First(&existing).Error
+	// ใช้เงื่อนไขฝั่ง main — เวลาเริ่มอย่างเดียวพอระบุคาบได้
+	// (แพ็กเกจเดียวกันในวันเดียวกันมีคาบที่เริ่มเวลาเดียวกันสองคาบไม่ได้)
+	// ฝั่งนี้เคยเขียนแบบเทียบทั้ง start และ end ซึ่งให้ผลเหมือนกันแต่ต่างจาก main เปล่า ๆ
+	err := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
+		packageIDs, dayStart, dayEnd).
+		Where("COALESCE(schedule_start_time, '') = '' OR schedule_start_time = ?", startTime).
+		Order("id ASC").
+		First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

@@ -126,12 +126,12 @@ export default function AdminEnrollmentsPage() {
 
   // อนุมัติได้จากในแผงตรวจสอบเท่านั้น เพื่อบังคับให้แอดมินเห็นยอดค้างชำระ
   // ที่นั่งคงเหลือ และคอร์สอื่นที่ผู้สมัครเรียนอยู่ ก่อนตัดสินใจ
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: number, allowOverbook = false) => {
     setProcessingId(id);
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      await approveEnrollment(id, token);
+      await approveEnrollment(id, token, allowOverbook);
       setReviewingId(null);
       alert("อนุมัติสำเร็จ!");
       loadData();
@@ -158,11 +158,24 @@ export default function AdminEnrollmentsPage() {
     }
   };
 
-  const filteredEnrollments = enrollments.filter(e =>
-      e.customer?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.customer?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.package?.course?.course_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  // ไม่ได้ค้นอะไร = เห็นทุกแถว · ของเดิมกรองด้วย || ของค่าที่อาจเป็น undefined
+  // แถวที่ไม่มีทั้งลูกค้าและแพ็กเกจจึงหลุดหายไปเงียบ ๆ แม้ช่องค้นหาจะว่าง
+  const searchKeyword = searchTerm.trim().toLowerCase();
+  const filteredEnrollments = searchKeyword
+    ? enrollments.filter((e) =>
+        [
+          e.customer?.first_name,
+          e.customer?.last_name,
+          e.customer?.nickname,
+          e.customer?.email,
+          e.package?.course?.course_name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(searchKeyword)
+      )
+    : enrollments;
 
   if (isLoading) return <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#CC0000]" /></div>;
   if (error) return <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">{error}</div>;

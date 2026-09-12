@@ -21,8 +21,6 @@ const fmtAmountInt = (n: number) => Math.round(n).toLocaleString("th-TH");
 // เลือกขนาดฟอนต์ตามความยาวตัวเลข กันยอดเงินหลักล้านล้นขอบการ์ด
 const mobileAmountSize = (len: number) =>
   len > 9 ? "text-sm" : len > 6 ? "text-base" : "text-lg";
-const cardAmountSize = (len: number) =>
-  len > 12 ? "text-xl" : len > 9 ? "text-2xl" : "text-2xl sm:text-[28px]";
 
 interface StatCard {
   key: string;
@@ -88,7 +86,7 @@ export default function PaymentStats({
   return (
     <>
       {/* จอเล็ก: ยุบเหลือการ์ดเดียว แบ่ง 3 ช่องแนวนอน ประหยัดพื้นที่ */}
-      <div className="grid grid-cols-3 divide-x divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:hidden">
+      <div className="grid grid-cols-3 divide-x divide-gray-100 overflow-hidden border border-gray-200 bg-white sm:hidden">
         {cards.map((c) => {
           const amt = fmtAmountInt(c.amount);
           return (
@@ -112,47 +110,27 @@ export default function PaymentStats({
         })}
       </div>
 
-      {/* จอ tablet ขึ้นไป: การ์ดแบบเต็มรายละเอียด */}
-      <div className="hidden gap-4 sm:grid sm:grid-cols-3">
-        {cards.map((c) => {
-          const Icon = c.icon;
-          return (
-            <div
-              key={c.key}
-              className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 hover:shadow-md sm:p-5"
-            >
-            {/* แถบ accent สี = เส้นข้างคอร์ต */}
-            <span className={`absolute inset-y-0 left-0 w-1 ${c.accentBar}`} />
-
-            {/* หัวการ์ด: จุดสถานะ + ป้ายกำกับ + ไอคอน */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${c.dot}`} />
-                <span className="text-sm font-bold text-gray-600">{c.label}</span>
-              </div>
-              <Icon className={`h-5 w-5 ${c.iconClass}`} />
+      {/* จอ tablet ขึ้นไป: แถบสถิติ 1px-gutter */}
+      <div className="hidden gap-px border border-gray-200 bg-gray-200 sm:grid sm:grid-cols-3">
+        {cards.map((c) => (
+          <div key={c.key} className="flex flex-col gap-2 bg-white px-5 py-5">
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 ${c.dot}`} />
+              <span className="text-xs font-light text-gray-500">{c.label}</span>
             </div>
-
-            {/* ยอดเงิน */}
-            <div className="mt-5 flex min-w-0 items-baseline gap-1">
-              <span className="text-base font-bold text-gray-400">฿</span>
-              <span className={`font-black leading-none tracking-tight ${cardAmountSize(fmtAmount(c.amount).length)} ${c.amountClass}`}>
-                {fmtAmount(c.amount)}
-              </span>
-            </div>
-
-            {/* ท้ายการ์ด: จำนวนรายการ + ป้ายเตือนเกินกำหนด */}
-            <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-              <span className="text-xs text-gray-500">{c.note}</span>
+            <span className={`text-2xl font-semibold leading-none tabular-nums sm:text-3xl ${c.amountClass}`}>
+              ฿{fmtAmount(c.amount)}
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-light text-gray-400">{c.note}</span>
               {c.badge && (
-                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-[#CC0000]">
+                <span className="border border-red-200 px-2 py-0.5 text-[10px] font-medium text-[#CC0000]">
                   {c.badge}
                 </span>
               )}
             </div>
-            </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </>
   );

@@ -10,11 +10,11 @@ import { homeContentAPI } from "@/services/homeContentAPI";
 import { reviewAPI } from "@/services/reviewAPI";
 import { announcementAPI } from "@/services/announcementAPI";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
-import { groupSchedulesByTime, seatsTotal, priceRange } from "@/components/course/courseUtils";
-import { PublicHome, PublicCoach } from "@/types/homeContent";
+import { priceRange } from "@/components/course/courseUtils";
+import { PublicHome, PublicCoach, FacilityTile } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
-import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images } from "lucide-react";
 
 // โทนสี/ฟอนต์ของดีไซน์ 2b แต่คงโทนสีเดิมของเว็บ (ขาว + แดง #CC0000) และใช้ฟอนต์ Kanit
 const ACCENT = "#CC0000";
@@ -23,17 +23,6 @@ const ACCENT = "#CC0000";
 const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as const;
 
 // ---- ตัวช่วยสรุปข้อมูลแพ็กเกจสำหรับตารางค่าเรียนสไตล์ editorial ----
-
-// ชื่อวัน (อังกฤษจาก backend) → อักษรย่อไทย เช่น Monday → "จ."
-const DAY_SHORT: Record<string, string> = {
-  Monday: "จ.",
-  Tuesday: "อ.",
-  Wednesday: "พ.",
-  Thursday: "พฤ.",
-  Friday: "ศ.",
-  Saturday: "ส.",
-  Sunday: "อา.",
-};
 
 // แพ็กเกจตัวแทนของคอร์ส = ราคาถูกสุดที่ตั้งราคาแล้ว (ถ้าไม่มีก็ใช้ตัวแรก)
 function representativePackage(course: CourseDTO): CoursePackageDTO | null {
@@ -44,24 +33,15 @@ function representativePackage(course: CourseDTO): CoursePackageDTO | null {
   return pool.reduce((min, p) => (p.price < min.price ? p : min), pool[0]);
 }
 
-function sessionsLabel(pkg: CoursePackageDTO): string {
-  return pkg.sessions_count ? `${pkg.sessions_count} ครั้ง` : "รายชม.";
-}
-
-function groupLabel(pkg: CoursePackageDTO): string {
-  const total = seatsTotal(pkg);
-  if (total <= 0) return "—";
-  if (total <= 2) return "ตัวต่อตัว";
-  return `${total} คน`;
-}
-
-function scheduleLabel(pkg: CoursePackageDTO): string {
-  const groups = groupSchedulesByTime(pkg.schedules);
-  if (groups.length === 0) return "ตามนัดหมาย";
-  const g = groups[0];
-  const days = g.days.map((d) => DAY_SHORT[d] ?? d).join(" / ");
-  return `${days} ${g.startTime.slice(0, 5)}`;
-}
+// ช่องภาพในส่วน "สนามและสิ่งอำนวยความสะดวก" (ดีไซน์ 2b — แถบเลื่อนแนวนอน)
+// ยังไม่มีฟิลด์รูปสนามใน CMS จึงเป็น placeholder ตามดีไซน์ รอลูกค้าอัปโหลดภาพจริง
+const FACILITY_TILES: FacilityTile[] = [
+  { label: "คอร์ทหลัก มุมกว้าง", wide: true },
+  { label: "โซนพักผู้ปกครอง" },
+  { label: "ห้องเปลี่ยนเสื้อผ้า" },
+  { label: "อุปกรณ์ฝึกซ้อม" },
+  { label: "ที่จอดรถ" },
+];
 
 // คำถามที่พบบ่อย (static — ไม่มีใน CMS) จัดเป็น accordion
 const FAQ_ITEMS = [
@@ -123,6 +103,9 @@ export default function Home() {
   const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
   // แกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) — เปิดจากปุ่ม "ดูข่าวทั้งหมด"
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  // แกลเลอรีภาพบรรยากาศ (facility) + lightbox รูปเดียวเต็มจอ
+  const [isFacilityOpen, setIsFacilityOpen] = useState(false);
+  const [facilityLightbox, setFacilityLightbox] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<Announcement[]>([]);
   const [isGalleryLoading, setIsGalleryLoading] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น
@@ -193,21 +176,108 @@ export default function Home() {
   const featuredNews = newsWithImage[0] ?? null;
   const secondaryNews = newsWithImage.slice(1, 5);
 
-  // สถิติ — ผสมข้อมูลจริง (จำนวนคอร์ส) กับตัวเลขการตลาดคงที่ตาม mockup
-  const stats = [
-    { value: "12", label: "เหรียญระดับจังหวัด" },
-    { value: "450+", label: "นักเรียนที่ผ่านการฝึก" },
-    { value: courses.length > 0 ? `${courses.length}` : "—", label: "คอร์สที่เปิดสอน" },
-    { value: "7", label: "ปีที่เปิดสอน" },
-  ];
+  // สถิติใต้ hero — ใช้ค่าจาก CMS ถ้าแอดมินตั้งไว้ ไม่งั้น fallback ผสมข้อมูลจริง (จำนวนคอร์ส) ตาม mockup
+  const stats =
+    content?.hero_stats && content.hero_stats.length > 0
+      ? content.hero_stats
+      : [
+          { value: "12", label: "เหรียญระดับจังหวัด" },
+          { value: "450+", label: "นักเรียนที่ผ่านการฝึก" },
+          { value: courses.length > 0 ? `${courses.length}` : "—", label: "คอร์สที่เปิดสอน" },
+          { value: "7", label: "ปีที่เปิดสอน" },
+        ];
 
-  const priceHint = (course: CourseDTO) => {
+  // สถิติส่วนโค้ช — CMS ถ้ามี ไม่งั้น fallback (ช่องแรกใช้จำนวนโค้ชจริง)
+  const coachStats: { value: string; label: string }[] =
+    content?.coach_stats && content.coach_stats.length > 0
+      ? content.coach_stats
+      : [
+          { value: `${coaches.length}`, label: "โค้ชประจำ" },
+          { value: "100%", label: "มีใบรับรอง" },
+          { value: "1 : 4", label: "สัดส่วนโค้ชต่อนักเรียน" },
+        ];
+
+  // ช่องภาพบรรยากาศ — CMS ถ้ามี ไม่งั้น fallback ค่าคงที่
+  const facilityTiles = content?.facility_tiles && content.facility_tiles.length > 0
+    ? content.facility_tiles
+    : FACILITY_TILES;
+
+  // คำถามที่พบบ่อย — CMS ถ้ามี (map เป็น {q,a}) ไม่งั้น fallback ค่าคงที่
+  const faqItems =
+    content?.faq_items && content.faq_items.length > 0
+      ? content.faq_items.map((f) => ({ q: f.question, a: f.answer }))
+      : FAQ_ITEMS;
+
+  const startingPrice = (course: CourseDTO) => {
     const r = priceRange(course.packages);
-    return r ? `${r.min.toLocaleString("th-TH")} บาท` : "สอบถามราคา";
+    return r ? `เริ่มต้น ${r.min.toLocaleString("th-TH")} บาท` : "สอบถามราคา";
   };
 
+  // ระหว่างรอข้อมูลจาก database แสดง skeleton ตามโครงหน้าจริง
+  // ไม่โชว์ค่า fallback พื้นฐานให้เห็นก่อน
+  if (isLoading) {
+    return (
+      <div style={kanitFont} className="min-h-screen animate-pulse bg-white">
+        {/* hero */}
+        <section className="relative h-[60vh] min-h-[380px] w-full overflow-hidden bg-gray-200">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 to-transparent" />
+          <div className="absolute inset-0 mx-auto flex max-w-6xl flex-col justify-center gap-4 px-6 pb-14 md:px-10">
+            <div className="h-3 w-40 rounded bg-gray-300/70" />
+            <div className="h-9 w-3/4 max-w-lg rounded bg-gray-300 md:h-14" />
+            <div className="h-9 w-2/3 max-w-md rounded bg-gray-300 md:h-14" />
+            <div className="mt-2 h-4 w-full max-w-xl rounded bg-gray-300/60" />
+            <div className="h-4 w-1/2 max-w-sm rounded bg-gray-300/60" />
+            <div className="mt-3 flex gap-4">
+              <div className="h-12 w-44 rounded bg-gray-300" />
+              <div className="h-12 w-32 rounded bg-gray-300/60" />
+            </div>
+          </div>
+        </section>
+
+        {/* แถบสถิติ */}
+        <div className="border-b border-gray-200 bg-white">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 md:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-2 border-gray-200 px-5 py-5 [&:not(:nth-child(2n))]:border-r [&:nth-child(-n+2)]:border-b md:border-b-0 md:[&:not(:last-child)]:border-r"
+              >
+                <div className="h-7 w-16 rounded bg-gray-300" />
+                <div className="h-3 w-24 rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* คอร์สเรียน */}
+        <section className="mx-auto max-w-6xl px-6 py-14 md:px-10">
+          <div className="mb-8 h-8 w-56 rounded bg-gray-200" />
+          <div className="flex flex-col">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-4 border-b border-gray-100 py-5"
+              >
+                <div className="flex-1 space-y-2">
+                  <div className="h-5 w-48 rounded bg-gray-300" />
+                  <div className="h-3 w-64 max-w-full rounded bg-gray-200" />
+                </div>
+                <div className="hidden gap-8 md:flex">
+                  <div className="h-4 w-24 rounded bg-gray-200" />
+                  <div className="h-4 w-24 rounded bg-gray-200" />
+                  <div className="h-4 w-20 rounded bg-gray-200" />
+                </div>
+                <div className="h-10 w-28 rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div style={kanitFont} className="min-h-screen bg-white text-gray-900">
+    <div style={kanitFont} className="min-h-screen bg-white pb-20 text-gray-900 lg:pb-0">
 
       {/* ===== HERO ===== สไลด์ CMS + headline ทับบนสไลด์ตรงๆ (สไตล์ 2b) */}
       <section className="w-full">
@@ -222,13 +292,14 @@ export default function Home() {
           <div className="pointer-events-none absolute inset-0 flex items-center">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 pb-14 md:px-10">
               <span className="text-xs font-light tracking-[0.22em] text-white/90">
-                สำหรับผู้ปกครอง · เปิดสอนตั้งแต่ปี 2562
+                {content?.hero_eyebrow || "สำหรับผู้ปกครอง · เปิดสอนตั้งแต่ปี 2562"}
               </span>
-              <h1 className="text-4xl font-semibold leading-[1.15] tracking-tight text-white drop-shadow-md md:text-6xl">
-                พื้นฐานที่ถูกต้อง<br />สำคัญกว่าชนะเร็ว
+              <h1 className="whitespace-pre-line text-4xl font-semibold leading-[1.15] tracking-tight text-white drop-shadow-md md:text-6xl">
+                {content?.hero_headline || "พื้นฐานที่ถูกต้อง\nสำคัญกว่าชนะเร็ว"}
               </h1>
               <p className="max-w-xl text-sm font-light leading-relaxed text-white/85 drop-shadow md:text-base">
-                คลาสเยาวชนกลุ่มเล็ก โค้ชมีใบรับรอง และระบบที่ผู้ปกครองเข้าไปดูตารางเรียน ค่าเรียน และพัฒนาการของลูกได้ทุกเมื่อ
+                {content?.hero_subtext ||
+                  "คลาสเยาวชนกลุ่มเล็ก โค้ชมีใบรับรอง และระบบที่ผู้ปกครองเข้าไปดูตารางเรียน ค่าเรียน และพัฒนาการของลูกได้ทุกเมื่อ"}
               </p>
               <div className="pointer-events-auto flex flex-wrap items-center gap-5 pt-1">
                 <Link
@@ -285,108 +356,317 @@ export default function Home() {
           ) : (
             <div>
               {/* หัวตาราง (เฉพาะจอ md ขึ้นไป) */}
-              <div className="hidden grid-cols-[1.6fr_0.8fr_0.8fr_1fr_1fr_140px] gap-4 border-b border-gray-200 pb-3 text-[11px] font-light tracking-[0.08em] text-gray-400 md:grid">
+              <div className="hidden grid-cols-[1.8fr_1fr_1fr_1fr_150px] gap-4 border-b border-gray-200 pb-3 text-[11px] font-light tracking-[0.08em] text-gray-400 md:grid">
                 <span>คอร์ส</span>
-                <span>ครั้ง</span>
-                <span>กลุ่ม</span>
-                <span>รอบเวลา</span>
-                <span>ค่าเรียน</span>
+                <span>จำนวนครั้ง</span>
+                <span>เวลาเรียน</span>
+                <span>ราคา</span>
                 <span />
               </div>
 
-              {courses.map((course) => {
+              {courses.slice(0, 3).map((course) => {
                 const pkg = representativePackage(course);
+                const sessionsText =
+                  pkg && pkg.sessions_count ? `เริ่มต้น ${pkg.sessions_count} ครั้ง` : "รายชั่วโมง";
+                const hoursText =
+                  pkg && pkg.hours_count ? `เริ่มต้น ${pkg.hours_count} ชั่วโมง` : "—";
+                const priceText = startingPrice(course);
                 return (
                   <div
                     key={course.id}
-                    className="grid grid-cols-1 items-center gap-y-2 border-b border-gray-100 py-5 transition-colors hover:bg-[#CC0000]/[0.03] md:grid-cols-[1.6fr_0.8fr_0.8fr_1fr_1fr_140px] md:gap-4"
+                    className="border-b border-gray-100 py-5 transition-colors hover:bg-[#CC0000]/[0.03]"
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-base font-normal text-gray-900">{course.course_name}</span>
-                      {course.description && (
-                        <span className="line-clamp-1 text-xs font-light text-gray-400">{course.description}</span>
-                      )}
+                    {/* มือถือ: รายละเอียดซ้าย · ราคา+ปุ่มชิดขวา */}
+                    <div className="flex items-start justify-between gap-4 md:hidden">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="text-base font-normal text-gray-900">{course.course_name}</span>
+                        {course.description && (
+                          <span className="line-clamp-2 text-xs font-light text-gray-400">{course.description}</span>
+                        )}
+                        <div className="mt-1 flex flex-col gap-0.5 text-sm font-light text-gray-600">
+                          <span>{sessionsText}</span>
+                          <span>{hoursText}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-none flex-col items-end gap-2">
+                        <span className="whitespace-nowrap text-base font-medium text-gray-900">{priceText}</span>
+                        <Link
+                          href={`/courses/${course.id}`}
+                          className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                        >
+                          เลือกคอร์ส
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </div>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">ครั้ง: </span>
-                      {pkg ? sessionsLabel(pkg) : "—"}
-                    </span>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">กลุ่ม: </span>
-                      {pkg ? groupLabel(pkg) : "—"}
-                    </span>
-                    <span className="text-sm font-light text-gray-600">
-                      <span className="text-gray-400 md:hidden">รอบเวลา: </span>
-                      {pkg ? scheduleLabel(pkg) : "ตามนัดหมาย"}
-                    </span>
-                    <span className="text-base font-medium text-gray-900">{priceHint(course)}</span>
-                    <Link
-                      href={`/courses/${course.id}`}
-                      className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
-                    >
-                      เลือกคอร์ส
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+
+                    {/* จอใหญ่: ตารางแนวนอน */}
+                    <div className="hidden grid-cols-[1.8fr_1fr_1fr_1fr_150px] items-center gap-4 md:grid">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-base font-normal text-gray-900">{course.course_name}</span>
+                        {course.description && (
+                          <span className="line-clamp-1 text-xs font-light text-gray-400">{course.description}</span>
+                        )}
+                      </div>
+                      <span className="text-sm font-light text-gray-600">{sessionsText}</span>
+                      <span className="text-sm font-light text-gray-600">{hoursText}</span>
+                      <span className="text-base font-medium text-gray-900">{priceText}</span>
+                      <Link
+                        href={`/courses/${course.id}`}
+                        className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
+                      >
+                        เลือกคอร์ส
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 );
               })}
+              {courses.length > 3 && (
+                <div className="mt-6 flex justify-center">
+                  <Link
+                    href="/courses"
+                    className="inline-flex items-center gap-1.5 border border-gray-300 px-6 py-3 text-sm font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                  >
+                    ดูคอร์สทั้งหมด ({courses.length})
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              )}
               <p className="mt-4 text-xs font-light text-gray-400">
-                รวมค่าคอร์ทและลูกขนไก่ · ยืมไม้ฟรีตลอดคอร์ส · แบ่งชำระ 2 งวดได้
+                {content?.courses_footnote || "รวมค่าคอร์ทและลูกขนไก่ · ยืมไม้ฟรีตลอดคอร์ส · แบ่งชำระ 2 งวดได้"}
               </p>
             </div>
           )}
         </div>
       </section>
 
-      {/* ===== 02 บุคลากร ===== */}
+      {/* ===== 02 บุคลากร ===== โค้ชคือจุดขายหลัก จึงขยายส่วนนี้: head coach เด่น + แถวโค้ชอื่น + สถิติ */}
       <section id="coaches" className="border-t border-gray-200 bg-gray-50 py-14">
         <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <SectionHeading
-            title={content?.coaches_title || "บุคลากร"}
-            sub={content?.coaches_subtitle ? undefined : "Coaches"}
-          />
-          {content?.coaches_subtitle && (
-            <p className="-mt-4 mb-8 text-sm font-light text-gray-500">{content.coaches_subtitle}</p>
-          )}
-
           {coaches.length === 0 ? (
-            <p className="py-12 text-center font-light text-gray-400">เร็วๆ นี้</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-px bg-gray-200 md:grid-cols-4">
-              {coaches.map((coach) => {
-                // ใช้รูปหน้าแรกที่แอดมินตั้ง ถ้ายังไม่ตั้งค่อย fallback รูปโปรไฟล์โค้ช
-                const img = coach.home_image || coach.profile_picture;
-                const name =
-                  coach.nickname ||
-                  [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
-                  `โค้ช #${coach.id}`;
-                const role = coach.specialization ? `ระดับ ${coach.specialization}` : coach.coach_license || "ผู้ฝึกสอน";
-                return (
-                  <button
-                    key={coach.id}
-                    type="button"
-                    onClick={() => setSelectedCoach(coach)}
-                    className="group flex flex-col bg-gray-50 pb-4 text-left transition-colors hover:bg-white"
-                  >
+            <>
+              <SectionHeading
+                title={content?.coaches_title || "บุคลากร"}
+                sub={content?.coaches_subtitle ? undefined : "Coaches"}
+              />
+              <p className="py-12 text-center font-light text-gray-400">เร็วๆ นี้</p>
+            </>
+          ) : (() => {
+            const head = coaches[0];
+            const others = coaches.slice(1);
+            const headImg = head.home_image || head.profile_picture;
+            const headName =
+              head.nickname ||
+              [head.firstName, head.lastName].filter(Boolean).join(" ") ||
+              `โค้ช #${head.id}`;
+            const headRole =
+              head.specialization ? `หัวหน้าผู้ฝึกสอน · ระดับ ${head.specialization}` : "หัวหน้าผู้ฝึกสอน";
+            // ตาราง label/value ของ head coach — แสดงเฉพาะฟิลด์ที่มีข้อมูลจริง
+            const headDetails = [
+              head.coach_license && { label: "ใบรับรอง", value: head.coach_license },
+              head.specialization && { label: "ความถนัด", value: head.specialization },
+            ].filter(Boolean) as { label: string; value: string }[];
+
+            return (
+              <>
+                {/* แถวหัว: หัวข้อ + lead ซ้าย / กลุ่มสถิติ 3 ช่องขวา */}
+                <div className="mb-8 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+                  <div className="flex flex-col gap-4">
+                    <SectionHeading
+                      title={content?.coaches_title || "โค้ชของเรา"}
+                      sub={content?.coaches_subtitle ? undefined : "Our coaches"}
+                    />
+                    <p className="-mt-4 max-w-[58ch] text-sm font-light leading-relaxed text-gray-500">
+                      {content?.coaches_subtitle ||
+                        "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็กด้วยแผนการฝึกรายบุคคล"}
+                    </p>
+                  </div>
+                  <div className="flex flex-none divide-x divide-gray-200 border-y border-gray-200">
+                    {coachStats.map((s, i) => (
+                      <div key={i} className="flex flex-col gap-1 px-5 py-3">
+                        <span className="text-lg font-medium" style={{ color: ACCENT }}>{s.value}</span>
+                        <span className="text-[11px] font-light leading-snug text-gray-500">{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* บล็อกหลัก: head coach (ซ้าย) + แถวโค้ชอื่น (ขวา) คั่นด้วย gutter 1px */}
+                <div className="grid grid-cols-1 gap-px bg-gray-200 md:grid-cols-[1.25fr_1fr]">
+                  {/* head coach */}
+                  <div className="grid grid-cols-1 gap-6 bg-gray-50 pb-6 sm:grid-cols-[200px_1fr] md:pr-6 md:[grid-template-columns:280px_1fr]">
                     <div className="aspect-[3/4] w-full overflow-hidden bg-gray-100">
-                      {img ? (
+                      {headImg ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={img} alt={name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                        <img src={headImg} alt={headName} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-gray-300">
-                          <UserRound className="h-14 w-14" />
+                          <UserRound className="h-16 w-16" />
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col gap-0.5 px-4 pt-4">
-                      <span className="text-[15px] font-medium text-gray-900">{name}</span>
-                      <span className="text-[11px] font-light text-gray-500">{role}</span>
+                    <div className="flex flex-col gap-3 pt-1 sm:pt-5">
+                      <span className="text-[11px] font-light tracking-[0.18em]" style={{ color: ACCENT }}>
+                        HEAD COACH
+                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-2xl font-medium tracking-tight text-gray-900">{headName}</span>
+                        <span className="text-[13px] font-light text-gray-500">{headRole}</span>
+                      </div>
+                      {head.bio?.trim() && (
+                        <p className="max-w-prose whitespace-pre-line text-[13.5px] font-light leading-relaxed text-gray-600">
+                          {head.bio}
+                        </p>
+                      )}
+                      {headDetails.length > 0 && (
+                        <div className="flex flex-col gap-2 border-t border-gray-200 pt-3">
+                          {headDetails.map((d) => (
+                            <div key={d.label} className="flex gap-4">
+                              <span className="w-[78px] flex-none text-[11.5px] font-light tracking-[0.06em] text-gray-400">
+                                {d.label}
+                              </span>
+                              <span className="text-[13px] font-light text-gray-700">{d.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCoach(head)}
+                        className="mt-2 w-fit border border-gray-300 px-5 py-2.5 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                      >
+                        จองคลาสกับโค้ชคนนี้
+                      </button>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+
+                  {/* โค้ชอื่น */}
+                  <div className="flex flex-col justify-center bg-gray-50 md:pl-6">
+                    {others.length === 0 ? (
+                      <p className="py-8 text-sm font-light text-gray-400">ยังไม่มีโค้ชเพิ่มเติม</p>
+                    ) : (
+                      others.map((coach) => {
+                        const img = coach.home_image || coach.profile_picture;
+                        const name =
+                          coach.nickname ||
+                          [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
+                          `โค้ช #${coach.id}`;
+                        const role = coach.specialization
+                          ? `ระดับ ${coach.specialization}`
+                          : coach.coach_license || "ผู้ฝึกสอน";
+                        return (
+                          <button
+                            key={coach.id}
+                            type="button"
+                            onClick={() => setSelectedCoach(coach)}
+                            className="group flex items-start gap-4 border-b border-gray-200 py-4 text-left last:border-b-0"
+                          >
+                            <div className="aspect-square w-[76px] flex-none overflow-hidden bg-gray-100">
+                              {img ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={img} alt={name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-gray-300">
+                                  <UserRound className="h-8 w-8" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-base font-medium text-gray-900 transition-colors group-hover:text-[#CC0000]">
+                                {name}
+                              </span>
+                              <span className="text-xs font-light" style={{ color: ACCENT }}>{role}</span>
+                              {coach.bio?.trim() && (
+                                <span className="line-clamp-2 text-[12.5px] font-light leading-relaxed text-gray-500">
+                                  {coach.bio}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* แถวปิดท้าย */}
+                <div className="flex flex-col items-start gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-[12.5px] font-light text-gray-400">
+                    {content?.coaches_note || "โค้ชทุกคนผ่านการตรวจประวัติอาชญากรรมและอบรมการปฐมพยาบาลเบื้องต้น"}
+                  </span>
+                  <a
+                    href="#coaches"
+                    className="border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                  >
+                    ดูโค้ชทั้ง {coaches.length} คน
+                  </a>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </section>
+
+      {/* ===== ภาพบรรยากาศ ===== mosaic grid (ดีไซน์ Koyama) — ช่องแรกกว้างและสูง 2 แถว */}
+      <section id="facility" className="border-t border-gray-200 bg-white py-14">
+        <div className="mx-auto max-w-6xl px-6 md:px-10">
+          <SectionHeading
+            title={content?.facility_title || "ภาพบรรยากาศ"}
+            sub={content?.facility_subtitle || "Facility"}
+            right={
+              <button
+                type="button"
+                onClick={() => setIsFacilityOpen(true)}
+                className="whitespace-nowrap border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+              >
+                ดูรูปทั้งหมด
+              </button>
+            }
+          />
+          {/* มือถือ: ช่อง wide เต็มกว้าง ที่เหลือ 2 คอลัมน์ · md ขึ้นไป: 2fr 1fr 1fr สองแถว
+              gutter 1px ใช้ gap-px บนพื้น bg-gray-200 */}
+          <div className="grid auto-rows-[150px] grid-cols-2 gap-px bg-gray-200 md:auto-rows-[170px] md:grid-cols-[2fr_1fr_1fr]">
+            {facilityTiles.map((tile, i) => (
+              <div
+                key={i}
+                className={`relative flex items-end overflow-hidden ${
+                  tile.wide ? "col-span-2 row-span-1 md:col-span-1 md:row-span-2" : ""
+                }`}
+                style={
+                  tile.image_url
+                    ? undefined
+                    : { background: "repeating-linear-gradient(115deg,#efefec 0 10px,#f7f7f4 10px 20px)" }
+                }
+              >
+                {tile.image_url ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={tile.image_url}
+                      alt={tile.label}
+                      loading="lazy"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    {tile.label && (
+                      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/55 to-transparent" />
+                    )}
+                  </>
+                ) : (
+                  <Images className="absolute right-3 top-3 h-5 w-5 text-gray-300" />
+                )}
+                {tile.label && (
+                  <span
+                    className={`relative p-3.5 text-xs font-light ${
+                      tile.image_url ? "text-white" : "text-gray-500"
+                    }`}
+                  >
+                    {tile.label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -511,7 +791,7 @@ export default function Home() {
             </p>
           </div>
           <div className="flex flex-col">
-            {FAQ_ITEMS.map((item, i) => {
+            {faqItems.map((item, i) => {
               const open = openFaq === i;
               return (
                 <div key={i} className="border-b border-gray-200">
@@ -636,43 +916,113 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== CTA ปิดท้าย ===== */}
-      <section className="border-t border-gray-200 bg-white py-14">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-6 md:flex-row md:items-end md:px-10">
-          <h2 className="max-w-md text-3xl font-medium leading-tight tracking-tight text-gray-900 md:text-4xl">
-            พร้อมเริ่มเรียน<br />กับเราแล้วหรือยัง?
-          </h2>
-          <div className="flex items-center gap-5">
-            <span className="text-xs font-light leading-relaxed text-gray-400">
-              ทดลองเรียนฟรี 1 ครั้ง<br />ไม่มีข้อผูกมัด
-            </span>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 px-8 py-4 text-[15px] font-medium text-white transition-colors"
-              style={{ backgroundColor: ACCENT }}
-            >
-              สมัคร / เข้าสู่ระบบ
-              <ArrowUpRight className="h-4 w-4" />
-            </Link>
+      {/* ===== Footer (โครงตามดีไซน์ Koyama · คงธีมเข้ม/แดงเดิม) ===== CTA band → 4 คอลัมน์ → แถบลิขสิทธิ์ */}
+      <footer className="border-t-2 bg-gray-900 text-gray-400" style={{ borderTopColor: ACCENT }}>
+        <div className="mx-auto max-w-6xl px-6 md:px-10">
+          {/* แถบ CTA */}
+          <div className="flex flex-col items-start justify-between gap-8 py-14 md:flex-row md:items-end">
+            <h2 className="max-w-[18ch] whitespace-pre-line text-3xl font-medium leading-[1.15] tracking-tight text-white md:text-[38px]">
+              {content?.footer_cta_title || "พร้อมเริ่มเรียน\nกับเราแล้วหรือยัง?"}
+            </h2>
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-5">
+              <span className="max-w-[24ch] text-xs font-light leading-relaxed text-gray-500">
+                {content?.footer_cta_subtitle || "ทดลองเรียนฟรี 1 ครั้ง ไม่มีข้อผูกมัด · Free trial class"}
+              </span>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center px-7 py-4 text-[15px] font-medium text-white shadow-lg transition-colors hover:brightness-110"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  ทดลองเรียนฟรี
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 border border-gray-600 px-7 py-4 text-[15px] font-light text-gray-200 transition-colors hover:border-white hover:text-white"
+                >
+                  สมัคร / เข้าสู่ระบบ
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
 
-      {/* ===== Footer ===== */}
-      <footer className="bg-gray-900 text-gray-400">
-        <div className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-          <div className="flex flex-col items-start justify-between gap-6 border-b border-gray-800 pb-8 md:flex-row md:items-center">
-            <div>
-              <h3 className="text-lg font-medium text-white">{schoolName}</h3>
-              {content && <SocialLinks content={content} variant="dark" className="mt-4" />}
+          {/* กริด 4 คอลัมน์: แบรนด์ / คอร์สเรียน / โรงเรียน / ติดต่อ */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-10 border-t border-gray-800 py-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            {/* แบรนด์ */}
+            <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
+              <span className="text-lg font-medium text-white">{schoolName}</span>
+              <p className="max-w-[34ch] text-[13px] font-light leading-relaxed text-gray-500">
+                {content?.about_content?.trim() ||
+                  "โรงเรียนสอนแบดมินตันสำหรับเยาวชนและผู้เริ่มต้น เปิดสอนตั้งแต่ปี 2562"}
+              </p>
+              {content && <SocialLinks content={content} variant="dark" className="pt-1" />}
             </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm font-light">
-              <Link href="/#courses" className="transition-colors hover:text-white">คอร์สเรียน</Link>
-              <Link href="/#coaches" className="transition-colors hover:text-white">บุคลากร</Link>
-              <Link href="/#about" className="transition-colors hover:text-white">ติดต่อเรา</Link>
+
+            {/* คอร์สเรียน */}
+            <div className="flex flex-col gap-4">
+              <span className="text-[11px] font-light tracking-[0.18em] text-gray-500">คอร์สเรียน</span>
+              <div className="flex flex-col gap-2.5 text-[13px] font-light">
+                {courses.slice(0, 4).map((course) => (
+                  <Link
+                    key={course.id}
+                    href={`/courses/${course.id}`}
+                    className="transition-colors hover:text-white"
+                  >
+                    {course.course_name}
+                  </Link>
+                ))}
+                <Link href="/#courses" className="transition-colors hover:text-white">
+                  ค่าเรียนและการชำระเงิน
+                </Link>
+              </div>
+            </div>
+
+            {/* โรงเรียน */}
+            <div className="flex flex-col gap-4">
+              <span className="text-[11px] font-light tracking-[0.18em] text-gray-500">โรงเรียน</span>
+              <div className="flex flex-col gap-2.5 text-[13px] font-light">
+                <Link href="/#coaches" className="transition-colors hover:text-white">โค้ชของเรา</Link>
+                <Link href="/#facility" className="transition-colors hover:text-white">ภาพบรรยากาศ</Link>
+                <Link href="/#news" className="transition-colors hover:text-white">ข่าวและประกาศ</Link>
+                <Link href="/#faq" className="transition-colors hover:text-white">คำถามที่พบบ่อย</Link>
+              </div>
+            </div>
+
+            {/* ติดต่อ */}
+            <div className="flex flex-col gap-4">
+              <span className="text-[11px] font-light tracking-[0.18em] text-gray-500">ติดต่อ</span>
+              <div className="flex flex-col gap-2.5 text-[13px] font-light leading-relaxed">
+                {content?.contact_address && (
+                  <span className="whitespace-pre-line">{content.contact_address}</span>
+                )}
+                {content?.contact_phone && (
+                  <a
+                    href={`tel:${content.contact_phone.replace(/[^\d+]/g, "")}`}
+                    className="transition-colors hover:text-white"
+                  >
+                    {content.contact_phone}
+                  </a>
+                )}
+                {content?.line_url && (
+                  <a
+                    href={content.line_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors hover:text-white"
+                  >
+                    LINE
+                  </a>
+                )}
+                {content?.opening_hours && (
+                  <span className="whitespace-pre-line">{content.opening_hours}</span>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex flex-col items-center justify-between gap-3 pt-6 text-xs font-light sm:flex-row">
+
+          {/* แถบลิขสิทธิ์ + เอกสารทางกฎหมาย */}
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-gray-800 py-6 text-xs font-light sm:flex-row">
             <p>
               © {new Date().getFullYear()} <span className="text-gray-200">{schoolName}</span>. สงวนลิขสิทธิ์.
             </p>
@@ -798,8 +1148,117 @@ export default function Home() {
         </div>
       )}
 
+      {/* ===== แกลเลอรีภาพบรรยากาศ (facility) ===== */}
+      {isFacilityOpen &&
+        (() => {
+          const photos = facilityTiles.filter((t) => t.image_url);
+          return (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              onClick={() => setIsFacilityOpen(false)}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <div
+                className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                style={kanitFont}
+              >
+                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {content?.facility_title || "ภาพบรรยากาศ"}
+                  </h3>
+                  <button
+                    onClick={() => setIsFacilityOpen(false)}
+                    className="grid h-9 w-9 place-items-center rounded-full bg-black/5 text-gray-600 transition hover:bg-black/10"
+                    aria-label="ปิด"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto px-5 py-5">
+                  {photos.length === 0 ? (
+                    <p className="py-16 text-center font-light text-gray-400">
+                      ยังไม่มีรูปภาพบรรยากาศ
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                      {photos.map((tile, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setFacilityLightbox(tile.image_url!)}
+                          className="group relative flex aspect-[4/3] overflow-hidden border border-gray-100 bg-gray-100"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={tile.image_url}
+                            alt={tile.label}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          {tile.label && (
+                            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 text-left text-xs font-light text-white">
+                              {tile.label}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* lightbox รูปเดียวเต็มจอ */}
+      {facilityLightbox && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+          onClick={() => setFacilityLightbox(null)}
+        >
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+          <button
+            onClick={() => setFacilityLightbox(null)}
+            className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+            aria-label="ปิด"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={facilityLightbox}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] max-w-[90vw] object-contain"
+          />
+        </div>
+      )}
+
       {/* ===== หน้าต่างอ่านข่าว ===== */}
       {selectedNews && <AnnouncementDetailModal announcement={selectedNews} onClose={() => setSelectedNews(null)} />}
+
+      {/* ===== แถบปุ่มติดด้านล่าง (เฉพาะมือถือ) ===== ทดลองเรียนฟรี + LINE */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2.5 border-t border-gray-200 bg-white px-4 py-3 lg:hidden">
+        <Link
+          href="/login"
+          className="flex min-h-[44px] flex-1 items-center justify-center text-[15px] font-medium text-white transition-colors hover:brightness-110"
+          style={{ backgroundColor: ACCENT }}
+        >
+          ทดลองเรียนฟรี
+        </Link>
+        {content?.line_url && (
+          <a
+            href={content.line_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-[44px] items-center justify-center border border-gray-300 px-5 text-[15px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+          >
+            LINE
+          </a>
+        )}
+      </div>
     </div>
   );
 }

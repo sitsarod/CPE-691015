@@ -31,7 +31,9 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 		return
 	}
 
-	expense, err := ctrl.service.CreateExpense(req)
+	actorID, _, _ := GetAuthContext(c) // แอดมินผู้บันทึก (คนเพิ่ม)
+
+	expense, err := ctrl.service.CreateExpense(req, actorID)
 	if err != nil {
 		mapExpenseError(c, err)
 		return
@@ -39,6 +41,41 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "บันทึกค่าใช้จ่ายสำเร็จ",
+		"data":    dto.ToExpenseDTO(expense),
+	})
+}
+
+func (ctrl *ExpenseController) UpdateExpense(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	var req dto.UpdateExpenseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		return
+	}
+
+	actorID, _, _ := GetAuthContext(c) // แอดมินผู้แก้ไขล่าสุด
+
+	expense, err := ctrl.service.UpdateExpense(uint(id), req, actorID)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrPayrollExceeds),
+			errors.Is(err, services.ErrPayrollNoUnpaid):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrPayrollNeedsCoach):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "แก้ไขค่าใช้จ่ายสำเร็จ",
 		"data":    dto.ToExpenseDTO(expense),
 	})
 }
@@ -150,13 +187,20 @@ func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {
 // ⚠️ หน้าจ่ายค่าจ้างต้องใช้ตัวนี้ ไม่ใช่วนลูปยิง POST /expenses ทีละรายการ
 // การวนลูปทำให้เกิดผลลัพธ์ครึ่ง ๆ เมื่อรายการใดรายการหนึ่งพัง
 func (ctrl *ExpenseController) CreateExpensesBatch(c *gin.Context) {
+	// ต้องรู้ว่าใครทำรายการ — เงินก้อนนี้ต้องตอบได้ย้อนหลังว่าใครสั่งจ่าย
+	actorID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
 	var req dto.CreateExpenseBatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
 		return
 	}
 
-	created, err := ctrl.service.CreateExpenses(req.Items)
+	created, err := ctrl.service.CreateExpenses(req.Items, actorID)
 	if err != nil {
 		mapExpenseError(c, err)
 		return

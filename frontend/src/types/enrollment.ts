@@ -216,8 +216,6 @@ export interface EnrollmentExtension {
   id: number;
   enrollment_id: number;
 
-  extend_days: number;
-  extend_sessions: number;
 
   reason: string;
   previous_expires_at: string | null;
@@ -258,6 +256,8 @@ export interface CreateEnrollmentReq {
 export interface CreateEnrollmentData {
   enrollment_id: number;
   billing_id: number | null;
+  status: string;
+  waitlisted: boolean;
 }
 
 export interface CreateEnrollmentRes {

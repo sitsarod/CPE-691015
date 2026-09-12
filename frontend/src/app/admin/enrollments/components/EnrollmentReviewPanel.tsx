@@ -35,7 +35,7 @@ import {
 interface EnrollmentReviewPanelProps {
   enrollmentId: number | null;
   onClose: () => void;
-  onApprove: (id: number) => Promise<void>;
+  onApprove: (id: number, allowOverbook: boolean) => Promise<void>;
   onReject: (id: number, reason: string) => Promise<void>;
   isApproving: boolean;
   isRejecting: boolean;
@@ -263,9 +263,7 @@ export default function EnrollmentReviewPanel({
                           >
                             <div className="flex justify-between gap-2">
                               <span className="font-semibold text-gray-800">
-                                {ext.extend_days > 0
-                                  ? `+${ext.extend_days} วัน`
-                                  : `ทบ ${ext.carried_over_sessions} ครั้ง`}
+                                ทบ {ext.carried_over_sessions} ครั้ง
                               </span>
                               <span className="text-gray-400">
                                 {formatThaiDate(ext.extended_at)}
@@ -502,16 +500,31 @@ export default function EnrollmentReviewPanel({
               </button>
               <button
                 type="button"
-                onClick={() => onApprove(enrollmentId)}
-                disabled={isApproving || isLoading || !!error || seatsFull}
-                className="flex items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-3 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
+                onClick={() => {
+                  if (seatsFull) {
+                    const expanded = (data?.package.active_count ?? 0) + 1;
+                    const confirmed = window.confirm(
+                      `แพ็กเกจนี้เต็มแล้ว (อนุมัติแล้ว ${data?.package.active_count} จาก ${data?.package.max_seats} ที่)\n\n` +
+                        `อนุมัติใบนี้จะขยายที่นั่งสูงสุดเป็น ${expanded} คนให้อัตโนมัติ\n\n` +
+                        `ยืนยันหรือไม่?`
+                    );
+                    if (!confirmed) return;
+                  }
+                  onApprove(enrollmentId, seatsFull);
+                }}
+                disabled={isApproving || isLoading || !!error}
+                className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1 ${
+                  seatsFull
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : "bg-[#CC0000] hover:bg-red-700"
+                }`}
               >
                 {isApproving ? (
                   <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
                 ) : (
                   <CheckCircle2 className="h-5 w-5 shrink-0" />
                 )}
-                {seatsFull ? "ที่นั่งเต็ม อนุมัติไม่ได้" : "อนุมัติและสร้างบิล"}
+                {seatsFull ? "อนุมัติและขยายที่นั่ง" : "อนุมัติและสร้างบิล"}
               </button>
             </div>
           )}
@@ -528,7 +541,7 @@ function Warnings({ data }: { data: EnrollmentReview }) {
   if (data.package.seats_left <= 0) {
     items.push({
       tone: "danger",
-      text: `ที่นั่งเต็มแล้ว (อนุมัติแล้ว ${data.package.active_count} จาก ${data.package.max_seats} ที่) ต้องขยายจำนวนที่นั่งก่อนจึงจะอนุมัติได้`,
+      text: `ที่นั่งเต็มแล้ว (อนุมัติแล้ว ${data.package.active_count} จาก ${data.package.max_seats} ที่) — อนุมัติได้ แต่ที่นั่งสูงสุดจะถูกขยายเป็น ${data.package.active_count + 1} คน`,
     });
   } else if (data.package.would_exceed_if_all_approved) {
     items.push({

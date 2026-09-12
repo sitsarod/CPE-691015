@@ -43,8 +43,8 @@ func isKnownExpenseType(t models.ExpenseType) bool {
 //
 // เหลือเส้นทางเขียนเส้นเดียวโดยตั้งใจ ด่านตรวจยอดค่าจ้างกับการล็อกแถวโค้ช
 // จึงทำงานเหมือนกันทั้งกรณีบันทึกทีเดียวและบันทึกหลายรายการ
-func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest) (*models.Expense, error) {
-	created, err := s.CreateExpenses([]dto.CreateExpenseRequest{req})
+func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest, actorID uint) (*models.Expense, error) {
+	created, err := s.CreateExpenses([]dto.CreateExpenseRequest{req}, actorID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *ExpenseService) CreateExpense(req dto.CreateExpenseRequest) (*models.Ex
 // ล็อกแถวใน coaches ทำให้การจ่ายเงินของโค้ชคนเดียวกันเข้าคิวกัน
 // (โค้ชคนละคนไม่บล็อกกัน) หลักเดียวกับที่ recordCoachAttendance พึ่ง unique index
 // แทนการ SELECT-แล้ว-INSERT
-func (s *ExpenseService) CreateExpenses(reqs []dto.CreateExpenseRequest) ([]models.Expense, error) {
+func (s *ExpenseService) CreateExpenses(reqs []dto.CreateExpenseRequest, actorID uint) ([]models.Expense, error) {
 	if len(reqs) == 0 {
 		return nil, errors.New("ไม่มีรายการค่าใช้จ่ายที่จะบันทึก")
 	}
@@ -122,6 +122,10 @@ func (s *ExpenseService) CreateExpenses(reqs []dto.CreateExpenseRequest) ([]mode
 				CoachID:     req.CoachID,
 				ReceiptURL:  req.ReceiptURL,
 			}
+			// บันทึกว่าใครเป็นคนทำรายการ — ต้องตอบได้ย้อนหลังว่าเงินก้อนนี้ใครสั่งจ่าย
+			if actorID != 0 {
+				expense.CreatedByID = &actorID
+			}
 			if err := tx.Create(&expense).Error; err != nil {
 				return errors.New("ไม่สามารถบันทึกค่าใช้จ่ายได้")
 			}
@@ -137,6 +141,7 @@ func (s *ExpenseService) CreateExpenses(reqs []dto.CreateExpenseRequest) ([]mode
 	// การแจ้งเตือนล้มเหลวต้องไม่ทำให้การบันทึกที่สำเร็จแล้วถูก rollback
 	for i := range created {
 		if err := s.db.Preload("Coach").Preload("Coach.User").
+			Preload("CreatedBy").Preload("UpdatedBy").
 			First(&created[i], created[i].ID).Error; err != nil {
 			continue
 		}
@@ -254,6 +259,108 @@ func (s *ExpenseService) validateCoachWage(tx *gorm.DB, req dto.CreateExpenseReq
 	return nil
 }
 
+// UpdateExpense แก้ไขรายการค่าใช้จ่ายที่บันทึกไปแล้ว
+//
+// สำหรับ coach_wages: ตรวจว่ายอดใหม่ไม่เกิน "ค้างจ่ายจริง + ยอดเดิมของรายการนี้"
+// (ยอดเดิมถูกนับเป็นจ่ายไปแล้วอยู่ จึงต้องบวกกลับเป็นเพดานที่แก้ได้ ไม่งั้นแก้ยอดตัวเองไม่ได้เลย)
+//
+// ─── สิ่งที่เติมจากฉบับเดิมตอน merge ───
+//
+//   - ครอบทรานแซกชันเดียว + ล็อกแถวโค้ช — การแก้ยอดก็เป็น "อ่านแล้วเขียน" เหมือนการสร้าง
+//     สองคนแก้พร้อมกันจะผ่านเพดานทั้งคู่ (เหตุผลเดียวกับ CreateExpenses)
+//   - ตรวจ type ที่ระบบไม่รู้จัก — ไม่งั้นแก้ type เป็นค่าอื่นแล้วข้ามด่านเพดานได้
+//   - คิดยอดค้าง ณ "งวดของรายการ" (expense.Date) ไม่ใช่วันนี้ — โค้ชรายเดือน
+//     นับยอดค้างเป็นรายเดือน ถ้าใช้วันนี้จะเทียบผิดงวด (ดู validateCoachWage)
+func (s *ExpenseService) UpdateExpense(id uint, req dto.UpdateExpenseRequest, actorID uint) (*models.Expense, error) {
+	var expense models.Expense
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&expense, id).Error; err != nil {
+			return errors.New("ไม่พบข้อมูลค่าใช้จ่าย")
+		}
+
+		prevAmount := expense.Amount
+
+		// รวมค่าที่แก้เข้ากับของเดิมเพื่อได้สถานะสุดท้าย แล้วค่อยตรวจกฎ
+		if req.Amount != nil {
+			expense.Amount = *req.Amount
+		}
+		if req.Type != nil {
+			expense.Type = *req.Type
+		}
+		if req.Description != nil {
+			expense.Description = *req.Description
+		}
+		if req.Date != nil {
+			expense.Date = *req.Date
+		}
+		if req.ReceiptURL != nil {
+			expense.ReceiptURL = *req.ReceiptURL
+		}
+		if req.CoachID != nil {
+			expense.CoachID = req.CoachID
+		}
+
+		if expense.Amount <= 0 {
+			return errors.New("จำนวนเงินต้องมากกว่า 0")
+		}
+		if !isKnownExpenseType(expense.Type) {
+			return fmt.Errorf("%w (%q)", ErrExpenseUnknownType, expense.Type)
+		}
+
+		if expense.CoachID != nil {
+			var coach models.Coach
+			if err := tx.First(&coach, *expense.CoachID).Error; err != nil {
+				return errors.New("ไม่พบข้อมูลโค้ชที่ระบุ")
+			}
+		}
+
+		// ตรวจเพดานค่าจ้างเฉพาะ coach_wages (เพดาน = ค้างจ่าย + ยอดเดิม)
+		if expense.Type == models.ExpenseTypeCoach {
+			if expense.CoachID == nil || *expense.CoachID == 0 {
+				return ErrPayrollNeedsCoach
+			}
+			if err := lockCoachRow(tx, *expense.CoachID); err != nil {
+				return err
+			}
+
+			asOf := expense.Date
+			if asOf.IsZero() {
+				asOf = time.Now()
+			}
+			payroll, err := ComputeCoachPayroll(tx, *expense.CoachID, asOf)
+			if err != nil {
+				return err
+			}
+
+			ceiling := payroll.Unpaid + prevAmount
+			if expense.Amount > ceiling+payrollEpsilon {
+				return fmt.Errorf("%w (แก้ได้ไม่เกิน %.2f บาท แต่กรอกมา %.2f บาท)",
+					ErrPayrollExceeds, ceiling, expense.Amount)
+			}
+		}
+
+		if actorID != 0 {
+			expense.UpdatedByID = &actorID
+		}
+
+		if err := tx.Save(&expense).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกการแก้ไขค่าใช้จ่ายได้")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Preload("Coach").Preload("Coach.User").
+		Preload("CreatedBy").Preload("UpdatedBy").
+		First(&expense, expense.ID).Error; err != nil {
+		return nil, err
+	}
+	return &expense, nil
+}
+
 // GetCoachPayroll คืนยอดค่าจ้างที่ backend คำนวณให้ — หน้าเว็บใช้ตัวนี้แทนการคิดเอง
 //
 // coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน (กัน IDOR เหมือน endpoint อื่นของ coach)
@@ -266,7 +373,9 @@ func (s *ExpenseService) GetCoachPayroll(coachID uint, userID uint, role string)
 
 func (s *ExpenseService) GetAllExpenses() ([]models.Expense, error) {
 	var expenses []models.Expense
-	if err := s.db.Preload("Coach").Preload("Coach.User").Order("date DESC, id DESC").Find(&expenses).Error; err != nil {
+	if err := s.db.Preload("Coach").Preload("Coach.User").
+		Preload("CreatedBy").Preload("UpdatedBy").
+		Order("date DESC, id DESC").Find(&expenses).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงข้อมูลค่าใช้จ่ายได้")
 	}
 	return expenses, nil

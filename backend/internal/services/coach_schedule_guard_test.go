@@ -294,7 +294,7 @@ func TestOpenSessionForSlotSeparatesTimeSlots(t *testing.T) {
 	db.Exec(`UPDATE attendance_sessions SET session_date = ? WHERE id = ?`, day, afternoon.ID)
 
 	// ถามหารอบของคาบบ่าย → ต้องเจอ
-	got, err := svc.openSessionForSlot(db, []uint{pkgID}, dayStart, dayEnd, "14:00", "16:00")
+	got, err := svc.openSessionForSlot(db, []uint{pkgID}, dayStart, dayEnd, "14:00")
 	if err != nil {
 		t.Fatalf("หารอบคาบบ่ายไม่สำเร็จ: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestOpenSessionForSlotSeparatesTimeSlots(t *testing.T) {
 	}
 
 	// ถามหารอบของคาบเช้า → ต้องไม่เจอ (ยังไม่เคยเปิด)
-	got, err = svc.openSessionForSlot(db, []uint{pkgID}, dayStart, dayEnd, "10:00", "12:00")
+	got, err = svc.openSessionForSlot(db, []uint{pkgID}, dayStart, dayEnd, "10:00")
 	if err != nil {
 		t.Fatalf("หารอบคาบเช้าไม่สำเร็จ: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestOpenSessionForSlotFallsBackForLegacySessions(t *testing.T) {
 	mustCreate(t, db, &legacy)
 	db.Exec(`UPDATE attendance_sessions SET session_date = ? WHERE id = ?`, day, legacy.ID)
 
-	got, err := svc.openSessionForSlot(db, []uint{pkgID}, day, "2026-01-11", "10:00", "12:00")
+	got, err := svc.openSessionForSlot(db, []uint{pkgID}, day, "2026-01-11", "10:00")
 	if err != nil {
 		t.Fatalf("หารอบรุ่นเก่าไม่สำเร็จ: %v", err)
 	}

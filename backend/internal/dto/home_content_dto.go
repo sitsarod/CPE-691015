@@ -26,6 +26,25 @@ type PublicCoachDTO struct {
 	FeatureOnHome  bool   `json:"feature_on_home"`
 }
 
+// StatItem หนึ่งช่องสถิติ (ใช้ทั้งสถิติใต้ hero และสถิติส่วนโค้ช)
+type StatItem struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// FacilityTileItem หนึ่งช่องภาพในส่วนภาพบรรยากาศ (wide = ช่องกว้าง/สูง 2 แถวใน mosaic)
+type FacilityTileItem struct {
+	Label    string `json:"label"`
+	Wide     bool   `json:"wide"`
+	ImageURL string `json:"image_url"` // รูปจริงของช่อง (ว่าง = แสดง placeholder)
+}
+
+// FaqItem หนึ่งข้อคำถามที่พบบ่อย
+type FaqItem struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
 // HomeContentDTO เนื้อหาหน้าแรกทั้งหมด (ส่วน content แบบ singleton)
 type HomeContentDTO struct {
 	ID                  uint      `json:"id"`
@@ -52,7 +71,25 @@ type HomeContentDTO struct {
 	OpeningHours        string    `json:"opening_hours"`
 	PrivacyPolicy       string    `json:"privacy_policy"`
 	TermsOfService      string    `json:"terms_of_service"`
-	UpdatedAt           time.Time `json:"updated_at"`
+
+	// เนื้อหาหลักหน้าแรก
+	HeroEyebrow       string `json:"hero_eyebrow"`
+	HeroHeadline      string `json:"hero_headline"`
+	HeroSubtext       string `json:"hero_subtext"`
+	CoursesFootnote   string `json:"courses_footnote"`
+	CoachesNote       string `json:"coaches_note"`
+	FacilityTitle     string `json:"facility_title"`
+	FacilitySubtitle  string `json:"facility_subtitle"`
+	FooterCtaTitle    string `json:"footer_cta_title"`
+	FooterCtaSubtitle string `json:"footer_cta_subtitle"`
+
+	// ข้อมูลชุดซ้ำ (แปลงจาก JSON ในฐานข้อมูลเป็น slice)
+	HeroStats     []StatItem         `json:"hero_stats"`
+	CoachStats    []StatItem         `json:"coach_stats"`
+	FacilityTiles []FacilityTileItem `json:"facility_tiles"`
+	FaqItems      []FaqItem          `json:"faq_items"`
+
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // PublicHomeDTO ก้อนข้อมูลรวมที่หน้าแรกสาธารณะดึงไปแสดงในครั้งเดียว
@@ -88,6 +125,23 @@ type UpdateHomeContentReq struct {
 	OpeningHours        *string `json:"opening_hours"`
 	PrivacyPolicy       *string `json:"privacy_policy"`
 	TermsOfService      *string `json:"terms_of_service"`
+
+	// เนื้อหาหลักหน้าแรก
+	HeroEyebrow       *string `json:"hero_eyebrow"`
+	HeroHeadline      *string `json:"hero_headline"`
+	HeroSubtext       *string `json:"hero_subtext"`
+	CoursesFootnote   *string `json:"courses_footnote"`
+	CoachesNote       *string `json:"coaches_note"`
+	FacilityTitle     *string `json:"facility_title"`
+	FacilitySubtitle  *string `json:"facility_subtitle"`
+	FooterCtaTitle    *string `json:"footer_cta_title"`
+	FooterCtaSubtitle *string `json:"footer_cta_subtitle"`
+
+	// ข้อมูลชุดซ้ำ (nil = ไม่แก้; ส่ง [] = ล้างเป็นว่าง)
+	HeroStats     *[]StatItem         `json:"hero_stats"`
+	CoachStats    *[]StatItem         `json:"coach_stats"`
+	FacilityTiles *[]FacilityTileItem `json:"facility_tiles"`
+	FaqItems      *[]FaqItem          `json:"faq_items"`
 }
 
 // CreateHeroSlideReq เพิ่มรูปสไลด์ใหม่

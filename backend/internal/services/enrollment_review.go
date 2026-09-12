@@ -17,14 +17,19 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 
 	var enrollment models.Enrollment
 	err := s.db.
-		Preload("Customer").
-		Preload("Customer.User").
-		Preload("Package").
-		Preload("Package.Course").
+		Preload("Customer", withDeleted).
+		Preload("Customer.User", withDeleted).
+		Preload("Package", withDeleted).
+		Preload("Package.Course", withDeleted).
 		Preload("Package.Schedules").
 		First(&enrollment, enrollmentID).Error
 	if err != nil {
 		return nil, ErrEnrollmentNotFound
+	}
+
+	carried, err := carriedOverEnrollmentIDs(s.db, []uint{enrollment.ID})
+	if err != nil {
+		return nil, err
 	}
 
 	result := &dto.EnrollmentReviewDTO{
@@ -40,7 +45,8 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			ExpiresAt:         enrollment.ExpiresAt,
 			DaysLeft:          dto.DaysLeft(enrollment.ExpiresAt),
 			GraceDaysLeft: dto.GraceDaysLeft(
-				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions),
+				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions,
+				carried[enrollment.ID]),
 			RejectedReason: enrollment.RejectedReason,
 			RejectedAt:     enrollment.RejectedAt,
 		},
@@ -205,8 +211,8 @@ func (s *EnrollmentService) summarizeBillings(userID uint) (*dto.ReviewFinanceIn
 func (s *EnrollmentService) otherEnrollments(customerID uint, excludeID uint) ([]dto.ReviewOtherEnrollment, error) {
 	var enrollments []models.Enrollment
 	err := s.db.
-		Preload("Package").
-		Preload("Package.Course").
+		Preload("Package", withDeleted).
+		Preload("Package.Course", withDeleted).
 		Where("customer_id = ? AND id <> ?", customerID, excludeID).
 		Order("enrollment_date DESC").
 		Find(&enrollments).Error

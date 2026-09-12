@@ -515,8 +515,9 @@ func (s *AttendanceService) UpdateCoachAttendanceStatus(
 // เพื่อให้สองลิสต์ครอบคลุมช่วงเดียวกันเสมอ แล้วหน้าเว็บเอาไปรวมเข้ารอบด้วย session_id
 func (s *AttendanceService) GetCoachHistory(courseID uint, date string) ([]dto.CoachHistoryItemDTO, error) {
 	query := s.db.Model(&models.CoachAttendance{}).
-		Limit(maxHistoryRows).
-		Preload("Coach.User").
+		Limit(MaxHistoryRows).
+		Preload("Coach", withDeleted).
+		Preload("Coach.User", withDeleted).
 		Order("check_in_time DESC")
 
 	if date != "" {

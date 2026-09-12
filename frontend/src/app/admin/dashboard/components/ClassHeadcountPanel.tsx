@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarCheck, ChevronRight, Loader2, Lock, RefreshCw } from "lucide-react";
+import { ChevronRight, Loader2, Lock, RefreshCw } from "lucide-react";
 
 import { fetchClassHeadcounts } from "@/services/classConfirmationAPI";
 import type { ClassHeadcount } from "@/types/classConfirmation";
 import { dayLabel } from "@/components/course/courseUtils";
 import ClassRosterModal, { type ClassRosterTarget } from "./ClassRosterModal";
+import { SectionHeader } from "./dashParts";
 
 /** ยอดคนที่ยืนยันจะมาเรียนในแต่ละคาบของวันนี้ */
 
@@ -58,25 +59,22 @@ export default function ClassHeadcountPanel() {
   }
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        {/* ⚠️ ไอคอนต้องอยู่นอก <h2> — ถ้าอยู่ข้างในจะกลายเป็น flex ซ้อน flex
-            แล้ว baseline ของ <h2> มาจากไอคอน SVG ทำให้วันที่ข้าง ๆ ตกต่ำกว่าหัวข้อ */}
-        <div className="flex flex-wrap items-baseline gap-2">
-          <CalendarCheck className="h-5 w-5 self-center text-[#CC0000]" />
-          <h2 className="text-lg font-bold text-gray-900">ยอดคนมาเรียนวันนี้</h2>
-          {header && <span className="text-sm text-gray-500">{header}</span>}
-        </div>
-        <button
-          type="button"
-          onClick={load}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          รีเฟรช
-        </button>
-      </div>
+    <section>
+      <SectionHeader
+        title="ยอดคนมาเรียนวันนี้"
+        meta={header ?? undefined}
+        right={
+          <button
+            type="button"
+            onClick={load}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            รีเฟรช
+          </button>
+        }
+      />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -109,11 +107,11 @@ export default function ClassHeadcountPanel() {
                 คอลัมน์ตัวเลขจึงตรงแนวกันทุกคอร์ส ต่างจากแยกเป็นตารางย่อย */}
             {courses.map((g) => (
               <tbody key={g.courseId} className="border-b border-gray-200 last:border-0">
-                <tr className="bg-red-50">
+                <tr>
                   <th
                     colSpan={3}
                     scope="colgroup"
-                    className="px-3 py-2 text-left text-sm font-bold text-[#CC0000]"
+                    className="px-3 py-2.5 text-left text-sm font-medium text-[#CC0000]"
                   >
                     {g.courseName}
                   </th>
@@ -123,17 +121,25 @@ export default function ClassHeadcountPanel() {
                   // กดที่แถวเพื่อดูรายชื่อ — <tr> ไม่ใช่ปุ่ม จึงต้องใส่ tabIndex
                   // กับ onKeyDown เอง ไม่งั้นคนที่ใช้คีย์บอร์ดโฟกัสไม่ได้เลย
                   <tr
-                    key={`${r.package_id}-${r.class_date}`}
+                    key={`${r.package_id}-${r.class_date}-${r.start_time}`}
                     role="button"
                     tabIndex={0}
                     aria-label={`ดูรายชื่อ ${g.courseName} ${r.start_time}–${r.end_time}`}
                     onClick={() =>
-                      setTarget({ packageId: r.package_id, classDate: r.class_date })
+                      setTarget({
+                        packageId: r.package_id,
+                        classDate: r.class_date,
+                        startTime: r.start_time,
+                      })
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setTarget({ packageId: r.package_id, classDate: r.class_date });
+                        setTarget({
+                          packageId: r.package_id,
+                          classDate: r.class_date,
+                          startTime: r.start_time,
+                        });
                       }
                     }}
                     className="cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50 focus:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#CC0000]"
@@ -155,10 +161,10 @@ export default function ClassHeadcountPanel() {
                         ทั้งหมด {r.total} คน
                       </span>
                     </td>
-                    <td className="px-2 text-center font-bold text-green-700 tabular-nums">
+                    <td className="px-2 text-center text-lg font-semibold text-emerald-600 tabular-nums">
                       {r.going}
                     </td>
-                    <td className="pl-2 text-center font-bold text-amber-600 tabular-nums">
+                    <td className="pl-2 text-center text-lg font-semibold text-amber-600 tabular-nums">
                       {r.pending}
                     </td>
                   </tr>

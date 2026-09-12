@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -90,8 +91,9 @@ func (s *AttendanceService) ListMissedClasses() ([]dto.MissedClassDTO, error) {
 
 	var rows []models.WorkSchedule
 	if err := unresolvedScheduleScope(s.db, todayStr).
-		Preload("Coach.User").
-		Preload("Course").
+		Preload("Coach", withDeleted).
+		Preload("Coach.User", withDeleted).
+		Preload("Course", withDeleted).
 		Order("work_schedules.date DESC, work_schedules.start_time ASC, work_schedules.id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงรายการคาบที่ยังไม่มีรอบเช็คชื่อได้")
@@ -106,6 +108,7 @@ func (s *AttendanceService) ListMissedClasses() ([]dto.MissedClassDTO, error) {
 	groups := make(map[slotKey]*dto.MissedClassDTO)
 	order := make([]slotKey, 0, len(rows))
 	seen := make(map[slotKey]map[uint]bool)
+	anchor := make(map[slotKey]*models.WorkSchedule)
 
 	for i := range rows {
 		w := &rows[i]
@@ -126,6 +129,7 @@ func (s *AttendanceService) ListMissedClasses() ([]dto.MissedClassDTO, error) {
 			}
 			groups[key] = item
 			seen[key] = make(map[uint]bool)
+			anchor[key] = w
 			order = append(order, key)
 		}
 
@@ -146,9 +150,52 @@ func (s *AttendanceService) ListMissedClasses() ([]dto.MissedClassDTO, error) {
 
 	result := make([]dto.MissedClassDTO, 0, len(order))
 	for _, key := range order {
+		groups[key].Students = s.confirmedStudentsForSlot(anchor[key], key.date)
 		result = append(result, *groups[key])
 	}
 	return result, nil
+}
+
+// confirmedStudentsForSlot คืนนักเรียนที่ยืนยันว่าจะมาเรียนคาบนี้
+//
+// ⚠️ ไม่กรองสถานะใบลงทะเบียน ต่างจาก confirmedCustomers ที่ใช้ตอนเช็คชื่อสด
+// คาบพวกนี้ผ่านไปแล้ว ใบที่หมดอายุทีหลังก็ยังเป็นคนที่ควรมาเรียนวันนั้นอยู่ดี
+func (s *AttendanceService) confirmedStudentsForSlot(ws *models.WorkSchedule, date string) []dto.MissedClassStudentDTO {
+	out := []dto.MissedClassStudentDTO{}
+	if ws == nil || ws.PackageID == nil {
+		return out
+	}
+
+	day, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return out
+	}
+
+	pkgIDs := s.slotPackageIDs(s.db, ws, day.Weekday().String())
+	if len(pkgIDs) == 0 {
+		return out
+	}
+
+	var rows []dto.MissedClassStudentDTO
+	if err := s.db.Raw(`
+		SELECT DISTINCT c.id AS customer_id,
+		       c.nickname,
+		       TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS full_name
+		FROM class_confirmations cc
+		JOIN enrollments e ON e.id = cc.enrollment_id AND e.deleted_at IS NULL
+		JOIN customers   c ON c.id = e.customer_id
+		LEFT JOIN users  u ON u.id = c.user_id
+		WHERE cc.deleted_at IS NULL
+		  AND cc.status = ?
+		  AND cc.class_date = ?::date
+		  AND cc.schedule_start_time = ?
+		  AND e.package_id IN ?
+		ORDER BY c.nickname
+	`, models.ClassConfirmationGoing, date, ws.StartTime, pkgIDs).Scan(&rows).Error; err != nil {
+		log.Printf("[attendance] ดึงรายชื่อนักเรียนของคาบค้างไม่สำเร็จ: %v", err)
+		return out
+	}
+	return rows
 }
 
 type coachDecision struct {
@@ -379,6 +426,25 @@ func (s *AttendanceService) classSessionExists(
 		return false, errors.New("ไม่สามารถตรวจรอบเช็คชื่อที่มีอยู่ได้")
 	}
 	return n > 0, nil
+}
+
+// slotPackageIDs คืนแพ็กเกจทั้งหมดของคลาสนี้ อย่างน้อยต้องมีของตารางงานเองเสมอ
+//
+// ⚠️ ใช้สำหรับ "ดึงข้อมูลประกอบ" เท่านั้น (เช่น รายชื่อนักเรียนที่ยืนยันมาเรียน)
+// ห้ามเอาไปใช้ตัดสินว่าคาบนี้มีรอบเช็คชื่อแล้วหรือยัง — เรื่องนั้นมีนิยามชุดเดียว
+// คือ classSessionForScheduleSQL (ดู classSessionExists) เคยมีชุดที่สองตรงนี้
+// แล้วทำให้รายการกับปุ่มยืนยันพูดสวนกันจนกดเคลียร์ไม่ได้
+func (s *AttendanceService) slotPackageIDs(tx *gorm.DB, ws *models.WorkSchedule, weekday string) []uint {
+	ids, err := classPackageIDs(tx, ws.CourseID, weekday, ws.StartTime, ws.EndTime)
+	if err != nil {
+		ids = nil
+	}
+	for _, id := range ids {
+		if id == *ws.PackageID {
+			return ids
+		}
+	}
+	return append(ids, *ws.PackageID)
 }
 
 // assertNoExistingSession กันเคลียร์ทับรอบที่มีอยู่แล้ว

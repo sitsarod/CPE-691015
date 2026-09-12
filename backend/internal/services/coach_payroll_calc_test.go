@@ -103,7 +103,7 @@ func payWage(db *gorm.DB, amount float64) error {
 		Type:    models.ExpenseTypeCoach,
 		Date:    time.Now(),
 		CoachID: &coachID,
-	})
+	}, 0)
 	return err
 }
 
@@ -244,7 +244,7 @@ func TestCreateExpenseDoesNotValidateOtherTypes(t *testing.T) {
 		Type:    models.ExpenseTypeCoachOther,
 		Date:    time.Now(),
 		CoachID: &coachID,
-	}); err != nil {
+	}, 0); err != nil {
 		t.Fatalf("โบนัสไม่ควรถูกด่านค่าจ้างบล็อก แต่ได้ error: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func TestCreateExpenseWageRequiresCoach(t *testing.T) {
 		Amount: 300,
 		Type:   models.ExpenseTypeCoach,
 		Date:   time.Now(),
-	})
+	}, 0)
 	if !errors.Is(err, ErrPayrollNeedsCoach) {
 		t.Fatalf("ค่าจ้างโค้ชที่ไม่ระบุโค้ชต้องถูกปฏิเสธ แต่ได้ error: %v", err)
 	}

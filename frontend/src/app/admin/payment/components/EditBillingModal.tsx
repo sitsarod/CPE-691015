@@ -79,7 +79,7 @@ export default function EditBillingModal({
             <select
               value={form.billingtype_id}
               onChange={(e) => setForm(prev => ({ ...prev, billingtype_id: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800 font-medium"
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800 font-medium"
               required
             >
               <option value="">-- เลือกประเภทค่าใช้จ่าย --</option>
@@ -95,7 +95,7 @@ export default function EditBillingModal({
               type="text"
               value={form.billingdescription}
               onChange={(e) => setForm(prev => ({ ...prev, billingdescription: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
               required
             />
           </div>
@@ -107,7 +107,7 @@ export default function EditBillingModal({
               step="0.01"
               value={form.billingamount}
               onChange={(e) => setForm(prev => ({ ...prev, billingamount: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
               required
             />
           </div>
@@ -118,7 +118,7 @@ export default function EditBillingModal({
               type="date"
               value={form.billingdue_date}
               onChange={(e) => setForm(prev => ({ ...prev, billingdue_date: e.target.value }))}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white text-slate-800"
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
               required
             />
           </div>

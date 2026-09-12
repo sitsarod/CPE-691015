@@ -38,6 +38,7 @@ func mapAttendanceError(c *gin.Context, err error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrInvalidStatus),
+		errors.Is(err, services.ErrInvalidDateFormat),
 		errors.Is(err, services.ErrMissedClassCoachSet),
 		errors.Is(err, services.ErrMissedClassLegacy),
 		errors.Is(err, services.ErrScheduleInvalid):
@@ -446,10 +447,13 @@ func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 
 	items, err := ctrl.service.GetHistory(courseID, c.Query("date"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	c.JSON(http.StatusOK, gin.H{
+		"data":      items,
+		"truncated": len(items) >= services.MaxHistoryRows,
+	})
 }
 
 // GetCoachHistory [GET] /api/attendance/coach-history — ประวัติเข้าสอนของโค้ช
@@ -469,10 +473,13 @@ func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
 
 	items, err := ctrl.service.GetCoachHistory(courseID, c.Query("date"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	c.JSON(http.StatusOK, gin.H{
+		"data":      items,
+		"truncated": len(items) >= services.MaxHistoryRows,
+	})
 }
 
 // ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────

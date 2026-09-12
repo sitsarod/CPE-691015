@@ -133,7 +133,7 @@ func (ctrl *ClassConfirmationController) GetHeadcounts(c *gin.Context) {
 
 // GetClassRoster คืนรายชื่อนักเรียนของคาบหนึ่ง แบ่งเป็น มา / ยังไม่ตอบ
 //
-// [GET] /api/admin/class-confirmations/roster?package_id=1&date=2026-08-31
+// [GET] /api/admin/class-confirmations/roster?package_id=1&date=2026-08-31&start_time=18:00
 // ใช้ query เพราะคาบระบุด้วยสองค่าคู่กัน ไม่ใช่ทรัพยากรที่มี id เดี่ยว ๆ
 func (ctrl *ClassConfirmationController) GetClassRoster(c *gin.Context) {
 	packageID, err := strconv.ParseUint(c.Query("package_id"), 10, 32)
@@ -148,7 +148,13 @@ func (ctrl *ClassConfirmationController) GetClassRoster(c *gin.Context) {
 		return
 	}
 
-	roster, err := ctrl.service.GetClassRoster(uint(packageID), date)
+	startTime := c.Query("start_time")
+	if startTime == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเวลาเริ่มคาบ (start_time=HH:MM)"})
+		return
+	}
+
+	roster, err := ctrl.service.GetClassRoster(uint(packageID), date, startTime)
 	if err != nil {
 		mapConfirmError(c, err)
 		return

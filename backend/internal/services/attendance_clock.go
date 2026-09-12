@@ -44,6 +44,20 @@ func nowLocal() time.Time {
 	return time.Now().In(appLocation())
 }
 
+// startOfLocalDay คืนเที่ยงคืนต้นวันของ t ตามนาฬิกาที่สนาม
+func startOfLocalDay(t time.Time) time.Time {
+	loc := appLocation()
+	y, m, d := t.In(loc).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+}
+
+// endOfLocalDay คืนวินาทีสุดท้ายของวันของ t ตามนาฬิกาที่สนาม
+func endOfLocalDay(t time.Time) time.Time {
+	loc := appLocation()
+	y, m, d := t.In(loc).Date()
+	return time.Date(y, m, d, 23, 59, 59, 0, loc)
+}
+
 // localDayRange แปลง "YYYY-MM-DD" เป็นช่วงของวันนั้นตามนาฬิกาที่สนาม แบบ [from, to)
 //
 // ⚠️ ต้องใช้ ParseInLocation ไม่ใช่ time.Parse

@@ -34,6 +34,7 @@ type UpcomingClassDTO struct {
 type ConfirmClassReq struct {
 	EnrollmentID uint   `json:"enrollment_id" binding:"required"`
 	ClassDate    string `json:"class_date" binding:"required"` // 2006-01-02
+	StartTime    string `json:"start_time" binding:"required"` // 18:00
 	Status       string `json:"status" binding:"required,oneof=going"`
 }
 
@@ -41,6 +42,7 @@ type ConfirmClassReq struct {
 type CancelClassReq struct {
 	EnrollmentID uint   `json:"enrollment_id" binding:"required"`
 	ClassDate    string `json:"class_date" binding:"required"` // 2006-01-02
+	StartTime    string `json:"start_time" binding:"required"` // 18:00
 }
 
 // ClassHeadcountDTO คือยอดสรุปของคาบหนึ่งคาบที่แอดมินใช้ตัดสินใจจองสนาม

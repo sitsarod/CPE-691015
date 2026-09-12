@@ -38,6 +38,7 @@ func mapEnrollmentError(c *gin.Context, err error) {
 
 	// สถานะไม่เอื้อให้ทำตอนนี้ — ยิงซ้ำก็ไม่ช่วย
 	case errors.Is(err, services.ErrAlreadyEnrolled),
+		errors.Is(err, services.ErrCourseNotOpen),
 		errors.Is(err, services.ErrPackageSeatsFull),
 		errors.Is(err, services.ErrEnrollmentNotPending),
 		errors.Is(err, services.ErrEnrollmentNotCancellable),
@@ -75,17 +76,28 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
 		return
 	}
 
-    enrollment, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
+    result, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
     if err != nil {
         mapEnrollmentError(c, err)
         return
     }
+    enrollment := result.Enrollment
+
+    message := "ลงทะเบียนสำเร็จ กำลังรอแอดมินตรวจสอบ"
+    switch {
+    case result.Waitlisted:
+        message = "แพ็กเกจนี้ที่นั่งเต็มแล้ว ใบสมัครของคุณเข้าคิวสำรองไว้ โรงเรียนจะติดต่อกลับเมื่อมีที่ว่างหรือเปิดรอบใหม่"
+    case enrollment.BillingID != nil:
+        message = "ลงทะเบียนสำเร็จ เปิดสิทธิ์เรียนให้แล้ว มีบิลค่าคอร์สรอชำระอยู่ที่เมนูชำระเงิน"
+    }
 
     c.JSON(http.StatusCreated, dto.CreateEnrollmentRes{
-        Message: "ลงทะเบียนสำเร็จ กำลังรอแอดมินตรวจสอบ",
+        Message: message,
         Data: dto.CreateEnrollmentData{
             EnrollmentID: enrollment.ID,
             BillingID:    enrollment.BillingID,
+            Status:       string(enrollment.Status),
+            Waitlisted:   result.Waitlisted,
         },
     })
 }
@@ -164,7 +176,15 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
     }
     adminID := uint(adminIDFloat)
 
-    enrollment, err := ctrl.service.ApproveEnrollment(uint(id), adminID)
+    var req dto.ApproveEnrollmentReq
+    if c.Request.ContentLength > 0 {
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+            return
+        }
+    }
+
+    enrollment, err := ctrl.service.ApproveEnrollment(uint(id), adminID, req.AllowOverbook)
     if err != nil {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
@@ -308,7 +328,7 @@ func (ctrl *EnrollmentController) GetAllEnrollments(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": dto.ToAdminEnrollmentDTOs(enrollments)})
+    c.JSON(http.StatusOK, gin.H{"data": enrollments})
 }
 
 // UpdateEnrollment
@@ -330,7 +350,8 @@ func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
             c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-        case errors.Is(err, services.ErrEnrollmentBillingLocked):
+        case errors.Is(err, services.ErrEnrollmentBillingLocked),
+            errors.Is(err, services.ErrEnrollmentDuplicateActive):
             c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
         default:
             c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

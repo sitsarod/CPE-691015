@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"gorm.io/gorm"
@@ -84,59 +83,6 @@ func (s *DetectedVideoService) CreateRawVideo(storageKey string, coachID *uint) 
 		return nil, errors.New("ไม่สามารถบันทึกข้อมูลวิดีโอต้นฉบับได้")
 	}
 	return &rawVideo, nil
-}
-
-// ProcessFaceDetection รันระบบจำลองการสแกนใบหน้าหาตัวตนนักเรียนในวิดีโอ (Mock Face Recognition)
-// โดยระบบจะสแกนหาเฉพาะนักเรียนที่กดยินยอมเก็บใบหน้า (PDPA: FaceConsentStatus == "granted") เท่านั้น
-func (s *DetectedVideoService) ProcessFaceDetection(rawVideoID uint, videoURL string) ([]models.DetectedVideo, error) {
-	var activeConsentCustomers []models.Customer
-	// ดึงนักเรียนทั้งหมดที่ให้ความยินยอมสแกนใบหน้า
-	err := s.db.Where("face_consent_status = ?", string(models.FaceConsentGranted)).
-		Preload("User").
-		Find(&activeConsentCustomers).Error
-	if err != nil {
-		return nil, errors.New("ไม่สามารถดึงรายชื่อนักเรียนที่มีประวัติการให้ความยินยอมใบหน้าได้")
-	}
-
-	var detected []models.DetectedVideo
-
-	// หากไม่มีนักเรียนที่กดยินยอมเลย จะไม่เกิดการจำลองตรวจจับ
-	if len(activeConsentCustomers) == 0 {
-		return detected, nil
-	}
-
-	// สุ่มตรวจจับพบนักเรียนประมาณ 1-2 คนจากนักเรียนที่กดยินยอม (ถ้ามี)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	countToDetect := r.Intn(2) + 1 // สุ่มพบ 1-2 คน
-	if countToDetect > len(activeConsentCustomers) {
-		countToDetect = len(activeConsentCustomers)
-	}
-
-	// สับเปลี่ยนลำดับเพื่อสุ่มเลือกนักเรียน
-	r.Shuffle(len(activeConsentCustomers), func(i, j int) {
-		activeConsentCustomers[i], activeConsentCustomers[j] = activeConsentCustomers[j], activeConsentCustomers[i]
-	})
-
-	for i := 0; i < countToDetect; i++ {
-		cust := activeConsentCustomers[i]
-
-		// สร้าง DetectedVideo ผูกนักเรียนเข้ากับวิดีโอ
-		detectedVideo := models.DetectedVideo{
-			CustomerID: cust.ID,
-			RawVideoID: rawVideoID,
-			VideoURL:   videoURL,
-		}
-
-		if err := s.db.Create(&detectedVideo).Error; err != nil {
-			return nil, errors.New("ไม่สามารถบันทึกความสัมพันธ์วิดีโอกับใบหน้านักเรียนได้")
-		}
-
-		// ดึงความสัมพันธ์มาให้ครบก่อนส่งกลับ
-		s.db.Preload("Customer").Preload("Customer.User").First(&detectedVideo, detectedVideo.ID)
-		detected = append(detected, detectedVideo)
-	}
-
-	return detected, nil
 }
 
 // ManuallyAssignStudentsToVideo โค้ชระบุรายชื่อนักเรียนในวิดีโอเอง (เพื่อแก้ไขกรณี AI ตรวจไม่พบ หรือโค้ชเลือกเอง)

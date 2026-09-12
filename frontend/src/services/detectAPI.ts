@@ -2,10 +2,13 @@
 import { apiFetch } from "@/services/apiClient";
 import type { AssignResult, UploadPhotoPostResult, UploadVideoResult } from "@/types/detect";
 
-// [POST] อัปโหลดวิดีโอ — backend รันการตรวจจับใบหน้าจำลอง (mock) ให้อัตโนมัติ คืนรายชื่อที่เจอเบื้องต้น
-export async function uploadDetectVideo(file: File): Promise<UploadVideoResult> {
+// [POST] อัปโหลดวิดีโอ — ส่ง courseId ไปด้วยเพื่อให้ระบบจำแนกใบหน้าเทียบกับนักเรียนของคอร์สนั้น
+// (เหมือน uploadDetectPhoto ทุกอย่าง) ผลที่ได้เป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง
+// ต้องยืนยันผ่าน assignVideoStudents อีกที
+export async function uploadDetectVideo(file: File, courseId: number): Promise<UploadVideoResult> {
   const form = new FormData();
   form.append("video", file, file.name);
+  form.append("course_id", String(courseId));
   const res = await apiFetch<{ message: string; data: UploadVideoResult }>("/videos", {
     method: "POST",
     body: form,

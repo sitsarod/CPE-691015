@@ -83,7 +83,9 @@ function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryIt
     // แถวที่ session_id เป็น null แยกเป็นกลุ่มต่อคอร์ส และใช้ check_in_time
     // แทน session_date เพราะ session_date ของแถวพวกนี้เป็นค่าศูนย์ของ Go (ปี 0001)
     const hasSession = item.session_id !== null;
-    const key = hasSession ? `s${item.session_id}` : `n:${item.course_name}`;
+    const key = hasSession
+      ? `s${item.session_id}`
+      : `n:${item.course_name}:${item.check_in_time.slice(0, 10)}`;
 
     let round = byKey.get(key);
     if (!round) {
@@ -122,6 +124,7 @@ export default function AttendanceHistoryPage() {
 
   const [items, setItems] = useState<AttendanceHistoryItem[]>([]);
   const [coaches, setCoaches] = useState<CoachHistoryItem[]>([]);
+  const [isTruncated, setIsTruncated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -163,8 +166,9 @@ export default function AttendanceHistoryPage() {
           fetchCoachHistory(filters),
         ]);
         if (cancelled) return;
-        setItems(data);
-        setCoaches(coachData);
+        setItems(data.items);
+        setCoaches(coachData.items);
+        setIsTruncated(data.truncated || coachData.truncated);
         setError(null);
       } catch (err: unknown) {
         if (cancelled) return;
@@ -318,6 +322,13 @@ export default function AttendanceHistoryPage() {
       </div>
 
       {error && <div className="mt-6 rounded-xl bg-red-50 p-4 text-red-700">{error}</div>}
+
+      {isTruncated && (
+        <div className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          รายการยาวเกินที่ระบบดึงได้ในครั้งเดียว — ที่เห็นอยู่ยังไม่ครบ
+          กรุณาเลือกวันหรือคอร์สให้แคบลง
+        </div>
+      )}
 
       {!isLoading && rounds.length === 0 && (
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
