@@ -294,7 +294,8 @@ type CreateBillingRequest struct {
 	CustomerIDs   []uint    `json:"customer_ids" binding:"required"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
-	Amount        float64   `json:"billingamount" binding:"required"`
+	// gt=0 กันยอดติดลบ/ศูนย์ (เดิมใช้แค่ required ทำให้ยอดติดลบผ่าน แล้วไปลดยอดรวมของ invoice ได้)
+	Amount        float64   `json:"billingamount" binding:"required,gt=0"`
 	DueDate       time.Time `json:"billingdue_date" binding:"required"`
 }
 
@@ -304,8 +305,9 @@ type CreateBillingRequest struct {
 type CreateSplitBillingRequest struct {
 	CourseID      uint      `json:"course_id" binding:"required"`
 	Date          string    `json:"date" binding:"required"` // format: YYYY-MM-DD
-	HourlyRate    float64   `json:"hourly_rate" binding:"required"`
-	Hours         float64   `json:"hours" binding:"required"`
+	// gt=0 กันอัตรา/จำนวนติดลบ ที่จะทำให้ยอดหารเฉลี่ยติดลบ
+	HourlyRate    float64   `json:"hourly_rate" binding:"required,gt=0"`
+	Hours         float64   `json:"hours" binding:"required,gt=0"`
 	BillingTypeID uint      `json:"billingtype_id" binding:"required"`
 	Description   string    `json:"billingdescription" binding:"required"`
 	DueDate       time.Time `json:"billingdue_date" binding:"required"`
@@ -326,7 +328,8 @@ type UploadSlipRequest struct {
 // UpdateBillingRequest represents the request payload for updating billing details
 type UpdateBillingRequest struct {
 	Description   *string    `json:"billingdescription"`
-	Amount        *float64   `json:"billingamount"`
+	// omitempty = แก้เฉพาะเมื่อส่งมา, gt=0 = ถ้าส่งมาต้องเป็นบวก (กันแก้ยอดเป็นติดลบ)
+	Amount        *float64   `json:"billingamount" binding:"omitempty,gt=0"`
 	DueDate       *time.Time `json:"billingdue_date"`
 	Status        *string    `json:"billingstatus"`
 	BillingTypeID *uint      `json:"billingtype_id"`

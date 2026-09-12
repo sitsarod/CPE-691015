@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -44,6 +45,19 @@ const stalePendingInvoiceTTL = 3 * 24 * time.Hour
 
 // slipAmountEpsilon เผื่อความคลาดเคลื่อนทศนิยมตอนเทียบยอดเงินจากสลิป (หน่วยบาท)
 const slipAmountEpsilon = 0.01
+
+// validateSlipURL บังคับให้ slip_url ต้องชี้ไปยังไฟล์ที่อัปโหลดผ่านระบบเท่านั้น (มี "/uploads/")
+//
+// slip_url มาจาก client ได้โดยตรง ถ้าไม่ตรวจ ผู้ใช้จะส่ง URL ภายนอกที่ตัวเอง host เข้ามาได้:
+//   - หลักฐานการเงินไม่ immutable (สลับ/ลบรูปทีหลังได้หลังแอดมินอนุมัติ = ทำลาย audit trail)
+//   - หน้าแอดมิน render เป็น <img src> ทำให้เบราว์เซอร์แอดมินยิงไปเครื่องผู้โจมตี (leak IP/UA, ยัดรูปปลอม)
+// ใช้เกณฑ์เดียวกับ loadSlipImage (SSRF guard ตอนตรวจสลิปอัตโนมัติ) เพื่อให้ค่าที่ "เก็บ" กับที่ "เอาไปตรวจ" ตรงกัน
+func validateSlipURL(slipURL string) error {
+	if !strings.Contains(slipURL, "/uploads/") {
+		return businessErr("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดผ่านระบบเท่านั้น")
+	}
+	return nil
+}
 
 // ExpireStalePendingInvoices ปิดใบแจ้งหนี้ที่ค้าง pending และยังไม่แนบสลิปเกินกำหนด (best-effort)
 //
@@ -176,6 +190,11 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 
 // UploadSlip อัปโหลดสลิปเพื่อแจ้งโอนเงิน
 func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint, role string) (*models.Invoice, error) {
+	// slip_url มาจาก client โดยตรง ต้องบังคับให้เป็นไฟล์ในระบบก่อนเก็บ (กัน SSRF/audit ปลอม)
+	if err := validateSlipURL(slipURL); err != nil {
+		return nil, err
+	}
+
 	var invoice models.Invoice
 	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
 		return nil, ErrInvoiceNotFound
@@ -186,11 +205,19 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 		return nil, ErrForbidden
 	}
 
+	// อนุญาตแนบสลิปเฉพาะใบที่ยัง "มีชีวิต" อยู่ (pending = ยังไม่ตัดสิน, rejected = ให้ส่งสลิปใหม่ตามดีไซน์)
+	// ปิดกั้นสถานะ terminal ทุกตัว ไม่ให้ชุบชีวิตใบที่จบไปแล้วกลับมา pending:
+	//   - success   = จ่ายสำเร็จแล้ว
+	//   - cancelled = ลูกค้ายกเลิกเอง
+	//   - expired   = ระบบปิดอัตโนมัติเพราะทิ้งค้างไว้เกินกำหนด (บิลกลับไปพร้อมออกใบใหม่แล้ว)
 	if invoice.Status == models.InvoiceSuccess {
 		return nil, businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
 	}
 	if invoice.Status == models.InvoiceCancelled {
 		return nil, businessErr("ใบแจ้งหนี้นี้ถูกยกเลิกไปแล้ว ไม่สามารถแนบสลิปได้")
+	}
+	if invoice.Status == models.InvoiceExpired {
+		return nil, businessErr("ใบแจ้งหนี้นี้หมดอายุแล้ว กรุณาสร้างใบแจ้งหนี้ใหม่เพื่อชำระเงิน")
 	}
 
 	// กันไม่ให้แนบสลิปกับใบแจ้งหนี้เก่าที่บิลถูกชำระผ่านใบแจ้งหนี้อื่นไปแล้ว
@@ -221,6 +248,12 @@ func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint,
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		invoice.SlipImageUrl = slipURL
 		invoice.Status = models.InvoicePending
+
+		// แนบสลิปใหม่ = เริ่มการตรวจรอบใหม่ ล้างผลตรวจอัตโนมัติเดิมทิ้ง
+		// กันกรณีส่งสลิปใหม่ทับใบที่เคยถูกปฏิเสธ แล้วแอดมินเห็น verdict เก่าค้างอยู่จนตัดสินผิด
+		invoice.SlipOkChecked = false
+		invoice.SlipOkPassed = false
+		invoice.SlipOkMessage = ""
 
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกข้อมูลสลิปได้")
@@ -384,15 +417,19 @@ func (s *PaymentService) recordSlipOk(invoiceID uint, passed bool, message strin
 // confirmedByID = users.id ของแอดมินที่กดอนุมัติ (nil = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
 func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*models.Invoice, error) {
 	var invoice models.Invoice
-	if err := s.db.First(&invoice, invoiceID).Error; err != nil {
-		return nil, ErrInvoiceNotFound
-	}
-
-	if invoice.Status == models.InvoiceSuccess {
-		return nil, businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
-	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// ล็อกแถวใบแจ้งหนี้ก่อนอ่านสถานะ กันการยืนยันซ้อนกับ reject/cancel หรือ auto-verify
+		// ที่เข้ามาพร้อมกัน (เดิมอ่านสถานะนอก tx เป็น check-then-act จึงเกิด race ได้:
+		// สองคำขออ่าน pending พร้อมกันแล้วเดินต่อทั้งคู่ จนบิล/enrollment ถูกอัปเดตซ้อน)
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invoice, invoiceID).Error; err != nil {
+			return ErrInvoiceNotFound
+		}
+
+		if invoice.Status == models.InvoiceSuccess {
+			return businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
+		}
+
 		invoice.Status = models.InvoiceSuccess
 		invoice.ConfirmedByID = confirmedByID
 		if err := tx.Save(&invoice).Error; err != nil {
