@@ -36,6 +36,13 @@ func SetupRoutes(r *gin.Engine) {
 
 	slipOkService := services.NewSlipOkService()
 	paymentService := services.NewPaymentService(db, slipOkService)
+	// เมื่อ deploy ใช้ Cloudinary เก็บสลิป URL จะเป็น res.cloudinary.com/<cloud>/... (ไม่มี /uploads/)
+	// จึงต้องบอก cloud name ให้ทั้งสอง service: payment รับ slip_url จาก Cloudinary,
+	// และ slipOk ดึงรูปจาก Cloudinary มาตรวจ auto-verify ได้
+	if cloudinaryService != nil {
+		paymentService.WithCloudinaryCloudName(cloudinaryService.CloudName())
+		slipOkService.WithCloudName(cloudinaryService.CloudName())
+	}
 	paymentController := controllers.NewPaymentController(paymentService)
 
 	billingService := services.NewBillingService(db)

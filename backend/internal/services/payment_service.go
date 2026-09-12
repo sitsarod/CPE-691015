@@ -33,10 +33,20 @@ func businessErr(msg string) error { return &BusinessError{Msg: msg} }
 type PaymentService struct {
 	db     *gorm.DB
 	slipOk *SlipOkService
+	// cloudinaryCloudName = ชื่อ cloud ของสถาบัน (ตั้งเมื่อ deploy ใช้ Cloudinary เก็บสลิป)
+	// ใช้อนุญาต slip_url ที่เป็นของ Cloudinary เราเองเพิ่มจากไฟล์ local /uploads
+	cloudinaryCloudName string
 }
 
 func NewPaymentService(db *gorm.DB, slipOk *SlipOkService) *PaymentService {
 	return &PaymentService{db: db, slipOk: slipOk}
+}
+
+// WithCloudinaryCloudName บอก service ว่า cloud ของสถาบันชื่ออะไร เพื่อรับ slip_url จาก Cloudinary
+// (เรียกตอน wire router เมื่อ Cloudinary ถูกตั้งค่า) คืน service ตัวเดิมเพื่อ chain ต่อได้
+func (s *PaymentService) WithCloudinaryCloudName(name string) *PaymentService {
+	s.cloudinaryCloudName = name
+	return s
 }
 
 // stalePendingInvoiceTTL คือระยะเวลาที่ยอมให้ใบแจ้งหนี้ค้างสถานะ pending โดย "ยังไม่แนบสลิป"
@@ -46,17 +56,25 @@ const stalePendingInvoiceTTL = 3 * 24 * time.Hour
 // slipAmountEpsilon เผื่อความคลาดเคลื่อนทศนิยมตอนเทียบยอดเงินจากสลิป (หน่วยบาท)
 const slipAmountEpsilon = 0.01
 
-// validateSlipURL บังคับให้ slip_url ต้องชี้ไปยังไฟล์ที่อัปโหลดผ่านระบบเท่านั้น (มี "/uploads/")
+// validateSlipURL บังคับให้ slip_url ต้องเป็นไฟล์ที่อัปโหลดผ่านระบบเท่านั้น
 //
 // slip_url มาจาก client ได้โดยตรง ถ้าไม่ตรวจ ผู้ใช้จะส่ง URL ภายนอกที่ตัวเอง host เข้ามาได้:
 //   - หลักฐานการเงินไม่ immutable (สลับ/ลบรูปทีหลังได้หลังแอดมินอนุมัติ = ทำลาย audit trail)
 //   - หน้าแอดมิน render เป็น <img src> ทำให้เบราว์เซอร์แอดมินยิงไปเครื่องผู้โจมตี (leak IP/UA, ยัดรูปปลอม)
-// ใช้เกณฑ์เดียวกับ loadSlipImage (SSRF guard ตอนตรวจสลิปอัตโนมัติ) เพื่อให้ค่าที่ "เก็บ" กับที่ "เอาไปตรวจ" ตรงกัน
-func validateSlipURL(slipURL string) error {
-	if !strings.Contains(slipURL, "/uploads/") {
-		return businessErr("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดผ่านระบบเท่านั้น")
+//
+// รับได้สองแหล่งตามที่ระบบอัปจริง (ดู ExpenseController.UploadFileHandler):
+//   1. ไฟล์ในเครื่อง — path มี "/uploads/"
+//   2. Cloudinary ของสถาบัน — host เป็น res.cloudinary.com ใต้ cloud name ที่ตั้งค่าไว้เท่านั้น
+//      (ผูกกับ cloud name เพื่อกันผู้โจมตีเอา Cloudinary account ของตัวเองมา host สลิปปลอม)
+func (s *PaymentService) validateSlipURL(slipURL string) error {
+	if strings.Contains(slipURL, "/uploads/") {
+		return nil
 	}
-	return nil
+	// ใช้ตัวตรวจเข้มตัวเดียวกับตอน fetch สลิปมาตรวจ (parse host/scheme/path) กัน URL หลอก
+	if isOwnCloudinaryURL(slipURL, s.cloudinaryCloudName) {
+		return nil
+	}
+	return businessErr("ที่อยู่สลิปไม่ถูกต้อง ต้องเป็นไฟล์ที่อัปโหลดผ่านระบบเท่านั้น")
 }
 
 // ExpireStalePendingInvoices ปิดใบแจ้งหนี้ที่ค้าง pending และยังไม่แนบสลิปเกินกำหนด (best-effort)
@@ -191,7 +209,7 @@ func (s *PaymentService) CreateInvoice(customerID uint, billingIDs []uint, metho
 // UploadSlip อัปโหลดสลิปเพื่อแจ้งโอนเงิน
 func (s *PaymentService) UploadSlip(invoiceID uint, slipURL string, userID uint, role string) (*models.Invoice, error) {
 	// slip_url มาจาก client โดยตรง ต้องบังคับให้เป็นไฟล์ในระบบก่อนเก็บ (กัน SSRF/audit ปลอม)
-	if err := validateSlipURL(slipURL); err != nil {
+	if err := s.validateSlipURL(slipURL); err != nil {
 		return nil, err
 	}
 

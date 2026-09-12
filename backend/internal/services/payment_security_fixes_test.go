@@ -2,12 +2,16 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"CPE-691015/internal/models"
 
 	"gorm.io/gorm"
 )
+
+// slipSeedCounter ทำให้อีเมลลูกค้าที่ seed ไม่ซ้ำกัน (ตาราง users มี unique index บนอีเมล)
+var slipSeedCounter int
 
 // เทสชุดนี้คุมพฤติกรรมใหม่จากการปิดช่องโหว่ระบบการเงิน:
 //   #1 UploadSlip ต้องปฏิเสธ slip_url ที่ไม่ใช่ไฟล์ในระบบ (กัน SSRF/audit ปลอม)
@@ -26,7 +30,9 @@ func newPaymentFixTestDB(t *testing.T) *gorm.DB {
 func seedInvoiceForSlip(t *testing.T, db *gorm.DB, bStatus models.BillingStatus, invStatus models.InvoiceStatus) (customerID, billingID, invoiceID uint) {
 	t.Helper()
 
-	customer := models.User{FirstName: "ลูกค้า", LastName: "ทดสอบ", Email: "slipfix@example.test", Role: models.CustomerRole}
+	slipSeedCounter++
+	email := fmt.Sprintf("slipfix%d@example.test", slipSeedCounter)
+	customer := models.User{FirstName: "ลูกค้า", LastName: "ทดสอบ", Email: email, Role: models.CustomerRole}
 	if err := db.Create(&customer).Error; err != nil {
 		t.Fatalf("สร้างลูกค้าไม่สำเร็จ: %v", err)
 	}
@@ -98,6 +104,33 @@ func TestUploadSlip_AcceptsInternalUploadURL(t *testing.T) {
 	}
 	if got := billingStatus(t, db, billingID); got != models.StatusWaitCheck {
 		t.Fatalf("บิลควรเป็น waitcheck หลังแนบสลิป แต่เป็น %q", got)
+	}
+}
+
+// slip_url ที่เป็น Cloudinary ของสถาบัน (cloud name ตรงกับที่ตั้งค่า) ต้องผ่าน
+// แต่ Cloudinary ของ cloud อื่น (ผู้โจมตี host เอง) ต้องถูกปฏิเสธ
+func TestUploadSlip_AcceptsOwnCloudinaryRejectsForeignCloud(t *testing.T) {
+	db := newPaymentFixTestDB(t)
+	svc := NewPaymentService(db, nil).WithCloudinaryCloudName("koyama-cloud")
+
+	// ── cloud ของสถาบัน → ผ่าน ──
+	customerID, billingID, invoiceID := seedInvoiceForSlip(t, db, models.StatusUnfunded, models.InvoicePending)
+	ownURL := "https://res.cloudinary.com/koyama-cloud/image/upload/v1/koyama/slip/abc.jpg"
+	if _, err := svc.UploadSlip(invoiceID, ownURL, customerID, string(models.CustomerRole)); err != nil {
+		t.Fatalf("slip Cloudinary ของสถาบันควรผ่าน แต่ได้ error: %v", err)
+	}
+	if got := billingStatus(t, db, billingID); got != models.StatusWaitCheck {
+		t.Fatalf("บิลควรเป็น waitcheck แต่เป็น %q", got)
+	}
+
+	// ── cloud ของผู้โจมตี → ถูกปฏิเสธ ──
+	customerID2, billingID2, invoiceID2 := seedInvoiceForSlip(t, db, models.StatusUnfunded, models.InvoicePending)
+	foreignURL := "https://res.cloudinary.com/attacker-cloud/image/upload/v1/fake/slip.jpg"
+	if _, err := svc.UploadSlip(invoiceID2, foreignURL, customerID2, string(models.CustomerRole)); err == nil {
+		t.Fatal("slip Cloudinary ของ cloud อื่น ควรถูกปฏิเสธ แต่กลับสำเร็จ")
+	}
+	if got := billingStatus(t, db, billingID2); got != models.StatusUnfunded {
+		t.Fatalf("บิลต้องคงเป็น unfunded แต่เป็น %q", got)
 	}
 }
 

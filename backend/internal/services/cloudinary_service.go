@@ -74,6 +74,15 @@ func NewCloudinaryService() *CloudinaryService {
 	return &CloudinaryService{cld: cld, folder: folder}
 }
 
+// CloudName คืนชื่อ cloud ที่ตั้งค่าไว้ (ใช้ตรวจว่า URL สลิปมาจาก Cloudinary ของสถาบันจริง)
+// คืนค่าว่างถ้ายังไม่ได้เชื่อมต่อ Cloudinary
+func (s *CloudinaryService) CloudName() string {
+	if s == nil || s.cld == nil {
+		return ""
+	}
+	return s.cld.Config.Cloud.CloudName
+}
+
 // SanitizeSubfolder ตรวจว่าชื่อโฟลเดอร์ย่อยที่ส่งมาอยู่ในรายการที่อนุญาตไหม
 // ถ้าไม่อยู่ (หรือว่าง) จะคืนค่าว่าง = เก็บที่โฟลเดอร์หลักตามเดิม
 func SanitizeSubfolder(sub string) string {
