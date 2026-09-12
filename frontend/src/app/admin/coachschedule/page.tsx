@@ -8,7 +8,7 @@ import { getWeekSessions, WeekSession } from "@/services/workScheduleAPI";
 import { getCourts, Court } from "@/services/courtAPI";
 import { AvailabilitySlot } from "@/types/coach";
 import { AssignCoachModal } from "@/components/admin/modals/AssignCoachModal";
-import { loadStudentsPerCoach, saveStudentsPerCoach, suggestedCoaches } from "@/lib/coachRatio";
+import { fetchStudentsPerCoach, saveStudentsPerCoach, suggestedCoaches, DEFAULT_STUDENTS_PER_COACH } from "@/lib/coachRatio";
 import { CourtManageModal } from "@/components/admin/modals/CourtManageModal";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
@@ -60,13 +60,37 @@ export default function CoachSchedulePage() {
   const [search, setSearch] = useState("");
   const [activeSession, setActiveSession] = useState<WeekSession | null>(null);
   const [activeIsPast, setActiveIsPast] = useState(false);
-  // อัตราส่วนโค้ช:นักเรียน — โหลดจาก localStorage หลัง mount (กัน hydration mismatch)
-  const [perCoach, setPerCoach] = useState(6);
-  useEffect(() => { setPerCoach(loadStudentsPerCoach()); }, []);
-  const changePerCoach = (n: number) => {
+  // อัตราส่วนโค้ช:นักเรียน — ค่ากลางขององค์กร โหลดจาก backend หลัง mount
+  //
+  // ⚠️ เดิมอยู่ใน localStorage ทำให้แอดมินแต่ละคนเห็นคำแนะนำไม่ตรงกัน
+  const [perCoach, setPerCoach] = useState(DEFAULT_STUDENTS_PER_COACH);
+  const [ratioError, setRatioError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    fetchStudentsPerCoach(token || "").then((v) => {
+      if (!cancelled) setPerCoach(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const changePerCoach = async (n: number) => {
     const safe = Math.min(50, Math.max(1, Number.isFinite(n) ? n : 1));
-    setPerCoach(safe);
-    saveStudentsPerCoach(safe);
+    const previous = perCoach;
+    setPerCoach(safe); // ตอบสนองทันที ไม่ต้องรอ network
+    setRatioError(null);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const saved = await saveStudentsPerCoach(safe, token || "");
+      setPerCoach(saved);
+    } catch (err) {
+      // บันทึกไม่สำเร็จต้องไม่เงียบ — ไม่งั้นแอดมินปิดหน้าไปแล้วคิดว่าเปลี่ยนแล้ว
+      setPerCoach(previous);
+      setRatioError(err instanceof Error ? err.message : "บันทึกอัตราส่วนไม่สำเร็จ");
+    }
   };
   const [menuOpen, setMenuOpen] = useState(false);     // เมนู 3 จุดบนหัวหน้า
   const [ratioModalOpen, setRatioModalOpen] = useState(false); // โมดัลตั้งเกณฑ์จำนวนโค้ช
@@ -347,12 +371,15 @@ export default function CoachSchedulePage() {
               min={1}
               max={50}
               value={perCoach}
-              onChange={(e) => changePerCoach(parseInt(e.target.value, 10))}
+              onChange={(e) => void changePerCoach(parseInt(e.target.value, 10))}
               className="h-10 w-20 rounded-lg border border-gray-200 bg-white px-2 text-center text-base font-bold text-gray-900 outline-none focus:border-gray-300"
             />
             <span>นักเรียน</span>
           </div>
-          <p className="text-xs text-slate-400">ตั้งได้ 1–50 · บันทึกในเครื่องนี้ · การ์ดคาบและหน้ามอบหมายจะคำนวณตามนี้ทันที</p>
+          {ratioError && (
+            <p className="text-xs text-rose-600">{ratioError}</p>
+          )}
+          <p className="text-xs text-slate-400">ตั้งได้ 1–50 · เป็นค่ากลางขององค์กร แอดมินทุกคนเห็นค่าเดียวกัน · การ์ดคาบและหน้ามอบหมายจะคำนวณตามนี้ทันที</p>
         </div>
       </Modal>
     </div>

@@ -138,7 +138,7 @@ func (s *AttendanceService) GetOpenablePackages() ([]dto.OpenablePackageDTO, err
 			item.Packages = pkgs
 		}
 
-		if existing, err := s.openSessionForSlot(s.db, ids, dayStart, dayEnd); err == nil && existing != nil {
+		if existing, err := s.openSessionForSlot(s.db, ids, dayStart, dayEnd, key.start, key.end); err == nil && existing != nil {
 			id := existing.ID
 			item.ExistingSessionID = &id
 			item.ExistingSessionStatus = string(existing.Status)
@@ -166,13 +166,15 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	session := models.AttendanceSession{
-		PackageID:         pkg.ID,
-		SessionDate:       sessionDateValue(now),
-		Status:            models.AttendanceSessionOpen,
-		OpenedAt:          now,
-		OpenedByUserID:    adminUserID,
-		ScheduleStartTime: sch.StartTime,
-		ScheduleEndTime:   sch.EndTime,
+		PackageID:      pkg.ID,
+		SessionDate:    sessionDateValue(now),
+		Status:         models.AttendanceSessionOpen,
+		OpenedAt:       now,
+		OpenedByUserID: adminUserID,
+		// สแนปช็อตต้องเป็นรูปแบบมาตรฐาน เพราะถูกเอาไปเทียบกับ work_schedules
+		// ที่แอดมินกรอกจากอีกหน้าหนึ่ง (ดู normalizeClockTime)
+		ScheduleStartTime: normalizeClockTime(sch.StartTime),
+		ScheduleEndTime:   normalizeClockTime(sch.EndTime),
 	}
 
 	siblings, err := s.siblingPackageIDs(s.db, &session)
@@ -181,7 +183,7 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	dayStart, dayEnd := dayBounds(now)
-	if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd); e == nil && existing != nil {
+	if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd, sch.StartTime, sch.EndTime); e == nil && existing != nil {
 		return s.GetSession(existing.ID)
 	}
 
@@ -192,7 +194,7 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	if err := s.db.Create(&session).Error; err != nil {
-		if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd); e == nil && existing != nil {
+		if existing, e := s.openSessionForSlot(s.db, siblings, dayStart, dayEnd, sch.StartTime, sch.EndTime); e == nil && existing != nil {
 			return s.GetSession(existing.ID)
 		}
 		return nil, errors.New("ไม่สามารถเปิดรอบเช็คชื่อได้")

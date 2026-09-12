@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -26,7 +27,8 @@ func NewWorkScheduleController(s services.WorkScheduleService) *WorkScheduleCont
 func (ctrl *WorkScheduleController) GetSchedules(c *gin.Context) {
 	schedules, err := ctrl.service.GetAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work schedules: " + err.Error()})
+		log.Printf("[api] ดึงตารางงาน ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงตารางงานได้"})
 		return
 	}
 	c.JSON(http.StatusOK, schedules)
@@ -47,7 +49,8 @@ func (ctrl *WorkScheduleController) GetWeekSessions(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve sessions: " + err.Error()})
+		log.Printf("[api] ดึงคาบเรียนรายสัปดาห์ ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงตารางคาบเรียนได้"})
 		return
 	}
 	c.JSON(http.StatusOK, sessions)
@@ -75,7 +78,8 @@ func (ctrl *WorkScheduleController) GetSchedulesByCoach(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work schedules: " + err.Error()})
+		log.Printf("[api] ดึงตารางงาน ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงตารางงานได้"})
 		return
 	}
 	c.JSON(http.StatusOK, schedules)
@@ -102,7 +106,8 @@ func (ctrl *WorkScheduleController) GetTaughtSessionCount(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count taught sessions: " + err.Error()})
+		log.Printf("[api] นับคาบที่สอนจริง ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับคาบที่สอนจริงได้"})
 		return
 	}
 	// คืนทั้งจำนวน (แอดมินใช้) และรายวันที่ (หน้าโค้ชใช้จัดกลุ่มรายเดือน) จาก endpoint เดียว
@@ -174,7 +179,8 @@ func (ctrl *WorkScheduleController) CreateSchedule(c *gin.Context) {
 		case errors.Is(err, services.ErrScheduleConflict):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work schedule: " + err.Error()})
+			log.Printf("[api] มอบหมายตารางงาน ไม่สำเร็จ: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถมอบหมายตารางงานได้"})
 		}
 		return
 	}
@@ -206,7 +212,8 @@ func (ctrl *WorkScheduleController) UpdateSchedule(c *gin.Context) {
 		case errors.Is(err, services.ErrScheduleConflict):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work schedule: " + err.Error()})
+			log.Printf("[api] แก้ไขตารางงาน ไม่สำเร็จ: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขตารางงานได้"})
 		}
 		return
 	}
@@ -223,7 +230,16 @@ func (ctrl *WorkScheduleController) DeleteSchedule(c *gin.Context) {
 	}
 
 	if err := ctrl.service.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete work schedule: " + err.Error()})
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบตารางงานที่ระบุ"})
+		// คาบที่ผ่านไปแล้วลบไม่ได้ = ผิดกฎธุรกิจ ไม่ใช่ระบบพัง
+		// ข้อความจาก service บอกทางออกให้แอดมินไว้แล้ว จึงส่งต่อตรง ๆ
+		case errors.Is(err, services.ErrScheduleConflict):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบตารางงานได้"})
+		}
 		return
 	}
 

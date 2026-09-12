@@ -186,20 +186,44 @@ func confirmedForClass(db *gorm.DB, customerID uint, packageIDs []uint, classDat
 	return n > 0
 }
 
+// openSessionForSlot หารอบเช็คชื่อที่มีอยู่แล้วของ "คาบนี้" ในวันนั้น
+//
+// ⚠️ ต้องกรองเวลาคาบด้วย ไม่ใช่แค่แพ็กเกจกับวันที่
+//
+// เดิมหาด้วย (package_id IN ?, วันที่) เท่านั้น ซึ่งพังเมื่อแพ็กเกจเดียวมีคาบเรียน
+// หลายช่วงในวันเดียวกัน (เช่น เสาร์ 10:00-12:00 และ เสาร์ 14:00-16:00)
+//
+//	เปิดรอบบ่ายไปแล้ว → จะเปิดรอบเช้า → เจอรอบบ่ายแล้วคืนตัวนั้นกลับไป
+//	→ รอบเช้าเปิดไม่ได้ → คาบเช้าไม่มีรอบที่ปิด → โค้ชไม่ได้เงินของคาบนั้น
+//
+// startTime/endTime = เวลาของคาบที่กำลังจะเปิด (สแนปช็อตชุดเดียวกับที่เก็บใน session)
+//
+// เงื่อนไข OR ท่อนหลังเป็นทางถอยสำหรับรอบรุ่นเก่าที่ยังไม่มีสแนปช็อตเวลา
+// ซึ่งเทียบเวลาไม่ได้ จึงถือว่าเป็นรอบของคาบนี้ไปตามเดิม (หลักเดียวกับ
+// closedSessionForScheduleSQL ในฝั่งคิดเงิน)
 func (s *AttendanceService) openSessionForSlot(
 	tx *gorm.DB,
 	packageIDs []uint,
 	dayStart, dayEnd string,
+	startTime, endTime string,
 ) (*models.AttendanceSession, error) {
 	if len(packageIDs) == 0 {
 		return nil, nil
 	}
 
+	q := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
+		packageIDs, dayStart, dayEnd)
+
+	if startTime != "" && endTime != "" {
+		q = q.Where(`(
+			COALESCE(schedule_start_time, '') = ''
+			OR COALESCE(schedule_end_time, '') = ''
+			OR (schedule_start_time = ? AND schedule_end_time = ?)
+		)`, startTime, endTime)
+	}
+
 	var existing models.AttendanceSession
-	err := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
-		packageIDs, dayStart, dayEnd).
-		Order("id ASC").
-		First(&existing).Error
+	err := q.Order("id ASC").First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

@@ -5,6 +5,7 @@ import (
 	"CPE-691015/internal/services"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,18 +33,7 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 
 	expense, err := ctrl.service.CreateExpense(req)
 	if err != nil {
-		switch {
-		// ยอดไม่ผ่านด่านตรวจค่าจ้าง = คำขอผิดกฎธุรกิจ ไม่ใช่ระบบพัง
-		case errors.Is(err, services.ErrPayrollExceeds),
-			errors.Is(err, services.ErrPayrollNoUnpaid):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		case errors.Is(err, services.ErrPayrollNeedsCoach):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		case errors.Is(err, services.ErrCoachNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
+		mapExpenseError(c, err)
 		return
 	}
 
@@ -56,7 +46,8 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 func (ctrl *ExpenseController) GetAllExpenses(c *gin.Context) {
 	expenses, err := ctrl.service.GetAllExpenses()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
@@ -118,7 +109,8 @@ func (ctrl *ExpenseController) GetExpensesByCoach(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
@@ -132,15 +124,68 @@ func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {
 		return
 	}
 
-	err = ctrl.service.DeleteExpense(uint(id))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// ต้องรู้ว่าใครลบ — รายการค่าจ้างที่ถูกลบทำให้ยอดค้างจ่ายเด้งกลับขึ้นมา
+	// ต้องตอบได้ย้อนหลังว่าใครสั่ง (หลักเดียวกับ closed_by_user_id ของรอบเช็คชื่อ)
+	actorUserID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	if err := ctrl.service.DeleteExpense(uint(id), actorUserID); err != nil {
+		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "ลบค่าใช้จ่ายสำเร็จ",
 	})
+}
+
+// CreateExpensesBatch handles POST /api/expenses/batch
+//
+// บันทึกหลายรายการเป็นก้อนเดียว สำเร็จทั้งหมดหรือไม่สำเร็จเลย
+//
+// ⚠️ หน้าจ่ายค่าจ้างต้องใช้ตัวนี้ ไม่ใช่วนลูปยิง POST /expenses ทีละรายการ
+// การวนลูปทำให้เกิดผลลัพธ์ครึ่ง ๆ เมื่อรายการใดรายการหนึ่งพัง
+func (ctrl *ExpenseController) CreateExpensesBatch(c *gin.Context) {
+	var req dto.CreateExpenseBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
+		return
+	}
+
+	created, err := ctrl.service.CreateExpenses(req.Items)
+	if err != nil {
+		mapExpenseError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "บันทึกค่าใช้จ่ายสำเร็จ",
+		"data":    dto.ToExpenseDTOs(created),
+	})
+}
+
+// mapExpenseError แปลง error ของการบันทึกค่าใช้จ่ายเป็น HTTP status
+// แยกออกมาเพื่อให้เส้นเดี่ยวกับเส้น batch ตอบเหมือนกัน
+func mapExpenseError(c *gin.Context, err error) {
+	switch {
+	// ยอดไม่ผ่านด่านตรวจค่าจ้าง = คำขอผิดกฎธุรกิจ ไม่ใช่ระบบพัง
+	case errors.Is(err, services.ErrPayrollExceeds),
+		errors.Is(err, services.ErrPayrollNoUnpaid):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrPayrollNeedsCoach):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrCoachNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		// ข้อความจาก service ชั้นนี้เขียนไว้ให้ผู้ใช้อ่านแล้ว (ไม่ใช่ err ดิบของ GORM)
+		// แต่ log ไว้ฝั่งเซิร์ฟเวอร์ด้วยเพื่อสืบย้อนได้
+		log.Printf("[api] บันทึกค่าใช้จ่ายไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกค่าใช้จ่ายได้"})
+	}
 }
 
 // UploadFileHandler handles multipart/form-data file uploads.
@@ -176,7 +221,8 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 
 		url, err := ctrl.cloudinary.UploadFileToFolder(c.Request.Context(), src, subfolder)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ขึ้น Cloudinary ไม่สำเร็จ: " + err.Error()})
+			log.Printf("[api] อัปโหลดไฟล์ ไม่สำเร็จ: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ"})
 			return
 		}
 

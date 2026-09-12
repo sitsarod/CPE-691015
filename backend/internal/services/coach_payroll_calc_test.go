@@ -310,9 +310,10 @@ func TestAssignWorkScheduleStoresPayRateSnapshot(t *testing.T) {
 		future = future.AddDate(0, 0, 1)
 	}
 
+	pkg := uint(1)
 	created, err := svc.AssignWorkSchedule(dto.CreateWorkScheduleRequest{
 		Date: future.Format("2006-01-02"), StartTime: wageStart, EndTime: wageEnd,
-		Description: "ทดสอบ", CoachID: wageCoachID, CourseID: 1,
+		Description: "ทดสอบ", CoachID: wageCoachID, CourseID: 1, PackageID: &pkg,
 	})
 	if err != nil {
 		t.Fatalf("มอบหมายตารางงานไม่สำเร็จ: %v", err)
@@ -327,5 +328,53 @@ func mustMigrate(t *testing.T, db *gorm.DB, tables ...any) {
 	t.Helper()
 	if err := db.AutoMigrate(tables...); err != nil {
 		t.Fatalf("AutoMigrate เพิ่มเติมไม่สำเร็จ: %v", err)
+	}
+}
+
+// ─── 6. จ่ายเกินต้องมองเห็น ไม่ใช่ถูกกลืนเป็น 0 ──────────────────────────────
+
+// ⚠️ บั๊กจริงที่เจอจากหน้าจอ: ควรได้ 800 · จ่ายไปแล้ว 9,800 · แสดง "คงค้าง ฿0"
+//
+// Unpaid ถูก clamp ที่ 0 โดยตั้งใจ (มันไปเติมช่องจำนวนเงินและเป็นเพดานของ
+// ด่านตรวจยอด จะติดลบไม่ได้) แต่ผลข้างเคียงคือ "จ่ายครบพอดี" กับ
+// "จ่ายเกินไป 9,000" แสดงเหมือนกันทั้งคู่ = เงินที่จ่ายเกินหายไปจากสายตา
+func TestPayrollReportsOverpayment(t *testing.T) {
+	db := newPayrollCalcTestDB(t)
+	seedWageCoach(t, db, PaymentTypePerSession, 400)
+	seedPaidClass(t, db, "2026-01-05", 400)
+	seedPaidClass(t, db, "2026-01-12", 400)
+
+	// จ่ายครบ 800 ก่อน
+	if err := payWage(db, 800); err != nil {
+		t.Fatalf("จ่ายค่าจ้างไม่สำเร็จ: %v", err)
+	}
+	if got := payrollOf(t, db); got.Unpaid != 0 || got.Overpaid != 0 {
+		t.Fatalf("จ่ายครบพอดี ต้องไม่ค้างและไม่เกิน แต่ได้ ค้าง %.2f เกิน %.2f",
+			got.Unpaid, got.Overpaid)
+	}
+
+	// จำลองยอดที่จ่ายเกินมาจากยุคก่อนมีด่านตรวจ (ใส่ตรงเข้าฐาน)
+	coachID := wageCoachID
+	mustCreate(t, db, &models.Expense{
+		Amount: 9000, Type: models.ExpenseTypeCoach,
+		Date: time.Now(), CoachID: &coachID,
+	})
+
+	got := payrollOf(t, db)
+	if got.AlreadyPaid != 9800 {
+		t.Fatalf("จ่ายไปแล้วต้องเป็น 9800 แต่ได้ %.2f", got.AlreadyPaid)
+	}
+	if got.Unpaid != 0 {
+		t.Fatalf("จ่ายเกินแล้วต้องไม่มียอดค้าง (ห้ามติดลบ) แต่ได้ %.2f", got.Unpaid)
+	}
+	if got.Overpaid != 9000 {
+		t.Fatalf("ต้องรายงานว่าจ่ายเกิน 9000 แต่ได้ %.2f "+
+			"— ถ้าเป็น 0 แอดมินจะแยกไม่ออกระหว่างจ่ายครบพอดีกับจ่ายเกินเก้าพัน",
+			got.Overpaid)
+	}
+
+	// และต้องยังจ่ายเพิ่มไม่ได้
+	if err := payWage(db, 100); !errors.Is(err, ErrPayrollNoUnpaid) {
+		t.Fatalf("จ่ายเกินอยู่แล้วต้องจ่ายเพิ่มไม่ได้ แต่ได้ error: %v", err)
 	}
 }

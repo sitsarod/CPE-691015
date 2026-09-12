@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -52,27 +53,27 @@ func toCoachResponse(coach *models.Coach) dto.CoachResponse {
 // ใช้กับหน้า detail/edit ที่ต้องการฟิลด์ครบกว่า list รวมถึง payment_type/pay_rate ที่โชว์ได้ (read-only)
 func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
 	resp := dto.CoachDetailResponse{
-		ID:                coach.ID,
-		UserID:            coach.UserID,
-		Nickname:          coach.Nickname,
-		Phone:             coach.Phone,
-		LineID:            coach.LineID,
-		Facebook:          coach.Facebook,
-		Uid:               coach.Uid,
-		Address:           coach.Address,
-		BirthDate:         coach.BirthDate,
-		Specialization:    coach.Specialization,
-		CoachLicense:      coach.CoachLicense,
-		ProfilePicture:    coach.ProfilePicture,
-		BankAccount:       coach.BankAccount,
-		PaymentInfo:       coach.PaymentInfo,
-		PromptPay:         coach.PromptPay,
-		PaymentType:       coach.PaymentType,
-		PayRate:           coach.PayRate,
-		Bio:               coach.Bio,
-		HomeImage:         coach.HomeImage,
-		PersonalQRCode:    coach.PersonalQRCode,
-		MemberCode:        coach.MemberCode,
+		ID:             coach.ID,
+		UserID:         coach.UserID,
+		Nickname:       coach.Nickname,
+		Phone:          coach.Phone,
+		LineID:         coach.LineID,
+		Facebook:       coach.Facebook,
+		Uid:            coach.Uid,
+		Address:        coach.Address,
+		BirthDate:      coach.BirthDate,
+		Specialization: coach.Specialization,
+		CoachLicense:   coach.CoachLicense,
+		ProfilePicture: coach.ProfilePicture,
+		BankAccount:    coach.BankAccount,
+		PaymentInfo:    coach.PaymentInfo,
+		PromptPay:      coach.PromptPay,
+		PaymentType:    coach.PaymentType,
+		PayRate:        coach.PayRate,
+		Bio:            coach.Bio,
+		HomeImage:      coach.HomeImage,
+		PersonalQRCode: coach.PersonalQRCode,
+		MemberCode:     coach.MemberCode,
 	}
 
 	// coach.User เป็น pointer ที่มาจาก Preload("User") ใน service
@@ -90,7 +91,8 @@ func toCoachDetailResponse(coach *models.Coach) dto.CoachDetailResponse {
 func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 	coaches, err := ctrl.service.GetAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve coaches: " + err.Error()})
+		log.Printf("[api] ดึงรายชื่อโค้ช ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายชื่อโค้ชได้"})
 		return
 	}
 
@@ -169,7 +171,8 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 		case errors.Is(err, services.ErrCoachDuplicateUser), errors.Is(err, services.ErrCoachDuplicateUID):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create coach: " + err.Error()})
+			log.Printf("[api] สร้างโค้ช ไม่สำเร็จ: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างข้อมูลโค้ชได้"})
 		}
 		return
 	}
@@ -205,7 +208,8 @@ func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update coach: " + err.Error()})
+		log.Printf("[api] แก้ไขโค้ช ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
 		return
 	}
 
@@ -281,7 +285,19 @@ func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 
 	coach, err := ctrl.service.AdminUpdate(uint(id), req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound), errors.Is(err, services.ErrCoachNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ระบุ"})
+		// ผิดกฎธุรกิจ (ยังค้างจ่ายอยู่จึงสลับวิธีจ่ายไม่ได้) ไม่ใช่ข้อมูลผิดรูปแบบ
+		case errors.Is(err, services.ErrCoachPaySwitchUnpaid):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCoachPayRateNegative),
+			errors.Is(err, services.ErrCoachInvalidPaymentType):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			log.Printf("[api] แก้ไขข้อมูลโค้ช ไม่สำเร็จ: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
+		}
 		return
 	}
 

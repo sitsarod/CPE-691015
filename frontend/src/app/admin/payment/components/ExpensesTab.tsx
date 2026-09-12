@@ -4,7 +4,7 @@ import { Coach, Expense } from './types';
 import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
-import { createExpense, deleteExpense } from "@/services/paymentAPI";
+import { createExpensesBatch, deleteExpense } from "@/services/paymentAPI";
 import { fetchCoachById, fetchCoachPayroll } from "@/services/coachAPI";
 import type { CoachPayrollLine } from "@/services/coachAPI";
 import { CreateExpenseReq } from "@/types/payment";
@@ -27,6 +27,10 @@ interface CoachWageInfo {
   // เคลียร์ได้ที่ /admin/attendance/missed
   unresolvedSessions?: number;
   unresolvedAmount?: number;
+
+  // จ่ายเกินไปเท่าไร — ต้องแสดงเสมอเมื่อ > 0
+  // ยอด "คงค้างจ่าย" ถูก clamp ที่ 0 จึงบอกไม่ได้ว่าจ่ายครบพอดีหรือจ่ายเกิน
+  overpaid?: number;
 
   // "8 คาบ × ฿300" + "4 คาบ × ฿400" — ทำให้แอดมินตรวจได้ว่ายอดรวมมาจากไหน
   rateBreakdown?: CoachPayrollLine[];
@@ -138,6 +142,7 @@ export default function ExpensesTab({
         unpaid: payroll.unpaid,
         unresolvedSessions: payroll.unresolved_sessions,
         unresolvedAmount: payroll.unresolved_amount,
+        overpaid: payroll.overpaid,
         rateBreakdown: payroll.rate_breakdown,
         periodNote: payroll.period_note,
         promptPay: coach.prompt_pay || '',
@@ -239,9 +244,13 @@ export default function ExpensesTab({
     setIsSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      for (const body of reqBodies) {
-        await createExpense(body, token || "");
-      }
+
+      // ⚠️ ส่งเป็นก้อนเดียว ห้ามวนลูปยิงทีละรายการ
+      //
+      // เดิมวนลูป ถ้าค่าจ้างลงแล้วแต่โบนัสพัง จะเหลือผลลัพธ์ครึ่ง ๆ ที่แอดมิน
+      // ไม่รู้ว่าอันไหนบันทึกไปแล้ว จะกดซ้ำก็ไม่กล้า
+      // backend คุมทั้งก้อนเป็นทรานแซกชันเดียว สำเร็จหมดหรือไม่สำเร็จเลย
+      await createExpensesBatch(reqBodies, token || "");
 
       onTriggerToast(reqBodies.length > 1 ? "บันทึกค่าจ้างและรายได้ส่วนอื่นสำเร็จเรียบร้อย" : "บันทึกค่าใช้จ่ายสำเร็จเรียบร้อย");
       setOtherIncomes([]);
@@ -345,6 +354,19 @@ export default function ExpensesTab({
                     <span className="font-bold text-slate-700">คงค้างจ่าย</span>
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
+                  {/* ยอดคงค้างถูก clamp ที่ 0 จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน"
+                      ถ้าไม่บอกตรงนี้ เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
+                  {(wageInfo.overpaid ?? 0) > 0 && (
+                    <div className="mt-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1.5">
+                      <p className="text-[11px] font-bold text-rose-700">
+                        จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-rose-600">
+                        จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
+                        หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
+                      </p>
+                    </div>
+                  )}
                   {wageInfo.payRate === 0 && (
                     <p className="text-[10px] text-amber-600 pt-1">
                       ยังไม่ได้ตั้งค่าอัตราค่าจ้างต่อเดือนของโค้ชคนนี้ ยอดจึงเป็น 0
@@ -382,6 +404,19 @@ export default function ExpensesTab({
                     <span className="font-bold text-slate-700">คงค้างจ่าย</span>
                     <span className="font-bold text-[#CD0D13]">฿{wageInfo.unpaid.toLocaleString()}</span>
                   </div>
+                  {/* ยอดคงค้างถูก clamp ที่ 0 จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน"
+                      ถ้าไม่บอกตรงนี้ เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
+                  {(wageInfo.overpaid ?? 0) > 0 && (
+                    <div className="mt-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1.5">
+                      <p className="text-[11px] font-bold text-rose-700">
+                        จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-rose-600">
+                        จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
+                        หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
+                      </p>
+                    </div>
+                  )}
                   <p className="text-[10px] text-slate-400 pt-0.5">
                     {wageInfo.periodNote ?? 'นับเฉพาะคาบที่มีการเช็คชื่อปิดรอบแล้ว (คาบที่สอนจริง)'}
                   </p>

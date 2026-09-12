@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -352,5 +353,196 @@ func TestResolveLeavesStudentRecordsUntouched(t *testing.T) {
 	db.Model(&models.StudentAttendance{}).Count(&studentRows)
 	if studentRows != 0 {
 		t.Fatalf("การเคลียร์ค่าจ้างโค้ชต้องไม่สร้างประวัติของนักเรียน แต่มี %d แถว", studentRows)
+	}
+}
+
+// ─── 7. invariant: โผล่ในรายการแล้วต้องกดเคลียร์ได้เสมอ ─────────────────────
+
+// ⚠️ บั๊กจริงที่เคยเกิด — หน้าจอกับด่านตอนกดพูดสวนกันเอง
+//
+// เดิม assertNoExistingSession เขียนเงื่อนไขของตัวเองขึ้นมาใหม่ ซึ่ง "กว้างกว่า"
+// ตัวที่ทำรายการ (จับคู่ด้วย package_id IN แพ็กเกจพี่น้องทั้งกลุ่ม
+// ขณะที่ตัวทำรายการต้องการ package_id ตรงกันเป๊ะสำหรับรอบที่ไม่มีสแนปช็อตเวลา)
+//
+// ผลคือคาบที่มีรอบเก่าของแพ็กเกจพี่น้องจะ:
+//
+//	โผล่ในรายการว่า "ยังไม่มีรอบเช็คชื่อ"   (ตัวทำรายการมองไม่เห็นรอบนั้น)
+//	กดยืนยันแล้วถูกปฏิเสธว่า "มีรอบปิดแล้ว" (ด่านตอนกดมองเห็น)
+//	= ค้างอยู่ในรายการตลอดไป กดออกไม่ได้เลย
+func TestListedMissedClassIsAlwaysResolvable(t *testing.T) {
+	db := newMissedClassTestDB(t)
+
+	// คลาสที่มี 2 แพ็กเกจเรียนพร้อมกัน (ตัวแทน = id ต่ำสุด)
+	c := seedMergedClass(t, db, missedDay, missedStart, missedEnd, 8, 12)
+	assignCoach(t, db, c, missedCoachA, missedStart, missedEnd, c.anchor)
+
+	// รอบเก่าของ "แพ็กเกจพี่น้อง" ที่ไม่ใช่ตัวแทน และไม่มีสแนปช็อตเวลา
+	var sibling uint
+	for _, id := range c.packageIDs {
+		if id != c.anchor {
+			sibling = id
+		}
+	}
+	if sibling == 0 {
+		t.Fatalf("ต้องมีแพ็กเกจพี่น้องที่ไม่ใช่ตัวแทน แต่ได้ %+v", c.packageIDs)
+	}
+
+	day, _ := time.Parse("2006-01-02", missedDay)
+	legacy := models.AttendanceSession{
+		PackageID: sibling, SessionDate: day,
+		Status: models.AttendanceSessionClosed, OpenedAt: time.Now(), OpenedByUserID: 1,
+		// ตั้งใจไม่ใส่ ScheduleStartTime/EndTime — เป็นรอบรุ่นเก่า
+	}
+	mustCreate(t, db, &legacy)
+	normalizeSessionDates(t, db, missedDay)
+
+	svc := NewAttendanceService(db)
+	items, err := svc.ListMissedClasses()
+	if err != nil {
+		t.Fatalf("ดึงรายการคาบที่ค้างไม่สำเร็จ: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("รอบของแพ็กเกจพี่น้องที่ไม่มีสแนปช็อตเวลาไม่นับว่าเคลียร์แล้ว "+
+			"คาบนี้จึงต้องโผล่ในรายการ แต่ได้ %d", len(items))
+	}
+
+	// หัวใจของเทส: ทุกคาบที่โผล่ในรายการต้องกดเคลียร์ได้
+	for _, item := range items {
+		decisions := make([]dto.ResolveMissedClassCoachReq, 0, len(item.Coaches))
+		for _, coach := range item.Coaches {
+			decisions = append(decisions, dto.ResolveMissedClassCoachReq{
+				CoachID: coach.CoachID, Status: "present",
+			})
+		}
+
+		if _, err := resolve(db, item.WorkScheduleID, decisions...); err != nil {
+			t.Fatalf("คาบที่โผล่ในรายการต้องเคลียร์ได้ แต่ถูกปฏิเสธ: %v%s",
+				err, "\n— รายการกับด่านตอนกดใช้เงื่อนไขไม่ตรงกัน คาบนี้จะค้างตลอดไป")
+		}
+	}
+
+	normalizeSessionDates(t, db, missedDay)
+	if n := paidSessionCount(t, db, missedCoachA); n != 1 {
+		t.Fatalf("เคลียร์แล้วต้องได้เงิน 1 คาบ แต่ได้ %d", n)
+	}
+}
+
+// ─── 8. ชนกับ unique index ต้องบอกสาเหตุ ไม่ใช่ตอบ "ลองกดอีกครั้ง" วนไป ─────
+
+// ⚠️ บั๊กจริงที่ผู้ใช้เจอ — กดยืนยันแล้วขึ้น "ลองกดอีกครั้ง" แล้วข้อความหายไป
+// กดใหม่ก็ได้ผลเดิม วนอยู่อย่างนั้นโดยไม่มีใครรู้สาเหตุ
+//
+// ต้นเหตุ: เวอร์ชันแรกดักตอน insert ล้มแล้วค่อย query หาแถวที่ชน
+// ซึ่งใช้ไม่ได้บน postgres — ทรานแซกชันที่มีคำสั่งล้มจะเข้าสถานะ aborted
+// ทุก query หลังจากนั้นถูกปฏิเสธ จึงตกไปเข้าทางสำรอง "ลองกดอีกครั้ง" ทุกครั้ง
+//
+// ตอนนี้ตรวจก่อน insert (ทรานแซกชันยังปกติ) จึงบอกได้ว่าชนกับรอบไหน
+//
+// ─── เคสที่ยังชนได้จริงหลังรับการจับคู่สองทาง ───
+//
+// ตารางงานชี้แพ็กเกจพี่น้อง (ไม่ใช่ตัวแทน) + รอบอยู่บนตัวแทน + เวลาไม่ตรง
+// → จับคู่ไม่ติดทั้งสองทาง (package_id ไม่ตรง · เวลาไม่ตรง) → โผล่ในรายการ
+// → แต่การสร้างรอบใหม่ต้องลงบน "ตัวแทน" ซึ่งมีแถวของวันนั้นอยู่แล้ว → ชน unique index
+func TestResolveExplainsUniqueIndexCollision(t *testing.T) {
+	db := newMissedClassTestDB(t)
+	c := seedMergedClass(t, db, missedDay, missedStart, missedEnd, 8, 12)
+
+	var sibling uint
+	for _, id := range c.packageIDs {
+		if id != c.anchor {
+			sibling = id
+		}
+	}
+	if sibling == 0 {
+		t.Fatalf("ต้องมีแพ็กเกจพี่น้องที่ไม่ใช่ตัวแทน แต่ได้ %+v", c.packageIDs)
+	}
+
+	// ตารางงานชี้แพ็กเกจพี่น้อง
+	assignCoach(t, db, c, missedCoachA, missedStart, missedEnd, sibling)
+
+	// รอบเช็คชื่ออยู่บนแพ็กเกจตัวแทน และเป็นคาบคนละช่วงเวลา
+	day, _ := time.Parse("2006-01-02", missedDay)
+	other := models.AttendanceSession{
+		PackageID: c.anchor, SessionDate: day,
+		Status: models.AttendanceSessionClosed, OpenedAt: time.Now(), OpenedByUserID: 1,
+		ScheduleStartTime: "08:00", ScheduleEndTime: "10:00",
+	}
+	mustCreate(t, db, &other)
+	normalizeSessionDates(t, db, missedDay)
+
+	items, err := NewAttendanceService(db).ListMissedClasses()
+	if err != nil {
+		t.Fatalf("ดึงรายการไม่สำเร็จ: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("จับคู่ไม่ติดทั้งสองทาง คาบนี้จึงต้องโผล่ในรายการ แต่ได้ %d", len(items))
+	}
+
+	_, resolveErr := resolve(db, items[0].WorkScheduleID,
+		dto.ResolveMissedClassCoachReq{CoachID: missedCoachA, Status: "present"})
+
+	if !errors.Is(resolveErr, ErrMissedClassCollision) {
+		t.Fatalf("ต้องตอบว่าชนกับรอบที่มีอยู่ (ErrMissedClassCollision) แต่ได้: %v", resolveErr)
+	}
+
+	// ข้อความต้องบอกได้ว่าชนกับรอบไหนและเวลาเท่าไร ไม่ใช่ "ลองกดอีกครั้ง"
+	msg := resolveErr.Error()
+	for _, want := range []string{"08:00", missedStart} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("ข้อความต้องมี %q เพื่อให้เอาไปแก้ต่อได้ แต่ได้: %s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "ลองกดอีกครั้ง") {
+		t.Fatalf("ห้ามตอบ \"ลองกดอีกครั้ง\" กับการชนที่กดใหม่ก็ไม่หาย: %s", msg)
+	}
+
+	var sessions int64
+	db.Model(&models.AttendanceSession{}).Count(&sessions)
+	if sessions != 1 {
+		t.Fatalf("คำขอที่ถูกปฏิเสธต้องไม่สร้างรอบใหม่ แต่มี %d รอบ", sessions)
+	}
+}
+
+// ─── 9. เวลาในตารางงานไม่ตรงกับเวลาคาบจริง ต้องยังได้เงิน ───────────────────
+
+// ⚠️ บั๊กจริงที่ผู้ใช้เจอ (คาบ 7 ก.ย. 2569)
+//
+//	รอบเช็คชื่อ #32  16:00-20:00   ← คาบจริง
+//	ตารางงานของโค้ช  18:00-20:00   ← เวลาที่แอดมินกรอกตอนมอบหมาย
+//
+// กติกาที่จับคู่ด้วย "course + วัน + เวลา" เท่านั้น มองว่าเป็นคนละคาบ
+// → โค้ชไม่ได้เงินทั้งที่สอนจริง และคาบค้างในรายการตลอดไป กดเคลียร์ก็ไม่ผ่าน
+//
+// เวลาที่แอดมินกรอกตอนมอบหมายงานไม่มีอะไรบังคับว่าต้องตรงกับ package_schedules
+// จะเรียกร้องให้ตรงกันเป๊ะเสมอไม่ได้ ระบบต้องรับความจริงข้อนี้
+func TestClassMatchesByPackageWhenAssignedTimeDiffers(t *testing.T) {
+	db := newMissedClassTestDB(t)
+	c := seedMergedClass(t, db, missedDay, missedStart, missedEnd, 8)
+
+	// ตารางงานเวลา 18:00-20:00 (ตามที่แอดมินกรอก)
+	assignCoach(t, db, c, missedCoachA, missedStart, missedEnd, c.anchor)
+
+	// รอบเช็คชื่อของแพ็กเกจเดียวกัน วันเดียวกัน แต่คาบจริงคือ 16:00-20:00
+	day, _ := time.Parse("2006-01-02", missedDay)
+	real := models.AttendanceSession{
+		PackageID: c.anchor, SessionDate: day,
+		Status: models.AttendanceSessionClosed, OpenedAt: time.Now(), OpenedByUserID: 1,
+		ScheduleStartTime: "16:00", ScheduleEndTime: "20:00",
+	}
+	mustCreate(t, db, &real)
+	normalizeSessionDates(t, db, missedDay)
+
+	if n := paidSessionCount(t, db, missedCoachA); n != 1 {
+		t.Fatalf("แพ็กเกจและวันตรงกัน ต้องนับเป็นคาบที่ได้เงิน 1 คาบ แต่ได้ %d "+
+			"— เวลาที่แอดมินกรอกไม่ตรงกับคาบจริงไม่ควรทำให้โค้ชไม่ได้เงิน", n)
+	}
+
+	items, err := NewAttendanceService(db).ListMissedClasses()
+	if err != nil {
+		t.Fatalf("ดึงรายการไม่สำเร็จ: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("คาบนี้มีรอบเช็คชื่อปิดแล้ว ต้องไม่ค้างในรายการ แต่ได้ %d "+
+			"— ถ้าค้าง แอดมินจะกดเคลียร์วนไม่จบ", len(items))
 	}
 }

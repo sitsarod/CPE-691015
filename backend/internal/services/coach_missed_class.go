@@ -46,6 +46,11 @@ var (
 	ErrMissedClassOpen     = errors.New("คาบนี้ยังมีรอบเช็คชื่อเปิดค้างอยู่ ให้เข้าไปปิดรอบตามปกติแทน")
 
 	ErrMissedClassCoachSet = errors.New("ต้องระบุสถานะให้ครบทุกคนที่ถูกมอบหมายคาบนี้ และห้ามมีคนที่ไม่ได้ถูกมอบหมาย")
+
+	// ErrMissedClassCollision = สร้างรอบย้อนหลังไม่ได้เพราะชนกับรอบที่มีอยู่ของแพ็กเกจ+วันเดียวกัน
+	// แยกจาก ErrMissedClassResolved เพราะ "ชน" ไม่ได้แปลว่า "เคลียร์แล้ว"
+	// อันนี้เป็นข้อมูลที่ต้องมีคนไปแก้ ไม่ใช่เรื่องปกติที่ปล่อยผ่านได้
+	ErrMissedClassCollision = errors.New("สร้างรอบเช็คชื่อย้อนหลังไม่ได้เพราะชนกับรอบที่มีอยู่")
 )
 
 // scheduleDateOnly ตัด "T00:00:00Z" ที่ driver อาจแถมมากับคอลัมน์ date
@@ -60,7 +65,7 @@ func scheduleDateOnly(v string) string {
 // unresolvedScheduleScope = ตารางงานของคาบที่ผ่านไปแล้วแต่ยังไม่มีรอบเช็คชื่อที่ปิด
 //
 // ⚠️ เป็นด้านตรงข้ามของ taughtScheduleScope เป๊ะ ๆ โดยตั้งใจ
-// ทั้งคู่ใช้ closedSessionForScheduleSQL ตัวเดียวกัน (ตัวหนึ่ง EXISTS อีกตัว NOT EXISTS)
+// ทั้งคู่ใช้ classSessionForScheduleSQL ตัวเดียวกัน (ตัวหนึ่ง EXISTS อีกตัว NOT EXISTS)
 // ถ้าแยกกันเขียนเมื่อไหร่ จะเกิดคาบที่ "ไม่ถูกนับเงิน แต่ก็ไม่โผล่ในรายการค้าง"
 // ซึ่งคือเงินหายโดยไม่มีใครเห็น — อาการเดียวกับบั๊กที่ไฟล์นี้แก้อยู่
 //
@@ -73,7 +78,7 @@ func unresolvedScheduleScope(db *gorm.DB, todayStr string) *gorm.DB {
 	return db.Model(&models.WorkSchedule{}).
 		Where("work_schedules.package_id IS NOT NULL").
 		Where("work_schedules.date < ?", todayStr).
-		Where("NOT EXISTS ("+closedSessionForScheduleSQL+")", models.AttendanceSessionClosed)
+		Where("NOT EXISTS ("+classSessionForScheduleSQL+")", models.AttendanceSessionClosed)
 }
 
 // ListMissedClasses คืนคลาสที่ค้างอยู่ทั้งหมด เรียงคาบล่าสุดขึ้นก่อน
@@ -204,8 +209,7 @@ func (s *AttendanceService) ResolveMissedClass(
 			return err
 		}
 
-		pkgIDs := s.slotPackageIDs(tx, &ws, weekday)
-		if err := s.assertNoExistingSession(tx, &ws, date, pkgIDs); err != nil {
+		if err := s.assertNoExistingSession(tx, &ws); err != nil {
 			return err
 		}
 
@@ -214,6 +218,15 @@ func (s *AttendanceService) ResolveMissedClass(
 		anchor := *ws.PackageID
 		if a, aerr := classAnchorPackageID(tx, ws.CourseID, weekday, ws.StartTime, ws.EndTime); aerr == nil && a != nil {
 			anchor = *a
+		}
+
+		// ⚠️ ต้องตรวจการชนก่อน insert ไม่ใช่ดักตอน insert ล้ม
+		//
+		// unique index คือ (package_id, session_date) ซึ่งไม่มีเวลาอยู่ในเงื่อนไข
+		// ขณะที่กติกาจับคู่คลาสใช้เวลาด้วย จึงมีช่องที่ assertNoExistingSession
+		// ตอบว่า "ยังไม่มีรอบ" แต่ฐานมีแถวของ (แพ็กเกจ, วัน) นั้นอยู่แล้ว
+		if err := s.assertNoAnchorDayCollision(tx, &ws, anchor, date); err != nil {
+			return err
 		}
 
 		closedAt := now
@@ -230,9 +243,14 @@ func (s *AttendanceService) ResolveMissedClass(
 			ScheduleEndTime:   ws.EndTime,
 		}
 		if err := tx.Create(&session).Error; err != nil {
-			// unique (package_id, session_date) — มีคนชิงเปิดรอบระหว่างที่เราทำอยู่
+			// ⚠️ ห้าม query อะไรต่อในทรานแซกชันนี้ — postgres ตั้งสถานะ aborted
+			// ไปแล้ว ทุกคำสั่งหลังจากนี้จะถูกปฏิเสธทั้งหมด
+			//
+			// มาถึงตรงนี้ได้เฉพาะกรณีมีคนชิงเปิดรอบระหว่างที่เราทำอยู่
+			// (การชนแบบอื่นถูก assertNoAnchorDayCollision ดักไปก่อนแล้ว)
 			if isUniqueViolation(err) {
-				return ErrMissedClassResolved
+				return fmt.Errorf("%w (มีคนเปิดรอบเช็คชื่อของคาบนี้พร้อมกัน กรุณากดอีกครั้ง)",
+					ErrMissedClassResolved)
 			}
 			return errors.New("ไม่สามารถสร้างรอบเช็คชื่อย้อนหลังได้")
 		}
@@ -341,54 +359,120 @@ func matchCoachDecisions(
 	return out, nil
 }
 
-// slotPackageIDs คืนแพ็กเกจทั้งหมดของคลาสนี้ อย่างน้อยต้องมีของตารางงานเองเสมอ
-func (s *AttendanceService) slotPackageIDs(tx *gorm.DB, ws *models.WorkSchedule, weekday string) []uint {
-	ids, err := classPackageIDs(tx, ws.CourseID, weekday, ws.StartTime, ws.EndTime)
-	if err != nil {
-		ids = nil
+// classSessionExists ตอบว่า "คลาสของตารางงานแถวนี้ มีรอบเช็คชื่อสถานะที่ถามอยู่ไหม"
+//
+// ⚠️ ใช้ classSessionForScheduleSQL ตัวเดียวกับที่ทำรายการและที่คิดเงิน
+//
+// เขียนเป็น query บน work_schedules ที่ล็อกไว้แถวเดียว (id = ?) เพื่อให้ subquery
+// correlate กับคอลัมน์ของแถวนั้นได้ตรง ๆ — วิธีนี้ทำให้ "ไม่มีทาง" เขียนเงื่อนไข
+// เพี้ยนจากตัวอื่น เพราะเป็นข้อความ SQL ชิ้นเดียวกันจริง ๆ ไม่ใช่ชิ้นที่เขียนตามกัน
+func (s *AttendanceService) classSessionExists(
+	tx *gorm.DB,
+	workScheduleID uint,
+	status models.AttendanceSessionStatus,
+) (bool, error) {
+	var n int64
+	if err := tx.Model(&models.WorkSchedule{}).
+		Where("work_schedules.id = ?", workScheduleID).
+		Where("EXISTS ("+classSessionForScheduleSQL+")", status).
+		Count(&n).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจรอบเช็คชื่อที่มีอยู่ได้")
 	}
-	for _, id := range ids {
-		if id == *ws.PackageID {
-			return ids
-		}
-	}
-	return append(ids, *ws.PackageID)
+	return n > 0, nil
 }
 
 // assertNoExistingSession กันเคลียร์ทับรอบที่มีอยู่แล้ว
 //
 // รอบที่เปิดค้าง = ยังมีทางปกติให้เดิน (เข้าไปกดปิด) ไม่ควรสร้างรอบที่สองมาแข่ง
 // รอบที่ปิดแล้ว = คาบนี้ไม่ได้ค้างตั้งแต่แรก การเคลียร์ซ้ำจะกลายเป็นสองรอบในคลาสเดียว
-func (s *AttendanceService) assertNoExistingSession(
+//
+// ─── invariant ที่ต้องเป็นจริงเสมอ ───
+//
+//	ถ้าคาบโผล่ในรายการ (ListMissedClasses) ต้องกดเคลียร์ได้
+//
+// รายการใช้ NOT EXISTS(closed) ส่วนด่านนี้ใช้ EXISTS(closed) กับเงื่อนไขชุดเดียวกัน
+// จึงเป็นไปไม่ได้ที่สองอันจะขัดกันเอง (เทส TestListedMissedClassIsAlwaysResolvable ตรึงไว้)
+func (s *AttendanceService) assertNoExistingSession(tx *gorm.DB, ws *models.WorkSchedule) error {
+	open, err := s.classSessionExists(tx, ws.ID, models.AttendanceSessionOpen)
+	if err != nil {
+		return err
+	}
+	if open {
+		return ErrMissedClassOpen
+	}
+
+	closed, err := s.classSessionExists(tx, ws.ID, models.AttendanceSessionClosed)
+	if err != nil {
+		return err
+	}
+	if closed {
+		return ErrMissedClassResolved
+	}
+	return nil
+}
+
+// assertNoAnchorDayCollision ตรวจว่าแพ็กเกจตัวแทน + วันนั้น มีรอบเช็คชื่ออยู่แล้วหรือไม่
+// และถ้ามี ให้บอกไปเลยว่าชนกับรอบไหน เวลาเท่าไร
+//
+// ─── ทำไมต้องตรวจแยกจาก assertNoExistingSession ───
+//
+// สองอันตอบคำถามต่างกัน:
+//
+//	assertNoExistingSession    "คลาสนี้มีรอบเช็คชื่อแล้วหรือยัง"  (จับคู่ด้วย course+วัน+เวลา)
+//	assertNoAnchorDayCollision "แถวที่จะ insert ชนกับ unique index ไหม" (แพ็กเกจ+วัน)
+//
+// unique index ของ attendance_sessions คือ (package_id, session_date)
+// ซึ่ง "ไม่มีเวลา" อยู่ในเงื่อนไข — 1 แพ็กเกจมีรอบได้วันละ 1 รอบเท่านั้น
+// จึงมีช่องที่อันแรกตอบว่า "ยังไม่มี" แต่ฐานปฏิเสธการ insert
+//
+// เกิดได้สองสาเหตุ ทางแก้ต่างกันคนละเรื่อง:
+//
+//  1. เวลาที่บันทึกไว้คนละรูปแบบ ("18:00" กับ "18:00:00")
+//     เวลาของรอบมาจาก package_schedules ส่วนของตารางงานแอดมินกรอกอีกหน้า
+//     ⇒ เป็นคาบเดียวกัน แก้ด้วย NormalizeClockTimeColumns (รัน cmd/migrate)
+//
+//  2. แพ็กเกจนั้นมีคาบเรียนสองช่วงในวันเดียวกันจริง (เสาร์ 10-12 และ 14-16)
+//     ⇒ index ปัจจุบันรองรับไม่ได้ ต้องแก้ index ให้รวมเวลาด้วย
+//
+// ─── ⚠️ ทำไมต้องตรวจ "ก่อน" insert ───
+//
+// เวอร์ชันแรกของฟังก์ชันนี้ดักตอน insert ล้มแล้วค่อย query หาแถวที่ชน
+// ซึ่ง "ใช้ไม่ได้เลยบน postgres" — เมื่อคำสั่งใดในทรานแซกชันล้ม ทรานแซกชันจะเข้าสถานะ
+// aborted ทุก query หลังจากนั้นถูกปฏิเสธทั้งหมด (current transaction is aborted)
+// การ query หาแถวที่ชนจึงล้มตามไปด้วย แล้วตกไปเข้าทางสำรองที่ตอบว่า
+// "ลองกดอีกครั้ง" ทุกครั้ง = ผู้ใช้กดยังไงก็ไม่ผ่าน และไม่มีใครรู้สาเหตุ
+func (s *AttendanceService) assertNoAnchorDayCollision(
 	tx *gorm.DB,
 	ws *models.WorkSchedule,
+	anchor uint,
 	date string,
-	pkgIDs []uint,
 ) error {
-	dayEnd := "9999-12-31"
+	dayEnd := date
 	if d, err := time.Parse("2006-01-02", date); err == nil {
 		dayEnd = d.AddDate(0, 0, 1).Format("2006-01-02")
 	}
 
-	var existing []models.AttendanceSession
-	if err := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
-		pkgIDs, date, dayEnd).
-		// ⚠️ ต้องกรองเวลาคาบด้วย ไม่ใช่แค่วัน — แพ็กเกจเดียวมีคาบหลายช่วงในวันเดียวกันได้
-		Where("COALESCE(schedule_start_time, '') = '' OR (schedule_start_time = ? AND schedule_end_time = ?)",
-			ws.StartTime, ws.EndTime).
-		Find(&existing).Error; err != nil {
+	var clash models.AttendanceSession
+	err := tx.Where("package_id = ? AND session_date >= ? AND session_date < ?",
+		anchor, date, dayEnd).Order("id ASC").First(&clash).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
 		return errors.New("ไม่สามารถตรวจรอบเช็คชื่อที่มีอยู่ได้")
 	}
 
-	for i := range existing {
-		if existing[i].Status == models.AttendanceSessionOpen {
-			return ErrMissedClassOpen
-		}
+	clashTime := fmt.Sprintf("%s-%s", clash.ScheduleStartTime, clash.ScheduleEndTime)
+	if clash.ScheduleStartTime == "" || clash.ScheduleEndTime == "" {
+		clashTime = "ไม่ได้บันทึกเวลาไว้"
 	}
-	if len(existing) > 0 {
-		return ErrMissedClassResolved
-	}
-	return nil
+
+	return fmt.Errorf("%w: แพ็กเกจนี้มีรอบเช็คชื่อของวันเดียวกันอยู่แล้ว "+
+		"(รอบ #%d เวลา %s สถานะ %s) แต่เวลาไม่ตรงกับตารางงานของคาบนี้ (%s-%s) "+
+		"ระบบจึงสร้างรอบใหม่ไม่ได้ — สาเหตุที่พบบ่อยคือรูปแบบเวลาในฐานข้อมูลไม่ตรงกัน "+
+		"ให้ผู้ดูแลระบบรัน cmd/migrate เพื่อแปลงรูปแบบเวลาให้เป็นมาตรฐานเดียวก่อน",
+		ErrMissedClassCollision, clash.ID, clashTime, clash.Status,
+		ws.StartTime, ws.EndTime)
 }
 
 // notifyMissedClassResolved บอกโค้ชว่ามีการบันทึกย้อนหลังเกิดขึ้นกับคาบของเขา

@@ -39,7 +39,13 @@ function coachName(c: { full_name: string; nickname: string }) {
 export default function MissedClassesPage() {
   const [items, setItems] = useState<MissedClass[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // ⚠️ แยก error ของการโหลด ออกจาก error ของการกดปุ่ม โดยตั้งใจ
+  //
+  // เดิมใช้ตัวแปรเดียวกัน แล้วตอนกดไม่ผ่านโค้ดจะ set error แล้วสั่งโหลดใหม่
+  // ตัวโหลดก็เคลียร์ error เมื่อสำเร็จ → ข้อความที่บอกสาเหตุ "แว้บแล้วหาย"
+  // ผู้ใช้เห็นไม่ทันว่ากดไม่ได้เพราะอะไร แล้วก็กดวนอยู่อย่างนั้น
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // คำตัดสินที่แอดมินเลือกไว้ แยกตามคลาส → โค้ช
   //
@@ -73,10 +79,10 @@ export default function MissedClassesPage() {
             ]),
           ),
         );
-        setError(null);
+        setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "โหลดรายการไม่สำเร็จ");
+        setLoadError(err instanceof Error ? err.message : "โหลดรายการไม่สำเร็จ");
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -109,7 +115,7 @@ export default function MissedClassesPage() {
 
     setSavingKey(key);
     setNotice(null);
-    setError(null);
+    setActionError(null);
     try {
       const result = await resolveMissedClass(item.work_schedule_id, coaches);
       const paid = result.present_coach_ids.length;
@@ -121,8 +127,9 @@ export default function MissedClassesPage() {
       );
       setItems((prev) => prev.filter((x) => classKey(x) !== key));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+      setActionError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
       // รายการอาจถูกคนอื่นเคลียร์ไปแล้ว ดึงใหม่ให้เห็นสถานะจริง
+      // (สาเหตุอยู่ใน actionError จึงไม่ถูกตัวโหลดล้างทิ้ง)
       reload();
     } finally {
       setSavingKey(null);
@@ -166,9 +173,21 @@ export default function MissedClassesPage() {
           {notice}
         </div>
       )}
-      {error && (
+      {actionError && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 font-medium text-red-800 underline"
+          >
+            ปิด
+          </button>
+        </div>
+      )}
+      {loadError && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          {loadError}
         </div>
       )}
 
