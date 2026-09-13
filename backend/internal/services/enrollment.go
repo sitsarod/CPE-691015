@@ -10,6 +10,7 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type EnrollmentService struct {
@@ -72,7 +73,7 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 	e.StartedAt = &now
 	e.ExpiresAt = &expiresAt
 
-	carried, err := consumeCarryOver(tx, e)
+	carried, err := consumeCarryOver(tx, e, pkg)
 	if err != nil {
 		return err
 	}
@@ -171,6 +172,16 @@ func seatsTaken(tx *gorm.DB, packageID uint) (uint, error) {
 	return uint(taken), nil
 }
 
+// lockPackageSeats จองสิทธิ์ตัดสินที่นั่งของแพ็กเกจนี้ไว้กับทรานแซกชันเดียว
+func lockPackageSeats(tx *gorm.DB, packageID uint) (*models.Package, error) {
+	var pkg models.Package
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&pkg, packageID).Error; err != nil {
+		return nil, ErrPackageNotFound
+	}
+	return &pkg, nil
+}
+
 func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
 	taken, err := seatsTaken(tx, packageID)
 	if err != nil {
@@ -186,6 +197,20 @@ func expireStaleEnrollments(db *gorm.DB) {
 		Update("status", models.EnrollmentStatusExpired).Error; err != nil {
 		log.Printf("[enrollment] อัปเดตสถานะใบที่หมดอายุไม่สำเร็จ: %v", err)
 	}
+}
+
+// BackfillCompletedEnrollments ปิดใบที่ใช้ครั้งครบแล้วแต่ยังค้างเป็น active
+func BackfillCompletedEnrollments(db *gorm.DB) error {
+	res := db.Model(&models.Enrollment{}).
+		Where("status = ? AND remaining_sessions = 0", models.EnrollmentStatusActive).
+		Update("status", models.EnrollmentStatusCompleted)
+	if res.Error != nil {
+		return fmt.Errorf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %w", res.Error)
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("[enrollment] ปิดใบที่เรียนครบแล้วย้อนหลัง %d ใบ", res.RowsAffected)
+	}
+	return nil
 }
 
 func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
@@ -277,6 +302,10 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 	waitlisted := false
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		lockedPkg, err := lockPackageSeats(tx, packageID)
+		if err != nil {
+			return err
+		}
 
 		expireStaleEnrollments(tx)
 
@@ -313,11 +342,11 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 			if err != nil {
 				return err
 			}
-			waitlisted = taken >= pkg.MaxSeats
+			waitlisted = taken >= lockedPkg.MaxSeats
 			return nil
 		}
 
-		full, err := seatsFull(tx, packageID, pkg.MaxSeats)
+		full, err := seatsFull(tx, packageID, lockedPkg.MaxSeats)
 		if err != nil {
 			return err
 		}
@@ -387,6 +416,10 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		lockedPkg, err := lockPackageSeats(tx, enrollment.PackageID)
+		if err != nil {
+			return err
+		}
 
 		expireStaleEnrollments(tx)
 
@@ -396,7 +429,7 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 		if err != nil {
 			return err
 		}
-		if taken >= enrollment.Package.MaxSeats {
+		if taken >= lockedPkg.MaxSeats {
 			if !allowOverbook {
 				return ErrPackageSeatsFull
 			}
@@ -680,6 +713,15 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 	}
 	if req.RemainingSessions != nil {
 		enrollment.RemainingSessions = uint(*req.RemainingSessions)
+
+		if req.Status == nil {
+			switch {
+			case enrollment.RemainingSessions == 0 && enrollment.Status == models.EnrollmentStatusActive:
+				enrollment.Status = models.EnrollmentStatusCompleted
+			case enrollment.RemainingSessions > 0 && enrollment.Status == models.EnrollmentStatusCompleted:
+				enrollment.Status = models.EnrollmentStatusActive
+			}
+		}
 	}
 
 	if err := s.db.Save(&enrollment).Error; err != nil {

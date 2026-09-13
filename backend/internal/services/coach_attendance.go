@@ -37,8 +37,6 @@ func (s *AttendanceService) findCoachByQR(code string) (*models.Coach, error) {
 }
 
 // checkInCoach บันทึกว่าโค้ชมาสอนคาบนี้
-//
-// ผ่าน loadOpenSession ด่านเดียวกับนักเรียน — คาบที่สแกนไม่ได้แล้ว โค้ชก็ไม่ควรสแกนได้
 func (s *AttendanceService) checkInCoach(
 	sessionID uint,
 	coach *models.Coach,
@@ -47,9 +45,6 @@ func (s *AttendanceService) checkInCoach(
 }
 
 // recordCoachAttendance คือทางเขียนบันทึกเช็คชื่อของโค้ชทางเดียวในระบบ
-//
-// ใช้ร่วมกันทั้งโค้ชสแกน QR เอง (qr_code, recordedBy=nil) และแอดมินเช็คให้ (manual, recordedBy=แอดมิน)
-// รวมไว้ที่เดียวเพื่อให้สองทางผ่านด่านเดียวกันและได้ตารางงานฉุกเฉินเหมือนกัน
 func (s *AttendanceService) recordCoachAttendance(
 	sessionID uint,
 	coach *models.Coach,
@@ -63,9 +58,6 @@ func (s *AttendanceService) recordCoachAttendance(
 
 	var record models.CoachAttendance
 
-	// ทรานแซกชันเดียว เพราะการสแกนหนึ่งครั้งอาจสร้างตารางงานให้ด้วย
-	// ถ้าบันทึกเช็คชื่อล้มเหลวทีหลัง ตารางงานที่เพิ่งสร้างต้องหายไปด้วย
-	// ไม่งั้นเหลือตารางงานลอย ๆ ที่ไปโผล่ในการคำนวณค่าจ้าง
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		session, err := s.loadOpenSession(tx, sessionID)
 		if err != nil {
@@ -89,8 +81,6 @@ func (s *AttendanceService) recordCoachAttendance(
 			RecordedByUserID:    recordedBy,
 		}
 
-		// พึ่ง unique index แทน SELECT-แล้ว-INSERT — สแกนรัวสองครั้ง
-		// สอง request จะอ่านเจอ "ยังไม่มี" พร้อมกันทั้งคู่
 		if err := tx.Create(&record).Error; err != nil {
 			if isUniqueViolation(err) {
 				return ErrCoachAlreadyWorkedIn
@@ -119,17 +109,6 @@ func (s *AttendanceService) recordCoachAttendance(
 }
 
 // ensureCoachWorkSchedule ทำให้แน่ใจว่าโค้ชมีตารางงานของคาบนี้ คืน true ถ้ามีอยู่ก่อนแล้ว
-//
-// รองรับกรณีจองสนามเพิ่มกะทันหันแล้วเรียกโค้ชมาเสริม ซึ่งแอดมินยังไม่ได้ assign
-//
-// ⚠️ ตั้งใจไม่เรียก validateScheduleSlot
-// กฎเวลาว่าง/เวลาชน/สนามซ้อน มีไว้กันแอดมินวางแผนผิด แต่ตรงนี้โค้ชมายืนอยู่จริงแล้ว
-// ปฏิเสธไปก็ไม่ได้ทำให้เขาไม่ได้สอน แค่ทำให้ข้อมูลหาย — ติดธง IsEmergency ให้มาตรวจแทน
-// (ธงเดียวกับที่แอดมินติ๊ก "กรณีฉุกเฉิน" ตอน assign เอง)
-//
-// ⚠️ ต้องเป็น find-or-create ห้าม create เปล่า ๆ
-// taughtSessionDates ไม่ dedupe วันที่ (Pluck ตรง ๆ) ทุกแถว WorkSchedule จึงเป็น
-// ค่าจ้างหนึ่งหน่วย สร้างซ้ำคาบเดิม = โค้ชได้เงินสองเท่า
 func (s *AttendanceService) ensureCoachWorkSchedule(
 	tx *gorm.DB,
 	coachID uint,
@@ -158,7 +137,6 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 	}
 
 	// ผูก PackageScheduleID ให้ด้วยถ้าหาเจอ แถวที่สร้างอัตโนมัติจะได้หน้าตา
-	// เหมือนแถวที่แอดมิน assign เอง ไม่ใช่ของแปลกปลอมในตาราง
 	var packageScheduleID *uint
 	var ps models.PackageSchedule
 	if err := tx.Where("package_id = ? AND day_of_week = ?",
@@ -172,8 +150,6 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 		StartTime: session.ScheduleStartTime,
 		EndTime:   session.ScheduleEndTime,
 
-		// court_number เว้นว่างให้แอดมินเติม — AttendanceSession ไม่เก็บสนาม
-		// และ validateScheduleSlot เองก็ถือว่าสนามเป็น optional อยู่แล้ว
 		Description: "เพิ่มอัตโนมัติจากการสแกนเช็คชื่อของโค้ช",
 
 		CoachID:           coachID,
@@ -182,7 +158,6 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 		PackageScheduleID: packageScheduleID,
 		IsEmergency:       true,
 
-		// แถวนี้เกิดตอนโค้ชสแกน = ตอนที่งานเกิดขึ้นจริง เรตปัจจุบันจึงเป็นเรตที่ถูกต้อง
 		PayRateSnapshot: coachPayRateSnapshot(tx, coachID),
 	}
 	if err := tx.Create(&schedule).Error; err != nil {
@@ -230,7 +205,6 @@ func (s *AttendanceService) coachSchedules(
 		return nil, errors.New("ไม่สามารถดึงตารางงานของโค้ชได้")
 	}
 
-	// work_schedules ไม่มี unique index แถวซ้ำจึงเกิดได้จริง (GetWeekSessions ก็กันแบบนี้)
 	seen := make(map[uint]bool, len(rows))
 	out := rows[:0]
 	for _, w := range rows {
@@ -255,8 +229,6 @@ func coachDisplayName(coach *models.Coach) (fullName, nickname string) {
 }
 
 // buildCoachRoster รวมรายชื่อจากสองทาง: ตารางงาน (คนที่ควรมา) + บันทึกเช็คชื่อ (คนที่มาแล้ว)
-//
-// ⚠️ ทางที่สองขาดไม่ได้ — โค้ชสแกนได้โดยไม่ต้องมีตารางงาน คนกลุ่มนั้นโผล่ทางนี้ทางเดียว
 func (s *AttendanceService) buildCoachRoster(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
@@ -329,12 +301,7 @@ func applyCoachAttendance(item *dto.CoachRosterItemDTO, record *models.CoachAtte
 	item.Remarks = record.Remarks
 }
 
-// ─── แอดมินเช็คชื่อให้โค้ช ───────────────────────────────────────────────────
-
 // ManualCoachCheckIn ให้แอดมินเช็คชื่อแทนโค้ชที่ลืม QR (คู่ขนานกับ ManualCheckIn ของนักเรียน)
-//
-// รับโค้ชคนไหนก็ได้ ไม่จำกัดเฉพาะคนในรายชื่อ เพราะเรียกโค้ชมาเสริมกะทันหันเป็นเรื่องปกติ
-// ensureCoachWorkSchedule จะเพิ่มตารางงานฉุกเฉินให้เหมือนตอนสแกน QR เอง
 func (s *AttendanceService) ManualCoachCheckIn(
 	sessionID uint,
 	coachID uint,
@@ -349,18 +316,7 @@ func (s *AttendanceService) ManualCoachCheckIn(
 		sessionID, &coach, models.CheckInMethodManual, strings.TrimSpace(remarks), &adminUserID)
 }
 
-// ─── มาร์คขาดงานตอนปิดรอบ ───────────────────────────────────────────────────
-
 // markCoachAbsentees มาร์คโค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อว่า "ขาดงาน"
-//
-// recordedBy = nil แปลว่างานปิดรอบอัตโนมัติเป็นคนมาร์ค (หลักเดียวกับ markAbsentees)
-//
-// ⚠️ กระทบค่าจ้างโดยตรง — แถว absent ที่สร้างตรงนี้ทำให้คาบนั้นไม่ถูกนับใน
-// taughtSessionDates โค้ชจึงไม่ได้เงินของคาบนั้น (เดิมมาร์คแล้วยังได้เงินเต็ม
-// ซึ่งเป็นบั๊ก) ก่อนแก้อะไรในฟังก์ชันนี้ ให้อ่านคอมเมนต์ของ taughtSessionDates ก่อน
-//
-// กรณีโค้ชมาสอนจริงแต่ลืมสแกน แอดมินแก้สถานะย้อนหลังได้ทั้งจากหน้ารอบที่เปิดอยู่
-// และหน้าประวัติเช็คชื่อ (UpdateCoachAttendanceStatus ไม่ห้ามแก้หลังปิดรอบ)
 func (s *AttendanceService) markCoachAbsentees(
 	tx *gorm.DB,
 	session *models.AttendanceSession,
@@ -400,7 +356,6 @@ func (s *AttendanceService) markCoachAbsentees(
 			RecordedByUserID:    recordedBy,
 		}
 		if err := tx.Create(&record).Error; err != nil {
-			// แอดมินชิงเช็คชื่อให้พอดีระหว่างปิดรอบ = ผลลัพธ์ที่ต้องการอยู่แล้ว
 			if isUniqueViolation(err) {
 				continue
 			}
@@ -410,11 +365,7 @@ func (s *AttendanceService) markCoachAbsentees(
 	return nil
 }
 
-// ─── แก้สถานะย้อนหลัง ────────────────────────────────────────────────────────
-
 // UpdateCoachAttendanceStatus สลับ present ⟷ absent ย้อนหลัง
-//
-// ง่ายกว่าของนักเรียนตรงที่ไม่มีโควตาให้หักหรือคืน จึงไม่ต้องใช้ quotaDelta
 func (s *AttendanceService) UpdateCoachAttendanceStatus(
 	attendanceID uint,
 	adminUserID uint,
@@ -450,30 +401,42 @@ func (s *AttendanceService) UpdateCoachAttendanceStatus(
 	}, nil
 }
 
-// ─── ประวัติของแอดมิน ────────────────────────────────────────────────────────
-
-// GetCoachHistory คืนประวัติเข้าสอนของโค้ชทุกคน ใช้ตัวกรองชุดเดียวกับ GetHistory
-// เพื่อให้สองลิสต์ครอบคลุมช่วงเดียวกันเสมอ แล้วหน้าเว็บเอาไปรวมเข้ารอบด้วย session_id
-func (s *AttendanceService) GetCoachHistory(courseID uint, date string) ([]dto.CoachHistoryItemDTO, error) {
+// GetCoachHistory คืนประวัติเข้าสอนของโค้ช ใช้ตัวกรองชุดเดียวกับ GetHistory
+func (s *AttendanceService) GetCoachHistory(f HistoryFilter) ([]dto.CoachHistoryItemDTO, error) {
 	query := s.db.Model(&models.CoachAttendance{}).
-		Limit(MaxHistoryRows).
 		Preload("Coach", withDeleted).
 		Preload("Coach.User", withDeleted).
-		Order("check_in_time DESC")
+		Order("coach_attendances.check_in_time DESC")
 
-	if date != "" {
-		from, to, err := localDayRange(date)
-		if err != nil {
-			return nil, err
-		}
-		query = query.Where("check_in_time >= ? AND check_in_time < ?", from, to)
+	start, end, ok, err := historyDateRange(f.From, f.To)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		query = query.Where(
+			"coach_attendances.check_in_time >= ? AND coach_attendances.check_in_time < ?",
+			start, end)
 	}
 
-	if courseID != 0 {
+	if len(f.SessionIDs) > 0 {
+		query = query.Where("coach_attendances.attendance_session_id IN ?", f.SessionIDs)
+	} else if f.Limit > 0 {
+		query = query.Limit(f.Limit)
+	}
+
+	if f.CourseID != 0 {
 		query = query.
 			Joins("JOIN attendance_sessions ON attendance_sessions.id = coach_attendances.attendance_session_id").
 			Joins("JOIN packages ON packages.id = attendance_sessions.package_id").
-			Where("packages.course_id = ?", courseID)
+			Where("packages.course_id = ?", f.CourseID)
+	}
+
+	if search := strings.TrimSpace(f.Query); search != "" {
+		pattern := nameSearchPattern(search)
+		query = query.
+			Joins("JOIN coaches ON coaches.id = coach_attendances.coach_id").
+			Joins("JOIN users AS coach_users ON coach_users.id = coaches.user_id").
+			Where("(coach_users.first_name || ' ' || coach_users.last_name) ILIKE ?", pattern)
 	}
 
 	var rows []models.CoachAttendance

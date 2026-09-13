@@ -6,11 +6,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// SessionCarryOver = ครั้งคงเหลือที่ทบเก็บไว้ ใช้ได้เฉพาะคอร์สเดิม (แพ็กเกจไหนในคอร์สก็ได้)
 type SessionCarryOver struct {
 	gorm.Model
 
 	CustomerID uint      `json:"customer_id" gorm:"index;not null"`
 	Customer   *Customer `json:"-" gorm:"foreignKey:CustomerID"`
+
+	CourseID uint `json:"course_id" gorm:"index"`
 
 	FromEnrollmentID uint        `json:"from_enrollment_id" gorm:"index;not null"`
 	FromEnrollment   *Enrollment `json:"-" gorm:"foreignKey:FromEnrollmentID"`

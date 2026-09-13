@@ -57,7 +57,7 @@ export default function ExtendEnrollmentModal({
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "ไม่สามารถทบครั้งไปคอร์สถัดไปได้");
+      setError(err instanceof Error ? err.message : "ไม่สามารถทบครั้งคงเหลือเก็บไว้ได้");
     } finally {
       setIsSaving(false);
     }
@@ -107,7 +107,7 @@ export default function ExtendEnrollmentModal({
             <p className="mt-1 text-sm text-gray-500">
               {notStarted
                 ? "ต้องอนุมัติหรือยืนยันการชำระเงินก่อน จึงจะมีครั้งคงเหลือให้ทบ"
-                : "ครั้งที่เหลือยังใช้เรียนได้ตามปกติ — ทบไปคอร์สถัดไปได้ก็ต่อเมื่อหมดอายุแล้ว"}
+                : "ครั้งที่เหลือยังใช้เรียนได้ตามปกติ — ทบเก็บไว้ได้ก็ต่อเมื่อหมดอายุแล้ว"}
             </p>
           </div>
         ) : (
@@ -144,7 +144,8 @@ export default function ExtendEnrollmentModal({
                 <div className="flex items-center gap-2">
                   <PiggyBank className="h-4 w-4 shrink-0 text-[#CC0000]" />
                   <span className="text-gray-700">
-                    ทบไปคอร์สถัดไป <span className="font-bold">{carriedSessions}</span> ครั้ง
+                    ทบเก็บไว้ให้{enrollment.courseName ? `คอร์ส${enrollment.courseName}` : "คอร์สเดิม"}{" "}
+                    <span className="font-bold">{carriedSessions}</span> ครั้ง
                   </span>
                 </div>
 
@@ -160,8 +161,12 @@ export default function ExtendEnrollmentModal({
                 ใบเดิมไม่ถูกแก้อะไรเลย — วันหมดอายุและเลข {enrollment.remaining_sessions} ครั้ง
                 ยังอยู่ครบเป็นหลักฐาน (ใบที่หมดอายุแล้วเอาไปเรียนต่อไม่ได้อยู่แล้ว)
                 <br />
-                ครั้งที่ทบจะถูกบวกให้อัตโนมัติเมื่อสมัครคอร์สใหม่ (ได้ระยะเวลาปกติ 1 เดือน)
-                ถ้าไม่สมัครต่อภายในกำหนดจะถูกริบตามไปด้วย
+                ครั้งที่ทบจะถูกบวกให้อัตโนมัติเมื่อกลับมาสมัคร{" "}
+                <span className="font-semibold">
+                  {enrollment.courseName ? `คอร์ส${enrollment.courseName}` : "คอร์สเดิม"}อีกครั้ง
+                </span>{" "}
+                จะเป็นแพ็กเกจไหนในคอร์สนี้ก็ได้ แต่เอาไปใช้กับคอร์สอื่นไม่ได้ ·
+                มีอายุ 90 วัน ถ้าไม่สมัครต่อภายในกำหนดจะถูกริบตามไปด้วย
                 <br />
                 <span className="font-semibold">ใบหนึ่งทบได้ครั้งเดียว</span> — กดแล้วกดซ้ำไม่ได้
               </p>
@@ -169,7 +174,7 @@ export default function ExtendEnrollmentModal({
 
             {noSessions && (
               <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
-                ใบนี้ไม่มีครั้งคงเหลือแล้ว จึงไม่มีอะไรให้ทบไปคอร์สถัดไป
+                ใบนี้ไม่มีครั้งคงเหลือแล้ว จึงไม่มีอะไรให้ทบเก็บไว้
               </div>
             )}
 

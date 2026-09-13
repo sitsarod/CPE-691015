@@ -80,7 +80,7 @@ export default function StudentEnrollmentsModal({
                 คอร์สเรียนของ {studentName}
               </h2>
               <p className="mt-0.5 text-xs text-gray-500">
-                ใบที่หมดอายุพร้อมครั้งที่ใช้ไม่ทัน ทบไปคอร์สถัดไปให้ได้จากที่นี่
+                ใบที่หมดอายุพร้อมครั้งที่ใช้ไม่ทัน ทบเก็บไว้ให้คอร์สเดิมได้จากที่นี่
               </p>
             </div>
             <button
@@ -182,7 +182,7 @@ export default function StudentEnrollmentsModal({
                           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
                         >
                           <Repeat className="h-4 w-4" />
-                          ทบครั้งไปคอร์สถัดไป
+                          ทบครั้งเก็บไว้
                         </button>
                       )}
                     </div>

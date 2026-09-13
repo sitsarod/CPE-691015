@@ -15,7 +15,7 @@ var (
 	ErrExtensionNotStarted = errors.New("ไม่สามารถขยายสิทธิ์ได้ เนื่องจากการลงทะเบียนนี้ยังไม่เริ่มเรียน")
 	ErrExtensionReasonReq  = errors.New("กรุณาระบุเหตุผลในการขยายสิทธิ์")
 	ErrExtensionCancelled  = errors.New("ไม่สามารถขยายสิทธิ์ให้การลงทะเบียนที่ถูกยกเลิกได้")
-	ErrExtensionNoSessions = errors.New("ใบลงทะเบียนนี้ไม่มีครั้งคงเหลือให้ทบไปคอร์สถัดไป")
+	ErrExtensionNoSessions = errors.New("ใบลงทะเบียนนี้ไม่มีครั้งคงเหลือให้ทบเก็บไว้")
 
 	ErrExtensionNotExpired  = errors.New("ขยายสิทธิ์ได้เฉพาะใบที่หมดอายุแล้ว — ใบนี้ยังเรียนได้ตามปกติ")
 	ErrExtensionAlreadyDone = errors.New("ใบลงทะเบียนนี้ถูกขยายสิทธิ์ไปแล้ว ทบซ้ำอีกไม่ได้")
@@ -24,7 +24,7 @@ var (
 		"เลยช่วงผ่อนผัน %d วันหลังหมดอายุแล้ว จึงขยายสิทธิ์ให้ไม่ได้", dto.GracePeriodDays)
 )
 
-// ExtendEnrollment ⚠️ ไม่ได้ขยายเวลาให้ใบนี้ — ทบครึ่งหนึ่งของครั้งคงเหลือไปคอร์สหน้า ที่เหลือริบ
+// ExtendEnrollment ⚠️ ไม่ได้ขยายเวลาให้ใบนี้ — ทบครึ่งหนึ่งของครั้งคงเหลือไว้ให้คอร์สเดิม ที่เหลือริบ
 func (s *EnrollmentService) ExtendEnrollment(
 	enrollmentID uint,
 	adminUserID uint,
@@ -42,8 +42,11 @@ func (s *EnrollmentService) ExtendEnrollment(
 
 		now := time.Now()
 
+		// แพ็กเกจของใบที่หมดอายุถูก soft delete ไปแล้วได้ ต้อง preload แบบเห็นแถวที่ลบด้วย
 		var enrollment models.Enrollment
-		if err := tx.First(&enrollment, enrollmentID).Error; err != nil {
+		if err := tx.
+			Preload("Package", withDeleted).
+			First(&enrollment, enrollmentID).Error; err != nil {
 			return ErrEnrollmentNotFound
 		}
 
