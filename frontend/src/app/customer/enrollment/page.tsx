@@ -237,20 +237,18 @@ export default function EnrollmentPage() {
 
   // ใบที่จบเส้นทางแล้วอยู่ในหน้าประวัติอย่างเดียว ไม่ปะปนกับคอร์สที่ใช้งานอยู่
   //
-  // ยกเว้นใบที่หมดอายุแต่ยังอยู่ในช่วงผ่อนผัน — ยังมีครั้งเหลือและขอขยายสิทธิ์ได้
-  // ถ้าซ่อนไปด้วย นักเรียนจะไม่รู้ว่ามีเวลาจำกัดให้ติดต่อแอดมิน
-  const isInGrace = (e: Enrollment) =>
-    e.grace_days_left !== null && e.grace_days_left > 0;
+  // ยกเว้นใบที่หมดอายุแล้วมีครั้งทบรออยู่ — ถ้าซ่อนไปด้วย นักเรียนจะไม่รู้ว่ายังมีสิทธิ์ค้าง
+  const hasCarryOver = (e: Enrollment) => e.carried_over_sessions > 0;
 
   const visibleEnrollments = enrollments.filter(
     (e) =>
-      e.status !== "rejected" && (e.status !== "expired" || isInGrace(e))
+      e.status !== "rejected" && (e.status !== "expired" || hasCarryOver(e))
   );
   const hiddenRejectedCount = enrollments.filter(
     (e) => e.status === "rejected"
   ).length;
   const hiddenExpiredCount = enrollments.filter(
-    (e) => e.status === "expired" && !isInGrace(e)
+    (e) => e.status === "expired" && !hasCarryOver(e)
   ).length;
 
   const displayCourses = courses;
@@ -317,9 +315,9 @@ export default function EnrollmentPage() {
               const expiry = describeExpiry(
                 item.days_left,
                 item.status,
-                item.grace_days_left
+                item.carried_over_sessions
               );
-              const inGrace = isInGrace(item);
+              const carried = hasCarryOver(item);
 
               return (
               <div
@@ -339,14 +337,14 @@ export default function EnrollmentPage() {
                 {item.status === 'expired' && (
                   <div
                     className={`absolute top-0 left-0 right-0 text-xs font-bold py-1.5 text-center flex justify-center items-center ${
-                      inGrace
-                        ? 'bg-red-100 text-red-700'
+                      carried
+                        ? 'bg-emerald-100 text-emerald-700'
                         : 'bg-slate-200 text-slate-700'
                     }`}
                   >
                     <CalendarX className="w-3 h-3 mr-1" />
-                    {inGrace
-                      ? `หมดอายุ · ติดต่อแอดมินได้อีก ${item.grace_days_left} วัน`
+                    {carried
+                      ? `หมดอายุ · ทบไว้ให้ ${item.carried_over_sessions} ครั้ง`
                       : 'หมดอายุแล้ว'}
                   </div>
                 )}
@@ -412,8 +410,8 @@ export default function EnrollmentPage() {
                   <div className="flex justify-between gap-2">
                     <dt className="text-gray-500 shrink-0">ราคา</dt>
                     <dd className="font-bold text-[#CC0000] text-right">
-                      {item.package?.price
-                        ? `${item.package.price.toLocaleString("th-TH")} บาท`
+                      {item.agreed_price || item.package?.price
+                        ? `${(item.agreed_price || item.package!.price).toLocaleString("th-TH")} บาท`
                         : "สอบถามราคา"}
                     </dd>
                   </div>
@@ -446,11 +444,10 @@ export default function EnrollmentPage() {
                       <span className="text-xs sm:text-sm text-orange-600">
                         ชำระเงินก่อนจึงจะเริ่มเรียนและมีตารางเรียน
                       </span>
-                    ) : inGrace ? (
-                      <span className="text-xs sm:text-sm font-semibold text-red-600">
-                        เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
-                        ติดต่อแอดมินภายใน {item.grace_days_left} วัน
-                        เพื่อขอทบครึ่งหนึ่งไปใช้กับคอร์สถัดไป
+                    ) : carried ? (
+                      <span className="text-xs sm:text-sm font-semibold text-emerald-700">
+                        ทบไว้ให้ {item.carried_over_sessions} ครั้ง ·
+                        จะถูกบวกเข้าให้อัตโนมัติเมื่อสมัครคอร์สนี้อีกครั้ง
                       </span>
                     ) : item.status === 'expired' ? (
                       <span className="text-xs sm:text-sm text-slate-500">

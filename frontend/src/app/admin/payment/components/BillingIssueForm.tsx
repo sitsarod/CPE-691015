@@ -225,7 +225,7 @@ export default function BillingIssueForm({
 
           {/* 5) ประเภทค่าใช้จ่าย + วันครบกำหนด */}
           <div className="grid grid-cols-1 gap-[22px] md:grid-cols-2">
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">ประเภทค่าใช้จ่าย {req}</label>
               <div className="relative">
                 <select
@@ -243,7 +243,7 @@ export default function BillingIssueForm({
               </div>
               {errType && <p className="mt-1 text-[11.5px] text-rose-500">กรุณาเลือกประเภทค่าใช้จ่าย</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">วันครบกำหนดชำระเงิน {req}</label>
               <div className="relative">
                 <input

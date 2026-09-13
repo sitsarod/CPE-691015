@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, Loader2, Repeat, AlertTriangle, BookOpen } from "lucide-react";
+import { X, Loader2, Repeat, BookOpen } from "lucide-react";
 import { fetchCustomerEnrollments } from "@/services/enrollmentAPI";
 import type { Enrollment } from "@/types/enrollment";
 import {
@@ -10,16 +10,12 @@ import {
   formatThaiDate,
 } from "@/components/course/expiryUtils";
 import CourseCover from "@/components/course/CourseCover";
-import ExtendEnrollmentModal, {
-  ExtendTarget,
-} from "@/app/admin/enrollments/components/ExtendEnrollmentModal";
 
 interface StudentEnrollmentsModalProps {
   /** users.id ของนักเรียน — null = ปิดโมดัล */
   userId: number | null;
   studentName: string;
   onClose: () => void;
-  onChanged?: () => void;
 }
 
 
@@ -27,12 +23,10 @@ export default function StudentEnrollmentsModal({
   userId,
   studentName,
   onClose,
-  onChanged,
 }: StudentEnrollmentsModalProps) {
   const [items, setItems] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [extending, setExtending] = useState<ExtendTarget | null>(null);
 
   const load = useCallback(async () => {
     if (userId == null) return;
@@ -59,10 +53,10 @@ export default function StudentEnrollmentsModal({
 
   if (userId == null) return null;
 
-  // เรียงให้คนที่ต้องรีบจัดการอยู่บนสุด — ผ่อนผันก่อน แล้วค่อยกำลังเรียน แล้วที่เหลือ
+  // เรียงให้ใบที่มีครั้งทบรออยู่ขึ้นก่อน แล้วค่อยกำลังเรียน แล้วที่เหลือ
   const sorted = [...items].sort((a, b) => {
     const rank = (e: Enrollment) => {
-      if (e.grace_days_left !== null && e.grace_days_left > 0) return 0;
+      if (e.carried_over_sessions > 0) return 0;
       if (e.status === "active") return 1;
       return 2;
     };
@@ -80,7 +74,7 @@ export default function StudentEnrollmentsModal({
                 คอร์สเรียนของ {studentName}
               </h2>
               <p className="mt-0.5 text-xs text-gray-500">
-                ใบที่หมดอายุพร้อมครั้งที่ใช้ไม่ทัน ทบไปคอร์สถัดไปให้ได้จากที่นี่
+                ใบที่หมดอายุพร้อมครั้งที่ใช้ไม่ทัน ทบเก็บไว้ให้คอร์สเดิมได้จากที่นี่
               </p>
             </div>
             <button
@@ -109,19 +103,18 @@ export default function StudentEnrollmentsModal({
             ) : (
               <div className="space-y-3">
                 {sorted.map((e) => {
-                  const inGrace =
-                    e.grace_days_left !== null && e.grace_days_left > 0;
+                  const carried = e.carried_over_sessions > 0;
                   const expiry = describeExpiry(
                     e.days_left,
                     e.status,
-                    e.grace_days_left
+                    e.carried_over_sessions
                   );
 
                   return (
                     <div
                       key={`enroll-${e.id}`}
                       className={`rounded-xl border p-4 ${
-                        inGrace ? "border-red-200 bg-red-50" : "border-gray-200"
+                        carried ? "border-emerald-200 bg-emerald-50" : "border-gray-200"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -156,34 +149,12 @@ export default function StudentEnrollmentsModal({
                         </p>
                       )}
 
-                      {/* ขึ้นเตือนเฉพาะคนที่ยังทันช่วยได้ ไม่ใช่ทุกคนที่หมดอายุ */}
-                      {inGrace && (
-                        <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold leading-relaxed text-red-700">
-                          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                          ยังเหลือ {e.remaining_sessions} ครั้งที่ใช้ไม่ทัน ·
-                          ทบให้ได้ภายใน {e.grace_days_left} วัน
+                      {carried && (
+                        <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold leading-relaxed text-emerald-700">
+                          <Repeat className="mt-0.5 h-3 w-3 shrink-0" />
+                          ระบบทบไว้ให้ {e.carried_over_sessions} ครั้ง — จะถูกบวกเข้าใบใหม่
+                          ของคอร์สนี้อัตโนมัติตอนเปิดสิทธิ์
                         </p>
-                      )}
-
-                      {inGrace && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExtending({
-                              id: e.id,
-                              status: e.status,
-                              expires_at: e.expires_at,
-                              total_sessions: e.total_sessions,
-                              remaining_sessions: e.remaining_sessions,
-                              studentName,
-                              courseName: e.package?.course?.course_name,
-                            })
-                          }
-                          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-                        >
-                          <Repeat className="h-4 w-4" />
-                          ทบครั้งไปคอร์สถัดไป
-                        </button>
                       )}
                     </div>
                   );
@@ -193,15 +164,6 @@ export default function StudentEnrollmentsModal({
           </div>
         </div>
       </div>
-
-      <ExtendEnrollmentModal
-        enrollment={extending}
-        onClose={() => setExtending(null)}
-        onSuccess={() => {
-          load();
-          onChanged?.();
-        }}
-      />
     </>
   );
 }

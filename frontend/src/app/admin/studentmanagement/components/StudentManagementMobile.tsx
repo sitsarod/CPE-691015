@@ -15,8 +15,8 @@ import { getId, type StudentManagement } from "./useStudentManagement";
  * หน้าจัดการนักเรียน — เวอร์ชันมือถือ
  *
  * การ์ดต่อคน แตะทั้งใบเพื่อเปิด action sheet (ดูรายละเอียด / คอร์สเรียน / ลบ)
- * ปุ่ม "คอร์สเรียน" โชว์บนการ์ดด้วยเพื่อให้แตะง่าย (เป็นทางเดียวที่ขยายสิทธิ์ได้)
- * แถบเตือน "รอขยายสิทธิ์" อยู่บนสุด กดเพื่อกรองเฉพาะกลุ่มนั้น
+ * ปุ่ม "คอร์สเรียน" โชว์บนการ์ดด้วยเพื่อให้แตะง่าย
+ * แถบ "มีครั้งทบรอใช้" อยู่บนสุด กดเพื่อกรองเฉพาะกลุ่มนั้น
  */
 export function StudentManagementMobile({ manager }: { manager: StudentManagement }) {
   const [actionItem, setActionItem] = useState<StudentListResponseDTO | null>(null);
@@ -32,29 +32,29 @@ export function StudentManagementMobile({ manager }: { manager: StudentManagemen
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <SummaryCard label="นักเรียนทั้งหมด" value={manager.stats.total} icon={GraduationCap} tint="bg-rose-100 text-rose-700" />
-        <SummaryCard label="รอขยายสิทธิ์" value={manager.stats.grace} icon={CalendarClock} tint="bg-red-100 text-red-700" />
+        <SummaryCard label="มีครั้งทบรอใช้" value={manager.stats.carryOver} icon={CalendarClock} tint="bg-emerald-100 text-emerald-700" />
         <SummaryCard label="ระบุเบอร์โทร" value={manager.stats.withPhone} icon={Phone} tint="bg-emerald-100 text-emerald-700" />
         <SummaryCard label="ระบุชื่อเล่น" value={manager.stats.withNickname} icon={UserRound} tint="bg-violet-100 text-violet-700" />
       </div>
 
       <AdminErrorBanner message={manager.error} />
 
-      {/* แถบเตือนกลุ่มรอขยายสิทธิ์ — กดเพื่อกรอง */}
-      {manager.graceStudents.length > 0 && (
+      {/* แถบกลุ่มที่มีครั้งทบรอใช้ — กดเพื่อกรอง */}
+      {manager.carryOverStudents.length > 0 && (
         <button
           type="button"
-          onClick={() => manager.setShowGraceOnly((v) => !v)}
+          onClick={() => manager.setShowCarryOverOnly((v) => !v)}
           className={`mt-6 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
-            manager.showGraceOnly ? "border-red-300 bg-red-100" : "border-red-200 bg-red-50 hover:bg-red-100"
+            manager.showCarryOverOnly ? "border-emerald-300 bg-emerald-100" : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
           }`}
         >
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-red-900">
-              มี {manager.graceStudents.length} คนที่คอร์สหมดอายุแล้วแต่ยังเรียนไม่ครบ
+            <p className="text-sm font-bold text-emerald-900">
+              มี {manager.carryOverStudents.length} คนที่มีครั้งทบรอใช้อยู่
             </p>
-            <p className="mt-0.5 text-sm text-red-700">
-              <span className="font-semibold underline">{manager.showGraceOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}</span>
+            <p className="mt-0.5 text-sm text-emerald-700">
+              <span className="font-semibold underline">{manager.showCarryOverOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}</span>
             </p>
           </div>
         </button>
@@ -75,7 +75,7 @@ export function StudentManagementMobile({ manager }: { manager: StudentManagemen
         ) : (
           <>
             {manager.filteredStudents.map((item) => {
-              const grace = item.graceEnrollments ?? 0;
+              const carried = item.carryOverSessions ?? 0;
               return (
                 <div
                   key={getId(item)}
@@ -106,16 +106,16 @@ export function StudentManagementMobile({ manager }: { manager: StudentManagemen
                     <span className="inline-flex items-center gap-1 text-gray-500">
                       <Phone className="h-3.5 w-3.5" /> {item.phoneNumber || "-"}
                     </span>
-                    {grace > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                        <CalendarClock className="h-3 w-3" /> รอขยายสิทธิ์ {grace}
+                    {carried > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                        <CalendarClock className="h-3 w-3" /> ทบรอใช้ {carried} ครั้ง
                       </span>
                     )}
                     {/* ปุ่มคอร์สเรียน — โชว์บนการ์ด แตะแล้วไม่เปิด action sheet */}
                     <button
                       onClick={(e) => { e.stopPropagation(); manager.setEnrollmentsOf(item); }}
                       className={`ml-auto inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold ${
-                        grace > 0 ? "border-[#CC0000] bg-red-50 text-[#CC0000]" : "border-gray-300 bg-white text-gray-600"
+                        carried > 0 ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-white text-gray-600"
                       }`}
                     >
                       <BookOpen className="h-3.5 w-3.5" /> คอร์สเรียน
@@ -158,7 +158,7 @@ export function StudentManagementMobile({ manager }: { manager: StudentManagemen
                 <Eye className="h-5 w-5 text-gray-400" /> ดูรายละเอียด
               </button>
               <button onClick={() => { const it = actionItem; setActionItem(null); manager.setEnrollmentsOf(it); }} className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-gray-700 active:bg-gray-50">
-                <BookOpen className="h-5 w-5 text-gray-400" /> คอร์สเรียน / ขยายสิทธิ์
+                <BookOpen className="h-5 w-5 text-gray-400" /> คอร์สเรียน
               </button>
               <button onClick={() => { const it = actionItem; setActionItem(null); manager.handleDelete(it); }} className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-sm font-medium text-red-600 active:bg-red-50">
                 <Trash2 className="h-5 w-5" /> ลบ
@@ -194,7 +194,6 @@ export function StudentManagementMobile({ manager }: { manager: StudentManagemen
         userId={manager.enrollmentsOf ? getId(manager.enrollmentsOf) : null}
         studentName={manager.enrollmentsOf ? `${manager.enrollmentsOf.firstName} ${manager.enrollmentsOf.lastName}` : ""}
         onClose={() => manager.setEnrollmentsOf(null)}
-        onChanged={manager.reload}
       />
     </div>
   );

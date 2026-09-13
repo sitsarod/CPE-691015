@@ -1,8 +1,6 @@
 export const EXPIRY_WARNING_DAYS = 7;
 
-export const GRACE_PERIOD_DAYS = 7;
-
-export type ExpiryTone = "none" | "normal" | "warning" | "expired" | "grace";
+export type ExpiryTone = "none" | "normal" | "warning" | "expired" | "carried";
 
 export interface ExpiryDisplay {
   label: string;
@@ -12,13 +10,12 @@ export interface ExpiryDisplay {
 export function describeExpiry(
   daysLeft: number | null,
   status?: string,
-  graceDaysLeft?: number | null
+  carriedOverSessions?: number
 ): ExpiryDisplay {
- 
-  if (graceDaysLeft !== null && graceDaysLeft !== undefined && graceDaysLeft > 0) {
+  if (carriedOverSessions && carriedOverSessions > 0) {
     return {
-      label: `หมดอายุแล้ว · ติดต่อแอดมินได้อีก ${graceDaysLeft} วัน`,
-      tone: "grace",
+      label: `หมดอายุแล้ว · ทบไว้ให้ ${carriedOverSessions} ครั้ง`,
+      tone: "carried",
       highlight: true,
     };
   }
@@ -50,8 +47,8 @@ export function expiryTextClass(tone: ExpiryTone): string {
   switch (tone) {
     case "expired":
       return "text-slate-500";
-    case "grace":
-      return "text-red-600";
+    case "carried":
+      return "text-emerald-700";
     case "warning":
       return "text-orange-600";
     case "normal":
@@ -65,8 +62,8 @@ export function expiryBadgeClass(tone: ExpiryTone): string {
   switch (tone) {
     case "expired":
       return "bg-slate-100 text-slate-700 border-slate-200";
-    case "grace":
-      return "bg-red-50 text-red-700 border-red-200";
+    case "carried":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "warning":
       return "bg-orange-50 text-orange-700 border-orange-200";
     case "normal":

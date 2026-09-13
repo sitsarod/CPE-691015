@@ -111,6 +111,26 @@ func main() {
 		log.Fatalf("สร้าง index กันสมัครซ้ำไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.EnsureCarryOverCourseScope(db); err != nil {
+		log.Fatalf("ผูกคอร์สให้ครั้งที่ทบไว้ไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.BackfillExpiredCarryOver(db); err != nil {
+		log.Fatalf("ทบครั้งคงเหลือย้อนหลังไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.BackfillCarryOverIntoRenewals(db); err != nil {
+		log.Fatalf("ย้ายยอดทบเก่าเข้าใบที่สมัครต่อไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.BackfillCompletedEnrollments(db); err != nil {
+		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
+	}
+
+	if err := services.BackfillEnrollmentAgreedPrice(db); err != nil {
+		log.Fatalf("เติมราคาที่ตกลงกันให้ใบลงทะเบียนเก่าไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
 	}

@@ -39,7 +39,7 @@ function StatusBadge({ status }: { status: AdminEnrollment["status"] }) {
 
 function ExpiryInfo({ item }: { item: AdminEnrollment }) {
   const expiry = item.expires_at
-    ? describeExpiry(item.days_left, item.status, item.grace_days_left)
+    ? describeExpiry(item.days_left, item.status, item.carried_over_sessions)
     : null;
 
   return (
@@ -50,9 +50,9 @@ function ExpiryInfo({ item }: { item: AdminEnrollment }) {
           <div className={`text-xs font-semibold ${expiryTextClass(expiry.tone)}`}>
             {expiry.label}
           </div>
-          {item.grace_days_left !== null && item.grace_days_left > 0 && (
-            <div className="text-xs font-bold text-red-600">
-              ยังเหลือ {item.remaining_sessions} ครั้ง
+          {item.carried_over_sessions > 0 && (
+            <div className="text-xs font-bold text-emerald-700">
+              ทบไว้ให้ {item.carried_over_sessions} ครั้ง
             </div>
           )}
         </>
@@ -234,7 +234,7 @@ export default function AdminEnrollmentsPage() {
               <p className="text-xs text-gray-600">
                 แพ็กเกจ {item.package?.sessions_count} ครั้ง ·{' '}
                 <span className="font-semibold text-gray-900">
-                  {item.package?.price?.toLocaleString()} ฿
+                  {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-gray-500">
@@ -290,7 +290,7 @@ export default function AdminEnrollmentsPage() {
                   </div>
                 </td>
                 <td className="p-4 font-semibold text-gray-900">
-                  {item.package?.price?.toLocaleString()} ฿
+                  {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </td>
                 <td className="p-4 text-sm text-gray-600">
                   {new Date(item.enrollment_date).toLocaleDateString('th-TH')}

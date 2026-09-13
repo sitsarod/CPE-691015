@@ -10,6 +10,7 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type EnrollmentService struct {
@@ -72,7 +73,7 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 	e.StartedAt = &now
 	e.ExpiresAt = &expiresAt
 
-	carried, err := consumeCarryOver(tx, e)
+	carried, err := consumeCarryOver(tx, e, pkg)
 	if err != nil {
 		return err
 	}
@@ -105,10 +106,13 @@ func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) e
 
 	courseName := "คอร์สเรียน"
 	var sessions uint
-	var price float64
+	price := e.AgreedPrice
 	if e.Package != nil {
 		sessions = e.Package.SessionsCount
-		price = e.Package.Price
+		// 0 = ใบเก่าที่ยังไม่มีสแนปช็อต — แพ็กเกจราคา 0 สร้างไม่ได้อยู่แล้ว
+		if price == 0 {
+			price = e.Package.Price
+		}
 		if e.Package.Course != nil {
 			courseName = e.Package.Course.CourseName
 		}
@@ -171,6 +175,16 @@ func seatsTaken(tx *gorm.DB, packageID uint) (uint, error) {
 	return uint(taken), nil
 }
 
+// lockPackageSeats จองสิทธิ์ตัดสินที่นั่งของแพ็กเกจนี้ไว้กับทรานแซกชันเดียว
+func lockPackageSeats(tx *gorm.DB, packageID uint) (*models.Package, error) {
+	var pkg models.Package
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&pkg, packageID).Error; err != nil {
+		return nil, ErrPackageNotFound
+	}
+	return &pkg, nil
+}
+
 func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
 	taken, err := seatsTaken(tx, packageID)
 	if err != nil {
@@ -180,12 +194,70 @@ func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
 }
 
 func expireStaleEnrollments(db *gorm.DB) {
-	if err := db.Model(&models.Enrollment{}).
+	var due []models.Enrollment
+	if err := db.
 		Where("status = ? AND expires_at IS NOT NULL AND expires_at < ?",
 			models.EnrollmentStatusActive, startOfLocalDay(nowLocal())).
-		Update("status", models.EnrollmentStatusExpired).Error; err != nil {
-		log.Printf("[enrollment] อัปเดตสถานะใบที่หมดอายุไม่สำเร็จ: %v", err)
+		Find(&due).Error; err != nil {
+		log.Printf("[enrollment] หาใบที่หมดอายุไม่สำเร็จ: %v", err)
+		return
 	}
+
+	for i := range due {
+		e := &due[i]
+
+		// ปิดทีละใบเพื่อให้รู้ว่าใครเป็นคนพลิกสถานะ — ฟังก์ชันนี้ถูกเรียกจากทุกจุดที่อ่านข้อมูล
+		// ถ้าปิดรวดเดียวแล้วค่อยทบ สองคำขอที่เข้ามาพร้อมกันจะทบให้ใบเดียวกันคนละรอบ
+		// พลิกสถานะกับทบอยู่ใน transaction เดียวกัน ทบล้มก็ถอยสถานะกลับให้รอบหน้าลองใหม่
+		err := db.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.Enrollment{}).
+				Where("id = ? AND status = ?", e.ID, models.EnrollmentStatusActive).
+				Update("status", models.EnrollmentStatusExpired)
+			if res.Error != nil || res.RowsAffected == 0 {
+				return res.Error
+			}
+			e.Status = models.EnrollmentStatusExpired
+
+			return autoCarryOver(tx, e)
+		})
+		if err != nil {
+			log.Printf("[enrollment] #%d: ปิดใบที่หมดอายุไม่สำเร็จ จะลองใหม่รอบหน้า: %v", e.ID, err)
+		}
+	}
+}
+
+// BackfillCompletedEnrollments ปิดใบที่ใช้ครั้งครบแล้วแต่ยังค้างเป็น active
+func BackfillCompletedEnrollments(db *gorm.DB) error {
+	res := db.Model(&models.Enrollment{}).
+		Where("status = ? AND remaining_sessions = 0", models.EnrollmentStatusActive).
+		Update("status", models.EnrollmentStatusCompleted)
+	if res.Error != nil {
+		return fmt.Errorf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %w", res.Error)
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("[enrollment] ปิดใบที่เรียนครบแล้วย้อนหลัง %d ใบ", res.RowsAffected)
+	}
+	return nil
+}
+
+// BackfillEnrollmentAgreedPrice เติมราคาที่ตกลงกันให้ใบเก่าจากราคาแพ็กเกจที่ใบนั้นผูกอยู่
+func BackfillEnrollmentAgreedPrice(db *gorm.DB) error {
+	// ไม่กรอง deleted_at ของ packages โดยตั้งใจ — ใบเก่าของแพ็กเกจที่ถูกลบก็ยังต้องมีราคา
+	res := db.Exec(`
+		UPDATE enrollments AS e
+		SET agreed_price = p.price
+		FROM packages AS p
+		WHERE p.id = e.package_id
+		  AND COALESCE(e.agreed_price, 0) = 0
+		  AND p.price > 0
+	`)
+	if res.Error != nil {
+		return fmt.Errorf("เติมราคาที่ตกลงกันให้ใบลงทะเบียนเก่าไม่สำเร็จ: %w", res.Error)
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("[enrollment] เติมราคาที่ตกลงกันย้อนหลัง %d ใบ", res.RowsAffected)
+	}
+	return nil
 }
 
 func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
@@ -277,6 +349,13 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 	waitlisted := false
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		lockedPkg, err := lockPackageSeats(tx, packageID)
+		if err != nil {
+			return err
+		}
+
+		// ล็อกราคาไว้กับใบตั้งแต่ตอนสมัคร บิลที่ออกทีหลังตอนอนุมัติจะได้ไม่เพี้ยนตามราคาใหม่
+		newEnrollment.AgreedPrice = lockedPkg.Price
 
 		expireStaleEnrollments(tx)
 
@@ -313,11 +392,11 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 			if err != nil {
 				return err
 			}
-			waitlisted = taken >= pkg.MaxSeats
+			waitlisted = taken >= lockedPkg.MaxSeats
 			return nil
 		}
 
-		full, err := seatsFull(tx, packageID, pkg.MaxSeats)
+		full, err := seatsFull(tx, packageID, lockedPkg.MaxSeats)
 		if err != nil {
 			return err
 		}
@@ -387,6 +466,10 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		lockedPkg, err := lockPackageSeats(tx, enrollment.PackageID)
+		if err != nil {
+			return err
+		}
 
 		expireStaleEnrollments(tx)
 
@@ -396,7 +479,7 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 		if err != nil {
 			return err
 		}
-		if taken >= enrollment.Package.MaxSeats {
+		if taken >= lockedPkg.MaxSeats {
 			if !allowOverbook {
 				return ErrPackageSeatsFull
 			}
@@ -503,7 +586,7 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 	for i := range enrollments {
 		ids = append(ids, enrollments[i].ID)
 	}
-	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	carried, err := carriedOverSessions(s.db, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -516,26 +599,27 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 // เหตุผลที่ไม่ส่ง model ดิบ: relation ที่ Preload มาจะติดไปทั้งก้อน และถ้าวันไหน
 // มีคนเพิ่ม Preload("...User") เข้ามา bcrypt hash จะรั่วทันที
 // (models.User.Password ยังใช้ tag json:"password" ไม่ใช่ json:"-")
-func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]bool) []dto.CustomerEnrollmentDTO {
+func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]uint) []dto.CustomerEnrollmentDTO {
 	items := make([]dto.CustomerEnrollmentDTO, 0, len(enrollments))
 
 	for i := range enrollments {
 		e := &enrollments[i]
 
 		item := dto.CustomerEnrollmentDTO{
-			ID:                e.ID,
-			Status:            string(e.Status),
-			EnrollmentDate:    e.EnrollmentDate,
-			TotalSessions:     e.TotalSessions,
-			RemainingSessions: e.RemainingSessions,
-			BillingID:         e.BillingID,
-			StartedAt:         e.StartedAt,
-			ExpiresAt:         e.ExpiresAt,
-			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
-			IsOverdue:         dto.IsBillingOverdue(e.Billing),
-			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions, carried[e.ID]),
-			RejectedReason:    e.RejectedReason,
-			RejectedAt:        e.RejectedAt,
+			ID:                  e.ID,
+			Status:              string(e.Status),
+			EnrollmentDate:      e.EnrollmentDate,
+			TotalSessions:       e.TotalSessions,
+			RemainingSessions:   e.RemainingSessions,
+			AgreedPrice:         e.AgreedPrice,
+			BillingID:           e.BillingID,
+			StartedAt:           e.StartedAt,
+			ExpiresAt:           e.ExpiresAt,
+			DaysLeft:            dto.DaysLeft(e.ExpiresAt),
+			IsOverdue:           dto.IsBillingOverdue(e.Billing),
+			CarriedOverSessions: carried[e.ID],
+			RejectedReason:      e.RejectedReason,
+			RejectedAt:          e.RejectedAt,
 		}
 
 		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
@@ -601,7 +685,7 @@ func (s *EnrollmentService) GetAllEnrollments() ([]dto.AdminEnrollmentDTO, error
 	for i := range enrollments {
 		ids = append(ids, enrollments[i].ID)
 	}
-	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	carried, err := carriedOverSessions(s.db, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -680,6 +764,15 @@ func (s *EnrollmentService) UpdateEnrollment(id uint, req dto.UpdateEnrollmentRe
 	}
 	if req.RemainingSessions != nil {
 		enrollment.RemainingSessions = uint(*req.RemainingSessions)
+
+		if req.Status == nil {
+			switch {
+			case enrollment.RemainingSessions == 0 && enrollment.Status == models.EnrollmentStatusActive:
+				enrollment.Status = models.EnrollmentStatusCompleted
+			case enrollment.RemainingSessions > 0 && enrollment.Status == models.EnrollmentStatusCompleted:
+				enrollment.Status = models.EnrollmentStatusActive
+			}
+		}
 	}
 
 	if err := s.db.Save(&enrollment).Error; err != nil {

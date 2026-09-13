@@ -9,6 +9,7 @@ import (
 
 	"CPE-691015/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // overdueCutoff คืนต้นวันของวันนี้ (เขตเวลาเครื่อง) — บิลที่ครบกำหนด "ก่อน" เวลานี้ถือว่าเกินกำหนด
@@ -277,6 +278,29 @@ func (s *BillingService) CreateSplitBillingFromAttendance(courseID uint, dateStr
 
 	// ใช้ Transaction ในการบันทึกบิลทุกคน
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// ล็อกรอบของวันนั้นก่อนเช็ค กันแอดมินอีกคนออกบิลค่าสนามของรอบเดียวกันพร้อมกันแล้วเก็บเงินสองรอบ
+		var daySessions []models.AttendanceSession
+		if err := courseDaySessions(tx, courseID, parsedDate, nextDay).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Find(&daySessions).Error; err != nil {
+			return errors.New("ไม่สามารถตรวจสอบบิลค่าสนามของวันที่ระบุได้")
+		}
+		// รอบเก่า (legacy) ถูกนับว่าออกบิลแล้วตอน migrate โดยที่ไม่รู้ว่าเก็บจริงหรือยัง จึงยังออกย้อนหลังได้
+		for _, ds := range daySessions {
+			if ds.CourtBilledAt != nil && ds.CourtFeeSource != models.CourtFeeSourceLegacy {
+				return businessErr("รอบเช็คชื่อของวันที่เลือกออกบิลค่าสนามไปแล้ว — ออกซ้ำจะเก็บเงินนักเรียนสองรอบ")
+			}
+		}
+
+		// บันทึกว่ารอบของวันนี้ออกบิลค่าสนามแล้ว ไม่ให้ขึ้นรอออกบิลซ้ำในหน้าเช็คชื่อ
+		if err := courseDaySessions(tx, courseID, parsedDate, nextDay).
+			Updates(map[string]any{
+				"court_billed_at":  time.Now(),
+				"court_fee_source": models.CourtFeeSourceSplit,
+			}).Error; err != nil {
+			return errors.New("ไม่สามารถบันทึกการออกบิลค่าสนามของรอบเช็คชื่อได้")
+		}
+
 		for customerID := range uniqueUserIDs {
 			billing := models.Billing{
 				Description:   description,

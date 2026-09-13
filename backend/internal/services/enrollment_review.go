@@ -27,28 +27,27 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 		return nil, ErrEnrollmentNotFound
 	}
 
-	carried, err := carriedOverEnrollmentIDs(s.db, []uint{enrollment.ID})
+	carried, err := carriedOverSessions(s.db, []uint{enrollment.ID})
 	if err != nil {
 		return nil, err
 	}
 
 	result := &dto.EnrollmentReviewDTO{
 		Enrollment: dto.ReviewEnrollmentInfo{
-			ID:                enrollment.ID,
-			Status:            string(enrollment.Status),
-			EnrollmentDate:    enrollment.EnrollmentDate,
-			TotalSessions:     enrollment.TotalSessions,
-			RemainingSessions: enrollment.RemainingSessions,
-			BillingID:         enrollment.BillingID,
-			WaitingDays:       daysSince(enrollment.EnrollmentDate),
-			StartedAt:         enrollment.StartedAt,
-			ExpiresAt:         enrollment.ExpiresAt,
-			DaysLeft:          dto.DaysLeft(enrollment.ExpiresAt),
-			GraceDaysLeft: dto.GraceDaysLeft(
-				string(enrollment.Status), enrollment.ExpiresAt, enrollment.RemainingSessions,
-				carried[enrollment.ID]),
-			RejectedReason: enrollment.RejectedReason,
-			RejectedAt:     enrollment.RejectedAt,
+			ID:                  enrollment.ID,
+			Status:              string(enrollment.Status),
+			EnrollmentDate:      enrollment.EnrollmentDate,
+			TotalSessions:       enrollment.TotalSessions,
+			RemainingSessions:   enrollment.RemainingSessions,
+			AgreedPrice:         enrollment.AgreedPrice,
+			BillingID:           enrollment.BillingID,
+			WaitingDays:         daysSince(enrollment.EnrollmentDate),
+			StartedAt:           enrollment.StartedAt,
+			ExpiresAt:           enrollment.ExpiresAt,
+			DaysLeft:            dto.DaysLeft(enrollment.ExpiresAt),
+			CarriedOverSessions: carried[enrollment.ID],
+			RejectedReason:      enrollment.RejectedReason,
+			RejectedAt:          enrollment.RejectedAt,
 		},
 		OtherEnrollments: []dto.ReviewOtherEnrollment{},
 	}

@@ -167,6 +167,11 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 			pkg.HoursCount = *req.HoursCount
 		}
 		if req.MaxSeats != nil {
+			// ล็อกด้วยเหตุผลเดียวกับตอนสมัคร — ไม่งั้นลดที่นั่งพร้อมกับมีคนสมัครเข้ามา
+			// จะจบลงที่รับเกินโควตาที่เพิ่งตั้ง
+			if _, err := lockPackageSeats(tx, pkg.ID); err != nil {
+				return err
+			}
 			taken, err := seatsTaken(tx, pkg.ID)
 			if err != nil {
 				return err

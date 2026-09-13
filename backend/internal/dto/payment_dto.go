@@ -234,6 +234,14 @@ func ToPaymentItemDTO(pi *models.PaymentItem) *PaymentItemDTO {
 }
 
 // InvoiceDTO represents an invoice response
+// RejectPaymentReq เหตุผลที่แอดมินปฏิเสธสลิป
+//
+// บังคับกรอกเพราะข้อความนี้ถูกส่งไปหาลูกค้าตรง ๆ ผ่านการแจ้งเตือน
+// และแสดงในประวัติใบแจ้งหนี้ — ปฏิเสธแบบเงียบ ๆ = ลูกค้าส่งสลิปเดิมซ้ำเข้ามาอีก
+type RejectPaymentReq struct {
+	Reason string `json:"reason" binding:"required,min=3,max=500"`
+}
+
 type InvoiceDTO struct {
 	ID            uint             `json:"id"`
 	TotalAmount   float64          `json:"invoicetotalamount"`
@@ -245,6 +253,10 @@ type InvoiceDTO struct {
 	Customer      *UserMinDTO      `json:"customer,omitempty"`
 	PaymentItems  []PaymentItemDTO `json:"paymentitems"`
 	CreatedAt     time.Time        `json:"created_at"`
+
+	// เหตุผล/เวลาที่ถูกปฏิเสธ — มีค่าเฉพาะใบที่สถานะ rejected
+	RejectReason string     `json:"reject_reason,omitempty"`
+	RejectedAt   *time.Time `json:"rejected_at,omitempty"`
 }
 
 // ToInvoiceDTO maps models.Invoice to InvoiceDTO
@@ -268,6 +280,8 @@ func ToInvoiceDTO(i *models.Invoice) *InvoiceDTO {
 		CustomerID:    i.CustomerID,
 		PaymentItems:  items,
 		CreatedAt:     i.CreatedAt,
+		RejectReason:  i.RejectReason,
+		RejectedAt:    i.RejectedAt,
 	}
 
 	if i.Customer != nil {

@@ -19,6 +19,7 @@ type ReviewEnrollmentInfo struct {
 	EnrollmentDate    time.Time `json:"enrollment_date"`
 	TotalSessions     uint      `json:"total_sessions"`
 	RemainingSessions uint      `json:"remaining_sessions"`
+	AgreedPrice       float64   `json:"agreed_price"`
 	BillingID         *uint     `json:"billing_id"`
 	// WaitingDays จำนวนวันที่คำขอนี้รออยู่ ใช้จัดลำดับความเร่งด่วน
 	WaitingDays int `json:"waiting_days"`
@@ -26,7 +27,7 @@ type ReviewEnrollmentInfo struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 	DaysLeft  *int       `json:"days_left"`
 
-	GraceDaysLeft *int `json:"grace_days_left"`
+	CarriedOverSessions uint `json:"carried_over_sessions"`
 
 	// เหตุผลที่คำขอถูกปฏิเสธ (มีค่าเฉพาะสถานะ rejected)
 	RejectedReason string     `json:"rejected_reason,omitempty"`

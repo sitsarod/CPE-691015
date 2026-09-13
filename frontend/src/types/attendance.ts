@@ -107,6 +107,21 @@ export interface AttendanceSession {
   absent_count: number;
   off_schedule_count: number;
   pending_count: number;
+
+  // null = ยังไม่ได้ออกบิลค่าสนาม · มีวันที่แต่ยอดรวมเป็น null = ออกบิลทางอื่น (ฟอร์มหารเฉลี่ย/รอบเก่า)
+  court_fee_total: number | null;
+  court_billed_at: string | null;
+}
+
+// รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิลค่าสนาม
+export interface UnbilledCourtSession {
+  id: number;
+  course_name: string;
+  session_date: string;
+  schedule_start_time: string;
+  schedule_end_time: string;
+  closed_at: string | null;
+  payer_count: number;
 }
 
 // รอบที่ยังเปิดค้างอยู่ — ทางกลับเข้าไปปิดรอบที่หลุดจาก OpenablePackage ไปแล้ว
