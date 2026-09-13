@@ -170,10 +170,16 @@ func (s *AttendanceService) checkIn(
 	return &result, nil
 }
 
+// deductSession หักครั้งคงเหลือ 1 ครั้ง และปิดใบเป็น completed ถ้าเป็นครั้งสุดท้าย
 func deductSession(tx *gorm.DB, enrollmentID uint) error {
 	res := tx.Model(&models.Enrollment{}).
 		Where("id = ? AND remaining_sessions > 0", enrollmentID).
-		UpdateColumn("remaining_sessions", gorm.Expr("remaining_sessions - 1"))
+		UpdateColumns(map[string]interface{}{
+			"remaining_sessions": gorm.Expr("remaining_sessions - 1"),
+			// ค่าใน SET อ่านจากแถวก่อนอัปเดตเสมอ จึงต้องลบเองอีกครั้งในเงื่อนไข
+			"status": gorm.Expr("CASE WHEN remaining_sessions - 1 = 0 AND status = ? THEN ? ELSE status END",
+				models.EnrollmentStatusActive, models.EnrollmentStatusCompleted),
+		})
 	if res.Error != nil {
 		return errors.New("ไม่สามารถหักจำนวนครั้งคงเหลือได้")
 	}
@@ -183,12 +189,19 @@ func deductSession(tx *gorm.DB, enrollmentID uint) error {
 	return nil
 }
 
+// refundSession คืนครั้งคงเหลือ 1 ครั้ง และเปิดใบที่ปิดไปเพราะครั้งหมดกลับมา
 func refundSession(tx *gorm.DB, enrollmentID uint) error {
 	res := tx.Model(&models.Enrollment{}).
 		Where("id = ? AND remaining_sessions < total_sessions", enrollmentID).
-		UpdateColumn("remaining_sessions", gorm.Expr("remaining_sessions + 1"))
+		UpdateColumns(map[string]interface{}{
+			"remaining_sessions": gorm.Expr("remaining_sessions + 1"),
+			"status": gorm.Expr("CASE WHEN status = ? THEN ? ELSE status END",
+				models.EnrollmentStatusCompleted, models.EnrollmentStatusActive),
+		})
 	if res.Error != nil {
 		return errors.New("ไม่สามารถคืนจำนวนครั้งคงเหลือได้")
 	}
+
+	expireStaleEnrollments(tx)
 	return nil
 }

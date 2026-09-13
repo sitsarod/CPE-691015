@@ -1,4 +1,4 @@
-import { apiFetch } from "./apiClient";
+import { apiFetch, apiFetchBlob } from "./apiClient";
 import type {
   OpenablePackage,
   OpenSessionSummary,
@@ -18,13 +18,30 @@ import type {
 interface Envelope<T> {
   data: T;
   message?: string;
-  truncated?: boolean;
+  total?: number;
 }
 
-// ผลที่อาจถูกตัดเพราะชนเพดานแถวของ backend
+// หนึ่งหน้าของประวัติ · total = จำนวนแถวทั้งหมดที่ตรงตัวกรอง ไม่ใช่จำนวนในหน้านี้
 export interface HistoryPage<T> {
   items: T[];
-  truncated: boolean;
+  total: number;
+}
+
+// ตัวกรองร่วมของประวัตินักเรียนและประวัติโค้ช — ต้องส่งชุดเดียวกันทั้งสองฝั่ง
+export interface HistoryFilters {
+  courseId?: number;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
+function historyQuery(filters?: HistoryFilters): URLSearchParams {
+  const qs = new URLSearchParams();
+  if (filters?.courseId) qs.set("course_id", String(filters.courseId));
+  if (filters?.from) qs.set("from", filters.from);
+  if (filters?.to) qs.set("to", filters.to);
+  if (filters?.q?.trim()) qs.set("q", filters.q.trim());
+  return qs;
 }
 
 const ALREADY_CHECKED_IN_HINTS = ["เช็คชื่อในรอบนี้ไปแล้ว", "เช็คชื่อคาบนี้ไปแล้ว"];
@@ -41,8 +58,6 @@ export async function fetchOpenablePackages(): Promise<OpenablePackage[]> {
 }
 
 // [POST] เปิดรอบเช็คชื่อของแพ็กเกจนี้สำหรับวันนี้
-//
-// 409 = เปิดไปแล้ว หรือยังไม่ถึงเวลาคาบ · ข้อความจาก backend อ่านรู้เรื่องอยู่แล้ว
 export async function openSession(packageId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>("/attendance/sessions", {
     method: "POST",
@@ -52,8 +67,6 @@ export async function openSession(packageId: number): Promise<AttendanceSession>
 }
 
 // [GET] รอบที่ยังเปิดค้างอยู่ทั้งหมด
-//
-// ต้องเรียกคู่กับ fetchOpenablePackages บนหน้าเลือกแพ็กเกจ ไม่งั้นรอบที่ลืมปิดจะหาไม่เจอ
 export async function fetchOpenSessions(): Promise<OpenSessionSummary[]> {
   const res = await apiFetch<Envelope<OpenSessionSummary[]>>("/attendance/sessions");
   return res.data ?? [];
@@ -66,15 +79,6 @@ export async function fetchSession(sessionId: number): Promise<AttendanceSession
 }
 
 // [POST] สแกนแล้วบันทึกจริงในครั้งเดียว โควตาถูกหักที่นี่
-//
-// ⚠️ ส่ง qr_code เท่านั้น ห้ามเพิ่ม enrollment_id เข้ามาใน body
-// backend หาตัวตนใหม่จาก QR ทุกครั้งและไม่อ่าน enrollment_id เลยในเส้นนี้
-// คนที่แก้ค่าใน devtools จึงเช็คชื่อให้คนอื่นไม่ได้
-//
-// รับ QR ของโค้ชด้วย ต้องดู kind ก่อน — backend เป็นคนแยกเพราะหน้าเว็บเห็นแค่สตริง QR
-//
-// หมายเหตุ: endpoint /lookup (ถามว่า QR นี้เป็นใครโดยไม่บันทึก) ยังอยู่ฝั่ง backend
-// แต่หน้าเว็บเลิกเรียกแล้วตั้งแต่ตัดขั้นให้แอดมินกดยืนยันตัวตนออก
 export async function checkInByQR(sessionId: number, qrCode: string): Promise<ScanCheckIn> {
   const res = await apiFetch<Envelope<ScanCheckIn>>(`/attendance/sessions/${sessionId}/check-in`, {
     method: "POST",
@@ -87,17 +91,11 @@ export async function checkInByQR(sessionId: number, qrCode: string): Promise<Sc
 
 function facePhotoForm(frame: Blob): FormData {
   const form = new FormData();
-  // ต้องมี filename ไม่งั้น c.FormFile ฝั่ง Go อ่านไม่เจอ
   form.append("photo", frame, "frame.jpg");
   return form;
 }
 
-/**
- * [POST] จังหวะ 1 — ถามว่าใบหน้าในเฟรมนี้คือใคร ยังไม่บันทึกอะไร
- *
- * ⚠️ ถูกเรียกทุก ~1.5 วินาทีตลอดเวลาที่กล้องเปิด เฟรมส่วนใหญ่จะไม่มีหน้าคน
- * ผู้เรียกต้องกลืน error เงียบ ๆ ไม่ใช่เด้งข้อความทุกครั้ง
- */
+// [POST] จังหวะ 1 — ถามว่าใบหน้าในเฟรมนี้คือใคร ยังไม่บันทึกอะไร
 export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceLookup> {
   const res = await apiFetch<Envelope<FaceLookup>>(
     `/attendance/sessions/${sessionId}/face-lookup`,
@@ -106,13 +104,7 @@ export async function faceLookup(sessionId: number, frame: Blob): Promise<FaceLo
   return res.data;
 }
 
-/**
- * [POST] จังหวะ 2 — บันทึกจริง + หักโควตา
- *
- * ⚠️ ส่ง "รูป" เท่านั้น ห้ามเพิ่ม enrollment_id ที่ได้จาก faceLookup เข้ามาใน body
- * backend หาตัวตนใหม่จากรูปทุกครั้งและไม่อ่าน id ใด ๆ จาก client เลย
- * (เหตุผลเดียวกับ checkInByQR ด้านบน)
- */
+// [POST] จังหวะ 2 — บันทึกจริง + หักโควตา
 export async function faceCheckIn(sessionId: number, frame: Blob): Promise<ScanCheckIn> {
   const res = await apiFetch<Envelope<ScanCheckIn>>(
     `/attendance/sessions/${sessionId}/face-check-in`,
@@ -160,9 +152,6 @@ export async function updateCoachAttendanceStatus(
 }
 
 // [PATCH] ปิดรอบ — คนที่ยืนยันว่าจะมาแล้วไม่มาจะถูกมาร์ค absent
-//
-// ไม่หักโควตา (ยังไม่ได้เรียน) — ดู markAbsentees ฝั่ง backend ที่สร้างแถวเปล่า
-// โดยไม่เรียก deductSession · โค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อก็ถูกมาร์คพร้อมกัน
 export async function closeSession(sessionId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(
     `/attendance/sessions/${sessionId}/close`,
@@ -172,10 +161,6 @@ export async function closeSession(sessionId: number): Promise<AttendanceSession
 }
 
 // [PATCH] แก้สถานะย้อนหลัง — ใช้ตอนคนมาเรียนจริงแต่ลืมสแกน แล้วมาปรับให้ทีหลัง
-//
-// รับสองสถานะเท่านั้น: present · absent (ค่าอื่นได้ 400 จาก UpdateAttendanceStatus)
-// กติกาโควตา: present หัก · absent ไม่หัก
-// present → absent จึงคืนโควตา 1 ครั้ง และ absent → present หัก 1 ครั้ง
 export async function updateAttendanceStatus(
   attendanceId: number,
   status: AttendanceStatus,
@@ -191,56 +176,59 @@ export async function updateAttendanceStatus(
   return res.data;
 }
 
-// [GET] ประวัติย้อนหลัง กรองตามคอร์สและวันได้
-//
-// backend จำกัดไว้ 500 แถวต่อครั้ง (MaxHistoryRows) จึงควรส่งวันมาด้วยเสมอ
-// truncated = ชนเพดานแล้ว ผลที่ได้ไม่ครบ ต้องบอกผู้ใช้ ไม่ใช่ปล่อยให้เข้าใจว่าครบ
-export async function fetchHistory(params?: {
-  courseId?: number;
-  date?: string;
-}): Promise<HistoryPage<AttendanceHistoryItem>> {
-  const qs = new URLSearchParams();
-  if (params?.courseId) qs.set("course_id", String(params.courseId));
-  if (params?.date) qs.set("date", params.date);
+// [GET] ประวัติย้อนหลังหนึ่งหน้า — กรองตามคอร์ส ช่วงวัน และชื่อได้
+export async function fetchHistory(
+  filters?: HistoryFilters,
+  page?: { limit?: number; offset?: number }
+): Promise<HistoryPage<AttendanceHistoryItem>> {
+  const qs = historyQuery(filters);
+  if (page?.limit) qs.set("limit", String(page.limit));
+  if (page?.offset) qs.set("offset", String(page.offset));
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<AttendanceHistoryItem[]>>(`/attendance/history${suffix}`);
-  return { items: res.data ?? [], truncated: res.truncated ?? false };
+  return { items: res.data ?? [], total: res.total ?? 0 };
 }
 
 // [GET] ประวัติเข้าสอนของโค้ช — ใช้ตัวกรองชุดเดียวกับ fetchHistory
-//
-// แยก endpoint เพราะฟิลด์สองฝั่งไม่ทับกัน ผู้เรียกต้องยิงคู่กันแล้วรวมเองด้วย session_id
-export async function fetchCoachHistory(params?: {
-  courseId?: number;
-  date?: string;
-}): Promise<HistoryPage<CoachHistoryItem>> {
-  const qs = new URLSearchParams();
-  if (params?.courseId) qs.set("course_id", String(params.courseId));
-  if (params?.date) qs.set("date", params.date);
+export async function fetchCoachHistory(
+  filters?: HistoryFilters,
+  sessionIds?: number[]
+): Promise<CoachHistoryItem[]> {
+  const qs = historyQuery(filters);
+  if (sessionIds?.length) qs.set("session_ids", sessionIds.join(","));
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await apiFetch<Envelope<CoachHistoryItem[]>>(`/attendance/coach-history${suffix}`);
-  return { items: res.data ?? [], truncated: res.truncated ?? false };
+  return res.data ?? [];
 }
 
-// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
+// [GET] ดาวน์โหลดประวัติทั้งช่วงเป็น CSV — ไม่มีเพดานแถว ไม่แบ่งหน้า
+export async function downloadHistoryCsv(
+  filters?: HistoryFilters,
+  type?: "student" | "coach"
+): Promise<void> {
+  const qs = historyQuery(filters);
+  if (type === "coach") qs.set("type", "coach");
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const blob = await apiFetchBlob(`/attendance/history/export${suffix}`);
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${type === "coach" ? "coach-attendance" : "attendance"}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // [GET] คาบที่ผ่านวันมาแล้ว มีโค้ชถูกมอบหมาย แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
-//
-// ทุกรายการที่ได้กลับมาคือค่าจ้างที่ยังไม่ถูกนับให้โค้ช
 export async function fetchMissedClasses(): Promise<MissedClass[]> {
   const res = await apiFetch<Envelope<MissedClass[]>>("/attendance/missed-classes");
   return res.data ?? [];
 }
 
 // [POST] เคลียร์คาบที่ค้าง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าใครมาสอนบ้าง
-//
-// ⚠️ ต้องส่งสถานะมาให้ครบทุกคนของคลาสนั้น backend ปฏิเสธถ้าขาดคนใดคนหนึ่ง
-// เพราะกติกาการนับคาบคือ "ไม่มีแถวขาดงาน = ได้เงิน" คนที่ตกหล่นจึงจะได้เงิน
-// โดยไม่มีใครตัดสินใจ
-//
-// 409 = คาบนี้มีรอบอยู่แล้ว หรือรอบยังเปิดค้าง (ข้อความจาก backend อ่านรู้เรื่องแล้ว)
 export async function resolveMissedClass(
   workScheduleId: number,
   coaches: { coach_id: number; status: AttendanceStatus; remarks?: string }[],

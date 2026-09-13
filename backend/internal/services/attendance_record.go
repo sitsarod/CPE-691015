@@ -12,6 +12,8 @@ import (
 )
 
 var (
+	ErrHistoryRangeReversed = errors.New("วันเริ่มต้นต้องไม่อยู่หลังวันสิ้นสุด")
+
 	ErrAttendanceNotFound = errors.New("ไม่พบบันทึกการเช็คชื่อนี้")
 	ErrInvalidStatus      = errors.New("สถานะไม่ถูกต้อง (รองรับเฉพาะ present, absent)")
 )
@@ -28,9 +30,6 @@ func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto
 }
 
 // closeSessionTx คือเนื้อของการปิดรอบ ใช้ร่วมกันทั้งแอดมินกดเองและงานปิดอัตโนมัติ
-//
-// closedBy = nil แปลว่าระบบเป็นคนปิด เก็บเป็น NULL ไว้ตอบตอนมีคนทักท้วงย้อนหลัง
-// ว่าการมาร์คขาดครั้งนั้นไม่มีมนุษย์คนไหนสั่ง
 func (s *AttendanceService) closeSessionTx(
 	tx *gorm.DB,
 	sessionID uint,
@@ -42,8 +41,6 @@ func (s *AttendanceService) closeSessionTx(
 		return ErrSessionNotFound
 	}
 
-	// status ใน WHERE คือด่านกันปิดซ้ำ — แอดมินกับงานอัตโนมัติชนกันได้จริง
-	// ตัวที่มาทีหลังได้ RowsAffected = 0 แล้วถอย ไม่ใช่มาร์คขาดเรียนซ้ำรอบสอง
 	res := tx.Model(&models.AttendanceSession{}).
 		Where("id = ? AND status = ?", sessionID, models.AttendanceSessionOpen).
 		Updates(map[string]interface{}{
@@ -61,14 +58,10 @@ func (s *AttendanceService) closeSessionTx(
 	if err := s.markAbsentees(tx, &session, closedBy, now); err != nil {
 		return err
 	}
-	// โค้ชที่มีตารางงานแต่ไม่ได้เช็คชื่อ ก็ถูกมาร์คขาดงานเหมือนนักเรียน
 	return s.markCoachAbsentees(tx, &session, closedBy, now)
 }
 
 // GetOpenSessions คืนรอบที่ยังเปิดค้างอยู่ทั้งหมด เรียงรอบล่าสุดขึ้นก่อน
-//
-// จำเป็นเพราะ GetOpenablePackages คืนเฉพาะแพ็กเกจที่อยู่ในคาบตอนนี้ พอเลยเวลา
-// รอบที่ลืมปิดจะหลุดจากจอและไม่มีทางกดเข้าไปปิดได้อีก ทั้งที่คนไม่มายังไม่ถูกมาร์คขาด
 func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, error) {
 	expireStaleEnrollments(s.db)
 
@@ -138,9 +131,6 @@ func (s *AttendanceService) GetOpenSessions() ([]dto.OpenSessionSummaryDTO, erro
 }
 
 // AutoCloseStaleSessions ปิดรอบที่เลยเวลาคาบแล้วแต่ไม่มีใครกดปิด คืนจำนวนที่ปิดไป
-//
-// ⚠️ มาร์คขาดเรียน/ขาดงานโดยไม่มีมนุษย์กดยืนยัน จึงรอจนพ้น sessionScanDeadline เสมอ
-// (ตัวเดียวกับที่กันการสแกน) เพื่อให้แอดมินมีช่วงเข้ามาจัดการเองก่อนทุกครั้ง
 func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 	var sessions []models.AttendanceSession
 	if err := s.db.Where("status = ?", models.AttendanceSessionOpen).
@@ -157,13 +147,11 @@ func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 			continue
 		}
 
-		// แยก transaction ต่อรอบ — รอบที่พังไม่ควรลากรอบอื่นล้มไปด้วย
 		sessionID := session.ID
 		err := s.db.Transaction(func(tx *gorm.DB) error {
 			return s.closeSessionTx(tx, sessionID, nil, now)
 		})
 		if err != nil {
-			// แอดมินชิงกดปิดไปก่อน = ผลลัพธ์ที่ต้องการอยู่แล้ว ไม่ใช่ข้อผิดพลาด
 			if !errors.Is(err, ErrSessionClosed) {
 				log.Printf("[attendance] ปิดรอบ %d อัตโนมัติไม่สำเร็จ: %v", sessionID, err)
 			}
@@ -181,7 +169,6 @@ func isStaleSession(session *models.AttendanceSession, now time.Time) bool {
 		return now.After(deadline)
 	}
 
-	// ไม่มีสแนปช็อตเวลาคาบ (ข้อมูลเก่า) — รอขึ้นวันใหม่ก่อน จะได้ไม่เผลอปิดรอบที่ยังเรียนอยู่
 	return !sameDay(now, session.SessionDate)
 }
 
@@ -192,7 +179,6 @@ func (s *AttendanceService) markAbsentees(
 	recordedBy *uint,
 	now time.Time,
 ) error {
-
 	expireStaleEnrollments(tx)
 
 	packageIDs, err := s.siblingPackageIDs(tx, session)
@@ -252,7 +238,6 @@ func (s *AttendanceService) markAbsentees(
 			RecordedByUserID:    recordedBy,
 		}
 		if err := tx.Create(&record).Error; err != nil {
-
 			if isUniqueViolation(err) {
 				continue
 			}
@@ -320,7 +305,6 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 				return err
 			}
 		case -1:
-			// โควตาหมดแล้วหักไม่ได้ ปล่อยผ่าน — สถานะยังต้องถูกแก้ตามที่แอดมินสั่ง
 			if err := deductSession(tx, record.EnrollmentID); err != nil && !errors.Is(err, ErrNoSessionsLeft) {
 				return err
 			}
@@ -348,41 +332,123 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 	return &result, nil
 }
 
-// MaxHistoryRows = เพดานแถวต่อการดึงประวัติหนึ่งครั้ง
-const MaxHistoryRows = 500
+const (
+	DefaultHistoryLimit = 100
+	MaxHistoryLimit     = 500
+)
+
+// HistoryFilter = ตัวกรองร่วมของประวัตินักเรียนและประวัติโค้ช
+type HistoryFilter struct {
+	CourseID uint
+	From     string // YYYY-MM-DD นับรวมวันนี้ · ว่าง = ไม่จำกัดขอบล่าง
+	To       string // YYYY-MM-DD นับรวมวันนี้ · ว่าง = ไม่จำกัดขอบบน
+	Query    string // ค้นจากชื่อ-นามสกุลหรือชื่อเล่น
+	Limit    int    // <= 0 = ไม่จำกัด (ใช้ตอน export เท่านั้น)
+	Offset   int
+
+	SessionIDs []uint
+}
 
 // withDeleted ใช้กับ Preload ของหน้าประวัติ เพื่อให้เห็นเจ้าของแถวที่ถูกลบไปแล้วด้วย
 func withDeleted(db *gorm.DB) *gorm.DB { return db.Unscoped() }
 
-func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.AttendanceHistoryItemDTO, error) {
-	query := s.db.Model(&models.StudentAttendance{}).
-		Limit(MaxHistoryRows).
+// historyDateRange แปลงช่วงวันเป็นขอบเวลาจริง · ส่งมาข้างเดียวถือว่าเป็นวันเดียว
+func historyDateRange(from, to string) (start, end time.Time, ok bool, err error) {
+	if from == "" && to == "" {
+		return time.Time{}, time.Time{}, false, nil
+	}
+	if from == "" {
+		from = to
+	}
+	if to == "" {
+		to = from
+	}
+
+	start, _, err = localDayRange(from)
+	if err != nil {
+		return time.Time{}, time.Time{}, false, err
+	}
+	_, end, err = localDayRange(to)
+	if err != nil {
+		return time.Time{}, time.Time{}, false, err
+	}
+	if end.Before(start) {
+		return time.Time{}, time.Time{}, false, ErrHistoryRangeReversed
+	}
+	return start, end, true, nil
+}
+
+// nameSearchPattern เตรียมค่าให้ ILIKE — ต้อง escape ตัวที่มีความหมายพิเศษก่อน
+func nameSearchPattern(q string) string {
+	r := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`)
+	return "%" + r.Replace(strings.TrimSpace(q)) + "%"
+}
+
+// historyBaseQuery ประกอบ join/where ของตัวกรอง — ใช้ร่วมกันทั้งตอนนับและตอนดึงแถว
+func (s *AttendanceService) historyBaseQuery(f HistoryFilter) (*gorm.DB, error) {
+	query := s.db.Model(&models.StudentAttendance{})
+
+	start, end, ok, err := historyDateRange(f.From, f.To)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		query = query.Where(
+			"student_attendances.check_in_time >= ? AND student_attendances.check_in_time < ?",
+			start, end)
+	}
+
+	search := strings.TrimSpace(f.Query)
+	if f.CourseID != 0 || search != "" {
+		query = query.Joins("JOIN enrollments ON enrollments.id = student_attendances.enrollment_id")
+	}
+
+	if f.CourseID != 0 {
+		query = query.
+			Joins("JOIN packages ON packages.id = enrollments.package_id").
+			Where("packages.course_id = ?", f.CourseID)
+	}
+
+	if search != "" {
+		pattern := nameSearchPattern(search)
+		query = query.
+			Joins("JOIN customers ON customers.id = enrollments.customer_id").
+			Joins("JOIN users ON users.id = customers.user_id").
+			Where("(users.first_name || ' ' || users.last_name) ILIKE ? OR customers.nickname ILIKE ?",
+				pattern, pattern)
+	}
+
+	return query, nil
+}
+
+// GetHistory คืนประวัติการเช็คชื่อของนักเรียนหนึ่งหน้า พร้อมยอดรวมของทั้งช่วง
+func (s *AttendanceService) GetHistory(f HistoryFilter) ([]dto.AttendanceHistoryItemDTO, int64, error) {
+	base, err := s.historyBaseQuery(f)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int64
+	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, errors.New("ไม่สามารถนับจำนวนประวัติการเช็คชื่อได้")
+	}
+
+	query := base.Session(&gorm.Session{}).
 		Preload("Enrollment", withDeleted).
 		Preload("Enrollment.Customer", withDeleted).
 		Preload("Enrollment.Customer.User", withDeleted).
 		Preload("Enrollment.Package", withDeleted).
 		Preload("Enrollment.Package.Course", withDeleted).
 		Preload("AttendanceSession").
-		Order("check_in_time DESC")
+		Order("student_attendances.check_in_time DESC")
 
-	if date != "" {
-		from, to, err := localDayRange(date)
-		if err != nil {
-			return nil, err
-		}
-		query = query.Where("check_in_time >= ? AND check_in_time < ?", from, to)
-	}
-
-	if courseID != 0 {
-		query = query.
-			Joins("JOIN enrollments ON enrollments.id = student_attendances.enrollment_id").
-			Joins("JOIN packages ON packages.id = enrollments.package_id").
-			Where("packages.course_id = ?", courseID)
+	if f.Limit > 0 {
+		query = query.Limit(f.Limit).Offset(f.Offset)
 	}
 
 	var records []models.StudentAttendance
 	if err := query.Find(&records).Error; err != nil {
-		return nil, errors.New("ไม่สามารถดึงประวัติการเช็คชื่อได้")
+		return nil, 0, errors.New("ไม่สามารถดึงประวัติการเช็คชื่อได้")
 	}
 
 	items := make([]dto.AttendanceHistoryItemDTO, 0, len(records))
@@ -418,5 +484,5 @@ func (s *AttendanceService) GetHistory(courseID uint, date string) ([]dto.Attend
 		items = append(items, item)
 	}
 
-	return items, nil
+	return items, total, nil
 }

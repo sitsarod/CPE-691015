@@ -1,10 +1,15 @@
 package controllers
 
 import (
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/services"
@@ -30,8 +35,6 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrMissedClassNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 
-	// ไม่ได้ลงทะเบียนแพ็กเกจนี้ = ไม่มีสิทธิ์ ไม่ใช่ข้อมูลผิด
-	// โค้ชที่ถูกพักงานก็เข้าข่ายเดียวกัน — ตัวตนถูก แต่ไม่มีสิทธิ์เช็คชื่อ
 	case errors.Is(err, services.ErrNotInPackage),
 		errors.Is(err, services.ErrCoachInactive):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -43,8 +46,6 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrScheduleInvalid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
-	// สแกนใบหน้าแล้วใช้ผลไม่ได้ — คำขอถูกรูปแบบ แต่เนื้อในไปต่อไม่ได้ จึงไม่ใช่ 400
-	// หน้าเว็บใช้ 422 เป็นสัญญาณว่า "ลองใหม่หรือไปใช้ QR" ไม่ใช่ "โปรแกรมส่งมาผิด"
 	case errors.Is(err, services.ErrNoFaceInImage),
 		errors.Is(err, services.ErrMultipleFaces),
 		errors.Is(err, services.ErrFaceTooBlurry),
@@ -52,12 +53,9 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrFaceAmbiguous):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 
-	// face-service ล่มหรือยังไม่ได้ตั้งค่า = ระบบยังไม่พร้อม ไม่ใช่ผู้ใช้ทำผิด
-	// ต้องแยกออกมาให้ชัดเพื่อให้หน้าเว็บบอกได้ว่า "ใช้ QR แทนไปก่อน"
 	case errors.Is(err, services.ErrFaceEngineUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 
-	// สถานะไม่เอื้อให้ทำตอนนี้
 	case errors.Is(err, services.ErrSessionClosed),
 		errors.Is(err, services.ErrSessionExists),
 		errors.Is(err, services.ErrNotInClassTime),
@@ -188,15 +186,8 @@ func (ctrl *AttendanceController) CheckIn(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": message, "data": result})
 }
 
-// ─── สแกนใบหน้า ───
-//
-// รับเป็น multipart (ฟิลด์ photo) ไม่ใช่ base64 ใน JSON เพราะ base64 ทำให้ payload
-// ใหญ่ขึ้น ~33% และใช้ ValidateFaceImageUpload ที่มีอยู่แล้วซ้ำไม่ได้
-
 // readFacePhoto อ่านรูปจาก multipart พร้อมตรวจขนาดและชนิดไฟล์
-// คืน false เมื่อตอบ error ให้ client ไปแล้ว
 func readFacePhoto(c *gin.Context) ([]byte, bool) {
-	// ตัดคำขอที่ใหญ่เกินตั้งแต่ยังไม่อ่านเข้าหน่วยความจำ (เหตุผลเดียวกับ face_image_controller)
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxImageUploadBytes+(1<<20))
 
 	fh, err := c.FormFile("photo")
@@ -248,9 +239,6 @@ func (ctrl *AttendanceController) FaceLookup(c *gin.Context) {
 }
 
 // FaceCheckIn [POST] /api/attendance/sessions/:id/face-check-in — จังหวะ 2 บันทึกจริง
-//
-// ⚠️ รับรูปใหม่เท่านั้น ไม่รับ enrollment_id จาก body — ตัวตนต้องถูก resolve ใหม่
-// จากรูปทุกครั้ง ไม่งั้นคนที่ยึด session แอดมินได้จะเช็คชื่อให้ใครก็ได้
 func (ctrl *AttendanceController) FaceCheckIn(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
 	if !ok {
@@ -307,8 +295,6 @@ func (ctrl *AttendanceController) ManualCheckIn(c *gin.Context) {
 }
 
 // ManualCoachCheckIn [POST] /api/attendance/sessions/:id/coach-manual
-//
-// แอดมินเช็คชื่อให้โค้ชที่ลืม QR — คู่ขนานกับ ManualCheckIn ของนักเรียน
 func (ctrl *AttendanceController) ManualCoachCheckIn(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
 	if !ok {
@@ -336,8 +322,6 @@ func (ctrl *AttendanceController) ManualCoachCheckIn(c *gin.Context) {
 }
 
 // UpdateCoachAttendanceStatus [PATCH] /api/attendance/coach-records/:id
-//
-// แก้สถานะย้อนหลัง present ⟷ absent — ไม่มีโควตาให้ปรับเหมือนของนักเรียน
 func (ctrl *AttendanceController) UpdateCoachAttendanceStatus(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสบันทึกการเช็คชื่อ")
 	if !ok {
@@ -389,8 +373,6 @@ func (ctrl *AttendanceController) CloseSession(c *gin.Context) {
 }
 
 // UpdateStatus [PATCH] /api/attendance/records/:id
-//
-// ใช้ตอนแอดมินต้องแก้ผลย้อนหลัง (present ↔ absent)
 func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 	id, ok := uintParam(c, "id", "รหัสบันทึกการเช็คชื่อ")
 	if !ok {
@@ -417,61 +399,165 @@ func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "แก้ไขสถานะเรียบร้อยแล้ว", "data": result})
 }
 
-// GetHistory [GET] /api/attendance/history?course_id=&date=YYYY-MM-DD
-func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
-	var courseID uint
+// historyFilter อ่านตัวกรองของหน้าประวัติจาก query string
+func historyFilter(c *gin.Context) (services.HistoryFilter, error) {
+	f := services.HistoryFilter{
+		From:  c.Query("from"),
+		To:    c.Query("to"),
+		Query: c.Query("q"),
+	}
+
+	if date := c.Query("date"); date != "" && f.From == "" && f.To == "" {
+		f.From, f.To = date, date
+	}
+
 	if raw := c.Query("course_id"); raw != "" {
 		parsed, err := strconv.ParseUint(raw, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
-			return
+			return f, errors.New("รหัสคอร์สไม่ถูกต้อง")
 		}
-		courseID = uint(parsed)
+		f.CourseID = uint(parsed)
 	}
 
-	items, err := ctrl.service.GetHistory(courseID, c.Query("date"))
+	f.Limit = services.DefaultHistoryLimit
+	if raw := c.Query("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			return f, errors.New("จำนวนแถวต่อหน้าไม่ถูกต้อง")
+		}
+		if parsed > services.MaxHistoryLimit {
+			parsed = services.MaxHistoryLimit
+		}
+		f.Limit = parsed
+	}
+
+	if raw := c.Query("offset"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			return f, errors.New("ตำแหน่งเริ่มต้นไม่ถูกต้อง")
+		}
+		f.Offset = parsed
+	}
+
+	return f, nil
+}
+
+// GetHistory [GET] /api/attendance/history?course_id=&from=&to=&q=&limit=&offset=
+func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
+	filter, err := historyFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	items, total, err := ctrl.service.GetHistory(filter)
 	if err != nil {
 		mapAttendanceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"data":      items,
-		"truncated": len(items) >= services.MaxHistoryRows,
+		"data":   items,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
 	})
+}
+
+// ExportHistory [GET] /api/attendance/history/export — CSV ของทั้งช่วง ไม่มีเพดานแถว
+func (ctrl *AttendanceController) ExportHistory(c *gin.Context) {
+	filter, err := historyFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	filter.Limit = 0 // export = ทั้งช่วงตามตัวกรอง
+	filter.Offset = 0
+
+	var (
+		rows     [][]string
+		filename string
+	)
+
+	if c.Query("type") == "coach" {
+		items, err := ctrl.service.GetCoachHistory(filter)
+		if err != nil {
+			mapAttendanceError(c, err)
+			return
+		}
+		filename = "coach-attendance"
+		rows = append(rows, []string{"เวลาเช็คชื่อ", "ชื่อโค้ช", "ชื่อเล่น", "สถานะ", "วิธี", "ตามตาราง", "หมายเหตุ"})
+		for _, it := range items {
+			rows = append(rows, []string{
+				it.CheckInTime.In(services.AppLocation()).Format("2006-01-02 15:04"),
+				it.FullName, it.Nickname, it.Status, it.CheckInMethod,
+				boolText(it.IsScheduled), it.Remarks,
+			})
+		}
+	} else {
+		items, _, err := ctrl.service.GetHistory(filter)
+		if err != nil {
+			mapAttendanceError(c, err)
+			return
+		}
+		filename = "attendance"
+		rows = append(rows, []string{"เวลาเช็คชื่อ", "คอร์ส", "ชื่อ-นามสกุล", "ชื่อเล่น", "สถานะ", "วิธี", "นอกตาราง", "หมายเหตุ"})
+		for _, it := range items {
+			rows = append(rows, []string{
+				it.CheckInTime.In(services.AppLocation()).Format("2006-01-02 15:04"),
+				it.CourseName, it.FullName, it.Nickname, it.Status, it.CheckInMethod,
+				boolText(it.IsOffSchedule), it.Remarks,
+			})
+		}
+	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s.csv"`, filename, time.Now().Format("20060102-150405")))
+
+	if _, err := c.Writer.WriteString("\ufeff"); err != nil {
+		return
+	}
+	w := csv.NewWriter(c.Writer)
+	if err := w.WriteAll(rows); err != nil {
+		log.Printf("[attendance] เขียน CSV ประวัติไม่สำเร็จ: %v", err)
+	}
+}
+
+func boolText(v bool) string {
+	if v {
+		return "ใช่"
+	}
+	return "ไม่"
 }
 
 // GetCoachHistory [GET] /api/attendance/coach-history — ประวัติเข้าสอนของโค้ช
-//
-// แยก endpoint จาก /history แทนที่จะยัดรวม เพราะฟิลด์สองฝั่งไม่ทับกัน
-// และการเปลี่ยนรูป response ของ /history จะทำให้หน้าเดิมพัง
 func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
-	var courseID uint
-	if raw := c.Query("course_id"); raw != "" {
-		parsed, err := strconv.ParseUint(raw, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
-			return
-		}
-		courseID = uint(parsed)
+	filter, err := historyFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	items, err := ctrl.service.GetCoachHistory(courseID, c.Query("date"))
+	for _, raw := range strings.Split(c.Query("session_ids"), ",") {
+		if raw == "" {
+			continue
+		}
+		parsed, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรอบเช็คชื่อไม่ถูกต้อง"})
+			return
+		}
+		filter.SessionIDs = append(filter.SessionIDs, uint(parsed))
+	}
+
+	items, err := ctrl.service.GetCoachHistory(filter)
 	if err != nil {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"data":      items,
-		"truncated": len(items) >= services.MaxHistoryRows,
-	})
+	c.JSON(http.StatusOK, gin.H{"data": items})
 }
 
-// ─── คาบที่สอนไปแล้วแต่ไม่เคยมีรอบเช็คชื่อ ───────────────────────────────────
-
 // GetMissedClasses [GET] /api/attendance/missed-classes
-//
-// คาบที่โค้ชถูกมอบหมาย ผ่านวันมาแล้ว แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
-// ทุกคาบในรายการนี้คือค่าจ้างที่ยังไม่ถูกนับให้โค้ช
 func (ctrl *AttendanceController) GetMissedClasses(c *gin.Context) {
 	items, err := ctrl.service.ListMissedClasses()
 	if err != nil {
@@ -482,9 +568,6 @@ func (ctrl *AttendanceController) GetMissedClasses(c *gin.Context) {
 }
 
 // ResolveMissedClass [POST] /api/attendance/missed-classes/resolve
-//
-// ⚠️ กระทบค่าจ้างโดยตรง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าโค้ชคนไหนมาสอนบ้าง
-// ต้องส่งสถานะมาให้ครบทุกคนของคาบนั้น (ดูเหตุผลที่ dto.ResolveMissedClassRequest)
 func (ctrl *AttendanceController) ResolveMissedClass(c *gin.Context) {
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {

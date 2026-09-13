@@ -10,11 +10,15 @@ import {
   CalendarDays,
   Clock,
   ChevronDown,
+  Download,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import {
   fetchHistory,
   fetchCoachHistory,
+  downloadHistoryCsv,
   updateAttendanceStatus,
   updateCoachAttendanceStatus,
 } from "@/services/attendanceAPI";
@@ -35,7 +39,6 @@ import {
 import type { CourseDTO } from "@/types/course";
 
 import EditStatusModal from "../components/EditStatusModal";
-
 
 function todayISO() {
   // ใช้เวลาของเครื่องแอดมินซึ่งอยู่ที่สนาม ตรงกับวันที่ backend บันทึกไว้
@@ -75,13 +78,11 @@ interface Round {
 }
 
 // backend ส่งมาเรียง check_in_time DESC อยู่แล้ว ไล่ตามลำดับที่ได้มาก็จะได้
-// รอบที่มีคนเช็คล่าสุดขึ้นก่อนเอง ไม่ต้องเรียงใหม่
 function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryItem[]): Round[] {
   const byKey = new Map<string, Round>();
 
   for (const item of items) {
     // แถวที่ session_id เป็น null แยกเป็นกลุ่มต่อคอร์ส และใช้ check_in_time
-    // แทน session_date เพราะ session_date ของแถวพวกนี้เป็นค่าศูนย์ของ Go (ปี 0001)
     const hasSession = item.session_id !== null;
     const key = hasSession
       ? `s${item.session_id}`
@@ -108,8 +109,6 @@ function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryIt
     round.items.push(item);
   }
 
-  // โค้ชเข้ารอบที่มีอยู่แล้วเท่านั้น — รอบที่มีแต่โค้ชไม่มีนักเรียนเลยแทบไม่เกิด
-  // และถ้าสร้างรอบใหม่จากโค้ชจะได้หัวรอบที่ไม่มีชื่อคอร์ส/เวลา เพราะข้อมูลนั้นมากับแถวนักเรียน
   for (const c of coaches) {
     byKey.get(`s${c.session_id}`)?.coaches.push(c);
   }
@@ -117,41 +116,41 @@ function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryIt
   return [...byKey.values()];
 }
 
+const PAGE_SIZE = 100;
+
 export default function AttendanceHistoryPage() {
-  const [date, setDate] = useState(todayISO());
+  // ค่าเริ่มต้นเป็นวันนี้ทั้งคู่ = พฤติกรรมเดิม แต่ตอนนี้ขยายเป็นช่วงได้
+  const [from, setFrom] = useState(todayISO());
+  const [to, setTo] = useState(todayISO());
   const [courseId, setCourseId] = useState<number>(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [courses, setCourses] = useState<CourseDTO[]>([]);
 
   const [items, setItems] = useState<AttendanceHistoryItem[]>([]);
   const [coaches, setCoaches] = useState<CoachHistoryItem[]>([]);
-  const [isTruncated, setIsTruncated] = useState(false);
+  const [totalRows, setTotalRows] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<AttendanceHistoryItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // แก้สถานะโค้ชย้อนหลังต้องทำได้จากหน้านี้ ไม่ใช่แค่หน้ารอบที่เปิดอยู่
-  //
-  // เหตุผล: ระบบมาร์ค "ไม่ได้มาสอน" ให้อัตโนมัติตอน "ปิดรอบ" และพอปิดแล้ว
-  // รอบจะหายจากหน้าเช็คชื่อทันที (หน้านั้นดึงเฉพาะรอบที่ status = open)
-  // ถ้าหน้านี้แก้ไม่ได้ด้วย สถานะขาดงานที่ระบบมาร์คให้จะไม่มีทางแก้ในเว็บเลย
-  // ซึ่งตอนนี้แปลว่าโค้ชที่มาสอนจริงแต่ลืมสแกนจะไม่ได้เงินโดยไม่มีทางแก้
   const [editingCoach, setEditingCoach] = useState<CoachHistoryItem | null>(null);
   const [isSavingCoach, setIsSavingCoach] = useState(false);
 
   // null = ยังไม่ได้กดพับ/กางอะไรเลย ให้กางรอบแรกไว้ให้
-  // (ใช้ null แทนการ setState ตอนข้อมูลมาถึง ซึ่งผิดกฎ react-hooks/set-state-in-effect)
   const [openKeys, setOpenKeys] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     fetchAllCourses()
       .then(setCourses)
       .catch(() => {
-        // ตัวกรองคอร์สโหลดไม่ได้ก็ยังดูประวัติตามวันได้ ไม่ต้องขึ้น error
       });
   }, []);
-
 
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -160,15 +159,30 @@ export default function AttendanceHistoryPage() {
 
     (async () => {
       try {
-        const filters = { date: date || undefined, courseId: courseId || undefined };
-        const [data, coachData] = await Promise.all([
-          fetchHistory(filters),
-          fetchCoachHistory(filters),
-        ]);
+        const filters = {
+          from: from || undefined,
+          to: to || undefined,
+          courseId: courseId || undefined,
+          q: search || undefined,
+        };
+
+        const data = await fetchHistory(filters, { limit: PAGE_SIZE, offset });
         if (cancelled) return;
+
+        // โค้ชต้องดึงตามรอบที่อยู่บนหน้านี้เท่านั้น ไม่งั้นเลขหน้าสองฝั่งไม่ตรงกัน
+        const sessionIds = [
+          ...new Set(
+            data.items
+              .map((it) => it.session_id)
+              .filter((id): id is number => id !== null)
+          ),
+        ];
+        const coachRows = sessionIds.length ? await fetchCoachHistory(filters, sessionIds) : [];
+        if (cancelled) return;
+
         setItems(data.items);
-        setCoaches(coachData.items);
-        setIsTruncated(data.truncated || coachData.truncated);
+        setCoaches(coachRows);
+        setTotalRows(data.total);
         setError(null);
       } catch (err: unknown) {
         if (cancelled) return;
@@ -181,7 +195,7 @@ export default function AttendanceHistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [date, courseId, refreshTick]);
+  }, [from, to, courseId, search, offset, refreshTick]);
 
   const rounds = useMemo(() => groupIntoRounds(items, coaches), [items, coaches]);
 
@@ -191,8 +205,43 @@ export default function AttendanceHistoryPage() {
   const load = useCallback(() => {
     setIsLoading(true);
     setOpenKeys(null);
+    setOffset(0);
+    setSearch(searchInput.trim());
     setRefreshTick((t) => t + 1);
+  }, [searchInput]);
+
+  // เปลี่ยนหน้าแล้วต้องเลื่อนขึ้นบนสุด ไม่งั้นค้างอยู่กลางรายการเดิมของหน้าที่แล้ว
+  const goToOffset = useCallback((next: number) => {
+    setIsLoading(true);
+    setOpenKeys(null);
+    setOffset(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  const exportCsv = useCallback(
+    async (type: "student" | "coach") => {
+      setIsExporting(true);
+      try {
+        await downloadHistoryCsv(
+          {
+            from: from || undefined,
+            to: to || undefined,
+            courseId: courseId || undefined,
+            q: search || undefined,
+          },
+          type
+        );
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "ดาวน์โหลดไฟล์ไม่สำเร็จ");
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [from, to, courseId, search]
+  );
+
+  const pageCount = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   const isOpen = (key: string, index: number) =>
     openKeys === null ? index === 0 : openKeys.has(key);
@@ -200,7 +249,6 @@ export default function AttendanceHistoryPage() {
   const toggleRound = (key: string) => {
     setOpenKeys((prev) => {
       // ตอนยังเป็น null รอบแรกกางอยู่บนจอ ต้อง seed จากสถานะที่ตาเห็นจริง
-      // ไม่งั้นกดพับรอบแรกแล้วจะไม่มีอะไรเกิดขึ้น
       const base = prev ?? new Set(rounds.length > 0 ? [rounds[0].key] : []);
 
       const next = new Set(base);
@@ -232,12 +280,7 @@ export default function AttendanceHistoryPage() {
     }
   };
 
-  /**
-   * แก้สถานะการเข้าสอนของโค้ชย้อนหลัง
-   *
-   * ต่างจากของนักเรียนตรงที่ไม่มีโควตาให้คืน แต่มีผลกับค่าจ้างแทน
-   * จึงบอกผลเรื่องเงินไปในข้อความยืนยันด้วย เพื่อให้แอดมินเห็นว่าเพิ่งทำอะไรลงไป
-   */
+  // แก้สถานะการเข้าสอนของโค้ชย้อนหลัง
   const handleSaveCoach = async (status: AttendanceStatus, remarks: string) => {
     if (!editingCoach) return;
 
@@ -275,29 +318,50 @@ export default function AttendanceHistoryPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 items-end gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-4">
+      <div className="mt-6 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">วันที่</label>
+          <label className="block text-sm font-medium text-gray-700">ตั้งแต่วันที่</label>
           <div className="relative mt-1">
             <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="date"
-              value={date}
+              value={from}
+              max={to || undefined}
               onChange={(e) => {
                 resetOpenState();
-                setDate(e.target.value);
+                setOffset(0);
+                setFrom(e.target.value);
               }}
               className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
             />
           </div>
         </div>
 
-        <div className="sm:max-w-xs">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">ถึงวันที่</label>
+          <div className="relative mt-1">
+            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => {
+                resetOpenState();
+                setOffset(0);
+                setTo(e.target.value);
+              }}
+              className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+            />
+          </div>
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700">คอร์ส</label>
           <select
             value={courseId}
             onChange={(e) => {
               resetOpenState();
+              setOffset(0);
               setCourseId(Number(e.target.value));
             }}
             className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
@@ -309,6 +373,23 @@ export default function AttendanceHistoryPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">ค้นหาชื่อ</label>
+          <div className="relative mt-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") load();
+              }}
+              placeholder="ชื่อ นามสกุล หรือชื่อเล่น"
+              className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+            />
+          </div>
         </div>
 
         <button
@@ -323,17 +404,38 @@ export default function AttendanceHistoryPage() {
 
       {error && <div className="mt-6 rounded-xl bg-red-50 p-4 text-red-700">{error}</div>}
 
-      {isTruncated && (
-        <div className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
-          รายการยาวเกินที่ระบบดึงได้ในครั้งเดียว — ที่เห็นอยู่ยังไม่ครบ
-          กรุณาเลือกวันหรือคอร์สให้แคบลง
+      {!isLoading && totalRows > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
+          <span className="text-gray-600">
+            พบ <span className="font-semibold text-gray-900">{totalRows.toLocaleString("th-TH")}</span> รายการ
+            {pageCount > 1 && ` · แสดงหน้า ${currentPage} จาก ${pageCount}`}
+          </span>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportCsv("student")}
+              disabled={isExporting}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 font-medium text-gray-700 transition hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              CSV นักเรียน
+            </button>
+            <button
+              onClick={() => exportCsv("coach")}
+              disabled={isExporting}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 font-medium text-gray-700 transition hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              CSV โค้ช
+            </button>
+          </div>
         </div>
       )}
 
       {!isLoading && rounds.length === 0 && (
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
           <CalendarDays className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-4 text-gray-500">ไม่มีรอบเช็คชื่อในวันและคอร์สที่เลือก</p>
+          <p className="mt-4 text-gray-500">ไม่มีรอบเช็คชื่อตามเงื่อนไขที่เลือก</p>
         </div>
       )}
 
@@ -347,7 +449,6 @@ export default function AttendanceHistoryPage() {
               key={round.key}
               className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
             >
-              {/* ── หัวรอบ ── */}
               <button
                 onClick={() => toggleRound(round.key)}
                 aria-expanded={open}
@@ -406,15 +507,11 @@ export default function AttendanceHistoryPage() {
                 </div>
               </button>
 
-              {/* ── รายชื่อในรอบ ── */}
               {open && (
                 <div className="border-t border-gray-200">
-                  {/* โค้ชที่สอนรอบนี้ — อยู่บนสุดเพราะเป็นบริบทของทั้งรอบ ไม่ใช่รายการหนึ่งในนั้น */}
                   {round.coaches.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
                       <span className="text-sm font-semibold text-gray-600">โค้ช</span>
-                      {/* กดที่ชิปเพื่อแก้สถานะย้อนหลัง — สถานะนี้มีผลกับค่าจ้าง
-                          และตัวที่ระบบมาร์คให้ตอนปิดรอบก็แก้ได้จากตรงนี้ที่เดียว */}
                       {round.coaches.map((c) => (
                         <button
                           key={c.attendance_id}
@@ -434,7 +531,6 @@ export default function AttendanceHistoryPage() {
                     </div>
                   )}
 
-                  {/* มือถือ: การ์ดต่อคน */}
                   <ul className="divide-y divide-gray-100 lg:hidden">
                     {round.items.map((item) => (
                       <li key={item.attendance_id} className="p-4">
@@ -481,7 +577,6 @@ export default function AttendanceHistoryPage() {
                     ))}
                   </ul>
 
-                  {/* เดสก์ท็อป: ตาราง — ไม่มีคอลัมน์คอร์ส/วันที่ หัวรอบบอกไปแล้ว */}
                   <table className="hidden w-full table-fixed text-left lg:table">
                     <thead className="bg-gray-50 text-sm font-semibold text-gray-600">
                       <tr>
@@ -526,7 +621,6 @@ export default function AttendanceHistoryPage() {
                             </div>
                           </td>
 
-                          {/* title ให้เอาเมาส์ชี้อ่านเต็มได้ เพราะหมายเหตุถูกตัดท้าย */}
                           <td className="px-4 py-3 text-sm text-gray-500">
                             <div className="truncate" title={item.remarks || undefined}>
                               {item.remarks || "—"}
@@ -553,9 +647,36 @@ export default function AttendanceHistoryPage() {
         })}
       </div>
 
-      {items.length >= 500 && (
-        <p className="mt-3 text-sm text-amber-700">
-          แสดงได้สูงสุด 500 รายการต่อครั้ง — กรองตามวันหรือคอร์สให้แคบลงเพื่อดูให้ครบ
+      {pageCount > 1 && (
+        <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <button
+            onClick={() => goToOffset(Math.max(0, offset - PAGE_SIZE))}
+            disabled={offset === 0 || isLoading}
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:text-gray-700"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            ก่อนหน้า
+          </button>
+
+          <span className="text-sm text-gray-600">
+            หน้า {currentPage} / {pageCount}
+          </span>
+
+          <button
+            onClick={() => goToOffset(offset + PAGE_SIZE)}
+            disabled={currentPage >= pageCount || isLoading}
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-[#CC0000] hover:text-[#CC0000] disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:text-gray-700"
+          >
+            ถัดไป
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {pageCount > 1 && (
+        <p className="mt-3 text-sm text-gray-500">
+          แบ่งหน้าทีละ {PAGE_SIZE} รายการตามเวลาเช็คชื่อ รอบที่คาบเกี่ยวสองหน้าจะเห็นไม่ครบในหน้าเดียว
+          · ต้องการทั้งช่วงพร้อมกันให้กดดาวน์โหลด CSV
         </p>
       )}
 
@@ -570,8 +691,6 @@ export default function AttendanceHistoryPage() {
         />
       )}
 
-      {/* ใช้โมดัลตัวเดียวกับนักเรียนแต่เปลี่ยนคำ — โค้ชมา "สอน" ไม่ได้มา "เรียน"
-          และผลของสถานะเป็นเรื่องค่าจ้าง ไม่ใช่โควตา */}
       {editingCoach && (
         <EditStatusModal
           title="แก้สถานะการเข้าสอน"

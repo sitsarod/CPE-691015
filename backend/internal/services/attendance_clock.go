@@ -21,6 +21,9 @@ var (
 	localLoc     *time.Location
 )
 
+// AppLocation เปิดเขตเวลาของสนามให้ชั้น controller ใช้ตอนจัดรูปแบบวันที่ลงไฟล์ export
+func AppLocation() *time.Location { return appLocation() }
+
 // appLocation คืนเขตเวลาของสนาม อ่านครั้งเดียวแล้ว cache ไว้
 func appLocation() *time.Location {
 	localLocOnce.Do(func() {

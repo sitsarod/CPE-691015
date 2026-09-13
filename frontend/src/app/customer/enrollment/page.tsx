@@ -450,7 +450,7 @@ export default function EnrollmentPage() {
                       <span className="text-xs sm:text-sm font-semibold text-red-600">
                         เหลือ {item.remaining_sessions} ครั้งที่ยังไม่ได้ใช้ ·
                         ติดต่อแอดมินภายใน {item.grace_days_left} วัน
-                        เพื่อขอทบครึ่งหนึ่งไปใช้กับคอร์สถัดไป
+                        เพื่อขอทบครึ่งหนึ่งไว้ใช้ตอนกลับมาสมัครคอร์สนี้อีกครั้ง
                       </span>
                     ) : item.status === 'expired' ? (
                       <span className="text-xs sm:text-sm text-slate-500">
