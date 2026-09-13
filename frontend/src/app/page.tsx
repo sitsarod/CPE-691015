@@ -14,10 +14,13 @@ import { priceRange } from "@/components/course/courseUtils";
 import { PublicHome, PublicCoach, FacilityTile } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
-import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images, ShieldCheck } from "lucide-react";
 
 // โทนสี/ฟอนต์ของดีไซน์ 2b แต่คงโทนสีเดิมของเว็บ (ขาว + แดง #CC0000) และใช้ฟอนต์ Kanit
 const ACCENT = "#CC0000";
+
+// สีแดงสำหรับส่วนที่พื้นเข้ม (ส่วนโค้ช) — #CC0000 บนพื้นดำคอนทราสต์ไม่พอ
+const COACH_ACCENT = "#FF4D4D";
 
 // สีเน้น (red accent) แบบ Tailwind arbitrary value — ใช้ซ้ำหลายที่
 const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as const;
@@ -448,220 +451,166 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== 02 บุคลากร ===== โค้ชคือจุดขายหลัก จึงขยายส่วนนี้: head coach เด่น + แถวโค้ชอื่น + สถิติ */}
-      <section id="coaches" className="border-t border-gray-200 bg-gray-50 py-14">
-        <div className="mx-auto max-w-6xl px-6 md:px-10">
+      {/* ===== 02 บุคลากร =====
+          แถบพื้นเข้มเต็มความกว้าง ตัดกับส่วนอื่นของหน้าที่เป็นพื้นขาว เพื่อให้หน้ามีจังหวะ
+          สีแดงบนพื้นเข้มใช้ COACH_ACCENT ไม่ใช่ ACCENT เพราะ #CC0000 บนพื้นดำอ่านไม่ออก */}
+      <section id="coaches" className="relative overflow-hidden bg-[#141210] py-16 md:py-20">
+        {/* คำใหญ่จาง ๆ เป็นพื้นหลัง ซ่อนบนจอเล็กเพราะจะเบียดเนื้อหา */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-8 top-8 hidden select-none text-[152px] font-bold leading-none tracking-[-0.04em] text-white/[0.035] md:block"
+        >
+          COACHES
+        </span>
+
+        <div className="relative mx-auto max-w-6xl px-6 md:px-10">
           {coaches.length === 0 ? (
             <>
-              <SectionHeading
-                title={content?.coaches_title || "บุคลากร"}
-                sub={content?.coaches_subtitle ? undefined : "Coaches"}
-              />
-              <p className="py-12 text-center font-light text-gray-400">เร็วๆ นี้</p>
+              <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: COACH_ACCENT }}>
+                <span className="h-px w-6" style={{ backgroundColor: COACH_ACCENT }} />
+                02 · OUR COACHES
+              </span>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+                {content?.coaches_title || "ทีมโค้ชของเรา"}
+              </h2>
+              <p className="py-12 text-center font-light text-[#8c8681]">เร็วๆ นี้</p>
             </>
           ) : (() => {
-            const head = coaches[0];
-            // ยังไม่กาง = โชว์ 3 แถว ที่เหลือซ่อนไว้หลังปุ่ม
-            const rest = coaches.slice(1);
-            const others = showAllCoaches ? rest : rest.slice(0, 3);
-            const hiddenCount = rest.length - others.length;
-            const headImg = head.home_image || head.profile_picture;
-            const headName =
-              head.nickname ||
-              [head.firstName, head.lastName].filter(Boolean).join(" ") ||
-              `โค้ช #${head.id}`;
+            // ยังไม่กาง = โชว์ 3 คนแรก ที่เหลือซ่อนไว้หลังปุ่ม
+            const display = showAllCoaches ? coaches : coaches.slice(0, 3);
+            const hiddenCount = coaches.length - display.length;
 
-            // specialization เก็บ "ระดับ" ของโค้ช (S / P) ไม่ใช่ความถนัด
-            // เดิมเอาฟิลด์เดียวไปแสดงทั้งบรรทัดบทบาทและแถว "ความถนัด" จึงขึ้นซ้ำสองที่
-            const headDetails = [
-              head.coach_license && { label: "ใบรับรอง", value: head.coach_license },
-              head.specialization && { label: "ระดับ", value: head.specialization },
-            ].filter(Boolean) as { label: string; value: string }[];
+            // เหลื่อมการ์ดให้เป็นจังหวะ — ต้องเป็นคลาสเต็มสตริง Tailwind ถึงจะเก็บไปคอมไพล์
+            const OFFSET = ["md:mt-0", "md:mt-14", "md:mt-6"];
 
             return (
               <>
-                {/* แถวหัว: หัวข้อ + lead ซ้าย / กลุ่มสถิติ 3 ช่องขวา */}
-                <div className="mb-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-                  <div className="flex flex-col gap-4">
-                    <SectionHeading
-                      title={content?.coaches_title || "โค้ชของเรา"}
-                      sub={content?.coaches_subtitle ? undefined : "Our coaches"}
-                    />
-                    <p className="-mt-4 max-w-[58ch] text-sm font-light leading-relaxed text-gray-500">
+                {/* แถวหัว: หัวข้อซ้าย / สถิติขวา */}
+                <div className="mb-11 flex flex-col gap-9 md:flex-row md:items-end md:justify-between">
+                  <div className="flex max-w-[520px] flex-col gap-3.5">
+                    <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: COACH_ACCENT }}>
+                      <span className="h-px w-6" style={{ backgroundColor: COACH_ACCENT }} />
+                      02 · OUR COACHES
+                    </span>
+                    <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-white md:text-[52px]">
+                      {content?.coaches_title || "ทีมโค้ชของเรา"}
+                    </h2>
+                    <p className="text-sm font-light leading-relaxed text-[#a6a09a]">
                       {content?.coaches_subtitle ||
-                        "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็กด้วยแผนการฝึกรายบุคคล"}
+                        "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็ก"}
                     </p>
                   </div>
-                  <div className="flex flex-none divide-x divide-gray-200 border-y border-gray-200">
+
+                  <div className="flex flex-none divide-x divide-[#2e2a27]">
                     {coachStats.map((s, i) => (
-                      <div key={i} className="flex flex-col gap-1 px-5 py-3.5">
-                        <span className="text-xl font-medium leading-none" style={{ color: ACCENT }}>
+                      <div key={i} className="flex flex-col gap-1.5 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
+                        <span className="text-[28px] font-semibold leading-none md:text-[34px]" style={{ color: COACH_ACCENT }}>
                           {s.value}
                         </span>
-                        <span className="text-[11px] font-light leading-snug text-gray-500">{s.label}</span>
+                        <span className="text-[11px] font-light text-[#8c8681]">{s.label}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* บล็อกหลัก: head coach (ซ้าย) + แถวโค้ชอื่น (ขวา) คั่นด้วย gutter 1px */}
-                <div
-                  className={`grid grid-cols-1 gap-px bg-gray-200 ${
-                    others.length > 0 ? "md:grid-cols-[1.25fr_1fr]" : ""
-                  }`}
-                >
-                  {/* head coach */}
-                  <div className="group/head grid grid-cols-1 gap-6 bg-gray-50 pb-6 sm:grid-cols-[200px_1fr] md:pr-8 md:[grid-template-columns:280px_1fr]">
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100 sm:aspect-[3/4]">
-                      {headImg ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={headImg}
-                          alt={headName}
-                          className="h-full w-full object-cover object-top transition duration-700 group-hover/head:scale-[1.03]"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-gray-300">
-                          <UserRound className="h-16 w-16" />
-                        </div>
-                      )}
-                      {/* ป้ายมุมภาพ — รูปใหญ่จะได้ไม่ลอยเปล่า ๆ และบอกลำดับความสำคัญทันที */}
-                      <span
-                        className="absolute left-0 top-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-white"
-                        style={{ backgroundColor: ACCENT }}
-                      >
-                        HEAD COACH
-                      </span>
-                    </div>
+                {/* การ์ดโค้ช — เหลื่อมกันบนจอกว้าง เรียงตรงบนจอเล็ก */}
+                <div className="grid grid-cols-1 items-start gap-7 sm:grid-cols-2 md:grid-cols-3">
+                  {display.map((coach, i) => {
+                    const img = coach.home_image || coach.profile_picture;
+                    const name =
+                      coach.nickname ||
+                      [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
+                      `โค้ช #${coach.id}`;
+                    const isHead = i === 0;
+                    const role = isHead ? "หัวหน้าผู้ฝึกสอน" : "ผู้ฝึกสอน";
 
-                    <div className="flex flex-col gap-3 pt-1 sm:pt-6">
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[28px] font-medium leading-tight tracking-tight text-gray-900">
-                          {headName}
-                        </span>
-                        <span className="text-[13px] font-light text-gray-500">หัวหน้าผู้ฝึกสอน</span>
-                      </div>
-
-                      {head.bio?.trim() && (
-                        <p className="max-w-prose whitespace-pre-line text-[13.5px] font-light leading-relaxed text-gray-600">
-                          {head.bio}
-                        </p>
-                      )}
-
-                      {headDetails.length > 0 && (
-                        <dl className="mt-1 flex flex-col divide-y divide-gray-200 border-y border-gray-200">
-                          {headDetails.map((d) => (
-                            <div key={d.label} className="flex items-baseline gap-4 py-2.5">
-                              <dt className="w-[78px] flex-none text-[11.5px] font-light tracking-[0.06em] text-gray-400">
-                                {d.label}
-                              </dt>
-                              <dd className="text-[13px] font-normal text-gray-800">{d.value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )}
-
+                    return (
                       <button
+                        key={coach.id}
                         type="button"
-                        onClick={() => setSelectedCoach(head)}
-                        className="group/cta mt-2 inline-flex w-fit items-center gap-2 border border-gray-300 px-5 py-2.5 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:bg-[#CC0000] hover:text-white"
+                        onClick={() => setSelectedCoach(coach)}
+                        className={`group flex flex-col text-left ${OFFSET[i % 3]}`}
                       >
-                        จองคลาสกับโค้ชคนนี้
-                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/cta:translate-x-0.5" />
-                      </button>
-                    </div>
-                  </div>
+                        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#262220]">
+                          {img ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={img}
+                              alt={name}
+                              className="h-full w-full object-cover object-top transition duration-700 group-hover:scale-[1.04]"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[#57514c]">
+                              <UserRound className="h-14 w-14" />
+                            </div>
+                          )}
 
-                  {/* โค้ชอื่น — แต่ละแถว flex-1 เพื่อยืดเต็มความสูงของคอลัมน์ซ้าย
-                      ไม่งั้นเวลามีโค้ชน้อยกว่าที่ดีไซน์เผื่อไว้ จะเหลือที่ว่างยาวใต้แถวสุดท้าย */}
-                  {others.length > 0 && (
-                    <div className="flex flex-col bg-gray-50 md:pl-8">
-                      {others.map((coach, i) => {
-                        const img = coach.home_image || coach.profile_picture;
-                        const name =
-                          coach.nickname ||
-                          [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
-                          `โค้ช #${coach.id}`;
-                        return (
-                          <button
-                            key={coach.id}
-                            type="button"
-                            onClick={() => setSelectedCoach(coach)}
-                            className="group flex flex-1 items-center gap-5 border-b border-gray-200 py-5 text-left transition-colors last:border-b-0 hover:bg-white"
+                          {/* ไล่เฉดล่างไว้กันชื่อจมกับภาพตอน hover */}
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+
+                          <span
+                            className="absolute right-3.5 top-2.5 text-[58px] font-bold leading-none"
+                            style={{ color: isHead ? COACH_ACCENT : "rgba(255,255,255,0.14)" }}
                           >
-                            <div className="aspect-square w-[84px] flex-none overflow-hidden bg-gray-100">
-                              {img ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={img}
-                                  alt={name}
-                                  className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-105"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-gray-300">
-                                  <UserRound className="h-8 w-8" />
-                                </div>
-                              )}
-                            </div>
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
 
-                            <div className="flex min-w-0 flex-col gap-1.5">
-                              <span className="flex flex-wrap items-center gap-2">
-                                <span className="text-base font-medium text-gray-900 transition-colors group-hover:text-[#CC0000]">
-                                  {name}
-                                </span>
-                                {coach.specialization && (
-                                  <span
-                                    className="border px-1.5 py-0.5 text-[10px] font-light leading-none"
-                                    style={{ color: ACCENT, borderColor: ACCENT }}
-                                  >
-                                    ระดับ {coach.specialization}
-                                  </span>
-                                )}
-                              </span>
-                              {coach.coach_license?.trim() && (
-                                <span className="text-[11.5px] font-light text-gray-400">
-                                  {coach.coach_license}
-                                </span>
-                              )}
-                              {coach.bio?.trim() && (
-                                <span className="line-clamp-2 text-[12.5px] font-light leading-relaxed text-gray-500">
-                                  {coach.bio}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* เลขลำดับ + ลูกศร บอกว่าแถวกดได้ */}
-                            <span className="ml-auto flex flex-none items-center gap-3 self-start pt-1">
-                              <span className="text-[11px] font-light tabular-nums text-gray-300">
-                                {String(i + 2).padStart(2, "0")}
-                              </span>
-                              <ArrowUpRight className="h-4 w-4 text-gray-300 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#CC0000]" />
+                          {isHead && (
+                            <span
+                              className="absolute left-0 bottom-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#141210]"
+                              style={{ backgroundColor: COACH_ACCENT }}
+                            >
+                              HEAD COACH
                             </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                          )}
+                        </div>
+
+                        <div
+                          className="flex flex-col gap-2 pt-4"
+                          style={{ borderTop: isHead ? `2px solid ${COACH_ACCENT}` : "1px solid #2e2a27" }}
+                        >
+                          <span className="text-2xl font-semibold leading-tight text-white">{name}</span>
+                          <span className="text-xs font-light" style={{ color: COACH_ACCENT }}>
+                            {role}
+                            {coach.specialization ? ` · ระดับ ${coach.specialization}` : ""}
+                          </span>
+                          {coach.coach_license?.trim() && (
+                            <span className="text-xs font-light text-[#8c8681]">{coach.coach_license}</span>
+                          )}
+                          {coach.bio?.trim() && (
+                            <span className="line-clamp-3 text-[12.5px] font-light leading-relaxed text-[#a6a09a]">
+                              {coach.bio}
+                            </span>
+                          )}
+                          <span
+                            className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-light opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                            style={{ color: COACH_ACCENT }}
+                          >
+                            ดูรายละเอียด
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* แถวปิดท้าย */}
-                <div className="flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-[12.5px] font-light text-gray-400">
+                <div className="mt-12 flex flex-col items-start gap-4 border-t border-[#2e2a27] pt-6 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex items-center gap-2.5 text-[12.5px] font-light text-[#8c8681]">
+                    <ShieldCheck className="h-4 w-4 flex-none" />
                     {content?.coaches_note || "โค้ชทุกคนผ่านการตรวจประวัติอาชญากรรมและอบรมการปฐมพยาบาลเบื้องต้น"}
                   </span>
-                  {/* โชว์ปุ่มเฉพาะตอนมีคนที่ยังไม่ได้แสดง — เดิมเป็นลิงก์ #coaches
-                      ซึ่งชี้กลับมาที่ section ตัวเอง กดแล้วไม่ไปไหน */}
                   {(hiddenCount > 0 || showAllCoaches) && (
                     <button
                       type="button"
                       onClick={() => setShowAllCoaches((v) => !v)}
-                      className="group inline-flex items-center gap-2 border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                      className="group inline-flex flex-none items-center gap-2 px-5 py-3 text-[13px] font-medium text-[#141210] transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: COACH_ACCENT }}
                     >
                       {showAllCoaches ? "ย่อรายชื่อโค้ช" : `ดูโค้ชทั้ง ${coaches.length} คน`}
                       <ArrowRight
-                        className={`h-3.5 w-3.5 transition-transform ${
-                          showAllCoaches ? "-rotate-90" : "group-hover:translate-x-0.5"
-                        }`}
+                        className={`h-4 w-4 transition-transform ${showAllCoaches ? "-rotate-90" : "group-hover:translate-x-0.5"}`}
                       />
                     </button>
                   )}
