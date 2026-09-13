@@ -432,17 +432,15 @@ func TestListedMissedClassIsAlwaysResolvable(t *testing.T) {
 // ⚠️ บั๊กจริงที่ผู้ใช้เจอ — กดยืนยันแล้วขึ้น "ลองกดอีกครั้ง" แล้วข้อความหายไป
 // กดใหม่ก็ได้ผลเดิม วนอยู่อย่างนั้นโดยไม่มีใครรู้สาเหตุ
 //
-// ต้นเหตุ: เวอร์ชันแรกดักตอน insert ล้มแล้วค่อย query หาแถวที่ชน
-// ซึ่งใช้ไม่ได้บน postgres — ทรานแซกชันที่มีคำสั่งล้มจะเข้าสถานะ aborted
-// ทุก query หลังจากนั้นถูกปฏิเสธ จึงตกไปเข้าทางสำรอง "ลองกดอีกครั้ง" ทุกครั้ง
+// ต้นเหตุ: เวอร์ชันแรกดักตอน insert ล้มแล้วค่อย query หาแถวที่ชน ซึ่งใช้ไม่ได้บน
+// postgres — ทรานแซกชันที่มีคำสั่งล้มจะเข้าสถานะ aborted ทุก query หลังจากนั้นถูกปฏิเสธ
+// จึงตกไปเข้าทางสำรอง "ลองกดอีกครั้ง" ทุกครั้ง · ตอนนี้ตรวจก่อน insert
 //
-// ตอนนี้ตรวจก่อน insert (ทรานแซกชันยังปกติ) จึงบอกได้ว่าชนกับรอบไหน
+// ─── เคสที่ยังชนได้จริง (หลัง index เปลี่ยนเป็นรวมเวลาเริ่ม) ───
 //
-// ─── เคสที่ยังชนได้จริงหลังรับการจับคู่สองทาง ───
-//
-// ตารางงานชี้แพ็กเกจพี่น้อง (ไม่ใช่ตัวแทน) + รอบอยู่บนตัวแทน + เวลาไม่ตรง
-// → จับคู่ไม่ติดทั้งสองทาง (package_id ไม่ตรง · เวลาไม่ตรง) → โผล่ในรายการ
-// → แต่การสร้างรอบใหม่ต้องลงบน "ตัวแทน" ซึ่งมีแถวของวันนั้นอยู่แล้ว → ชน unique index
+// รอบที่ "เวลาเริ่มตรงกัน แต่เวลาจบไม่ตรง" — กติกาจับคู่คลาสไม่รับ (ต้องตรงทั้ง start/end)
+// แต่ unique index มองว่าเป็นคีย์เดียวกัน จึง insert ไม่ได้
+// มักเกิดจากการแก้เวลาคาบใน package_schedules หลังเปิดรอบไปแล้ว
 func TestResolveExplainsUniqueIndexCollision(t *testing.T) {
 	db := newMissedClassTestDB(t)
 	c := seedMergedClass(t, db, missedDay, missedStart, missedEnd, 8, 12)
@@ -457,15 +455,16 @@ func TestResolveExplainsUniqueIndexCollision(t *testing.T) {
 		t.Fatalf("ต้องมีแพ็กเกจพี่น้องที่ไม่ใช่ตัวแทน แต่ได้ %+v", c.packageIDs)
 	}
 
-	// ตารางงานชี้แพ็กเกจพี่น้อง
+	// โค้ชมีตารางงานสองแถวของคลาสนี้ → ท่อน package_id ถูกปิด (กันความกำกวม)
 	assignCoach(t, db, c, missedCoachA, missedStart, missedEnd, sibling)
+	assignCoach(t, db, c, missedCoachB, missedStart, missedEnd, sibling)
 
-	// รอบเช็คชื่ออยู่บนแพ็กเกจตัวแทน และเป็นคาบคนละช่วงเวลา
+	// รอบเช็คชื่ออยู่บนแพ็กเกจตัวแทน เวลาเริ่มตรงกัน แต่เวลาจบไม่ตรง
 	day, _ := time.Parse("2006-01-02", missedDay)
 	other := models.AttendanceSession{
 		PackageID: c.anchor, SessionDate: day,
 		Status: models.AttendanceSessionClosed, OpenedAt: time.Now(), OpenedByUserID: 1,
-		ScheduleStartTime: "08:00", ScheduleEndTime: "10:00",
+		ScheduleStartTime: missedStart, ScheduleEndTime: "21:30",
 	}
 	mustCreate(t, db, &other)
 	normalizeSessionDates(t, db, missedDay)
@@ -475,19 +474,19 @@ func TestResolveExplainsUniqueIndexCollision(t *testing.T) {
 		t.Fatalf("ดึงรายการไม่สำเร็จ: %v", err)
 	}
 	if len(items) != 1 {
-		t.Fatalf("จับคู่ไม่ติดทั้งสองทาง คาบนี้จึงต้องโผล่ในรายการ แต่ได้ %d", len(items))
+		t.Fatalf("เวลาจบไม่ตรง จับคู่ไม่ติด คาบนี้จึงต้องโผล่ในรายการ แต่ได้ %d", len(items))
 	}
 
 	_, resolveErr := resolve(db, items[0].WorkScheduleID,
-		dto.ResolveMissedClassCoachReq{CoachID: missedCoachA, Status: "present"})
+		dto.ResolveMissedClassCoachReq{CoachID: missedCoachA, Status: "present"},
+		dto.ResolveMissedClassCoachReq{CoachID: missedCoachB, Status: "present"})
 
 	if !errors.Is(resolveErr, ErrMissedClassCollision) {
 		t.Fatalf("ต้องตอบว่าชนกับรอบที่มีอยู่ (ErrMissedClassCollision) แต่ได้: %v", resolveErr)
 	}
 
-	// ข้อความต้องบอกได้ว่าชนกับรอบไหนและเวลาเท่าไร ไม่ใช่ "ลองกดอีกครั้ง"
 	msg := resolveErr.Error()
-	for _, want := range []string{"08:00", missedStart} {
+	for _, want := range []string{"21:30", missedStart} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("ข้อความต้องมี %q เพื่อให้เอาไปแก้ต่อได้ แต่ได้: %s", want, msg)
 		}

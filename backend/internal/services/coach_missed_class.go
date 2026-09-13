@@ -487,18 +487,17 @@ func (s *AttendanceService) assertNoExistingSession(tx *gorm.DB, ws *models.Work
 //	assertNoExistingSession    "คลาสนี้มีรอบเช็คชื่อแล้วหรือยัง"  (จับคู่ด้วย course+วัน+เวลา)
 //	assertNoAnchorDayCollision "แถวที่จะ insert ชนกับ unique index ไหม" (แพ็กเกจ+วัน)
 //
-// unique index ของ attendance_sessions คือ (package_id, session_date)
-// ซึ่ง "ไม่มีเวลา" อยู่ในเงื่อนไข — 1 แพ็กเกจมีรอบได้วันละ 1 รอบเท่านั้น
-// จึงมีช่องที่อันแรกตอบว่า "ยังไม่มี" แต่ฐานปฏิเสธการ insert
+// unique index ของ attendance_sessions คือ
+// (package_id, session_date, schedule_start_time)
 //
-// เกิดได้สองสาเหตุ ทางแก้ต่างกันคนละเรื่อง:
+// ด่านนี้จึงต้องใช้คีย์ชุดเดียวกันเป๊ะ ๆ ไม่ใช่แค่แพ็กเกจ+วัน
+// (เคยเช็คแค่แพ็กเกจ+วันตอนที่ index ยังไม่มีเวลา พอ index เปลี่ยนก็กลายเป็นเข้มเกินจริง
 //
-//  1. เวลาที่บันทึกไว้คนละรูปแบบ ("18:00" กับ "18:00:00")
-//     เวลาของรอบมาจาก package_schedules ส่วนของตารางงานแอดมินกรอกอีกหน้า
-//     ⇒ เป็นคาบเดียวกัน แก้ด้วย NormalizeClockTimeColumns (รัน cmd/migrate)
+//	จนบล็อกการเคลียร์คาบที่สองของวัน — เทส TestSecondSlotOfDayCanBeResolved ตรึงไว้แล้ว)
 //
-//  2. แพ็กเกจนั้นมีคาบเรียนสองช่วงในวันเดียวกันจริง (เสาร์ 10-12 และ 14-16)
-//     ⇒ index ปัจจุบันรองรับไม่ได้ ต้องแก้ index ให้รวมเวลาด้วย
+// เคสที่ยังชนได้จริงหลัง index เปลี่ยน: รอบที่ "เวลาเริ่มตรงกัน แต่เวลาจบไม่ตรง"
+// ซึ่งกติกาจับคู่คลาสไม่รับ (ต้องตรงทั้ง start และ end) แต่ index มองว่าเป็นคีย์เดียวกัน
+// มักเกิดจากการแก้เวลาคาบใน package_schedules หลังเปิดรอบไปแล้ว
 //
 // ─── ⚠️ ทำไมต้องตรวจ "ก่อน" insert ───
 //
@@ -518,9 +517,19 @@ func (s *AttendanceService) assertNoAnchorDayCollision(
 		dayEnd = d.AddDate(0, 0, 1).Format("2006-01-02")
 	}
 
+	// ⚠️ เงื่อนไขต้องตรงกับคีย์ของ unique index เป๊ะ ๆ ไม่ใช่ใกล้เคียง
+	//
+	//	index = (package_id, session_date, schedule_start_time)
+	//
+	// กว้างกว่านี้ = บล็อกการเคลียร์ที่ทำได้จริง (เคยเช็คแค่แพ็กเกจ+วัน ตามคีย์ของ
+	// index รุ่นเก่า พอ index เพิ่มเวลาเข้าไป คาบที่สองของวันก็ถูกปฏิเสธทั้งที่สร้างรอบได้
+	// = โผล่ในรายการค้างแต่กดไม่ได้ ซึ่งเป็นอาการที่ไฟล์นี้ถูกเขียนมาแก้)
+	//
+	// แคบกว่านี้ = ปล่อยให้ INSERT ไปล้มเอง แล้วเจอปัญหาทรานแซกชัน aborted
 	var clash models.AttendanceSession
-	err := tx.Where("package_id = ? AND session_date >= ? AND session_date < ?",
-		anchor, date, dayEnd).Order("id ASC").First(&clash).Error
+	err := tx.Where("package_id = ? AND session_date >= ? AND session_date < ? AND schedule_start_time = ?",
+		anchor, date, dayEnd, ws.StartTime).
+		Order("id ASC").First(&clash).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}
@@ -533,8 +542,8 @@ func (s *AttendanceService) assertNoAnchorDayCollision(
 		clashTime = "ไม่ได้บันทึกเวลาไว้"
 	}
 
-	return fmt.Errorf("%w: แพ็กเกจนี้มีรอบเช็คชื่อของวันเดียวกันอยู่แล้ว "+
-		"(รอบ #%d เวลา %s สถานะ %s) แต่เวลาไม่ตรงกับตารางงานของคาบนี้ (%s-%s) "+
+	return fmt.Errorf("%w: แพ็กเกจนี้มีรอบเช็คชื่อของคาบนี้อยู่แล้ว "+
+		"(รอบ #%d เวลา %s สถานะ %s) แต่เวลาที่บันทึกไว้ไม่ตรงกับตารางงาน (%s-%s) "+
 		"ระบบจึงสร้างรอบใหม่ไม่ได้ — สาเหตุที่พบบ่อยคือรูปแบบเวลาในฐานข้อมูลไม่ตรงกัน "+
 		"ให้ผู้ดูแลระบบรัน cmd/migrate เพื่อแปลงรูปแบบเวลาให้เป็นมาตรฐานเดียวก่อน",
 		ErrMissedClassCollision, clash.ID, clashTime, clash.Status,

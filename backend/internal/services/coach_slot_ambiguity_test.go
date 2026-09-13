@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 
 	"gorm.io/gorm"
@@ -106,12 +107,6 @@ func TestOnePackageTwoSlotsSameDayPaysOnlyClosedSlot(t *testing.T) {
 
 // ─── F4: มาร์คขาดคาบเช้า ต้องไม่ทำให้คาบบ่ายหายเงียบ ───────────────────────
 
-// ⚠️ ข้อจำกัดของฐานข้อมูลที่ต้องรู้ก่อนอ่านเทสนี้
-//
-// unique index ของ attendance_sessions คือ (package_id, session_date)
-// แปลว่า "1 แพ็กเกจมีรอบเช็คชื่อได้วันละ 1 รอบเท่านั้น" — คาบบ่ายของแพ็กเกจเดียวกัน
-// จึงเปิดรอบของตัวเองไม่ได้เลย (ดูหมายเหตุท้ายไฟล์)
-//
 // บั๊กเดิม: ท่อน package_id แบบไม่มีเงื่อนไขทำให้คาบบ่ายไปเกาะรอบของคาบเช้า
 // พอมาร์คขาดงานคาบเช้า แถว absent แถวเดียวจึงตัดเงินคาบบ่ายทิ้งไปด้วย
 // **และคาบบ่ายก็ไม่โผล่ในรายการค้าง** เพราะถือว่า "มีรอบแล้ว" = เงินหายเงียบสนิท
@@ -154,12 +149,33 @@ func TestSecondSlotOfDayCanBeResolved(t *testing.T) {
 	afternoon := ambiWS(t, db, day, "14:00", "16:00")
 	ambiSession(t, db, day, "10:00", "12:00")
 
-	items, err := NewAttendanceService(db).ListMissedClasses()
+	svc := NewAttendanceService(db)
+	items, err := svc.ListMissedClasses()
 	if err != nil {
 		t.Fatalf("ดึงรายการคาบค้างไม่สำเร็จ: %v", err)
 	}
 	if len(items) != 1 || items[0].WorkScheduleID != afternoon.ID {
 		t.Fatalf("ต้องเจอคาบบ่าย (#%d) ในรายการค้าง แต่ได้ %+v", afternoon.ID, items)
+	}
+
+	// ⚠️ โผล่ในรายการอย่างเดียวไม่พอ ต้องกดเคลียร์ได้จริงด้วย
+	//
+	// ด่านกันชนเคยเช็คแค่ (แพ็กเกจ, วัน) ตามคีย์ของ index รุ่นเก่า
+	// พอ index เพิ่มเวลาเริ่มเข้าไป ด่านก็กลายเป็นเข้มเกินจริง — คาบบ่ายจะถูกปฏิเสธ
+	// เพราะไปเจอรอบของคาบเช้า ทั้งที่สร้างรอบของตัวเองได้
+	if _, err := svc.ResolveMissedClass(dto.ResolveMissedClassRequest{
+		WorkScheduleID: afternoon.ID,
+		Coaches: []dto.ResolveMissedClassCoachReq{
+			{CoachID: ambiCoach, Status: "present"},
+		},
+	}, 1); err != nil {
+		t.Fatalf("คาบที่สองของวันต้องเคลียร์ย้อนหลังได้ แต่ถูกปฏิเสธ: %v", err)
+	}
+
+	var sessions int64
+	db.Model(&models.AttendanceSession{}).Count(&sessions)
+	if sessions != 2 {
+		t.Fatalf("ต้องมีรอบเช็คชื่อ 2 รอบ (เช้า+บ่าย) แต่มี %d", sessions)
 	}
 }
 
@@ -246,13 +262,11 @@ func TestScanStillCreatesRowForNonOverlappingClass(t *testing.T) {
 	}
 }
 
-// ─── หมายเหตุ: ข้อจำกัดที่ยังเหลืออยู่ ───────────────────────────────────────
+// ─── หมายเหตุ: unique index ─────────────────────────────────────────────────
 //
-// unique index (package_id, session_date) ทำให้แพ็กเกจหนึ่งเปิดรอบเช็คชื่อได้วันละรอบเดียว
-// ถ้าโรงเรียนขายแพ็กเกจที่เรียนสองช่วงในวันเดียวกันจริง (เช่น เสาร์ 10-12 และ 14-16)
-// คาบที่สองจะเปิดรอบไม่ได้เลย → นักเรียนเช็คชื่อคาบนั้นไม่ได้
+// index ของ attendance_sessions คือ (package_id, session_date, schedule_start_time)
+// แพ็กเกจหนึ่งจึงเปิดรอบเช็คชื่อได้หลายรอบต่อวัน ตราบใดที่เวลาเริ่มต่างกัน
+// (เดิมเป็น (package_id, session_date) ซึ่งทำให้คาบที่สองของวันเปิดรอบไม่ได้เลย)
 //
-// ทางแก้คือเปลี่ยน index เป็น (package_id, session_date, schedule_start_time)
-// ซึ่งเป็น migration ที่ต้องตัดสินใจแยก — ยังไม่ทำในรอบนี้
-//
-// เทสข้างบนจึงตรึงแค่ว่า "เงินต้องไม่หายเงียบ" ไม่ได้ตรึงว่าคาบที่สองเปิดรอบได้
+// ทุกจุดที่ตรวจ "ชนกับรอบที่มีอยู่" ต้องใช้คีย์ชุดนี้ให้ครบ ไม่งั้นจะเข้มเกินจริง
+// แล้วบล็อกคาบที่สองของวันโดยไม่จำเป็น (ดู assertNoAnchorDayCollision)
