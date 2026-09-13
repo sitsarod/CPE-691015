@@ -271,14 +271,15 @@ export async function confirmSlip(invoiceId: number, token: string): Promise<{ m
   return resData;
 }
 
-// Reject payment slip
-export async function rejectSlip(invoiceId: number, token: string): Promise<{ message?: string; data?: BillingDTO }> {
+// Reject payment slip — reason บังคับกรอก ถูกส่งไปแจ้งลูกค้าและแสดงในประวัติใบแจ้งหนี้
+export async function rejectSlip(invoiceId: number, reason: string, token: string): Promise<{ message?: string; data?: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/reject`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`
-    }
+    },
+    body: JSON.stringify({ reason })
   });
   const resData = await response.json();
   if (!response.ok) {

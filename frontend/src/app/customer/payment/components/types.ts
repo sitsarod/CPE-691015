@@ -17,6 +17,10 @@ export interface InvoiceDTO {
   customer_id: number;
   paymentitems: PaymentItemDTO[];
   created_at: string;
+
+  // เหตุผล/เวลาที่แอดมินปฏิเสธสลิป — มีค่าเฉพาะใบสถานะ rejected
+  reject_reason?: string;
+  rejected_at?: string;
 }
 
 export type { BillingDTO, BankAccount };

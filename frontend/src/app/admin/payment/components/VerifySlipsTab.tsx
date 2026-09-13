@@ -191,11 +191,11 @@ export default function VerifySlipsTab({
     }
   };
 
-  const handleRejectSlip = async (invoiceId: number) => {
+  const handleRejectSlip = async (invoiceId: number, reason: string) => {
     setSubmitting('reject');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      await rejectSlip(invoiceId, token || "");
+      await rejectSlip(invoiceId, reason, token || "");
       onTriggerToast('ปฏิเสธหลักฐานการแนบสลิปเรียบร้อยแล้ว');
       advanceRef.current = true;
       onFetchData();
@@ -214,7 +214,7 @@ export default function VerifySlipsTab({
       onTriggerToast('กรุณาระบุเหตุผลการปฏิเสธก่อน', 'error');
       return;
     }
-    handleRejectSlip(invoiceId);
+    handleRejectSlip(invoiceId, reason.trim());
   };
 
   // ลูกค้าจ่ายเงินสด (logic เดิม)
@@ -428,7 +428,7 @@ export default function VerifySlipsTab({
               </p>
             </div>
           ) : (
-            <div className="flex min-h-full flex-1 flex-col gap-5 p-6">
+            <div className="mx-auto flex min-h-full w-full max-w-xl flex-1 flex-col gap-5 p-6 lg:max-w-none">
               {/* 1) หัวแผง */}
               <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
                 <h2 className="text-xl font-semibold tracking-tight text-slate-900">รายละเอียดและผลตรวจสอบ</h2>

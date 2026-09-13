@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { ChevronDown, ChevronUp, FileText, AlertCircle } from "lucide-react";
 import { InvoiceDTO } from "./types";
 import ImageLightbox from "@/components/ImageLightbox";
 
@@ -214,6 +214,22 @@ export default function InvoicesTab({
                     </div>
                   </div>
                 </div>
+
+                {/* เหตุผลที่ถูกปฏิเสธ — แสดงเด่นไว้เสมอ (ไม่ต้องกดขยาย) ให้ลูกค้ารู้ว่าต้องแก้อะไรก่อนส่งสลิปใหม่ */}
+                {invoiceStatus === "rejected" && inv.reject_reason && (
+                  <div className="border-t border-rose-100 bg-rose-50/60 px-6 py-3.5">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600">เหตุผลที่ถูกปฏิเสธ</p>
+                        <p className="mt-0.5 text-sm text-rose-800">{inv.reject_reason}</p>
+                        {inv.rejected_at && (
+                          <p className="mt-1 text-[10px] text-rose-500">ปฏิเสธเมื่อ {formatDate(inv.rejected_at)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Expanded Items */}
                 {isExpanded && (

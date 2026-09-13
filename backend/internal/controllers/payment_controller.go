@@ -137,7 +137,14 @@ func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 		return
 	}
 
-	invoice, err := ctrl.service.RejectPayment(uint(id))
+	// บังคับกรอกเหตุผล เพราะข้อความนี้ถูกส่งไปหาลูกค้าตรง ๆ และแสดงในประวัติใบแจ้งหนี้
+	var req dto.RejectPaymentReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
+		return
+	}
+
+	invoice, err := ctrl.service.RejectPayment(uint(id), req.Reason)
 	if err != nil {
 		respondServiceError(c, err)
 		return

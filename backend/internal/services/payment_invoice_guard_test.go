@@ -187,7 +187,7 @@ func TestRejectPayment_RejectsAlreadyClosedAndKeepsBillingPaid(t *testing.T) {
 	billingID, staleInvoiceID := seedPaidBillingWithStaleInvoice(t, db)
 	svc := NewPaymentService(db, nil)
 
-	if _, err := svc.RejectPayment(staleInvoiceID); err == nil {
+	if _, err := svc.RejectPayment(staleInvoiceID, "สลิปไม่ถูกต้อง"); err == nil {
 		t.Fatal("คาดว่าปฏิเสธใบที่ปิดไปแล้วต้องได้ error แต่กลับสำเร็จ")
 	}
 
@@ -268,7 +268,7 @@ func TestRejectPayment_PendingInvoiceResetsBillingToUnfunded(t *testing.T) {
 	}
 
 	svc := NewPaymentService(db, nil)
-	if _, err := svc.RejectPayment(invoice.ID); err != nil {
+	if _, err := svc.RejectPayment(invoice.ID, "สลิปไม่ถูกต้อง"); err != nil {
 		t.Fatalf("ปฏิเสธใบที่ยัง pending ควรสำเร็จ แต่ได้ error: %v", err)
 	}
 
