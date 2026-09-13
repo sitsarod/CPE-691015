@@ -260,7 +260,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         </div>
       </div>
 
-      <div className="flex justify-end pt-6 border-t border-gray-200">
+      <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-40 flex justify-end border-t border-gray-200 bg-white/95 py-4 backdrop-blur md:bottom-0">
         <button 
           type="submit" disabled={isLoading}
           className="flex items-center justify-center w-full md:w-auto bg-[#CC0000] text-white font-bold px-8 py-3 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"

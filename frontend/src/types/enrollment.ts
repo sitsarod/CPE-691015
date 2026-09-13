@@ -242,6 +242,19 @@ export interface EnrollmentExtension {
 export interface CreateEnrollmentReq {
   customer_id: number;
   package_id: number;
+  // เลขเวอร์ชันข้อตกลงที่ผู้ใช้กดยอมรับ — backend ปฏิเสธถ้าไม่ตรงกับฉบับปัจจุบัน
+  accepted_terms_version: string;
+}
+
+export interface EnrollmentTermsSection {
+  heading: string;
+  items: string[];
+}
+
+export interface EnrollmentTerms {
+  version: string;
+  title: string;
+  sections: EnrollmentTermsSection[];
 }
 
 export interface CreateEnrollmentData {

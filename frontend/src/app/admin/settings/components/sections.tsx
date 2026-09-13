@@ -16,6 +16,7 @@ import {
   CoachGrid,
 } from './editors';
 import { HeroPreview } from './HeroPreview';
+import { LegalConsentEditors } from './LegalConsentEditors';
 
 export interface SectionCtx {
   draft: HomeContent;
@@ -489,6 +490,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
               แสดงเป็นหน้าแยก (/privacy, /terms) และมีลิงก์ท้ายหน้า · เว้นว่างไว้ = ไม่แสดงลิงก์นั้น
             </p>
           </div>
+          <LegalConsentEditors />
         </>
       );
 

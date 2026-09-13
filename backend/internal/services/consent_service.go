@@ -117,7 +117,8 @@ func (s *ConsentService) GetPolicy() dto.FaceConsentPolicyRes {
 		}
 	}
 
-	return FaceConsentPolicy(contact)
+	version, content := loadFaceConsentContent(s.db)
+	return buildFaceConsentPolicy(version, content, contact)
 }
 
 // ConsentMeta คือข้อมูลประกอบที่เก็บไว้เป็นหลักฐาน audit (ไม่ได้มาจาก body ที่ผู้ใช้ควบคุมได้)
@@ -171,7 +172,7 @@ func (s *ConsentService) GetStatus(userID uint) (*dto.FaceConsentStatusRes, erro
 	// เฉพาะคนที่เคยตอบ granted เท่านั้น — คนที่ปฏิเสธหรือถอนไปแล้วไม่ต้องถามซ้ำ
 	// (เหตุผลเดียวกับข้างบน) และระหว่างที่ยังไม่ยินยอมใหม่ ต้องปิดการสแกนใบหน้าไปก่อน
 	// เพราะเท่ากับประมวลผลโดยไม่มีความยินยอมที่ใช้ได้ · QR ยังใช้ได้ตามปกติ
-	if status == models.FaceConsentGranted && res.PolicyVersion != models.FaceConsentPolicyVersion {
+	if status == models.FaceConsentGranted && res.PolicyVersion != CurrentFaceConsentVersion(s.db) {
 		res.NeedsDecision = true
 		res.CanUseFaceCheckIn = false
 		res.PolicyOutdated = true
@@ -348,7 +349,7 @@ func writeConsentTx(tx *gorm.DB, subject *consentSubject, actorUserID uint, acti
 		CustomerID:      subject.CustomerID,
 		CoachID:         subject.CoachID,
 		Action:          action,
-		PolicyVersion:   models.FaceConsentPolicyVersion,
+		PolicyVersion:   CurrentFaceConsentVersion(tx),
 		ActedAt:         time.Now(),
 		GrantedByUserID: actorUserID,
 		IPAddress:       meta.IPAddress,

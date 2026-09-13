@@ -14,6 +14,21 @@ import (
 type CreateEnrollmentReq struct {
     CustomerID uint `json:"customer_id" binding:"required"`
     PackageID  uint `json:"package_id" binding:"required"`
+
+    // AcceptedTermsVersion = เลขเวอร์ชันข้อตกลงที่นักเรียนกดยอมรับ · ต้องตรงกับฉบับปัจจุบัน
+    AcceptedTermsVersion string `json:"accepted_terms_version"`
+}
+
+type EnrollmentTermsSection struct {
+    Heading string   `json:"heading"`
+    Items   []string `json:"items"`
+}
+
+// EnrollmentTermsRes คือข้อตกลงการสมัครเรียนที่แสดงให้อ่านก่อนกดสมัคร
+type EnrollmentTermsRes struct {
+    Version  string                   `json:"version"`
+    Title    string                   `json:"title"`
+    Sections []EnrollmentTermsSection `json:"sections"`
 }
 
 // CreateEnrollmentRes ส่งข้อมูลกลับไปให้หน้าเว็บเพื่อพาไปหน้าชำระเงิน

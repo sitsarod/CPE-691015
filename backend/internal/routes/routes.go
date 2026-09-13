@@ -80,6 +80,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	consentService := services.NewConsentService(db, cloudinaryService)
 	consentController := controllers.NewConsentController(consentService)
+	legalDocumentController := controllers.NewLegalDocumentController(services.NewLegalDocumentService(db))
 
 	evaluationService := services.NewEvaluationService(db)
 	evaluationController := controllers.NewEvaluationController(evaluationService, db)
@@ -133,6 +134,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		api.GET("/enrollments/courses", enrollmentController.GetAvailableCourses)
+		api.GET("/enrollments/terms", enrollmentController.GetTerms)
 
 		publicCourseGroup := api.Group("/courses")
 		{
@@ -326,6 +328,11 @@ func SetupRoutes(r *gin.Engine) {
 
 		adminOnly.GET("/admin/class-confirmations/headcount", classConfirmationController.GetHeadcounts)
 		adminOnly.GET("/admin/class-confirmations/roster", classConfirmationController.GetClassRoster)
+
+		protected.GET("/attendance/me", attendanceController.GetMyHistory)
+
+		adminOnly.GET("/admin/legal-documents", legalDocumentController.List)
+		adminOnly.PUT("/admin/legal-documents/:key", legalDocumentController.Update)
 
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
 		{
