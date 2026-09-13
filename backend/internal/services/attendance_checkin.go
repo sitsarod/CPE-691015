@@ -25,6 +25,7 @@ func (s *AttendanceService) LookupByQR(sessionID uint, qrCode string) (*dto.Scan
 		FullName:          ctx.FullName,
 		Nickname:          ctx.Nickname,
 		CourseName:        ctx.CourseName,
+		PackageSessions:   ctx.PackageSessions,
 		TotalSessions:     ctx.Enrollment.TotalSessions,
 		RemainingSessions: ctx.Enrollment.RemainingSessions,
 		IsConfirmed:       ctx.Confirmed,
@@ -163,6 +164,8 @@ func (s *AttendanceService) checkIn(
 			CheckInMethod:     string(method),
 			CheckInTime:       now,
 			IsOffSchedule:     record.IsOffSchedule,
+			CourseName:        ctx.CourseName,
+			PackageSessions:   ctx.PackageSessions,
 			RemainingSessions: remaining,
 		}
 		return nil

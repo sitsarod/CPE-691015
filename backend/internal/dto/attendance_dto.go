@@ -175,6 +175,7 @@ type ScanResultDTO struct {
 	Nickname     string `json:"nickname"`
 	CourseName   string `json:"course_name"`
 
+	PackageSessions   uint `json:"package_sessions"`
 	TotalSessions     uint `json:"total_sessions"`
 	RemainingSessions uint `json:"remaining_sessions"`
 
@@ -234,7 +235,9 @@ type CheckInResultDTO struct {
 
 	IsOffSchedule bool `json:"is_off_schedule"`
 
-	RemainingSessions uint `json:"remaining_sessions"`
+	CourseName        string `json:"course_name"`
+	PackageSessions   uint   `json:"package_sessions"`
+	RemainingSessions uint   `json:"remaining_sessions"`
 }
 
 // CoachRosterItemDTO คู่ขนานกับ RosterItemDTO — แต่รายชื่อมาจาก WorkSchedule
