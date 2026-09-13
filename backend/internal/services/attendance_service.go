@@ -484,6 +484,9 @@ type scanContext struct {
 	Nickname   string
 	CourseName string
 	Confirmed  bool
+
+	// PackageSessions = จำนวนครั้งของแพ็กเกจที่ใบนี้ผูกอยู่ (ไม่ใช่แพ็กเกจหลักของรอบ)
+	PackageSessions uint
 }
 
 func (s *AttendanceService) loadOpenSession(tx *gorm.DB, sessionID uint) (*models.AttendanceSession, error) {
@@ -644,6 +647,12 @@ func (s *AttendanceService) buildContext(
 	if err := tx.Preload("Course").First(&pkg, session.PackageID).Error; err == nil && pkg.Course != nil {
 		ctx.CourseName = pkg.Course.CourseName
 	}
+
+	// คาบเดียวรวมหลายแพ็กเกจ — ต้องอ่านแพ็กเกจของใบนี้เอง · Unscoped เพราะแพ็กเกจอาจถูกลบไปแล้ว
+	tx.Unscoped().Model(&models.Package{}).
+		Select("sessions_count").
+		Where("id = ?", enrollment.PackageID).
+		Scan(&ctx.PackageSessions)
 	return ctx
 }
 

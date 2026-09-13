@@ -263,6 +263,7 @@ func (s *AttendanceService) LookupByFace(sessionID uint, image []byte) (*dto.Fac
 			FullName:          ctx.FullName,
 			Nickname:          ctx.Nickname,
 			CourseName:        ctx.CourseName,
+			PackageSessions:   ctx.PackageSessions,
 			TotalSessions:     ctx.Enrollment.TotalSessions,
 			RemainingSessions: ctx.Enrollment.RemainingSessions,
 			IsConfirmed:       ctx.Confirmed,

@@ -173,6 +173,8 @@ export interface ScanResult {
   nickname: string;
   course_name: string;
 
+  // จำนวนครั้งของแพ็กเกจที่ใบลงทะเบียนนี้ผูกอยู่
+  package_sessions: number;
   total_sessions: number;
   remaining_sessions: number;
 
@@ -205,6 +207,8 @@ export interface CheckInResult {
 
   is_off_schedule: boolean;
 
+  course_name: string;
+  package_sessions: number;
   remaining_sessions: number;
 }
 
