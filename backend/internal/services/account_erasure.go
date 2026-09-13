@@ -74,6 +74,9 @@ func scrubCoachPII(tx *gorm.DB, coachID uint) error {
 			"payment_info":    "",
 			"prompt_pay":      "",
 			"feature_on_home": false,
+			// ลบแล้วต้องไม่ค้างเป็นหัวหน้าโค้ช ไม่งั้นตำแหน่งจะว่างโดยไม่มีใครรู้
+			// และตั้งคนใหม่ได้แต่ของเก่ายังถือธงอยู่ในฐาน
+			"is_head_coach": false,
 
 			// birth_date เป็นคอลัมน์ date — ใส่ "" แล้ว postgres ฟ้อง invalid input syntax
 			"birth_date": gorm.Expr("NULL"),

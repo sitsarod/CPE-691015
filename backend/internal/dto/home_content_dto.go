@@ -24,6 +24,7 @@ type PublicCoachDTO struct {
 	HomeImage      string `json:"home_image"` // รูปโชว์การ์ดโค้ชหน้าแรก (แอดมินตั้งเอง)
 	Bio            string `json:"bio"`        // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
 	FeatureOnHome  bool   `json:"feature_on_home"`
+	IsHeadCoach    bool   `json:"is_head_coach"`
 }
 
 // StatItem หนึ่งช่องสถิติ (ใช้ทั้งสถิติใต้ hero และสถิติส่วนโค้ช)
@@ -47,30 +48,30 @@ type FaqItem struct {
 
 // HomeContentDTO เนื้อหาหน้าแรกทั้งหมด (ส่วน content แบบ singleton)
 type HomeContentDTO struct {
-	ID                  uint      `json:"id"`
-	AboutTitle          string    `json:"about_title"`
-	AboutContent        string    `json:"about_content"`
-	AboutImageURL       string    `json:"about_image_url"`
-	MapEmbedURL         string    `json:"map_embed_url"`
-	CoachesTitle        string    `json:"coaches_title"`
-	CoachesSubtitle     string    `json:"coaches_subtitle"`
-	CoursesTitle        string    `json:"courses_title"`
-	CoursesSubtitle     string    `json:"courses_subtitle"`
-	ShowFeaturedReviews bool      `json:"show_featured_reviews"`
-	ReviewsTitle        string    `json:"reviews_title"`
-	ReviewsSubtitle     string    `json:"reviews_subtitle"`
-	FacebookURL         string    `json:"facebook_url"`
-	InstagramURL        string    `json:"instagram_url"`
-	TiktokURL           string    `json:"tiktok_url"`
-	YoutubeURL          string    `json:"youtube_url"`
-	LineURL             string    `json:"line_url"`
-	SchoolName          string    `json:"school_name"`
-	ContactAddress      string    `json:"contact_address"`
-	ContactPhone        string    `json:"contact_phone"`
-	ContactEmail        string    `json:"contact_email"`
-	OpeningHours        string    `json:"opening_hours"`
-	PrivacyPolicy       string    `json:"privacy_policy"`
-	TermsOfService      string    `json:"terms_of_service"`
+	ID                  uint   `json:"id"`
+	AboutTitle          string `json:"about_title"`
+	AboutContent        string `json:"about_content"`
+	AboutImageURL       string `json:"about_image_url"`
+	MapEmbedURL         string `json:"map_embed_url"`
+	CoachesTitle        string `json:"coaches_title"`
+	CoachesSubtitle     string `json:"coaches_subtitle"`
+	CoursesTitle        string `json:"courses_title"`
+	CoursesSubtitle     string `json:"courses_subtitle"`
+	ShowFeaturedReviews bool   `json:"show_featured_reviews"`
+	ReviewsTitle        string `json:"reviews_title"`
+	ReviewsSubtitle     string `json:"reviews_subtitle"`
+	FacebookURL         string `json:"facebook_url"`
+	InstagramURL        string `json:"instagram_url"`
+	TiktokURL           string `json:"tiktok_url"`
+	YoutubeURL          string `json:"youtube_url"`
+	LineURL             string `json:"line_url"`
+	SchoolName          string `json:"school_name"`
+	ContactAddress      string `json:"contact_address"`
+	ContactPhone        string `json:"contact_phone"`
+	ContactEmail        string `json:"contact_email"`
+	OpeningHours        string `json:"opening_hours"`
+	PrivacyPolicy       string `json:"privacy_policy"`
+	TermsOfService      string `json:"terms_of_service"`
 
 	// เนื้อหาหลักหน้าแรก
 	HeroEyebrow       string `json:"hero_eyebrow"`
@@ -170,4 +171,9 @@ type ReorderHeroSlidesReq struct {
 // FeatureCoachReq เลือก/ยกเลิกให้โค้ชแสดงบนหน้าแรก
 type FeatureCoachReq struct {
 	FeatureOnHome bool `json:"feature_on_home"`
+}
+
+// HeadCoachReq ตั้ง/ยกเลิกหัวหน้าผู้ฝึกสอน (มีได้คนเดียวทั้งระบบ)
+type HeadCoachReq struct {
+	IsHeadCoach bool `json:"is_head_coach"`
 }

@@ -120,6 +120,7 @@ export default function AdminSettingsPage() {
       moveSlide: c.moveSlide,
       coaches: c.coaches,
       toggleCoach: c.toggleCoach,
+      setHeadCoach: c.setHeadCoach,
     };
   }, [c]);
 

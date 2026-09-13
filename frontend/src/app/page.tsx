@@ -14,7 +14,7 @@ import { priceRange } from "@/components/course/courseUtils";
 import { PublicHome, PublicCoach, FacilityTile } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
-import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images, ShieldCheck } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images } from "lucide-react";
 
 // โทนสี/ฟอนต์ของดีไซน์ 2b แต่คงโทนสีเดิมของเว็บ (ขาว + แดง #CC0000) และใช้ฟอนต์ Kanit
 const ACCENT = "#CC0000";
@@ -564,7 +564,10 @@ export default function Home() {
                       coach.nickname ||
                       [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
                       `โค้ช #${coach.id}`;
-                    const isHead = i === 0;
+                    // ⚠️ ห้ามกลับไปเดาจากลำดับ (i === 0) — ลำดับเปลี่ยนเมื่อไหร่
+                    // คนอื่นจะถูกป้ายว่าเป็นหัวหน้าโค้ชทันทีโดยไม่มีใครสั่ง
+                    // ฟิลด์นี้แอดมินติ๊กเองที่หน้าตั้งค่า และ backend บังคับให้มีคนเดียว
+                    const isHead = coach.is_head_coach;
                     const role = isHead ? "หัวหน้าผู้ฝึกสอน" : "ผู้ฝึกสอน";
 
                     return (
@@ -594,6 +597,15 @@ export default function Home() {
                               รูปที่เข้มอยู่แล้วจะแทบไม่เห็นความต่าง */}
                           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#141210] via-[#141210]/45 to-transparent" />
                           <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/15" />
+
+                          {isHead && (
+                            <span
+                              className="absolute bottom-0 left-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#141210]"
+                              style={{ backgroundColor: COACH_ACCENT }}
+                            >
+                              HEAD COACH
+                            </span>
+                          )}
 
                         </div>
 
@@ -637,13 +649,10 @@ export default function Home() {
                   })}
                 </div>
 
-                {/* แถวปิดท้าย */}
-                <div className="mt-12 flex flex-col items-start gap-4 border-t border-[#2e2a27] pt-6 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="flex items-center gap-2.5 text-[12.5px] font-light text-[#8c8681]">
-                    <ShieldCheck className="h-4 w-4 flex-none" />
-                    {content?.coaches_note || "โค้ชทุกคนผ่านการตรวจประวัติอาชญากรรมและอบรมการปฐมพยาบาลเบื้องต้น"}
-                  </span>
-                  {(hiddenCount > 0 || showAllCoaches) && (
+                {/* แถวปิดท้าย — โผล่เฉพาะตอนมีโค้ชเกินที่แสดงอยู่
+                    ไม่งั้นจะเหลือเส้นคาดกับที่ว่างลอย ๆ โดยไม่มีอะไรอยู่ในนั้น */}
+                {(hiddenCount > 0 || showAllCoaches) && (
+                  <div className="mt-12 flex justify-end border-t border-[#2e2a27] pt-6">
                     <button
                       type="button"
                       onClick={() => setShowAllCoaches((v) => !v)}
@@ -655,8 +664,8 @@ export default function Home() {
                         className={`h-4 w-4 transition-transform ${showAllCoaches ? "-rotate-90" : "group-hover:translate-x-0.5"}`}
                       />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             );
           })()}

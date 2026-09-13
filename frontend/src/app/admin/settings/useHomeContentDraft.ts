@@ -116,6 +116,7 @@ export interface UseHomeContentDraft {
   // โค้ช (บันทึกทันที)
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => Promise<void>;
+  setHeadCoach: (coach: PublicCoach) => Promise<void>;
 }
 
 export function useHomeContentDraft(): UseHomeContentDraft {
@@ -253,6 +254,22 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     }
   }, []);
 
+  // ⚠️ ตั้งหัวหน้าคนใหม่ = backend ปลดคนเดิมให้เอง จึงต้องล้างธงของทุกคนในฝั่ง UI ด้วย
+  // ถ้าอัปเดตเฉพาะแถวที่กด หน้าจอจะโชว์หัวหน้าโค้ชสองคนจนกว่าจะรีโหลด
+  const setHeadCoach = useCallback(async (coach: PublicCoach) => {
+    const next = !coach.is_head_coach;
+    try {
+      const updated = await homeContentAPI.setHeadCoach(coach.id, next);
+      setCoaches((prev) =>
+        prev.map((c) =>
+          c.id === coach.id ? updated : next ? { ...c, is_head_coach: false } : c
+        )
+      );
+    } catch (error) {
+      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+    }
+  }, []);
+
   return {
     loading,
     saving,
@@ -271,5 +288,6 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     moveSlide,
     coaches,
     toggleCoach,
+    setHeadCoach,
   };
 }

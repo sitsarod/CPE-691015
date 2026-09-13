@@ -438,6 +438,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			adminHomeGroup.GET("/coaches", homeContentController.GetAllCoachesForHome)
 			adminHomeGroup.PATCH("/coaches/:id/feature", homeContentController.SetCoachFeature)
+			adminHomeGroup.PATCH("/coaches/:id/head", homeContentController.SetHeadCoach) // หัวหน้าผู้ฝึกสอน มีได้คนเดียว
 		}
 
 		api.GET("/announcements", announcementController.GetActiveAnnouncements)

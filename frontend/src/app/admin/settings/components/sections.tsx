@@ -29,6 +29,7 @@ export interface SectionCtx {
   moveSlide: (index: number, dir: -1 | 1) => void;
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => void;
+  setHeadCoach: (coach: PublicCoach) => void;
 }
 
 const UnsavedChip = () => (
@@ -319,7 +320,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
           <p className="-mt-2 mb-5 max-w-[66ch] text-[13.5px] leading-relaxed text-gray-500">
             ดึงข้อมูลโค้ชจริงจากระบบ · โค้ชเป็นจุดขายหลักของหน้าแรก คนที่เลือกไว้จะแสดงพร้อมประวัติและใบรับรอง
           </p>
-          <CoachGrid coaches={ctx.coaches} onToggle={ctx.toggleCoach} />
+          <CoachGrid coaches={ctx.coaches} onToggle={ctx.toggleCoach} onSetHead={ctx.setHeadCoach} />
         </>
       );
 

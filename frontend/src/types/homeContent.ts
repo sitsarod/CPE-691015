@@ -20,6 +20,8 @@ export interface PublicCoach {
   home_image: string; // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเอง)
   bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
   feature_on_home: boolean;
+  // หัวหน้าผู้ฝึกสอน — แอดมินติ๊กเอง มีได้คนเดียวทั้งระบบ (backend บังคับให้)
+  is_head_coach: boolean;
 }
 
 // ข้อมูลชุดซ้ำที่แก้ผ่าน CMS (เก็บเป็น JSON array ฝั่ง backend)
