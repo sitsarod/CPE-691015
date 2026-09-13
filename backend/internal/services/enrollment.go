@@ -106,10 +106,13 @@ func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) e
 
 	courseName := "คอร์สเรียน"
 	var sessions uint
-	var price float64
+	price := e.AgreedPrice
 	if e.Package != nil {
 		sessions = e.Package.SessionsCount
-		price = e.Package.Price
+		// 0 = ใบเก่าที่ยังไม่มีสแนปช็อต — แพ็กเกจราคา 0 สร้างไม่ได้อยู่แล้ว
+		if price == 0 {
+			price = e.Package.Price
+		}
 		if e.Package.Course != nil {
 			courseName = e.Package.Course.CourseName
 		}
@@ -213,6 +216,26 @@ func BackfillCompletedEnrollments(db *gorm.DB) error {
 	return nil
 }
 
+// BackfillEnrollmentAgreedPrice เติมราคาที่ตกลงกันให้ใบเก่าจากราคาแพ็กเกจที่ใบนั้นผูกอยู่
+func BackfillEnrollmentAgreedPrice(db *gorm.DB) error {
+	// ไม่กรอง deleted_at ของ packages โดยตั้งใจ — ใบเก่าของแพ็กเกจที่ถูกลบก็ยังต้องมีราคา
+	res := db.Exec(`
+		UPDATE enrollments AS e
+		SET agreed_price = p.price
+		FROM packages AS p
+		WHERE p.id = e.package_id
+		  AND COALESCE(e.agreed_price, 0) = 0
+		  AND p.price > 0
+	`)
+	if res.Error != nil {
+		return fmt.Errorf("เติมราคาที่ตกลงกันให้ใบลงทะเบียนเก่าไม่สำเร็จ: %w", res.Error)
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("[enrollment] เติมราคาที่ตกลงกันย้อนหลัง %d ใบ", res.RowsAffected)
+	}
+	return nil
+}
+
 func releaseLinkedBilling(tx *gorm.DB, billingID *uint) error {
 	if billingID == nil {
 		return nil
@@ -306,6 +329,9 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		if err != nil {
 			return err
 		}
+
+		// ล็อกราคาไว้กับใบตั้งแต่ตอนสมัคร บิลที่ออกทีหลังตอนอนุมัติจะได้ไม่เพี้ยนตามราคาใหม่
+		newEnrollment.AgreedPrice = lockedPkg.Price
 
 		expireStaleEnrollments(tx)
 
@@ -561,6 +587,7 @@ func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]
 			EnrollmentDate:    e.EnrollmentDate,
 			TotalSessions:     e.TotalSessions,
 			RemainingSessions: e.RemainingSessions,
+			AgreedPrice:       e.AgreedPrice,
 			BillingID:         e.BillingID,
 			StartedAt:         e.StartedAt,
 			ExpiresAt:         e.ExpiresAt,

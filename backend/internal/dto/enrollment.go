@@ -137,6 +137,7 @@ type CustomerEnrollmentDTO struct {
     EnrollmentDate    time.Time `json:"enrollment_date"`
     TotalSessions     uint      `json:"total_sessions"`
     RemainingSessions uint      `json:"remaining_sessions"`
+    AgreedPrice       float64   `json:"agreed_price"`
 
     StartedAt *time.Time `json:"started_at"`
     ExpiresAt *time.Time `json:"expires_at"`
@@ -210,6 +211,7 @@ type AdminEnrollmentDTO struct {
     TotalSessions     uint                        `json:"total_sessions"`
     RemainingSessions uint                        `json:"remaining_sessions"`
     Status            string                      `json:"status"`
+    AgreedPrice       float64                     `json:"agreed_price"`
     BillingID         *uint                       `json:"billing_id"`
     StartedAt *time.Time `json:"started_at"`
     ExpiresAt *time.Time `json:"expires_at"`
@@ -230,6 +232,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver bool) AdminEnrollmen
         TotalSessions:     e.TotalSessions,
         RemainingSessions: e.RemainingSessions,
         Status:            string(e.Status),
+        AgreedPrice:       e.AgreedPrice,
         BillingID:         e.BillingID,
         StartedAt:         e.StartedAt,
         ExpiresAt:         e.ExpiresAt,

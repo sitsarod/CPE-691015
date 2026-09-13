@@ -41,6 +41,10 @@ type Enrollment struct {
 	TotalSessions      uint             `json:"total_sessions" valid:"required~totalSessions is required"`
 	RemainingSessions  uint             `json:"remaining_sessions" valid:"required~remainingSessions is required"`
 	Status             EnrollmentStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`
+
+	// AgreedPrice = ราคาที่ตกลงกันตอนสมัคร · บิลต้องอ่านค่านี้ ไม่ใช่ Package.Price ที่ขยับได้
+	AgreedPrice float64 `json:"agreed_price" gorm:"not null;default:0"`
+
 	StartedAt *time.Time `json:"started_at"`
 	ExpiresAt *time.Time `json:"expires_at" gorm:"index"`
 
