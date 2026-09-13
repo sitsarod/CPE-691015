@@ -529,7 +529,10 @@ func (s *PaymentService) GetCustomerInvoices(customerID uint) ([]models.Invoice,
 }
 
 // RejectPayment ปฏิเสธการชำระเงินโดยผู้ดูแลระบบ (Admin)
-func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) {
+//
+// reason = เหตุผลที่ปฏิเสธ บังคับกรอกจากฝั่ง controller — เก็บลงใบแจ้งหนี้และส่งไปแจ้งลูกค้า
+// เพื่อให้ลูกค้ารู้ว่าสลิปมีปัญหาอะไรก่อนส่งใหม่ (ปฏิเสธแบบเงียบ ๆ = ลูกค้าส่งสลิปเดิมซ้ำ)
+func (s *PaymentService) RejectPayment(invoiceID uint, reason string) (*models.Invoice, error) {
 	var invoice models.Invoice
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -549,7 +552,10 @@ func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) 
 			return businessErr("ใบแจ้งหนี้นี้ถูกปิดไปแล้ว ไม่สามารถปฏิเสธซ้ำได้")
 		}
 
+		now := time.Now()
 		invoice.Status = models.InvoiceRejected
+		invoice.RejectReason = reason
+		invoice.RejectedAt = &now
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถบันทึกสถานะปฏิเสธการชำระเงินได้")
 		}
@@ -582,12 +588,17 @@ func (s *PaymentService) RejectPayment(invoiceID uint) (*models.Invoice, error) 
 		return nil, err
 	}
 
-	// แจ้งลูกค้าว่าสลิปไม่ผ่าน ให้อัปโหลดใหม่
+	// แจ้งลูกค้าว่าสลิปไม่ผ่าน ให้อัปโหลดใหม่ — แนบเหตุผลไปด้วยเพื่อให้แก้ได้ตรงจุด
+	notifBody := fmt.Sprintf("สลิปใบแจ้งหนี้ #%d ไม่ผ่านการตรวจสอบ", invoiceID)
+	if reason != "" {
+		notifBody += fmt.Sprintf(" เหตุผล: %s", reason)
+	}
+	notifBody += " กรุณาตรวจสอบและอัปโหลดสลิปใหม่"
 	CreateNotification(s.db, result.CustomerID,
 		"payment_rejected",
 		fmt.Sprintf("invoice-%d-rejected-%d", invoiceID, time.Now().Unix()),
 		"สลิปไม่ผ่านการตรวจสอบ",
-		fmt.Sprintf("สลิปใบแจ้งหนี้ #%d ไม่ผ่านการตรวจสอบ กรุณาตรวจสอบและอัปโหลดสลิปใหม่", invoiceID),
+		notifBody,
 		"/customer/payment?tab=billings",
 		"danger",
 	)

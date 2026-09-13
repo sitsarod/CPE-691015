@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 )
 
@@ -45,6 +47,11 @@ type Invoice struct {
 	SlipOkChecked bool   `json:"slipok_checked" gorm:"default:false"`
 	SlipOkPassed  bool   `json:"slipok_passed" gorm:"default:false"`
 	SlipOkMessage string `json:"slipok_message"`
+
+	// เหตุผลที่แอดมินปฏิเสธสลิป (มีค่าเฉพาะสถานะ rejected) — ส่งไปแจ้งลูกค้าตรง ๆ
+	// และแสดงในประวัติใบแจ้งหนี้ฝั่งลูกค้า เพื่อให้รู้ว่าต้องแก้อะไรก่อนส่งสลิปใหม่
+	RejectReason string     `json:"reject_reason" gorm:"type:text"`
+	RejectedAt   *time.Time `json:"rejected_at"`
 
 	// บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป เผื่อบัญชีถูกแก้/ปิดภายหลัง)
 	ReceivingBankName  string `json:"receiving_bank_name"`

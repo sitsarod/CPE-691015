@@ -539,7 +539,7 @@ export default function ExpensesTab({
 
           {/* 7) วันที่ทำรายการ + รายละเอียดเพิ่มเติม */}
           <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2">
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">วันที่ทำรายการ</label>
               <input
                 type="date"
@@ -549,7 +549,7 @@ export default function ExpensesTab({
                 required
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">รายละเอียด / คำอธิบายเพิ่มเติม</label>
               <input
                 type="text"
