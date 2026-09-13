@@ -15,6 +15,15 @@ func classPackageIDs(db *gorm.DB, courseID uint, weekday, startTime, endTime str
 		return nil, nil
 	}
 
+	// ⚠️ normalize ทั้งตอนเขียนและตอนค้น
+	//
+	// ฐานมีทั้ง "18:00" และ "18:00:00" ปนกันจากอดีต (คนละหน้ากรอก คนละเวลา)
+	// NormalizeClockTimeColumns แปลงของเก่าให้ตอนรัน migrate แต่ถ้าพึ่งแค่นั้น
+	// ความถูกต้องของการจับคู่คลาส (และการคิดเงิน) จะขึ้นกับว่ามีคนรัน migrate หรือยัง
+	// ซึ่งเป็นกฎที่บังคับไม่ได้ — จึงกันไว้อีกชั้นตรงนี้
+	startTime = normalizeClockTime(startTime)
+	endTime = normalizeClockTime(endTime)
+
 	var ids []uint
 	err := db.Raw(`
 		SELECT DISTINCT p.id
@@ -210,6 +219,7 @@ func (s *AttendanceService) openSessionForSlot(
 	if len(packageIDs) == 0 {
 		return nil, nil
 	}
+	startTime = normalizeClockTime(startTime) // เหตุผลเดียวกับ classPackageIDs
 
 	var existing models.AttendanceSession
 	// ใช้เงื่อนไขฝั่ง main — เวลาเริ่มอย่างเดียวพอระบุคาบได้

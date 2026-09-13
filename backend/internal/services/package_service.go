@@ -116,8 +116,11 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 	for _, sch := range req.Schedules {
 		schedules = append(schedules, models.PackageSchedule{
 			DayOfWeek: models.DayOfWeek(sch.DayOfWeek),
-			StartTime: sch.StartTime,
-			EndTime:   sch.EndTime,
+			// เก็บรูปแบบมาตรฐานเสมอ — เวลาของตารางเรียนถูกเอาไปเทียบกับ
+			// work_schedules.start_time ที่แอดมินกรอกจากอีกหน้า ถ้ารูปแบบไม่ตรงกัน
+			// การจับคู่คลาสจะพลาด แล้วโค้ชไม่ได้เงิน (ดู normalizeClockTime)
+			StartTime: normalizeClockTime(sch.StartTime),
+			EndTime:   normalizeClockTime(sch.EndTime),
 		})
 	}
 
@@ -204,8 +207,8 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 				newSchedules = append(newSchedules, models.PackageSchedule{
 					PackageID: pkg.ID,
 					DayOfWeek: models.DayOfWeek(sch.DayOfWeek),
-					StartTime: sch.StartTime,
-					EndTime:   sch.EndTime,
+					StartTime: normalizeClockTime(sch.StartTime),
+					EndTime:   normalizeClockTime(sch.EndTime),
 				})
 			}
 
