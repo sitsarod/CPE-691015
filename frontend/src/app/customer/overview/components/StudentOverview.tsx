@@ -311,8 +311,8 @@ export default function StudentOverview() {
 
   // คอร์สใกล้หมดอายุ (ใช้ describeExpiry)
   const expiring = confirmedEnrollments
-    .map((e) => ({ e, exp: describeExpiry(e.days_left, e.status, e.grace_days_left) }))
-    .filter((x) => x.exp.tone === "warning" || x.exp.tone === "expired" || x.exp.tone === "grace")
+    .map((e) => ({ e, exp: describeExpiry(e.days_left, e.status, e.carried_over_sessions) }))
+    .filter((x) => x.exp.tone === "warning" || x.exp.tone === "expired" || x.exp.tone === "carried")
     .sort((a, b) => (a.e.days_left ?? 9999) - (b.e.days_left ?? 9999));
 
   // การแจ้งเตือน (คงตรรกะเดิม)
@@ -395,7 +395,7 @@ export default function StudentOverview() {
           const remaining = e.remaining_sessions || 0;
           const done = Math.max(0, total - remaining);
           const pct = total > 0 ? (done / total) * 100 : 0;
-          const exp = describeExpiry(e.days_left, e.status, e.grace_days_left);
+          const exp = describeExpiry(e.days_left, e.status, e.carried_over_sessions);
           const near = exp.highlight;
           return (
             <div key={e.id} className="flex flex-col gap-3 py-5 first:pt-0">

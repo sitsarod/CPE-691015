@@ -33,7 +33,7 @@ export interface StudentListResponseDTO {
   email: string;
   nickname: string;
   phoneNumber: string;
-  graceEnrollments?: number;
+  carryOverSessions?: number;
   lineId?: string;
   facebook?: string;
   birthDate?: string;

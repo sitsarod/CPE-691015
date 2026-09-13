@@ -27,7 +27,7 @@ type ReviewEnrollmentInfo struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 	DaysLeft  *int       `json:"days_left"`
 
-	GraceDaysLeft *int `json:"grace_days_left"`
+	CarriedOverSessions uint `json:"carried_over_sessions"`
 
 	// เหตุผลที่คำขอถูกปฏิเสธ (มีค่าเฉพาะสถานะ rejected)
 	RejectedReason string     `json:"rejected_reason,omitempty"`

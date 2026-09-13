@@ -97,29 +97,6 @@ func DaysLeft(expiresAt *time.Time) *int {
 }
 const GracePeriodDays = 7
 
-// GraceDaysLeft = เหลืออีกกี่วันที่แอดมินยังทบครั้งคงเหลือไปคอร์สหน้าให้ได้
-func GraceDaysLeft(status string, expiresAt *time.Time, remainingSessions uint, carriedOver bool) *int {
-	if carriedOver {
-		return nil
-	}
-	if status != string(models.EnrollmentStatusExpired) || expiresAt == nil || remainingSessions == 0 {
-		return nil
-	}
-
-	graceEnd := expiresAt.AddDate(0, 0, GracePeriodDays)
-	remaining := time.Until(graceEnd)
-	if remaining <= 0 {
-		return nil // พ้นช่วงผ่อนผันไปแล้ว
-	}
-
-	// ปัดขึ้นเหมือน DaysLeft — เหลืออีก 3 ชั่วโมงยังถือว่ามีเวลาอีก 1 วัน
-	days := int(remaining.Hours() / 24)
-	if remaining.Hours() > float64(days*24) {
-		days++
-	}
-	return &days
-}
-
 func IsBillingOverdue(b *models.Billing) bool {
     if b == nil {
         return false
@@ -144,7 +121,7 @@ type CustomerEnrollmentDTO struct {
     DaysLeft  *int       `json:"days_left"`
     IsOverdue bool `json:"is_overdue"`
 
-    GraceDaysLeft *int `json:"grace_days_left"`
+    CarriedOverSessions uint `json:"carried_over_sessions"`
 
     // เหตุผลที่คำขอถูกปฏิเสธ (มีค่าเฉพาะสถานะ rejected)
     RejectedReason string     `json:"rejected_reason,omitempty"`
@@ -218,14 +195,14 @@ type AdminEnrollmentDTO struct {
     DaysLeft  *int       `json:"days_left"`
     IsOverdue bool       `json:"is_overdue"`
 
-    GraceDaysLeft *int `json:"grace_days_left"`
+    CarriedOverSessions uint `json:"carried_over_sessions"`
 
     Customer *AdminEnrollmentCustomerDTO `json:"customer"`
     Package  *AdminEnrollmentPackageDTO  `json:"package"`
 }
 
 
-func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver bool) AdminEnrollmentDTO {
+func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver uint) AdminEnrollmentDTO {
     item := AdminEnrollmentDTO{
         ID:                e.ID,
         EnrollmentDate:    e.EnrollmentDate,
@@ -238,7 +215,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver bool) AdminEnrollmen
         ExpiresAt:         e.ExpiresAt,
         DaysLeft:          DaysLeft(e.ExpiresAt),
         IsOverdue:         IsBillingOverdue(e.Billing),
-        GraceDaysLeft:     GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions, carriedOver),
+        CarriedOverSessions: carriedOver,
     }
 
     if e.Customer != nil {
@@ -273,7 +250,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver bool) AdminEnrollmen
 }
 
 // ToAdminEnrollmentDTOs แปลงทั้งรายการ
-func ToAdminEnrollmentDTOs(enrollments []models.Enrollment, carriedOver map[uint]bool) []AdminEnrollmentDTO {
+func ToAdminEnrollmentDTOs(enrollments []models.Enrollment, carriedOver map[uint]uint) []AdminEnrollmentDTO {
     result := make([]AdminEnrollmentDTO, 0, len(enrollments))
     for i := range enrollments {
         e := &enrollments[i]

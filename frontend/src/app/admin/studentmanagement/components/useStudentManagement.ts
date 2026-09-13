@@ -20,7 +20,7 @@ export { getId };
  *
  * โครงพื้นฐาน (โหลด ค้นหา เปิดดู บันทึก ลบ) มาจาก useAdminResource ตัวเดียวกับ
  * หน้าจัดการสมาชิกและหน้าจัดการโค้ช ไฟล์นี้เหลือเฉพาะเรื่องของนักเรียนจริง ๆ
- * คือฟอร์มแก้ไข ตัวกรอง "รอขยายสิทธิ์" และหน้าต่างคอร์สเรียน
+ * คือฟอร์มแก้ไข ตัวกรอง "มีครั้งทบรอใช้" และหน้าต่างคอร์สเรียน
  */
 
 export function useStudentManagement() {
@@ -43,8 +43,8 @@ export function useStudentManagement() {
   /** นักเรียนที่กำลังดูคอร์สเรียนอยู่ (null = ปิดหน้าต่างนั้น) */
   const [enrollmentsOf, setEnrollmentsOf] = useState<StudentListResponseDTO | null>(null);
 
-  /** แสดงเฉพาะคนที่รอขยายสิทธิ์ */
-  const [showGraceOnly, setShowGraceOnly] = useState(false);
+  /** แสดงเฉพาะคนที่มีครั้งทบรอใช้ */
+  const [showCarryOverOnly, setShowCarryOverOnly] = useState(false);
 
   /**
    * เปิดฟอร์มแก้ไข
@@ -89,17 +89,17 @@ export function useStudentManagement() {
       "ไม่สามารถลบข้อมูลได้",
     );
 
-  /** นักเรียนที่คอร์สหมดอายุแล้วแต่ยังเรียนไม่ครบ */
-  const graceStudents = base.items.filter((s) => (s.graceEnrollments ?? 0) > 0);
+  /** นักเรียนที่มีครั้งที่ระบบทบไว้ให้และยังไม่ได้ใช้ */
+  const carryOverStudents = base.items.filter((s) => (s.carryOverSessions ?? 0) > 0);
 
-  // กรอง "รอขยายสิทธิ์" ต่อจากผลค้นหา — เป็นตัวกรองเฉพาะของหน้านี้
-  const filteredStudents = showGraceOnly
-    ? base.filtered.filter((s) => (s.graceEnrollments ?? 0) > 0)
+  // กรอง "มีครั้งทบรอใช้" ต่อจากผลค้นหา — เป็นตัวกรองเฉพาะของหน้านี้
+  const filteredStudents = showCarryOverOnly
+    ? base.filtered.filter((s) => (s.carryOverSessions ?? 0) > 0)
     : base.filtered;
 
   const stats = {
     total: base.items.length,
-    grace: graceStudents.length,
+    carryOver: carryOverStudents.length,
     withPhone: base.items.filter((s) => !!s.phoneNumber).length,
     withNickname: base.items.filter((s) => !!s.nickname).length,
   };
@@ -108,7 +108,7 @@ export function useStudentManagement() {
     ...base,
     students: base.items,
     filteredStudents,
-    graceStudents,
+    carryOverStudents,
     stats,
 
     editForm,
@@ -116,8 +116,8 @@ export function useStudentManagement() {
 
     enrollmentsOf,
     setEnrollmentsOf,
-    showGraceOnly,
-    setShowGraceOnly,
+    showCarryOverOnly,
+    setShowCarryOverOnly,
 
     openEdit,
     handleUpdate,

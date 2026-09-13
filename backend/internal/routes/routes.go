@@ -328,7 +328,6 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			adminEnrollmentReviewGroup.GET("/:id", enrollmentController.GetEnrollmentReview)
 			adminEnrollmentReviewGroup.PATCH("/:id/reject", enrollmentController.RejectEnrollment)
-			adminEnrollmentReviewGroup.POST("/:id/extend", enrollmentController.ExtendEnrollment)
 			adminEnrollmentReviewGroup.GET("/:id/extensions", enrollmentController.GetEnrollmentExtensions)
 		}
 

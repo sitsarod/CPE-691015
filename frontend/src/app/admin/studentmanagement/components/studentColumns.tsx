@@ -48,10 +48,10 @@ export function buildStudentColumns(actions: {
     {
       header: "สิทธิ์เรียน",
       render: (item) =>
-        (item.graceEnrollments ?? 0) > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
+        (item.carryOverSessions ?? 0) > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
             <CalendarClock className="h-3 w-3" />
-            รอขยายสิทธิ์ {item.graceEnrollments} คอร์ส
+            ทบรอใช้ {item.carryOverSessions} ครั้ง
           </span>
         ) : (
           <span className="text-xs text-gray-400">ปกติ</span>
@@ -65,10 +65,10 @@ export function buildStudentColumns(actions: {
           <button
             type="button"
             onClick={() => actions.onOpenEnrollments(item)}
-            title="ดูคอร์สและขยายสิทธิ์"
+            title="ดูคอร์สเรียนและครั้งที่ทบไว้"
             className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
-              (item.graceEnrollments ?? 0) > 0
-                ? "border-[#CC0000] bg-red-50 text-[#CC0000] hover:bg-red-100"
+              (item.carryOverSessions ?? 0) > 0
+                ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                 : "border-gray-300 bg-white text-gray-600 hover:border-[#CC0000] hover:text-[#CC0000]"
             }`}
           >

@@ -6,10 +6,6 @@ import (
 	"CPE-691015/internal/models"
 )
 
-type ExtendEnrollmentReq struct {
-	Reason string `json:"reason" binding:"required,min=3,max=500"`
-}
-
 type EnrollmentExtensionDTO struct {
 	ID           uint `json:"id"`
 	EnrollmentID uint `json:"enrollment_id"`
@@ -30,22 +26,6 @@ type EnrollmentExtensionDTO struct {
 
 	ExtendedByUserID uint      `json:"extended_by_user_id"`
 	ExtendedAt       time.Time `json:"extended_at"`
-}
-
-type ExtendEnrollmentRes struct {
-	EnrollmentID uint       `json:"enrollment_id"`
-	Status       string     `json:"status"`
-	ExpiresAt    *time.Time `json:"expires_at"`
-	DaysLeft     *int       `json:"days_left"`
-
-	TotalSessions     uint `json:"total_sessions"`
-	RemainingSessions uint `json:"remaining_sessions"`
-
-	CarriedOverSessions uint       `json:"carried_over_sessions"`
-	ForfeitedSessions   uint       `json:"forfeited_sessions"`
-	CarryOverExpiresAt  *time.Time `json:"carry_over_expires_at"`
-
-	Extension EnrollmentExtensionDTO `json:"extension"`
 }
 
 func ToEnrollmentExtensionDTO(e *models.EnrollmentExtension) EnrollmentExtensionDTO {

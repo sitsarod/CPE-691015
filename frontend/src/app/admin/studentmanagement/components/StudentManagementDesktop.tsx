@@ -35,31 +35,31 @@ export function StudentManagementDesktop({ manager }: { manager: StudentManageme
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="นักเรียนทั้งหมด" value={manager.stats.total} icon={GraduationCap} tint="bg-rose-100 text-rose-700" />
-        <SummaryCard label="รอขยายสิทธิ์" value={manager.stats.grace} icon={CalendarClock} tint="bg-red-100 text-red-700" />
+        <SummaryCard label="มีครั้งทบรอใช้" value={manager.stats.carryOver} icon={CalendarClock} tint="bg-emerald-100 text-emerald-700" />
         <SummaryCard label="ระบุเบอร์โทร" value={manager.stats.withPhone} icon={Phone} tint="bg-emerald-100 text-emerald-700" />
         <SummaryCard label="ระบุชื่อเล่น" value={manager.stats.withNickname} icon={UserRound} tint="bg-violet-100 text-violet-700" />
       </div>
 
       <AdminErrorBanner message={manager.error} />
 
-      {/* แถบเตือนกลุ่มที่รอขยายสิทธิ์ — กดเพื่อกรองเฉพาะกลุ่มนี้ */}
-      {manager.graceStudents.length > 0 && (
+      {/* แถบกลุ่มที่มีครั้งทบรอใช้ — กดเพื่อกรองเฉพาะกลุ่มนี้ */}
+      {manager.carryOverStudents.length > 0 && (
         <button
           type="button"
-          onClick={() => manager.setShowGraceOnly((v) => !v)}
+          onClick={() => manager.setShowCarryOverOnly((v) => !v)}
           className={`mt-6 flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
-            manager.showGraceOnly ? "border-red-300 bg-red-100" : "border-red-200 bg-red-50 hover:bg-red-100"
+            manager.showCarryOverOnly ? "border-emerald-300 bg-emerald-100" : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
           }`}
         >
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-red-900">
-              มี {manager.graceStudents.length} คนที่คอร์สหมดอายุแล้วแต่ยังเรียนไม่ครบ
+            <p className="text-sm font-bold text-emerald-900">
+              มี {manager.carryOverStudents.length} คนที่มีครั้งทบรอใช้อยู่
             </p>
-            <p className="mt-0.5 text-sm text-red-700">
-              ทบครั้งที่เหลือเก็บไว้ให้คอร์สเดิมก่อนพ้นช่วงผ่อนผัน ·{" "}
+            <p className="mt-0.5 text-sm text-emerald-700">
+              ครั้งพวกนี้จะถูกบวกเข้าให้อัตโนมัติเมื่อสมัครคอร์สเดิมอีกครั้ง ·{" "}
               <span className="font-semibold underline">
-                {manager.showGraceOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}
+                {manager.showCarryOverOnly ? "แสดงทั้งหมด" : "ดูเฉพาะกลุ่มนี้"}
               </span>
             </p>
           </div>
@@ -108,8 +108,6 @@ export function StudentManagementDesktop({ manager }: { manager: StudentManageme
         userId={manager.enrollmentsOf ? getId(manager.enrollmentsOf) : null}
         studentName={manager.enrollmentsOf ? `${manager.enrollmentsOf.firstName} ${manager.enrollmentsOf.lastName}` : ""}
         onClose={() => manager.setEnrollmentsOf(null)}
-        // โหลดรายชื่อใหม่เพราะธง "รอขยายสิทธิ์" อาจหายไปหลังขยายให้แล้ว
-        onChanged={manager.reload}
       />
     </div>
   );

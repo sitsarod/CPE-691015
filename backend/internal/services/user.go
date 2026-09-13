@@ -472,15 +472,13 @@ func (s *UserService) GetActiveStudents() ([]models.User, error) {
 
     expireStaleEnrollments(s.db)
 
-    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
-
     err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
         Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
-        Where("enrollments.deleted_at IS NULL AND enrollments.remaining_sessions > 0").
+        Where("enrollments.deleted_at IS NULL").
         Where(
-            s.db.Where("enrollments.status = ?", models.EnrollmentStatusActive).
-                Or("enrollments.status = ? AND enrollments.expires_at > ?",
-                    models.EnrollmentStatusExpired, graceCutoff),
+            s.db.Where("enrollments.status = ? AND enrollments.remaining_sessions > 0",
+                models.EnrollmentStatusActive).
+                Or("EXISTS (?)", unconsumedCarryOver(s.db)),
         ).
         Group("users.id").
         Preload("Customer").
@@ -489,20 +487,33 @@ func (s *UserService) GetActiveStudents() ([]models.User, error) {
     return users, err
 }
 
-func (s *UserService) CountGraceEnrollments(userID uint) int64 {
+// unconsumedCarryOver = ครั้งที่ระบบทบไว้ให้แล้วแต่ยังไม่ถูกดูดเข้าใบใหม่และยังไม่หมดอายุ
+func unconsumedCarryOver(db *gorm.DB) *gorm.DB {
+    return db.Model(&models.SessionCarryOver{}).
+        Select("1").
+        Where("session_carry_overs.customer_id = customers.id").
+        Where("session_carry_overs.deleted_at IS NULL").
+        Where("session_carry_overs.consumed_by_enrollment_id IS NULL").
+        Where("session_carry_overs.expires_at > ?", time.Now())
+}
+
+// CountCarryOverSessions = จำนวนครั้งที่ทบไว้ให้ลูกค้าคนนี้และยังรอใช้อยู่
+func (s *UserService) CountCarryOverSessions(userID uint) int64 {
     customerID, err := ResolveCustomerID(s.db, userID)
     if err != nil {
         return 0
     }
 
-    graceCutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
-
-    var count int64
-    s.db.Model(&models.Enrollment{}).
-        Where("customer_id = ? AND status = ? AND remaining_sessions > 0 AND expires_at > ?",
-            customerID, models.EnrollmentStatusExpired, graceCutoff).
-        Count(&count)
-    return count
+    var total *int64
+    s.db.Model(&models.SessionCarryOver{}).
+        Select("SUM(sessions)").
+        Where("customer_id = ? AND consumed_by_enrollment_id IS NULL AND expires_at > ?",
+            customerID, time.Now()).
+        Scan(&total)
+    if total == nil {
+        return 0
+    }
+    return *total
 }
 
 // FindAccountByIdentifier ค้นหาบัญชีผู้ใช้จาก Email หรือ PhoneNumber
