@@ -234,7 +234,7 @@ export default function EnrollmentReviewPanel({
                         describeExpiry(
                           data.enrollment.days_left,
                           data.enrollment.status,
-                          data.enrollment.grace_days_left
+                          data.enrollment.carried_over_sessions
                         ).tone
                       )}`}
                     >
@@ -247,7 +247,7 @@ export default function EnrollmentReviewPanel({
                           describeExpiry(
                             data.enrollment.days_left,
                             data.enrollment.status,
-                            data.enrollment.grace_days_left
+                            data.enrollment.carried_over_sessions
                           ).label
                         }
                       </p>

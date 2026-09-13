@@ -58,7 +58,8 @@ export interface Enrollment {
   expires_at: string | null;
   days_left: number | null;
   is_overdue: boolean;
-  grace_days_left: number | null;
+  /** ครั้งที่ระบบทบไว้ให้จากใบนี้ตอนหมดอายุ */
+  carried_over_sessions: number;
 
   /** มีค่าเฉพาะสถานะ rejected — เหตุผลที่แอดมินไม่รับคำขอ */
   rejected_reason?: string;
@@ -100,7 +101,8 @@ export interface AdminEnrollment {
   expires_at: string | null;
   days_left: number | null;
   is_overdue: boolean;
-  grace_days_left: number | null;
+  /** ครั้งที่ระบบทบไว้ให้จากใบนี้ตอนหมดอายุ */
+  carried_over_sessions: number;
   customer: AdminEnrollmentCustomer | null;
   package: AdminEnrollmentPackage | null;
 
@@ -124,7 +126,8 @@ export interface ReviewEnrollmentInfo {
   started_at: string | null;
   expires_at: string | null;
   days_left: number | null;
-  grace_days_left: number | null;
+  /** ครั้งที่ระบบทบไว้ให้จากใบนี้ตอนหมดอายุ */
+  carried_over_sessions: number;
 
   rejected_reason?: string;
   rejected_at?: string | null;
@@ -214,10 +217,6 @@ export interface FormattedEnrollment {
 // และให้ทุกที่ใช้ CourseDTO จาก @/types/course แหล่งเดียว
 
 
-export interface ExtendEnrollmentReq {
-  reason: string;
-}
-
 export interface EnrollmentExtension {
   id: number;
   enrollment_id: number;
@@ -239,20 +238,6 @@ export interface EnrollmentExtension {
   extended_at: string;
 }
 
-export interface ExtendEnrollmentRes {
-  enrollment_id: number;
-  status: string;
-  expires_at: string | null;
-  days_left: number | null;
-  total_sessions: number;
-  remaining_sessions: number;
-
-  carried_over_sessions: number;
-  forfeited_sessions: number;
-  carry_over_expires_at: string | null;
-
-  extension: EnrollmentExtension;
-}
 
 export interface CreateEnrollmentReq {
   customer_id: number;

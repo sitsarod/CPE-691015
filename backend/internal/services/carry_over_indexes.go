@@ -3,7 +3,10 @@ package services
 import (
 	"fmt"
 	"log"
+	"time"
 
+	"CPE-691015/internal/dto"
+	"CPE-691015/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -61,9 +64,69 @@ func EnsureCarryOverCourseScope(db *gorm.DB) error {
 			"แถวพวกนี้จะไม่ถูกนำไปใช้ ต้องเติม course_id ด้วยมือหรือตกลงกับลูกค้าใหม่", len(orphans))
 	}
 
-	return db.Exec(`
+	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_carry_over_claimable
 		ON session_carry_overs (customer_id, course_id, expires_at)
 		WHERE deleted_at IS NULL AND consumed_by_enrollment_id IS NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	// ข้อมูลเก่าจากระบบขยายด้วยมืออาจทบซ้ำไว้แล้ว ถ้าสร้าง index ทับจะทำให้ migrate ล้มทั้งก้อน
+	var dupes []struct {
+		FromEnrollmentID uint
+		RowCount         int
+	}
+	if err := db.Model(&models.SessionCarryOver{}).
+		Select("from_enrollment_id, COUNT(*) AS row_count").
+		Group("from_enrollment_id").
+		Having("COUNT(*) > 1").
+		Scan(&dupes).Error; err != nil {
+		return fmt.Errorf("ตรวจหาใบที่ถูกทบซ้ำไม่สำเร็จ: %w", err)
+	}
+	if len(dupes) > 0 {
+		for _, d := range dupes {
+			log.Printf("[carryover] ⚠️ ใบลงทะเบียน #%d ถูกทบซ้ำ %d แถว", d.FromEnrollmentID, d.RowCount)
+		}
+		log.Printf("[carryover] ⚠️ ข้ามการสร้าง uniq_carry_over_from_enrollment เพราะมีใบที่ถูกทบซ้ำ %d ใบ — "+
+			"ลบแถวที่เกินด้วยมือแล้วรัน migrate ใหม่", len(dupes))
+		return nil
+	}
+
+	// หนึ่งใบทบได้ครั้งเดียว — ด่านสุดท้ายกันสองคำขอที่พลิกสถานะพร้อมกันแล้วทบซ้ำ
+	return db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS uniq_carry_over_from_enrollment
+		ON session_carry_overs (from_enrollment_id)
+		WHERE deleted_at IS NULL
 	`).Error
+}
+
+// BackfillExpiredCarryOver ทบย้อนหลังให้ใบที่หมดอายุไปแล้วแต่ยังไม่เคยถูกทบ
+//
+// จำกัดไว้เฉพาะใบที่ยังอยู่ในช่วงผ่อนผันเดิม (แอดมินยังกดขยายให้ได้อยู่ก่อนเปลี่ยนมาทบเอง)
+// ใบที่หมดอายุนานกว่านั้นไม่แตะ เพราะการแจกครั้งคืนย้อนหลังคือการแจกของที่ไม่มีใครอนุมัติ
+func BackfillExpiredCarryOver(db *gorm.DB) error {
+	cutoff := time.Now().AddDate(0, 0, -dto.GracePeriodDays)
+
+	var due []models.Enrollment
+	if err := db.
+		Where("status = ? AND remaining_sessions > 1 AND expires_at > ?",
+			models.EnrollmentStatusExpired, cutoff).
+		Where("id NOT IN (?)",
+			db.Model(&models.SessionCarryOver{}).Select("from_enrollment_id")).
+		Find(&due).Error; err != nil {
+		return fmt.Errorf("หาใบที่ยังไม่ถูกทบไม่สำเร็จ: %w", err)
+	}
+
+	for i := range due {
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			return autoCarryOver(tx, &due[i])
+		}); err != nil {
+			log.Printf("[carryover] ใบลงทะเบียน #%d: ทบย้อนหลังไม่สำเร็จ: %v", due[i].ID, err)
+		}
+	}
+	if len(due) > 0 {
+		log.Printf("[carryover] ทบย้อนหลังให้ใบที่หมดอายุในช่วงผ่อนผัน %d ใบ", len(due))
+	}
+	return nil
 }

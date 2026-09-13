@@ -82,7 +82,7 @@ type StudentListResponseDTO struct {
 	Nickname    string `json:"nickname"`
 	PhoneNumber string `json:"phoneNumber"`
 
-	GraceEnrollments int64 `json:"graceEnrollments"`
+	CarryOverSessions int64 `json:"carryOverSessions"`
 	LineID      string `json:"lineId"`
 	Facebook    string `json:"facebook"`
 	BirthDate   string `json:"birthDate"`

@@ -194,11 +194,35 @@ func seatsFull(tx *gorm.DB, packageID uint, maxSeats uint) (bool, error) {
 }
 
 func expireStaleEnrollments(db *gorm.DB) {
-	if err := db.Model(&models.Enrollment{}).
+	var due []models.Enrollment
+	if err := db.
 		Where("status = ? AND expires_at IS NOT NULL AND expires_at < ?",
 			models.EnrollmentStatusActive, startOfLocalDay(nowLocal())).
-		Update("status", models.EnrollmentStatusExpired).Error; err != nil {
-		log.Printf("[enrollment] อัปเดตสถานะใบที่หมดอายุไม่สำเร็จ: %v", err)
+		Find(&due).Error; err != nil {
+		log.Printf("[enrollment] หาใบที่หมดอายุไม่สำเร็จ: %v", err)
+		return
+	}
+
+	for i := range due {
+		e := &due[i]
+
+		// ปิดทีละใบเพื่อให้รู้ว่าใครเป็นคนพลิกสถานะ — ฟังก์ชันนี้ถูกเรียกจากทุกจุดที่อ่านข้อมูล
+		// ถ้าปิดรวดเดียวแล้วค่อยทบ สองคำขอที่เข้ามาพร้อมกันจะทบให้ใบเดียวกันคนละรอบ
+		// พลิกสถานะกับทบอยู่ใน transaction เดียวกัน ทบล้มก็ถอยสถานะกลับให้รอบหน้าลองใหม่
+		err := db.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.Enrollment{}).
+				Where("id = ? AND status = ?", e.ID, models.EnrollmentStatusActive).
+				Update("status", models.EnrollmentStatusExpired)
+			if res.Error != nil || res.RowsAffected == 0 {
+				return res.Error
+			}
+			e.Status = models.EnrollmentStatusExpired
+
+			return autoCarryOver(tx, e)
+		})
+		if err != nil {
+			log.Printf("[enrollment] #%d: ปิดใบที่หมดอายุไม่สำเร็จ จะลองใหม่รอบหน้า: %v", e.ID, err)
+		}
 	}
 }
 
@@ -562,7 +586,7 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 	for i := range enrollments {
 		ids = append(ids, enrollments[i].ID)
 	}
-	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	carried, err := carriedOverSessions(s.db, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -575,27 +599,27 @@ func (s *EnrollmentService) GetCustomerEnrollments(userID uint) ([]dto.CustomerE
 // เหตุผลที่ไม่ส่ง model ดิบ: relation ที่ Preload มาจะติดไปทั้งก้อน และถ้าวันไหน
 // มีคนเพิ่ม Preload("...User") เข้ามา bcrypt hash จะรั่วทันที
 // (models.User.Password ยังใช้ tag json:"password" ไม่ใช่ json:"-")
-func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]bool) []dto.CustomerEnrollmentDTO {
+func toCustomerEnrollmentDTOs(enrollments []models.Enrollment, carried map[uint]uint) []dto.CustomerEnrollmentDTO {
 	items := make([]dto.CustomerEnrollmentDTO, 0, len(enrollments))
 
 	for i := range enrollments {
 		e := &enrollments[i]
 
 		item := dto.CustomerEnrollmentDTO{
-			ID:                e.ID,
-			Status:            string(e.Status),
-			EnrollmentDate:    e.EnrollmentDate,
-			TotalSessions:     e.TotalSessions,
-			RemainingSessions: e.RemainingSessions,
-			AgreedPrice:       e.AgreedPrice,
-			BillingID:         e.BillingID,
-			StartedAt:         e.StartedAt,
-			ExpiresAt:         e.ExpiresAt,
-			DaysLeft:          dto.DaysLeft(e.ExpiresAt),
-			IsOverdue:         dto.IsBillingOverdue(e.Billing),
-			GraceDaysLeft:     dto.GraceDaysLeft(string(e.Status), e.ExpiresAt, e.RemainingSessions, carried[e.ID]),
-			RejectedReason:    e.RejectedReason,
-			RejectedAt:        e.RejectedAt,
+			ID:                  e.ID,
+			Status:              string(e.Status),
+			EnrollmentDate:      e.EnrollmentDate,
+			TotalSessions:       e.TotalSessions,
+			RemainingSessions:   e.RemainingSessions,
+			AgreedPrice:         e.AgreedPrice,
+			BillingID:           e.BillingID,
+			StartedAt:           e.StartedAt,
+			ExpiresAt:           e.ExpiresAt,
+			DaysLeft:            dto.DaysLeft(e.ExpiresAt),
+			IsOverdue:           dto.IsBillingOverdue(e.Billing),
+			CarriedOverSessions: carried[e.ID],
+			RejectedReason:      e.RejectedReason,
+			RejectedAt:          e.RejectedAt,
 		}
 
 		// กัน underflow ของ uint กรณีแอดมินตั้ง remaining มากกว่า total
@@ -661,7 +685,7 @@ func (s *EnrollmentService) GetAllEnrollments() ([]dto.AdminEnrollmentDTO, error
 	for i := range enrollments {
 		ids = append(ids, enrollments[i].ID)
 	}
-	carried, err := carriedOverEnrollmentIDs(s.db, ids)
+	carried, err := carriedOverSessions(s.db, ids)
 	if err != nil {
 		return nil, err
 	}

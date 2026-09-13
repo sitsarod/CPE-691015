@@ -39,7 +39,7 @@ function StatusBadge({ status }: { status: AdminEnrollment["status"] }) {
 
 function ExpiryInfo({ item }: { item: AdminEnrollment }) {
   const expiry = item.expires_at
-    ? describeExpiry(item.days_left, item.status, item.grace_days_left)
+    ? describeExpiry(item.days_left, item.status, item.carried_over_sessions)
     : null;
 
   return (
@@ -50,9 +50,9 @@ function ExpiryInfo({ item }: { item: AdminEnrollment }) {
           <div className={`text-xs font-semibold ${expiryTextClass(expiry.tone)}`}>
             {expiry.label}
           </div>
-          {item.grace_days_left !== null && item.grace_days_left > 0 && (
-            <div className="text-xs font-bold text-red-600">
-              ยังเหลือ {item.remaining_sessions} ครั้ง
+          {item.carried_over_sessions > 0 && (
+            <div className="text-xs font-bold text-emerald-700">
+              ทบไว้ให้ {item.carried_over_sessions} ครั้ง
             </div>
           )}
         </>
