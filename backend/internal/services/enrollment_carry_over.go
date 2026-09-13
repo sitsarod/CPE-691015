@@ -152,20 +152,31 @@ func activeRenewalEnrollment(tx *gorm.DB, e *models.Enrollment, courseID uint) (
 
 // applyCarryOverTo บวกยอดที่ทบเข้าใบที่สมัครต่อทันที และปิดยอดนั้นว่าถูกใช้แล้ว
 func applyCarryOverTo(tx *gorm.DB, row *models.SessionCarryOver, target *models.Enrollment) error {
-	if err := tx.Model(row).Updates(map[string]any{
-		"consumed_by_enrollment_id": target.ID,
-		"consumed_at":               time.Now(),
-	}).Error; err != nil {
+	claim := tx.Model(&models.SessionCarryOver{}).
+		Where("id = ? AND consumed_by_enrollment_id IS NULL", row.ID).
+		Updates(map[string]any{
+			"consumed_by_enrollment_id": target.ID,
+			"consumed_at":               time.Now(),
+		})
+	if claim.Error != nil {
 		return errors.New("ไม่สามารถบันทึกการทบครั้งเข้าใบที่สมัครต่อได้")
 	}
+	if claim.RowsAffected == 0 {
+		return nil
+	}
 
-	if err := tx.Model(&models.Enrollment{}).
-		Where("id = ?", target.ID).
+	// เช็กสถานะซ้ำตอนบวก — ใบอาจเรียนครบไปหลังจากที่อ่านมา ถ้าบวกเข้าใบ completed ครั้งจะหายไปเฉย ๆ
+	res := tx.Model(&models.Enrollment{}).
+		Where("id = ? AND status = ?", target.ID, models.EnrollmentStatusActive).
 		Updates(map[string]any{
 			"total_sessions":     gorm.Expr("total_sessions + ?", row.Sessions),
 			"remaining_sessions": gorm.Expr("remaining_sessions + ?", row.Sessions),
-		}).Error; err != nil {
+		})
+	if res.Error != nil {
 		return errors.New("ไม่สามารถบวกครั้งที่ทบเข้าใบที่สมัครต่อได้")
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("ใบที่สมัครต่อ #%d ไม่ได้อยู่ในสถานะกำลังเรียนแล้ว", target.ID)
 	}
 
 	log.Printf("[carryover] ใบลงทะเบียน #%d: บวก %d ครั้งที่ทบจากใบ #%d เข้าทันที",

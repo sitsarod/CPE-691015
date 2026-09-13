@@ -39,6 +39,9 @@ func main() {
 		log.Fatalf("เปิด extension pgvector ไม่สำเร็จ: %v", err)
 	}
 
+	// ต้องเช็คก่อน AutoMigrate สร้างคอลัมน์ — ใช้แยกรอบเก่าที่ปิดไปก่อนมีระบบค่าสนาม
+	hadCourtFeeColumn := db.Migrator().HasColumn(&models.AttendanceSession{}, "court_billed_at")
+
 	// AutoMigrate ทุกโมเดล (รายการเดียวกับ cmd/init แต่ไม่ DROP SCHEMA)
 	// เพิ่มคอลัมน์/ตารางที่ขาดให้อัตโนมัติทุกครั้งที่เพิ่มฟิลด์ใหม่ในโมเดล
 	if err := db.AutoMigrate(
@@ -86,6 +89,16 @@ func main() {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}
 
+	if !hadCourtFeeColumn {
+		if err := services.MarkLegacyCourtFeeSessions(db); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+
+	if err := services.BackfillCourtFeeSource(db); err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ (ดู services.EnsureMemberCodeIndexes)
 	if err := services.EnsureMemberCodeIndexes(db); err != nil {
 		log.Fatalf("สร้าง index ของรหัสประจำตัวไม่สำเร็จ: %v", err)
@@ -125,6 +138,10 @@ func main() {
 		log.Fatalf("ทบครั้งคงเหลือย้อนหลังไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.BackfillCarryOverIntoRenewals(db); err != nil {
+		log.Fatalf("ย้ายยอดทบเก่าเข้าใบที่สมัครต่อไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.BackfillCompletedEnrollments(db); err != nil {
 		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
 	}
@@ -150,6 +167,13 @@ func main() {
 	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
 	if err := services.CleanupLegacyFacePhotos(db); err != nil {
 		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)
+	}
+
+	// ค่าสนามเปลี่ยนจากราคาต่อชั่วโมงเป็นยอดรวมของคาบ
+	if db.Migrator().HasColumn(&models.AttendanceSession{}, "court_hourly_rate") {
+		if err := db.Migrator().DropColumn(&models.AttendanceSession{}, "court_hourly_rate"); err != nil {
+			log.Fatalf("ลบคอลัมน์ค่าสนามต่อชั่วโมงไม่สำเร็จ: %v", err)
+		}
 	}
 
 	fmt.Println("อัปเดตสคีมาเรียบร้อย — เพิ่มคอลัมน์/ตารางที่ขาดของทุกโมเดลแล้ว (ข้อมูลเดิมอยู่ครบ)")

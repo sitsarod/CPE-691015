@@ -101,6 +101,44 @@ func EnsureCarryOverCourseScope(db *gorm.DB) error {
 	`).Error
 }
 
+// BackfillCarryOverIntoRenewals ย้ายยอดทบที่ยังรออยู่เข้าใบที่สมัครต่อซึ่งเปิดสิทธิ์ไปแล้วก่อนเปลี่ยนมาบวกให้ทันที
+func BackfillCarryOverIntoRenewals(db *gorm.DB) error {
+	var pending []models.SessionCarryOver
+	if err := db.
+		Where("consumed_by_enrollment_id IS NULL AND course_id <> 0 AND expires_at > ?", time.Now()).
+		Find(&pending).Error; err != nil {
+		return fmt.Errorf("หายอดทบที่ยังรออยู่ไม่สำเร็จ: %w", err)
+	}
+
+	moved := 0
+	for i := range pending {
+		row := &pending[i]
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var from models.Enrollment
+			if err := tx.Unscoped().First(&from, row.FromEnrollmentID).Error; err != nil {
+				return fmt.Errorf("ไม่พบใบต้นทาง #%d: %w", row.FromEnrollmentID, err)
+			}
+
+			renewal, err := activeRenewalEnrollment(tx, &from, row.CourseID)
+			if err != nil || renewal == nil {
+				return err
+			}
+			if err := applyCarryOverTo(tx, row, renewal); err != nil {
+				return err
+			}
+			moved++
+			return nil
+		})
+		if err != nil {
+			log.Printf("[carryover] ยอดทบแถว #%d: ย้ายเข้าใบที่สมัครต่อไม่สำเร็จ: %v", row.ID, err)
+		}
+	}
+	if moved > 0 {
+		log.Printf("[carryover] ย้ายยอดทบเก่าเข้าใบที่สมัครต่อ %d แถว", moved)
+	}
+	return nil
+}
+
 // BackfillExpiredCarryOver ทบย้อนหลังให้ใบที่หมดอายุไปแล้วแต่ยังไม่เคยถูกทบ
 //
 // จำกัดไว้เฉพาะใบที่ยังอยู่ในช่วงผ่อนผันเดิม (แอดมินยังกดขยายให้ได้อยู่ก่อนเปลี่ยนมาทบเอง)
@@ -113,7 +151,7 @@ func BackfillExpiredCarryOver(db *gorm.DB) error {
 		Where("status = ? AND remaining_sessions > 1 AND expires_at > ?",
 			models.EnrollmentStatusExpired, cutoff).
 		Where("id NOT IN (?)",
-			db.Model(&models.SessionCarryOver{}).Select("from_enrollment_id")).
+			db.Unscoped().Model(&models.SessionCarryOver{}).Select("from_enrollment_id")).
 		Find(&due).Error; err != nil {
 		return fmt.Errorf("หาใบที่ยังไม่ถูกทบไม่สำเร็จ: %w", err)
 	}

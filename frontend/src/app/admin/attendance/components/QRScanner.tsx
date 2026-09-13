@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Camera, CameraOff, Loader2, Timer } from "lucide-react";
+import { Camera, CameraOff, Loader2, SwitchCamera, Timer } from "lucide-react";
 
 
 
@@ -10,6 +10,19 @@ const ELEMENT_ID = "attendance-qr-reader";
 
 
 const QR_CODE_FORMAT = 0;
+
+// จำกล้องที่เลือกไว้ต่อเครื่อง — iPad ที่ตั้งหันหน้าเข้าหานักเรียนต้องใช้กล้องหน้าตลอด
+const FACING_STORAGE_KEY = "qr_scanner_facing";
+
+type Facing = "environment" | "user";
+
+function readFacing(): Facing {
+  try {
+    return localStorage.getItem(FACING_STORAGE_KEY) === "user" ? "user" : "environment";
+  } catch {
+    return "environment";
+  }
+}
 
 interface Html5QrcodeInstance {
   start(
@@ -139,6 +152,12 @@ export default function QRScanner({
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [facing, setFacing] = useState<Facing>(readFacing);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+
+  // สลับกล้องต้องรอตัวเก่า stop() เสร็จก่อน ไม่งั้น html5-qrcode เปิดตัวใหม่บน element เดิมไม่ได้
+  const stoppingRef = useRef<Promise<unknown>>(Promise.resolve());
+
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
@@ -157,6 +176,7 @@ export default function QRScanner({
     const boot = async () => {
       setStatus("starting");
       try {
+        await stoppingRef.current;
         const Ctor = await loadHtml5Qrcode();
         if (cancelled) return;
 
@@ -170,7 +190,7 @@ export default function QRScanner({
         scannerRef.current = instance;
 
         startPromise = instance.start(
-          { facingMode: "environment" },
+          { facingMode: facing },
           {
             fps: 20,
             disableFlip: true,
@@ -187,7 +207,13 @@ export default function QRScanner({
         );
         await startPromise;
 
-        if (!cancelled) setStatus("running");
+        if (cancelled) return;
+        setStatus("running");
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!cancelled) {
+          setHasMultipleCameras(devices.filter((d) => d.kind === "videoinput").length > 1);
+        }
       } catch (err: unknown) {
         if (cancelled) return;
         setStatus("error");
@@ -208,12 +234,12 @@ export default function QRScanner({
       if (!active) return;
 
       // ⚠️ ต้องรอ start() จบก่อนค่อย stop() — หยุดกลางคันแล้วไลบรารีจะโยน AbortError ทิ้งไว้
-      Promise.resolve(startPromise)
+      stoppingRef.current = Promise.resolve(startPromise)
         .catch(() => {})
         .then(() => active.stop())
         .catch(() => {});
     };
-  }, []);
+  }, [facing]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -259,13 +285,30 @@ export default function QRScanner({
     return () => clearInterval(timer);
   }, [status, paused, onFaceFrame]);
 
+  const switchCamera = () => {
+    const next: Facing = facing === "user" ? "environment" : "user";
+    try {
+      localStorage.setItem(FACING_STORAGE_KEY, next);
+    } catch {
+    }
+    setFacing(next);
+  };
+
+  const isFront = facing === "user";
+
+  // กล้องเดียวซ่อนปุ่ม · เปิดไม่ติดให้ลองอีกตัวได้ เพราะยังไม่รู้ว่าเครื่องมีกี่ตัว
+  const canSwitch = status === "error" || (status === "running" && hasMultipleCameras);
+
   return (
     <div className="space-y-3">
-    
+
       <div className={`relative w-full overflow-hidden rounded-2xl bg-black ${frameClassName}`}>
         <div
           id={ELEMENT_ID}
-          className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+          // กล้องหน้ากลับด้านเฉพาะภาพที่โชว์ให้เหมือนส่องกระจก เฟรมที่อ่าน QR/ส่งทายใบหน้าไม่กลับ
+          className={`absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover ${
+            isFront ? "[&_video]:[transform:scaleX(-1)]" : ""
+          }`}
         />
 
         {status === "starting" && (
@@ -283,6 +326,18 @@ export default function QRScanner({
         )}
 
         {status === "running" && <ScanFrame paused={paused} />}
+
+        {canSwitch && (
+          <button
+            type="button"
+            onClick={switchCamera}
+            aria-label={isFront ? "สลับไปกล้องหลัง" : "สลับไปกล้องหน้า"}
+            title={isFront ? "สลับไปกล้องหลัง" : "สลับไปกล้องหน้า"}
+            className="absolute right-3 top-3 z-10 grid h-12 w-12 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/70 active:scale-95"
+          >
+            <SwitchCamera className="h-6 w-6" />
+          </button>
+        )}
 
         {overlay && status === "running" && (
           <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
@@ -310,7 +365,9 @@ export default function QRScanner({
           {paused ? <Timer className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
           {paused
             ? (pausedReason ?? "หยุดอ่านชั่วคราว")
-            : "ยกกล้องส่อง QR ของนักเรียน"}
+            : isFront
+              ? "ให้นักเรียนยก QR หรือหันหน้าเข้าหากล้อง"
+              : "ยกกล้องส่อง QR ของนักเรียน"}
         </p>
       )}
 

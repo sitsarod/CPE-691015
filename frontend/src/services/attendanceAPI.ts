@@ -13,6 +13,7 @@ import type {
   AttendanceStatus,
   MissedClass,
   ResolveMissedClassResult,
+  UnbilledCourtSession,
 } from "@/types/attendance";
 
 interface Envelope<T> {
@@ -152,12 +153,46 @@ export async function updateCoachAttendanceStatus(
 }
 
 // [PATCH] ปิดรอบ — คนที่ยืนยันว่าจะมาแล้วไม่มาจะถูกมาร์ค absent
-export async function closeSession(sessionId: number): Promise<AttendanceSession> {
+// ส่งค่าสนามรวมของคาบมาด้วยจะออกบิลค่าสนามให้คนในรอบทันที
+export async function closeSession(
+  sessionId: number,
+  courtFeeTotal?: number
+): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(
     `/attendance/sessions/${sessionId}/close`,
-    { method: "PATCH" }
+    {
+      method: "PATCH",
+      body: JSON.stringify(courtFeeTotal ? { court_fee_total: courtFeeTotal } : {}),
+    }
   );
   return res.data;
+}
+
+// [POST] ออกบิลค่าสนามให้รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิล
+export async function billCourtFee(
+  sessionId: number,
+  courtFeeTotal: number
+): Promise<AttendanceSession> {
+  const res = await apiFetch<Envelope<AttendanceSession>>(
+    `/attendance/sessions/${sessionId}/court-fee`,
+    { method: "POST", body: JSON.stringify({ court_fee_total: courtFeeTotal }) }
+  );
+  return res.data;
+}
+
+// [DELETE] ยกเลิกบิลค่าสนามทั้งรอบเพื่อออกใหม่ — ทำได้เฉพาะตอนยังไม่มีใครจ่าย
+export async function cancelCourtFee(sessionId: number): Promise<AttendanceSession> {
+  const res = await apiFetch<Envelope<AttendanceSession>>(
+    `/attendance/sessions/${sessionId}/court-fee`,
+    { method: "DELETE" }
+  );
+  return res.data;
+}
+
+// [GET] รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิลค่าสนาม
+export async function fetchUnbilledCourtSessions(): Promise<UnbilledCourtSession[]> {
+  const res = await apiFetch<Envelope<UnbilledCourtSession[]>>("/attendance/court-fee/pending");
+  return res.data ?? [];
 }
 
 // [PATCH] แก้สถานะย้อนหลัง — ใช้ตอนคนมาเรียนจริงแต่ลืมสแกน แล้วมาปรับให้ทีหลัง

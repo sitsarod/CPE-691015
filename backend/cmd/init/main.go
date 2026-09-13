@@ -118,6 +118,10 @@ func main() {
 		log.Fatalf("ทบครั้งคงเหลือย้อนหลังไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.BackfillCarryOverIntoRenewals(db); err != nil {
+		log.Fatalf("ย้ายยอดทบเก่าเข้าใบที่สมัครต่อไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.BackfillCompletedEnrollments(db); err != nil {
 		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
 	}

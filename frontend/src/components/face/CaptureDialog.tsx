@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, RotateCcw, X, Check } from "lucide-react";
+import { Loader2, RotateCcw, X, Check, SwitchCamera } from "lucide-react";
 import { FacePose, POSE_HINT, POSE_LABEL } from "@/types/faceImage";
 
 /** ย่อรูปให้ด้านยาวสุดไม่เกินค่านี้ก่อนส่ง — พอสำหรับโมเดลและไม่กินแบนด์วิดท์ */
 const MAX_EDGE = 640;
 const COUNTDOWN_SECONDS = 3;
+
+type Facing = "user" | "environment";
 
 interface Props {
   pose: FacePose;
@@ -24,6 +26,11 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
   const [preview, setPreview] = useState<{ url: string; blob: Blob } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [facing, setFacing] = useState<Facing>("user");
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  // เพิ่มค่าเพื่อสั่งเปิดกล้องใหม่ (ถ่ายใหม่หลังดูรูปตัวอย่าง)
+  const [cameraRequest, setCameraRequest] = useState(0);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -44,7 +51,7 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
         if (cancelled) {
@@ -55,17 +62,25 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!cancelled) {
+          setHasMultipleCameras(devices.filter((d) => d.kind === "videoinput").length > 1);
+        }
       } catch {
-        setCameraError("เปิดกล้องไม่สำเร็จ — กรุณาอนุญาตให้เว็บไซต์ใช้กล้องแล้วลองใหม่");
+        if (!cancelled) {
+          setCameraError("เปิดกล้องไม่สำเร็จ — กรุณาอนุญาตให้เว็บไซต์ใช้กล้องแล้วลองใหม่");
+        }
       }
     };
 
     start();
     return () => {
       cancelled = true;
+      // iOS เปิดกล้องตัวใหม่ไม่ได้ถ้าตัวเก่ายังค้าง ต้องปิดก่อนสลับทุกครั้ง
       stopCamera();
     };
-  }, [stopCamera]);
+  }, [facing, cameraRequest, stopCamera]);
 
   // เก็บกวาด object URL ของรูปตัวอย่าง ไม่งั้นค้างในหน่วยความจำ
   useEffect(() => {
@@ -114,23 +129,19 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
     return () => clearTimeout(timer);
   }, [countdown, grabFrame]);
 
-  // grabFrame ปิดกล้องไปแล้ว ถ่ายใหม่จึงต้องเปิดกลับมาเอง
-  const handleRetake = async () => {
+  // grabFrame ปิดกล้องไปแล้ว ถ่ายใหม่จึงต้องสั่งเปิดกลับมาเอง
+  const handleRetake = () => {
     if (preview) URL.revokeObjectURL(preview.url);
     setPreview(null);
     setUploadError(null);
     setCountdown(null);
+    setCameraError(null);
+    setCameraRequest((n) => n + 1);
+  };
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      setCameraError("เปิดกล้องไม่สำเร็จ");
-    }
+  const handleSwitchCamera = () => {
+    setCameraError(null);
+    setFacing((f) => (f === "user" ? "environment" : "user"));
   };
 
   const handleConfirm = async () => {
@@ -144,6 +155,8 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
       setIsUploading(false);
     }
   };
+
+  const isFront = facing === "user";
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -177,8 +190,8 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
                 autoPlay
                 playsInline
                 muted
-                // กลับด้านให้เหมือนส่องกระจก ผู้ใช้จัดท่าง่ายกว่า (รูปที่ส่งไม่ได้กลับด้าน)
-                className="w-full h-full object-cover [transform:scaleX(-1)]"
+                // กล้องหน้ากลับด้านให้เหมือนส่องกระจก ผู้ใช้จัดท่าง่ายกว่า (รูปที่ส่งไม่ได้กลับด้าน)
+                className={`w-full h-full object-cover ${isFront ? "[transform:scaleX(-1)]" : ""}`}
               />
               {/* กรอบวงรีนำสายตา ให้วางใบหน้าตรงกลาง */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -236,7 +249,19 @@ export default function CaptureDialog({ pose, onCancel, onConfirm }: Props) {
             </>
           ) : (
             <>
-              <span />
+              <div className="justify-self-start">
+                {(hasMultipleCameras || cameraError) && (
+                  <button
+                    onClick={handleSwitchCamera}
+                    disabled={countdown !== null}
+                    aria-label={isFront ? "สลับไปกล้องหลัง" : "สลับไปกล้องหน้า"}
+                    title={isFront ? "สลับไปกล้องหลัง" : "สลับไปกล้องหน้า"}
+                    className="grid h-12 w-12 place-items-center rounded-full border border-gray-300 text-gray-600 transition hover:bg-gray-50 active:scale-95 disabled:opacity-40"
+                  >
+                    <SwitchCamera className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
 
               <div className="justify-self-center">
                 <button
