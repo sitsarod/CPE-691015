@@ -412,8 +412,8 @@ export default function EnrollmentPage() {
                   <div className="flex justify-between gap-2">
                     <dt className="text-gray-500 shrink-0">ราคา</dt>
                     <dd className="font-bold text-[#CC0000] text-right">
-                      {item.package?.price
-                        ? `${item.package.price.toLocaleString("th-TH")} บาท`
+                      {item.agreed_price || item.package?.price
+                        ? `${(item.agreed_price || item.package!.price).toLocaleString("th-TH")} บาท`
                         : "สอบถามราคา"}
                     </dd>
                   </div>

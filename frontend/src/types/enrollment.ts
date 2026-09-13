@@ -49,6 +49,8 @@ export interface Enrollment {
   remaining_sessions: number;
   attended_sessions: number;
   status: string;
+  /** ราคาที่ตกลงกันตอนสมัคร · 0 = ใบเก่าที่ยังไม่มีสแนปช็อต ให้ใช้ราคาแพ็กเกจแทน */
+  agreed_price: number;
   billing_id: number | null;
   package: EnrollmentPackageInfo | null;
 
@@ -91,6 +93,8 @@ export interface AdminEnrollment {
   total_sessions: number;
   remaining_sessions: number;
   status: string;
+  /** ราคาที่ตกลงกันตอนสมัคร · 0 = ใบเก่าที่ยังไม่มีสแนปช็อต ให้ใช้ราคาแพ็กเกจแทน */
+  agreed_price: number;
   billing_id: number | null;
   started_at: string | null;
   expires_at: string | null;
@@ -112,6 +116,8 @@ export interface ReviewEnrollmentInfo {
   enrollment_date: string;
   total_sessions: number;
   remaining_sessions: number;
+  /** ราคาที่ตกลงกันตอนสมัคร · 0 = ใบเก่าที่ยังไม่มีสแนปช็อต ให้ใช้ราคาแพ็กเกจแทน */
+  agreed_price: number;
   billing_id: number | null;
   /** จำนวนวันที่คำขอนี้รออยู่ */
   waiting_days: number;

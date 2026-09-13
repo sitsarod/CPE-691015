@@ -112,6 +112,10 @@ export default function EnrollmentReviewPanel({
   const isPending = data?.enrollment.status === "pending";
   const seatsFull = data ? data.package.seats_left <= 0 : false;
 
+  // ราคาที่ตกลงกันตอนสมัคร — ใบเก่าที่ยังไม่มีสแนปช็อตถึงค่อยกลับไปใช้ราคาแพ็กเกจ
+  const agreedPrice = data ? data.enrollment.agreed_price || data.package.price : 0;
+  const priceChanged = data ? agreedPrice > 0 && agreedPrice !== data.package.price : false;
+
   return (
     // z สูงกว่าแถบเมนูล่างของมือถือ (z-[60] ใน AdminSideBar)
     // ที่ z-50 แถบเมนูจะทับ footer ของแผงพอดี = ไม่เห็นปุ่มอนุมัติกับปฏิเสธเลย
@@ -302,10 +306,16 @@ export default function EnrollmentReviewPanel({
                   <p className="mt-0.5 text-sm text-gray-600">
                     แพ็กเกจ {data.package.sessions_count} ครั้ง ·{" "}
                     {data.package.hours_count} ชั่วโมง ·{" "}
-                    {data.package.price
-                      ? `${data.package.price.toLocaleString("th-TH")} บาท`
+                    {agreedPrice
+                      ? `${agreedPrice.toLocaleString("th-TH")} บาท`
                       : "ยังไม่ได้ตั้งราคา"}
                   </p>
+                  {priceChanged && (
+                    <p className="mt-0.5 text-sm text-amber-700">
+                      ราคาแพ็กเกจตอนนี้ {data.package.price.toLocaleString("th-TH")} บาท —
+                      บิลจะออกตามราคาที่ตกลงกันตอนสมัคร
+                    </p>
+                  )}
                   {data.package.duration_days > 0 && (
                     <p className="mt-0.5 text-sm text-gray-600">
                       สิทธิ์เรียน {formatDuration(data.package.duration_days).replace("เรียนได้ ", "")} นับจากวันเริ่มเรียน

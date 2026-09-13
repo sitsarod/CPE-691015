@@ -234,7 +234,7 @@ export default function AdminEnrollmentsPage() {
               <p className="text-xs text-gray-600">
                 แพ็กเกจ {item.package?.sessions_count} ครั้ง ·{' '}
                 <span className="font-semibold text-gray-900">
-                  {item.package?.price?.toLocaleString()} ฿
+                  {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-gray-500">
@@ -290,7 +290,7 @@ export default function AdminEnrollmentsPage() {
                   </div>
                 </td>
                 <td className="p-4 font-semibold text-gray-900">
-                  {item.package?.price?.toLocaleString()} ฿
+                  {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </td>
                 <td className="p-4 text-sm text-gray-600">
                   {new Date(item.enrollment_date).toLocaleDateString('th-TH')}

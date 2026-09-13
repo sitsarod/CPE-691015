@@ -125,6 +125,10 @@ func main() {
 		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.BackfillEnrollmentAgreedPrice(db); err != nil {
+		log.Fatalf("เติมราคาที่ตกลงกันให้ใบลงทะเบียนเก่าไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
 	}

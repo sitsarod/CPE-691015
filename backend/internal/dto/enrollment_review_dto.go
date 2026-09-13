@@ -19,6 +19,7 @@ type ReviewEnrollmentInfo struct {
 	EnrollmentDate    time.Time `json:"enrollment_date"`
 	TotalSessions     uint      `json:"total_sessions"`
 	RemainingSessions uint      `json:"remaining_sessions"`
+	AgreedPrice       float64   `json:"agreed_price"`
 	BillingID         *uint     `json:"billing_id"`
 	// WaitingDays จำนวนวันที่คำขอนี้รออยู่ ใช้จัดลำดับความเร่งด่วน
 	WaitingDays int `json:"waiting_days"`

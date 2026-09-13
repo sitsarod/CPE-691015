@@ -39,6 +39,7 @@ func (s *EnrollmentService) GetEnrollmentReview(enrollmentID uint) (*dto.Enrollm
 			EnrollmentDate:    enrollment.EnrollmentDate,
 			TotalSessions:     enrollment.TotalSessions,
 			RemainingSessions: enrollment.RemainingSessions,
+			AgreedPrice:       enrollment.AgreedPrice,
 			BillingID:         enrollment.BillingID,
 			WaitingDays:       daysSince(enrollment.EnrollmentDate),
 			StartedAt:         enrollment.StartedAt,
