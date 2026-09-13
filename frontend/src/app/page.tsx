@@ -229,7 +229,6 @@ export default function Home() {
           { value: `${coaches.length}`, label: "โค้ชประจำ" },
           // คิดจากข้อมูลจริง ไม่ใช่ 100% ตายตัว — ตัวเลขบนหน้าขายต้องตรวจย้อนได้
           { value: `${licensedPct}%`, label: "มีใบรับรอง" },
-          { value: "1 : 4", label: "สัดส่วนโค้ชต่อนักเรียน" },
         ];
 
   // ช่องภาพบรรยากาศ — CMS ถ้ามี ไม่งั้น fallback ค่าคงที่
@@ -596,14 +595,6 @@ export default function Home() {
                           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#141210] via-[#141210]/45 to-transparent" />
                           <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/15" />
 
-                          {isHead && (
-                            <span
-                              className="absolute left-0 bottom-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#141210]"
-                              style={{ backgroundColor: COACH_ACCENT }}
-                            >
-                              HEAD COACH
-                            </span>
-                          )}
                         </div>
 
                         <div
@@ -1105,59 +1096,98 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* ===== Modal รายละเอียดโค้ช ===== */}
+      {/* ===== Modal รายละเอียดโค้ช =====
+          หน้าตาต้องต่อเนื่องกับแถบโค้ชที่กดมา — พื้นเข้ม ไม่มีมุมมน ไม่มีเงา
+          เดิมเป็นกล่องขาวมุมมนมีเงา + ชิปมนสีชมพู/ม่วง ซึ่งหลุดจากทั้งหน้า */}
       {selectedCoach && (() => {
         const c = selectedCoach;
         const img = c.home_image || c.profile_picture;
         const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ");
+        const displayName = c.nickname || fullName || `โค้ช #${c.id}`;
+        const details = [
+          c.specialization && { label: "ระดับ", value: c.specialization },
+          c.coach_license && { label: "ใบรับรอง", value: c.coach_license },
+        ].filter(Boolean) as { label: string; value: string }[];
+
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setSelectedCoach(null)}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-            {/* overscroll-contain กันล้อเลื่อนทะลุไปหาหน้าข้างหลังตอนเนื้อหาในนี้สุดทาง */}
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+            onClick={() => setSelectedCoach(null)}
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+            {/* จอเล็กเรียงบนล่างแล้วเลื่อนทั้งกล่อง · จอ sm ขึ้นไปวางรูปซ้ายเนื้อหาขวา
+                กล่องจะได้เป็นแนวนอน ไม่สูงจนต้องเลื่อนกว่าจะอ่านประวัติจบ */}
             <div
-              className="relative max-h-[90vh] w-full max-w-md overflow-y-auto overscroll-contain bg-white shadow-xl"
+              className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden border border-[#2e2a27] bg-[#141210] sm:grid sm:grid-cols-[300px_1fr]"
               onClick={(e) => e.stopPropagation()}
               style={kanitFont}
             >
               <button
                 onClick={() => setSelectedCoach(null)}
-                className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/80 text-gray-700 shadow transition hover:bg-white"
+                className="absolute right-0 top-0 z-10 grid h-10 w-10 place-items-center border-b border-l border-[#2e2a27] bg-[#141210]/85 text-[#a6a09a] transition-colors hover:text-white"
                 aria-label="ปิด"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
 
-              {img ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={img} alt="" className="aspect-[3/4] w-full bg-gray-50 object-cover" />
-              ) : (
-                <div className="flex aspect-[3/4] w-full items-center justify-center bg-gray-100 text-gray-300">
-                  <UserRound className="h-20 w-20" />
-                </div>
-              )}
+              <div className="relative h-[280px] w-full flex-none bg-[#262220] sm:h-full">
+                {img ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={img} alt={displayName} className="h-full w-full object-cover object-top" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[#57514c]">
+                    <UserRound className="h-16 w-16" />
+                  </div>
+                )}
+                {/* เฉพาะจอเล็กที่รูปอยู่เหนือเนื้อหา — ให้ขอบล่างจมเข้าหาพื้นกล่อง */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#141210] to-transparent sm:hidden" />
+              </div>
 
-              <div className="p-6">
-                <h3 className="text-2xl font-medium text-gray-900">{c.nickname || fullName || `โค้ช #${c.id}`}</h3>
-                {fullName && c.nickname && <p className="mt-0.5 text-sm font-light text-gray-400">{fullName}</p>}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {c.specialization && (
-                    <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium" style={{ color: ACCENT }}>
-                      ระดับ {c.specialization}
-                    </span>
-                  )}
-                  {c.coach_license && (
-                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
-                      {c.coach_license}
-                    </span>
+              {/* min-h-0 ขาดไม่ได้ — ลูกของ flex มีความสูงขั้นต่ำเท่าเนื้อหาโดยปริยาย
+                  ถ้าไม่ปลดออก กล่องจะยืดตามเนื้อหาแทนที่จะให้ตรงนี้เลื่อน */}
+              <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-7 sm:max-h-[88vh] sm:flex-none">
+                <div className="flex flex-col gap-1.5 pr-10">
+                  <span className="text-[30px] font-semibold leading-tight tracking-tight text-white">
+                    {displayName}
+                  </span>
+                  {fullName && c.nickname && (
+                    <span className="text-sm font-light text-[#8c8681]">{fullName}</span>
                   )}
                 </div>
+
+                {details.length > 0 && (
+                  <dl className="flex flex-col divide-y divide-[#2e2a27] border-y border-[#2e2a27]">
+                    {details.map((d) => (
+                      <div key={d.label} className="flex items-baseline gap-5 py-3">
+                        <dt className="w-[72px] flex-none text-[11px] font-light tracking-[0.1em] text-[#6f6862]">
+                          {d.label}
+                        </dt>
+                        <dd className="text-sm font-normal text-white">{d.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
 
                 {c.bio?.trim() ? (
-                  <p className="mt-4 whitespace-pre-line text-sm font-light leading-relaxed text-gray-600">{c.bio}</p>
+                  <p className="whitespace-pre-line text-[13.5px] font-light leading-[1.8] text-[#a6a09a]">
+                    {c.bio}
+                  </p>
                 ) : (
-                  <p className="mt-4 text-sm font-light text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
+                  <p className="text-[13.5px] font-light text-[#57514c]">ยังไม่มีรายละเอียดเพิ่มเติม</p>
                 )}
+
+                {/* ⚠️ ห้ามเขียนว่า "จองคลาสกับโค้ชคนนี้" — ระบบสมัครเรียนเลือกเป็นคอร์ส
+                    ไม่มีทางเลือกโค้ชรายคน ปุ่มแบบนั้นสัญญาสิ่งที่กดแล้วทำไม่ได้จริง
+                    พาไปหน้าคอร์สแทน ซึ่งเป็นก้าวถัดไปที่มีอยู่จริง */}
+                <Link
+                  href="/courses"
+                  className="group mt-auto inline-flex w-fit items-center gap-2 px-5 py-3 text-[13px] font-medium text-[#141210] transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: COACH_ACCENT }}
+                >
+                  ดูคอร์สเรียนทั้งหมด
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
               </div>
             </div>
           </div>
