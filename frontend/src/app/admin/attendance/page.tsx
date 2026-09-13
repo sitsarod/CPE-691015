@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   Maximize,
   CalendarX,
+  Receipt,
+  RotateCcw,
 } from "lucide-react";
 
 import {
@@ -33,6 +35,9 @@ import {
   updateCoachAttendanceStatus,
   fetchMissedClasses,
   isAlreadyCheckedIn,
+  billCourtFee,
+  cancelCourtFee,
+  fetchUnbilledCourtSessions,
 } from "@/services/attendanceAPI";
 import { COACH_STATUS_LABEL, COACH_STATUS_NOTE } from "@/types/attendance";
 import type {
@@ -43,6 +48,7 @@ import type {
   RosterItem,
   AttendanceStatus,
   FaceLookup,
+  UnbilledCourtSession,
 } from "@/types/attendance";
 
 import QRScanner from "./components/QRScanner";
@@ -52,6 +58,7 @@ import CoachRosterList from "./components/CoachRosterList";
 import KioskMode, { KioskSetupDialog } from "./components/KioskMode";
 import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
+import CourtFeeDialog from "./components/CourtFeeDialog";
 
 const SCAN_COOLDOWN_SECONDS = 5;
 
@@ -80,7 +87,6 @@ function readKiosk(): KioskState | null {
 function formatSessionDate(iso: string) {
   return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 }
-
 export default function AdminAttendancePage() {
   const [openable, setOpenable] = useState<OpenablePackage[]>([]);
   const [openSessions, setOpenSessions] = useState<OpenSessionSummary[]>([]);
@@ -99,6 +105,11 @@ export default function AdminAttendancePage() {
   // ใครไม่ต้องการก็กดปิดได้ แต่ค่าเริ่มต้นควรเป็นสิ่งที่จะใช้ 99% ของเวลา
   const [useCamera, setUseCamera] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
+
+  // close = กำลังปิดรอบพร้อมออกบิล · bill = ออกบิลให้รอบที่ปิดไปแล้ว
+  const [courtFeeMode, setCourtFeeMode] = useState<"close" | "bill" | null>(null);
+  const [isBillingCourtFee, setIsBillingCourtFee] = useState(false);
+  const [isCancellingCourtFee, setIsCancellingCourtFee] = useState(false);
 
   const [editing, setEditing] = useState<RosterItem | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
@@ -191,6 +202,22 @@ export default function AdminAttendancePage() {
       })
       .catch(() => {
         /* ตัวเลขประกอบ ล้มเหลวได้เงียบ ๆ */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  const [unbilledSessions, setUnbilledSessions] = useState<UnbilledCourtSession[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchUnbilledCourtSessions()
+      .then((list) => {
+        if (!cancelled) setUnbilledSessions(list);
+      })
+      .catch(() => {
+        /* รายการประกอบ ไม่ควรทำให้เปิดรอบไม่ได้ */
       });
     return () => {
       cancelled = true;
@@ -532,41 +559,58 @@ export default function AdminAttendancePage() {
 
   // ─── ปิดรอบ ────────────────────────────────────────────────────────────────
 
-  const handleClose = async () => {
+  const handleClose = () => {
+    if (session) setCourtFeeMode("close");
+  };
+
+  // ไม่ส่งค่าสนาม = ปิดรอบอย่างเดียว รอบจะไปค้างในรายการรอออกบิลค่าสนาม
+  const submitClose = async (courtFeeTotal?: number) => {
     if (!session) return;
-
-    const pending = session.pending_count;
-    // ปิดรอบมาร์คโค้ชที่ไม่ได้เช็คชื่อด้วย ต้องบอกก่อนกด ไม่งั้นโค้ชที่มาสอนจริง
-    // แต่ลืมสแกนจะกลายเป็น "ไม่ได้มาสอน" โดยที่แอดมินไม่รู้ตัว
-    const pendingCoaches = session.coaches.filter((c) => !c.attendance_id).length;
-
-    const lines: string[] = [];
-    if (pending > 0) {
-      lines.push(
-        `นักเรียนที่ยืนยันว่าจะมาแล้วไม่มา ${pending} คนจะถูกบันทึกเป็นขาดเรียน`,
-        "ไม่หักโควตา (ยังไม่ได้เรียน) แต่ยังถูกคิดค่าสนามด้วย เพราะสนามถูกจองเผื่อไว้แล้ว"
-      );
-    }
-    if (pendingCoaches > 0) {
-      lines.push(`โค้ช ${pendingCoaches} คนที่ยังไม่ได้เช็คชื่อจะถูกบันทึกเป็น "ไม่ได้มาสอน" (ไม่กระทบค่าจ้าง)`);
-    }
-
-    const confirmed = window.confirm(
-      lines.length > 0
-        ? `${lines.join("\n\n")}\n\nยืนยันปิดรอบ?`
-        : "ยืนยันปิดรอบเช็คชื่อ?"
-    );
-    if (!confirmed) return;
 
     setIsClosing(true);
     try {
-      setSession(await closeSession(session.id));
+      setSession(await closeSession(session.id, courtFeeTotal));
       setUseCamera(false);
+      setCourtFeeMode(null);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "ไม่สามารถปิดรอบได้");
       await refreshSession();
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  const submitCourtFee = async (courtFeeTotal: number) => {
+    if (!session) return;
+
+    setIsBillingCourtFee(true);
+    try {
+      setSession(await billCourtFee(session.id, courtFeeTotal));
+      setCourtFeeMode(null);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถออกบิลค่าสนามได้");
+      await refreshSession();
+    } finally {
+      setIsBillingCourtFee(false);
+    }
+  };
+
+  // ใช้ตอนแก้สถานะเช็คชื่อหลังออกบิลไปแล้ว — ยกเลิกทั้งรอบแล้วหารใหม่
+  const handleCancelCourtFee = async () => {
+    if (!session) return;
+    const confirmed = window.confirm(
+      "ยกเลิกบิลค่าสนามของรอบนี้ทั้งหมดเพื่อออกใหม่?\n\nทำได้เฉพาะตอนที่ยังไม่มีใครจ่ายหรือแนบสลิป"
+    );
+    if (!confirmed) return;
+
+    setIsCancellingCourtFee(true);
+    try {
+      setSession(await cancelCourtFee(session.id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "ไม่สามารถยกเลิกบิลค่าสนามได้");
+      await refreshSession();
+    } finally {
+      setIsCancellingCourtFee(false);
     }
   };
 
@@ -736,6 +780,60 @@ export default function AdminAttendancePage() {
           </div>
         )}
 
+        {unbilledSessions.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+            <div className="flex items-start gap-3">
+              <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+              <div>
+                <p className="font-semibold text-blue-900">รอบที่ยังไม่ได้ออกบิลค่าสนาม</p>
+                <p className="mt-0.5 text-sm text-blue-800">
+                  รอบที่ระบบปิดให้อัตโนมัติ หรือปิดโดยยังไม่ได้กรอกค่าสนาม —
+                  เข้าไปกรอกค่าสนามรวมเพื่อออกบิลให้คนในรอบ
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {unbilledSessions.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-white p-4"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {row.course_name || "ไม่ทราบคอร์ส"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {formatSessionDate(row.session_date)} · {row.schedule_start_time} –{" "}
+                        {row.schedule_end_time}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        ต้องจ่าย {row.payer_count} คน
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleEnterSession(row.id)}
+                    disabled={enteringSessionId !== null}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60 sm:w-auto"
+                  >
+                    {enteringSessionId === row.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Receipt className="h-5 w-5" />
+                    )}
+                    ออกบิลค่าสนาม
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isLoadingList ? (
           <div className="mt-16 flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -848,6 +946,33 @@ export default function AdminAttendancePage() {
   // กล้องโชว์อยู่จริงหรือไม่ — ตัวตัดสินว่าผลการเช็คชื่อจะไปขึ้นที่ไหน
   // ถ้าดูแค่ useCamera ผลจะไม่โผล่ที่ไหนเลยตอนบล็อกกล้องไม่ถูกเรนเดอร์
   const showResultOnCamera = canScan && useCamera;
+
+  // ตอนปิดรอบ คนที่ยืนยันแล้วยังไม่เช็คชื่อจะกลายเป็นขาดเรียนและต้องจ่ายด้วย
+  const payerCount = new Set(
+    session.roster
+      .filter(
+        (r) =>
+          r.status === "present" ||
+          (r.status === "absent" && !r.is_off_schedule) ||
+          (courtFeeMode === "close" && !r.attendance_id && r.is_confirmed)
+      )
+      .map((r) => r.user_id)
+  ).size;
+
+  // ปิดรอบมาร์คโค้ชที่ไม่ได้เช็คชื่อด้วย ต้องบอกก่อนกด ไม่งั้นโค้ชที่มาสอนจริงแต่ลืมสแกน
+  // จะกลายเป็น "ไม่ได้มาสอน" โดยที่แอดมินไม่รู้ตัว
+  const pendingCoaches = session.coaches.filter((c) => !c.attendance_id).length;
+  const closeNotes: string[] = [];
+  if (session.pending_count > 0) {
+    closeNotes.push(
+      `นักเรียนที่ยืนยันว่าจะมาแล้วไม่มา ${session.pending_count} คนจะถูกบันทึกเป็นขาดเรียน — ไม่หักโควตา แต่ยังถูกคิดค่าสนาม`
+    );
+  }
+  if (pendingCoaches > 0) {
+    closeNotes.push(
+      `โค้ช ${pendingCoaches} คนที่ยังไม่ได้เช็คชื่อจะถูกบันทึกเป็น "ไม่ได้มาสอน" (ไม่กระทบค่าจ้าง)`
+    );
+  }
 
   return (
     // สองคอลัมน์บนจอ lg ขึ้นไป (iPad วางนอนเข้าเกณฑ์) — กล้องซ้าย รายชื่อขวา
@@ -967,6 +1092,52 @@ export default function AdminAttendancePage() {
         </div>
       )}
 
+      {!isOpen && !session.court_billed_at && payerCount > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-start gap-3">
+            <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <div>
+              <p className="font-semibold text-blue-900">ยังไม่ได้ออกบิลค่าสนามของรอบนี้</p>
+              <p className="mt-0.5 text-sm text-blue-800">
+                กรอกค่าสนามรวมของคาบนี้ ระบบจะหารให้คนที่มาเรียนและคนที่ยืนยันแล้วไม่มา แล้วออกบิลทันที
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setCourtFeeMode("bill")}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
+          >
+            <Receipt className="h-4 w-4" />
+            ออกบิลค่าสนาม
+          </button>
+        </div>
+      )}
+
+      {!isOpen && session.court_fee_total !== null && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div>
+            <p className="font-medium text-gray-800">
+              ออกบิลค่าสนามแล้ว · รวม ฿{session.court_fee_total.toLocaleString("th-TH")}
+            </p>
+            <p className="mt-0.5 text-sm text-gray-500">
+              แก้สถานะเช็คชื่อหลังออกบิล บิลจะไม่ปรับตาม — ยกเลิกบิลแล้วออกใหม่เพื่อหารใหม่
+            </p>
+          </div>
+          <button
+            onClick={handleCancelCourtFee}
+            disabled={isCancellingCourtFee}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-60 sm:w-auto"
+          >
+            {isCancellingCourtFee ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}
+            ยกเลิกบิลค่าสนาม
+          </button>
+        </div>
+      )}
+
       {/* ปิดรอบแล้วคอลัมน์ซ้ายหายไป ต้องสลับเป็นคอลัมน์เดียวด้วย
           ไม่งั้นรายชื่อจะไปนั่งในช่องซ้ายที่กว้างแค่ 380px แล้วตารางแน่นจนอ่านยาก */}
       <div
@@ -1070,6 +1241,20 @@ export default function AdminAttendancePage() {
           statusNote={COACH_STATUS_NOTE}
           onSubmit={handleSaveCoachStatus}
           onClose={() => setEditingCoach(null)}
+        />
+      )}
+
+      {courtFeeMode && (
+        <CourtFeeDialog
+          title={courtFeeMode === "close" ? "ปิดรอบและออกบิลค่าสนาม" : "ออกบิลค่าสนาม"}
+          confirmLabel={courtFeeMode === "close" ? "ปิดรอบและออกบิล" : "ออกบิล"}
+          payerCount={payerCount}
+          notes={courtFeeMode === "close" ? closeNotes : []}
+          isSubmitting={courtFeeMode === "close" ? isClosing : isBillingCourtFee}
+          onSubmit={courtFeeMode === "close" ? submitClose : submitCourtFee}
+          onSkip={courtFeeMode === "close" ? () => submitClose() : undefined}
+          skipLabel="ปิดรอบ ออกบิลทีหลัง"
+          onCancel={() => setCourtFeeMode(null)}
         />
       )}
 

@@ -316,6 +316,9 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceGroup.POST("/sessions/:id/manual", attendanceController.ManualCheckIn)
 			attendanceGroup.POST("/sessions/:id/coach-manual", attendanceController.ManualCoachCheckIn)
 			attendanceGroup.PATCH("/sessions/:id/close", attendanceController.CloseSession)
+			attendanceGroup.POST("/sessions/:id/court-fee", attendanceController.BillCourtFee)
+			attendanceGroup.DELETE("/sessions/:id/court-fee", attendanceController.CancelCourtFee)
+			attendanceGroup.GET("/court-fee/pending", attendanceController.GetUnbilledCourtSessions)
 
 			attendanceGroup.PATCH("/records/:id", attendanceController.UpdateStatus)
 			attendanceGroup.PATCH("/coach-records/:id", attendanceController.UpdateCoachAttendanceStatus)

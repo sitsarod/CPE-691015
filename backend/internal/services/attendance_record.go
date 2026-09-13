@@ -18,14 +18,25 @@ var (
 	ErrInvalidStatus      = errors.New("สถานะไม่ถูกต้อง (รองรับเฉพาะ present, absent)")
 )
 
-func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto.AttendanceSessionDTO, error) {
+// CloseSession ปิดรอบ · ส่งค่าสนามรวมมาด้วยจะออกบิลค่าสนามให้คนในรอบทันทีใน transaction เดียวกัน
+func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint, courtFeeTotal *float64) (*dto.AttendanceSessionDTO, error) {
+	var issued []issuedBill
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		return s.closeSessionTx(tx, sessionID, &adminUserID, nowLocal())
+		if err := s.closeSessionTx(tx, sessionID, &adminUserID, nowLocal()); err != nil {
+			return err
+		}
+		if courtFeeTotal == nil {
+			return nil
+		}
+		var err error
+		issued, err = billCourtFeeTx(tx, sessionID, adminUserID, *courtFeeTotal)
+		return err
 	})
 
 	if err != nil {
 		return nil, err
 	}
+	notifyIssuedBills(s.db, issued)
 	return s.GetSession(sessionID)
 }
 

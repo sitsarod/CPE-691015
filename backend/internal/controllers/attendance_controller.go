@@ -43,7 +43,8 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrInvalidDateFormat),
 		errors.Is(err, services.ErrMissedClassCoachSet),
 		errors.Is(err, services.ErrMissedClassLegacy),
-		errors.Is(err, services.ErrScheduleInvalid):
+		errors.Is(err, services.ErrScheduleInvalid),
+		errors.Is(err, services.ErrCourtFeeTotalInvalid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrNoFaceInImage),
@@ -65,7 +66,12 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrAttendanceExpired),
 		errors.Is(err, services.ErrMissedClassResolved),
 		errors.Is(err, services.ErrMissedClassOpen),
-		errors.Is(err, services.ErrMissedClassNotDue):
+		errors.Is(err, services.ErrMissedClassNotDue),
+		errors.Is(err, services.ErrCourtFeeBilled),
+		errors.Is(err, services.ErrCourtFeeNotClosed),
+		errors.Is(err, services.ErrCourtFeeNotBilled),
+		errors.Is(err, services.ErrCourtFeePaid),
+		errors.Is(err, services.ErrCourtFeeNoPayers):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
@@ -361,15 +367,90 @@ func (ctrl *AttendanceController) CloseSession(c *gin.Context) {
 		return
 	}
 
-	session, err := ctrl.service.CloseSession(id, adminID)
+	var req dto.CloseSessionReq
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrCourtFeeTotalInvalid.Error()})
+		return
+	}
+
+	session, err := ctrl.service.CloseSession(id, adminID, req.CourtFeeTotal)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+
+	message := "ปิดรอบเรียบร้อย — คนที่ยืนยันว่าจะมาแล้วไม่มา ถูกบันทึกเป็นขาดเรียน"
+	if req.CourtFeeTotal != nil {
+		message = "ปิดรอบและออกบิลค่าสนามเรียบร้อย"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": message,
+		"data":    session,
+	})
+}
+
+// BillCourtFee [POST] /api/attendance/sessions/:id/court-fee
+func (ctrl *AttendanceController) BillCourtFee(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	var req dto.BillCourtFeeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrCourtFeeTotalInvalid.Error()})
+		return
+	}
+
+	session, err := ctrl.service.BillCourtFee(id, adminID, req.CourtFeeTotal)
 	if err != nil {
 		mapAttendanceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "ปิดรอบเรียบร้อย — คนที่ยืนยันว่าจะมาแล้วไม่มา ถูกบันทึกเป็นขาดเรียน",
+		"message": "ออกบิลค่าสนามเรียบร้อย",
 		"data":    session,
 	})
+}
+
+// CancelCourtFee [DELETE] /api/attendance/sessions/:id/court-fee
+func (ctrl *AttendanceController) CancelCourtFee(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	session, err := ctrl.service.CancelCourtFee(id, adminID)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "ยกเลิกบิลค่าสนามของรอบนี้แล้ว — ออกบิลใหม่ได้",
+		"data":    session,
+	})
+}
+
+// GetUnbilledCourtSessions [GET] /api/attendance/court-fee/pending
+func (ctrl *AttendanceController) GetUnbilledCourtSessions(c *gin.Context) {
+	items, err := ctrl.service.GetUnbilledCourtSessions()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items})
 }
 
 // UpdateStatus [PATCH] /api/attendance/records/:id

@@ -242,6 +242,8 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		Roster:            roster,
 		WalkInCandidates:  walkInCandidates,
 		Coaches:           coaches,
+		CourtFeeTotal:     session.CourtFeeTotal,
+		CourtBilledAt:     session.CourtBilledAt,
 	}
 	if session.Package != nil && session.Package.Course != nil {
 		result.CourseName = session.Package.Course.CourseName
