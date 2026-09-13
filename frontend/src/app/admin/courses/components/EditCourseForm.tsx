@@ -364,7 +364,8 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         </div>
       </div>
 
-      <div className="flex justify-end pt-6 border-t border-gray-200 gap-3">
+      {/* ลอยค้างไว้ขอบล่าง — ฟอร์มยาว แก้แพ็กเกจท้าย ๆ แล้วไม่ต้องเลื่อนหาปุ่ม · มือถือยกขึ้นพ้นแถบเมนูล่าง */}
+      <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-40 flex justify-end gap-3 border-t border-gray-200 bg-white/95 py-4 backdrop-blur md:bottom-0">
         <button 
           type="button" onClick={onCancel} disabled={isSaving}
           className="px-6 py-3 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors font-bold disabled:opacity-50"

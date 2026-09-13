@@ -54,6 +54,10 @@ type Enrollment struct {
 	RejectedByUserID *uint      `json:"rejected_by_user_id"`
 	RejectedAt       *time.Time `json:"rejected_at"`
 
+	// ข้อตกลงการสมัครเรียนที่นักเรียนยอมรับตอนสมัคร · ว่าง = ใบที่สมัครก่อนมีข้อตกลง
+	TermsVersion    string     `json:"terms_version" gorm:"type:varchar(20)"`
+	TermsAcceptedAt *time.Time `json:"terms_accepted_at"`
+
 	// Foreign Keys
 	PackageID  uint `json:"package_id" valid:"required~packageId is required"`
 	CustomerID uint `json:"customer_id" valid:"required~customerId is required"`

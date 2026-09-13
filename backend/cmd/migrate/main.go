@@ -85,6 +85,7 @@ func main() {
 		&models.Court{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
+		&models.LegalDocumentRevision{},
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}

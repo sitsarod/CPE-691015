@@ -370,6 +370,28 @@ type AttendanceHistoryItemDTO struct {
 	RecordedByUserID *uint `json:"recorded_by_user_id"`
 }
 
+// MyAttendanceItemDTO คือประวัติหนึ่งครั้งที่นักเรียนเห็นของตัวเอง — ไม่มีหมายเหตุหรือรหัสแอดมินที่บันทึก
+type MyAttendanceItemDTO struct {
+	AttendanceID uint       `json:"attendance_id"`
+	CourseName   string     `json:"course_name"`
+	SessionDate  *time.Time `json:"session_date"`
+
+	ScheduleStartTime string `json:"schedule_start_time,omitempty"`
+	ScheduleEndTime   string `json:"schedule_end_time,omitempty"`
+
+	Status        string    `json:"status"`
+	CheckInMethod string    `json:"check_in_method"`
+	CheckInTime   time.Time `json:"check_in_time"`
+	IsOffSchedule bool      `json:"is_off_schedule"`
+}
+
+type MyAttendanceHistoryDTO struct {
+	Items        []MyAttendanceItemDTO `json:"items"`
+	Total        int64                 `json:"total"`
+	PresentCount int64                 `json:"present_count"`
+	AbsentCount  int64                 `json:"absent_count"`
+}
+
 // ToRosterItem แปลงหนึ่งแถวของรายชื่อ — attendance เป็น nil ได้ (ยังไม่เช็ค)
 func ToRosterItem(e *models.Enrollment, attendance *models.StudentAttendance, confirmed bool) RosterItemDTO {
 	item := RosterItemDTO{

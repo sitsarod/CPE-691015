@@ -113,6 +113,27 @@ export interface AttendanceSession {
   court_billed_at: string | null;
 }
 
+// ประวัติการเข้าเรียนหนึ่งครั้งที่นักเรียนเห็นของตัวเอง
+export interface MyAttendanceItem {
+  attendance_id: number;
+  course_name: string;
+  // null = บันทึกนอกรอบเช็คชื่อ (ข้อมูลเก่า) ใช้ check_in_time แทน
+  session_date: string | null;
+  schedule_start_time?: string;
+  schedule_end_time?: string;
+  status: AttendanceStatus;
+  check_in_method: CheckInMethod;
+  check_in_time: string;
+  is_off_schedule: boolean;
+}
+
+export interface MyAttendanceHistory {
+  items: MyAttendanceItem[];
+  total: number;
+  present_count: number;
+  absent_count: number;
+}
+
 // รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิลค่าสนาม
 export interface UnbilledCourtSession {
   id: number;

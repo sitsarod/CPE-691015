@@ -14,6 +14,7 @@ import type {
   MissedClass,
   ResolveMissedClassResult,
   UnbilledCourtSession,
+  MyAttendanceHistory,
 } from "@/types/attendance";
 
 interface Envelope<T> {
@@ -186,6 +187,13 @@ export async function cancelCourtFee(sessionId: number): Promise<AttendanceSessi
     `/attendance/sessions/${sessionId}/court-fee`,
     { method: "DELETE" }
   );
+  return res.data;
+}
+
+// [GET] ประวัติการเข้าเรียนของนักเรียนที่ล็อกอินอยู่ พร้อมยอดสรุปมา/ขาดทั้งหมด
+export async function fetchMyAttendance(limit: number, offset: number): Promise<MyAttendanceHistory> {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  const res = await apiFetch<Envelope<MyAttendanceHistory>>(`/attendance/me?${qs.toString()}`);
   return res.data;
 }
 

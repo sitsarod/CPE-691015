@@ -392,7 +392,7 @@ export default function Home() {
                         <span className="whitespace-nowrap text-base font-medium text-gray-900">{priceText}</span>
                         <Link
                           href={`/courses/${course.id}`}
-                          className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                          className="inline-flex w-fit items-center gap-1 border border-[#CC0000] bg-[#CC0000] px-4 py-2 text-[13px] font-normal text-white transition-colors hover:border-[#A30A0E] hover:bg-[#A30A0E]"
                         >
                           เลือกคอร์ส
                           <ArrowRight className="h-3.5 w-3.5" />
@@ -413,7 +413,7 @@ export default function Home() {
                       <span className="text-base font-medium text-gray-900">{priceText}</span>
                       <Link
                         href={`/courses/${course.id}`}
-                        className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
+                        className="inline-flex w-fit items-center gap-1 border border-[#CC0000] bg-[#CC0000] px-4 py-2 text-[13px] font-normal text-white transition-colors hover:border-[#A30A0E] hover:bg-[#A30A0E] md:justify-self-end"
                       >
                         เลือกคอร์ส
                         <ArrowRight className="h-3.5 w-3.5" />

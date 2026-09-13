@@ -16,13 +16,14 @@ import {
   XCircle,
   History,
 } from "lucide-react";
-import { Enrollment } from "@/types/enrollment";
+import { Enrollment, EnrollmentTerms } from "@/types/enrollment";
 import { CourseDTO, CoursePackageDTO } from "@/types/course";
 import {
   fetchCustomerEnrollments,
   fetchAvailableCourses,
   enrollCourse,
   cancelMyEnrollment,
+  fetchEnrollmentTerms,
 } from "@/services/enrollmentAPI";
 import FaceConsentModal from "@/components/FaceConsentModal";
 import { fetchMyFaceConsent, recordFaceConsent } from "@/services/consentAPI";
@@ -64,6 +65,10 @@ export default function EnrollmentPage() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // ข้อตกลงการสมัครเรียน — ต้องติ๊กยอมรับก่อนถึงจะกดยืนยันสมัครได้
+  const [terms, setTerms] = useState<EnrollmentTerms | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // สำหรับความยินยอมเก็บข้อมูลใบหน้า (PDPA)
   const [consent, setConsent] = useState<FaceConsentStatus | null>(null);
@@ -107,6 +112,13 @@ export default function EnrollmentPage() {
         setConsent(await fetchMyFaceConsent());
       } catch {
         setConsent(null);
+      }
+
+      // โหลดไม่ได้ก็ไม่ทำให้หน้าพัง — หน้าต่างสมัครจะแจ้งเองและกดยืนยันไม่ได้
+      try {
+        setTerms(await fetchEnrollmentTerms());
+      } catch {
+        setTerms(null);
       }
     } catch (err: unknown) {
       setError(
@@ -177,15 +189,27 @@ export default function EnrollmentPage() {
         {
           customer_id: parseInt(customerId, 10),
           package_id: selected.pkg.id,
+          accepted_terms_version: terms?.version ?? "",
         },
         token
       );
 
       setSuccessMessage(res.message || "สมัครคอร์สเรียนสำเร็จ");
       setSelected(null);
+      setAcceptedTerms(false);
       loadData(); // รีเฟรชข้อมูลคอร์สใหม่
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครเรียน");
+
+      // ข้อตกลงอาจถูกปรับระหว่างที่เปิดหน้าค้างไว้ — ต้องให้อ่านฉบับใหม่แล้วติ๊กใหม่
+      fetchEnrollmentTerms()
+        .then((latest) => {
+          if (latest.version !== terms?.version) {
+            setTerms(latest);
+            setAcceptedTerms(false);
+          }
+        })
+        .catch(() => {});
     } finally {
       setIsEnrolling(false);
     }
@@ -554,7 +578,7 @@ export default function EnrollmentPage() {
       {/* ---------------- Modal ยืนยันการสมัคร ---------------- */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="bg-[#CC0000] p-4 text-center text-white">
               <h3 className="text-lg font-bold">ยืนยันการสมัครเรียน</h3>
             </div>
@@ -606,9 +630,47 @@ export default function EnrollmentPage() {
                 </div>
               </div>
 
+              <div className="mb-4 rounded-lg border border-gray-200">
+                <p className="border-b border-gray-200 px-3 py-2 text-sm font-bold text-gray-900">
+                  {terms?.title ?? "ข้อตกลงการสมัครเรียน"}
+                </p>
+                {terms ? (
+                  <div className="max-h-56 space-y-3 overflow-y-auto px-3 py-3 text-xs leading-relaxed text-gray-600">
+                    {terms.sections.map((section) => (
+                      <div key={section.heading}>
+                        <p className="font-semibold text-gray-800">{section.heading}</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {section.items.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="px-3 py-3 text-xs text-red-600">
+                    โหลดข้อตกลงไม่สำเร็จ — ลองรีเฟรชหน้านี้อีกครั้ง
+                  </p>
+                )}
+              </div>
+
+              <label className="mb-5 flex cursor-pointer items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  disabled={!terms || isEnrolling}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#CC0000]"
+                />
+                <span>ฉันได้อ่านและยอมรับข้อตกลงการสมัครเรียนข้างต้น</span>
+              </label>
+
               <div className="flex gap-3">
                 <button
-                  onClick={() => setSelected(null)}
+                  onClick={() => {
+                    setSelected(null);
+                    setAcceptedTerms(false);
+                  }}
                   disabled={isEnrolling}
                   className="flex-1 rounded-xl bg-gray-100 py-3 font-bold text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
                 >
@@ -616,7 +678,7 @@ export default function EnrollmentPage() {
                 </button>
                 <button
                   onClick={handleEnroll}
-                  disabled={isEnrolling}
+                  disabled={isEnrolling || !terms || !acceptedTerms}
                   className="flex flex-1 items-center justify-center rounded-xl bg-[#CC0000] py-3 font-bold text-white shadow-md shadow-red-200 transition-colors hover:bg-red-700 disabled:opacity-70"
                 >
                   {isEnrolling ? (

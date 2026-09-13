@@ -94,6 +94,8 @@ func (s *AttendanceService) checkIn(
 	extra *checkInExtra, // nil สำหรับ QR/manual ที่ไม่มีคะแนนความมั่นใจ
 ) (*dto.CheckInResultDTO, error) {
 	var result dto.CheckInResultDTO
+	var studentUserIDForNotify uint
+	var courseName string
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		session, err := s.loadOpenSession(tx, sessionID)
@@ -116,7 +118,9 @@ func (s *AttendanceService) checkIn(
 		var studentUserID *uint
 		if uid, err := ResolveUserID(tx, ctx.Enrollment.CustomerID); err == nil {
 			studentUserID = &uid
+			studentUserIDForNotify = uid
 		}
+		courseName = ctx.CourseName
 
 		record := models.StudentAttendance{
 			CheckInTime:         now,
@@ -167,6 +171,8 @@ func (s *AttendanceService) checkIn(
 	if err != nil {
 		return nil, err
 	}
+
+	notifyCheckedIn(s.db, studentUserIDForNotify, &result, courseName)
 	return &result, nil
 }
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { fetchAllCourses } from "@/services/courseAPI";
 import { CourseDTO } from "@/types/course";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import CourseSummaryCard from "@/components/course/CourseSummaryCard";
 
 export default function CoursesPage() {
+  const router = useRouter();
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,14 @@ export default function CoursesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
+      <button
+        // เปิดลิงก์ตรงเข้ามาไม่มีหน้าก่อนหน้า back() จะพาออกนอกเว็บ จึงส่งกลับหน้าแรกแทน
+        onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}
+        className="mb-8 flex items-center text-gray-500 transition-colors hover:text-black"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" /> ย้อนกลับ
+      </button>
+
       <div className="mb-12 text-center">
         <h1 className="text-3xl font-bold text-gray-900">คอร์สเรียนแบดมินตัน</h1>
         <p className="mt-3 text-gray-500">

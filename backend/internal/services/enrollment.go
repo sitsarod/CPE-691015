@@ -320,7 +320,11 @@ type EnrollResult struct {
 }
 
 // [POST] ลงทะเบียนคอร์สเรียน
-func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollResult, error) {
+func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint, acceptedTermsVersion string) (*EnrollResult, error) {
+	if acceptedTermsVersion != CurrentEnrollmentTermsVersion(s.db) {
+		return nil, ErrEnrollmentTermsNotAccepted
+	}
+
 	var pkg models.Package
 
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
@@ -338,12 +342,15 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		return nil, err
 	}
 
+	acceptedAt := time.Now()
 	newEnrollment := models.Enrollment{
 		CustomerID:        customerID,
 		PackageID:         packageID,
-		EnrollmentDate:    time.Now(),
+		EnrollmentDate:    acceptedAt,
 		TotalSessions:     pkg.SessionsCount,
 		RemainingSessions: pkg.SessionsCount,
+		TermsVersion:      acceptedTermsVersion,
+		TermsAcceptedAt:   &acceptedAt,
 	}
 
 	waitlisted := false
