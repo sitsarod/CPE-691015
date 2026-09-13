@@ -98,6 +98,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedCoach, setSelectedCoach] = useState<PublicCoach | null>(null); // คลิกการ์ดโค้ช → เปิด modal รายละเอียด
   const [openFaq, setOpenFaq] = useState<number>(0); // FAQ ที่เปิดอยู่ (ค่าเริ่มต้นเปิดข้อแรก)
+  const [showAllCoaches, setShowAllCoaches] = useState(false); // กางรายชื่อโค้ชที่เหลือในที่เดิม
 
   // ประกาศข่าวสารสำหรับผู้เยี่ยมชม (visibility: all/guest) — ใช้ในส่วนข่าว/ประกาศบนหน้าแรก
   const [guestAnnouncements, setGuestAnnouncements] = useState<Announcement[]>([]);
@@ -187,13 +188,19 @@ export default function Home() {
           { value: "7", label: "ปีที่เปิดสอน" },
         ];
 
+  const licensedPct =
+    coaches.length > 0
+      ? Math.round((coaches.filter((c) => c.coach_license?.trim()).length / coaches.length) * 100)
+      : 0;
+
   // สถิติส่วนโค้ช — CMS ถ้ามี ไม่งั้น fallback (ช่องแรกใช้จำนวนโค้ชจริง)
   const coachStats: { value: string; label: string }[] =
     content?.coach_stats && content.coach_stats.length > 0
       ? content.coach_stats
       : [
           { value: `${coaches.length}`, label: "โค้ชประจำ" },
-          { value: "100%", label: "มีใบรับรอง" },
+          // คิดจากข้อมูลจริง ไม่ใช่ 100% ตายตัว — ตัวเลขบนหน้าขายต้องตรวจย้อนได้
+          { value: `${licensedPct}%`, label: "มีใบรับรอง" },
           { value: "1 : 4", label: "สัดส่วนโค้ชต่อนักเรียน" },
         ];
 
@@ -454,24 +461,27 @@ export default function Home() {
             </>
           ) : (() => {
             const head = coaches[0];
-            const others = coaches.slice(1);
+            // ยังไม่กาง = โชว์ 3 แถว ที่เหลือซ่อนไว้หลังปุ่ม
+            const rest = coaches.slice(1);
+            const others = showAllCoaches ? rest : rest.slice(0, 3);
+            const hiddenCount = rest.length - others.length;
             const headImg = head.home_image || head.profile_picture;
             const headName =
               head.nickname ||
               [head.firstName, head.lastName].filter(Boolean).join(" ") ||
               `โค้ช #${head.id}`;
-            const headRole =
-              head.specialization ? `หัวหน้าผู้ฝึกสอน · ระดับ ${head.specialization}` : "หัวหน้าผู้ฝึกสอน";
-            // ตาราง label/value ของ head coach — แสดงเฉพาะฟิลด์ที่มีข้อมูลจริง
+
+            // specialization เก็บ "ระดับ" ของโค้ช (S / P) ไม่ใช่ความถนัด
+            // เดิมเอาฟิลด์เดียวไปแสดงทั้งบรรทัดบทบาทและแถว "ความถนัด" จึงขึ้นซ้ำสองที่
             const headDetails = [
               head.coach_license && { label: "ใบรับรอง", value: head.coach_license },
-              head.specialization && { label: "ความถนัด", value: head.specialization },
+              head.specialization && { label: "ระดับ", value: head.specialization },
             ].filter(Boolean) as { label: string; value: string }[];
 
             return (
               <>
                 {/* แถวหัว: หัวข้อ + lead ซ้าย / กลุ่มสถิติ 3 ช่องขวา */}
-                <div className="mb-8 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+                <div className="mb-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
                   <div className="flex flex-col gap-4">
                     <SectionHeading
                       title={content?.coaches_title || "โค้ชของเรา"}
@@ -484,8 +494,10 @@ export default function Home() {
                   </div>
                   <div className="flex flex-none divide-x divide-gray-200 border-y border-gray-200">
                     {coachStats.map((s, i) => (
-                      <div key={i} className="flex flex-col gap-1 px-5 py-3">
-                        <span className="text-lg font-medium" style={{ color: ACCENT }}>{s.value}</span>
+                      <div key={i} className="flex flex-col gap-1 px-5 py-3.5">
+                        <span className="text-xl font-medium leading-none" style={{ color: ACCENT }}>
+                          {s.value}
+                        </span>
                         <span className="text-[11px] font-light leading-snug text-gray-500">{s.label}</span>
                       </div>
                     ))}
@@ -493,114 +505,166 @@ export default function Home() {
                 </div>
 
                 {/* บล็อกหลัก: head coach (ซ้าย) + แถวโค้ชอื่น (ขวา) คั่นด้วย gutter 1px */}
-                <div className="grid grid-cols-1 gap-px bg-gray-200 md:grid-cols-[1.25fr_1fr]">
+                <div
+                  className={`grid grid-cols-1 gap-px bg-gray-200 ${
+                    others.length > 0 ? "md:grid-cols-[1.25fr_1fr]" : ""
+                  }`}
+                >
                   {/* head coach */}
-                  <div className="grid grid-cols-1 gap-6 bg-gray-50 pb-6 sm:grid-cols-[200px_1fr] md:pr-6 md:[grid-template-columns:280px_1fr]">
-                    <div className="aspect-[3/4] w-full overflow-hidden bg-gray-100">
+                  <div className="group/head grid grid-cols-1 gap-6 bg-gray-50 pb-6 sm:grid-cols-[200px_1fr] md:pr-8 md:[grid-template-columns:280px_1fr]">
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100 sm:aspect-[3/4]">
                       {headImg ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={headImg} alt={headName} className="h-full w-full object-cover" />
+                        <img
+                          src={headImg}
+                          alt={headName}
+                          className="h-full w-full object-cover object-top transition duration-700 group-hover/head:scale-[1.03]"
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-gray-300">
                           <UserRound className="h-16 w-16" />
                         </div>
                       )}
-                    </div>
-                    <div className="flex flex-col gap-3 pt-1 sm:pt-5">
-                      <span className="text-[11px] font-light tracking-[0.18em]" style={{ color: ACCENT }}>
+                      {/* ป้ายมุมภาพ — รูปใหญ่จะได้ไม่ลอยเปล่า ๆ และบอกลำดับความสำคัญทันที */}
+                      <span
+                        className="absolute left-0 top-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-white"
+                        style={{ backgroundColor: ACCENT }}
+                      >
                         HEAD COACH
                       </span>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-2xl font-medium tracking-tight text-gray-900">{headName}</span>
-                        <span className="text-[13px] font-light text-gray-500">{headRole}</span>
+                    </div>
+
+                    <div className="flex flex-col gap-3 pt-1 sm:pt-6">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[28px] font-medium leading-tight tracking-tight text-gray-900">
+                          {headName}
+                        </span>
+                        <span className="text-[13px] font-light text-gray-500">หัวหน้าผู้ฝึกสอน</span>
                       </div>
+
                       {head.bio?.trim() && (
                         <p className="max-w-prose whitespace-pre-line text-[13.5px] font-light leading-relaxed text-gray-600">
                           {head.bio}
                         </p>
                       )}
+
                       {headDetails.length > 0 && (
-                        <div className="flex flex-col gap-2 border-t border-gray-200 pt-3">
+                        <dl className="mt-1 flex flex-col divide-y divide-gray-200 border-y border-gray-200">
                           {headDetails.map((d) => (
-                            <div key={d.label} className="flex gap-4">
-                              <span className="w-[78px] flex-none text-[11.5px] font-light tracking-[0.06em] text-gray-400">
+                            <div key={d.label} className="flex items-baseline gap-4 py-2.5">
+                              <dt className="w-[78px] flex-none text-[11.5px] font-light tracking-[0.06em] text-gray-400">
                                 {d.label}
-                              </span>
-                              <span className="text-[13px] font-light text-gray-700">{d.value}</span>
+                              </dt>
+                              <dd className="text-[13px] font-normal text-gray-800">{d.value}</dd>
                             </div>
                           ))}
-                        </div>
+                        </dl>
                       )}
+
                       <button
                         type="button"
                         onClick={() => setSelectedCoach(head)}
-                        className="mt-2 w-fit border border-gray-300 px-5 py-2.5 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                        className="group/cta mt-2 inline-flex w-fit items-center gap-2 border border-gray-300 px-5 py-2.5 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:bg-[#CC0000] hover:text-white"
                       >
                         จองคลาสกับโค้ชคนนี้
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/cta:translate-x-0.5" />
                       </button>
                     </div>
                   </div>
 
-                  {/* โค้ชอื่น */}
-                  <div className="flex flex-col justify-center bg-gray-50 md:pl-6">
-                    {others.length === 0 ? (
-                      <p className="py-8 text-sm font-light text-gray-400">ยังไม่มีโค้ชเพิ่มเติม</p>
-                    ) : (
-                      others.map((coach) => {
+                  {/* โค้ชอื่น — แต่ละแถว flex-1 เพื่อยืดเต็มความสูงของคอลัมน์ซ้าย
+                      ไม่งั้นเวลามีโค้ชน้อยกว่าที่ดีไซน์เผื่อไว้ จะเหลือที่ว่างยาวใต้แถวสุดท้าย */}
+                  {others.length > 0 && (
+                    <div className="flex flex-col bg-gray-50 md:pl-8">
+                      {others.map((coach, i) => {
                         const img = coach.home_image || coach.profile_picture;
                         const name =
                           coach.nickname ||
                           [coach.firstName, coach.lastName].filter(Boolean).join(" ") ||
                           `โค้ช #${coach.id}`;
-                        const role = coach.specialization
-                          ? `ระดับ ${coach.specialization}`
-                          : coach.coach_license || "ผู้ฝึกสอน";
                         return (
                           <button
                             key={coach.id}
                             type="button"
                             onClick={() => setSelectedCoach(coach)}
-                            className="group flex items-start gap-4 border-b border-gray-200 py-4 text-left last:border-b-0"
+                            className="group flex flex-1 items-center gap-5 border-b border-gray-200 py-5 text-left transition-colors last:border-b-0 hover:bg-white"
                           >
-                            <div className="aspect-square w-[76px] flex-none overflow-hidden bg-gray-100">
+                            <div className="aspect-square w-[84px] flex-none overflow-hidden bg-gray-100">
                               {img ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={img} alt={name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                                <img
+                                  src={img}
+                                  alt={name}
+                                  className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-105"
+                                />
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center text-gray-300">
                                   <UserRound className="h-8 w-8" />
                                 </div>
                               )}
                             </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="text-base font-medium text-gray-900 transition-colors group-hover:text-[#CC0000]">
-                                {name}
+
+                            <div className="flex min-w-0 flex-col gap-1.5">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="text-base font-medium text-gray-900 transition-colors group-hover:text-[#CC0000]">
+                                  {name}
+                                </span>
+                                {coach.specialization && (
+                                  <span
+                                    className="border px-1.5 py-0.5 text-[10px] font-light leading-none"
+                                    style={{ color: ACCENT, borderColor: ACCENT }}
+                                  >
+                                    ระดับ {coach.specialization}
+                                  </span>
+                                )}
                               </span>
-                              <span className="text-xs font-light" style={{ color: ACCENT }}>{role}</span>
+                              {coach.coach_license?.trim() && (
+                                <span className="text-[11.5px] font-light text-gray-400">
+                                  {coach.coach_license}
+                                </span>
+                              )}
                               {coach.bio?.trim() && (
                                 <span className="line-clamp-2 text-[12.5px] font-light leading-relaxed text-gray-500">
                                   {coach.bio}
                                 </span>
                               )}
                             </div>
+
+                            {/* เลขลำดับ + ลูกศร บอกว่าแถวกดได้ */}
+                            <span className="ml-auto flex flex-none items-center gap-3 self-start pt-1">
+                              <span className="text-[11px] font-light tabular-nums text-gray-300">
+                                {String(i + 2).padStart(2, "0")}
+                              </span>
+                              <ArrowUpRight className="h-4 w-4 text-gray-300 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#CC0000]" />
+                            </span>
                           </button>
                         );
-                      })
-                    )}
-                  </div>
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* แถวปิดท้าย */}
-                <div className="flex flex-col items-start gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-[12.5px] font-light text-gray-400">
                     {content?.coaches_note || "โค้ชทุกคนผ่านการตรวจประวัติอาชญากรรมและอบรมการปฐมพยาบาลเบื้องต้น"}
                   </span>
-                  <a
-                    href="#coaches"
-                    className="border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-                  >
-                    ดูโค้ชทั้ง {coaches.length} คน
-                  </a>
+                  {/* โชว์ปุ่มเฉพาะตอนมีคนที่ยังไม่ได้แสดง — เดิมเป็นลิงก์ #coaches
+                      ซึ่งชี้กลับมาที่ section ตัวเอง กดแล้วไม่ไปไหน */}
+                  {(hiddenCount > 0 || showAllCoaches) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCoaches((v) => !v)}
+                      className="group inline-flex items-center gap-2 border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                    >
+                      {showAllCoaches ? "ย่อรายชื่อโค้ช" : `ดูโค้ชทั้ง ${coaches.length} คน`}
+                      <ArrowRight
+                        className={`h-3.5 w-3.5 transition-transform ${
+                          showAllCoaches ? "-rotate-90" : "group-hover:translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  )}
                 </div>
               </>
             );
