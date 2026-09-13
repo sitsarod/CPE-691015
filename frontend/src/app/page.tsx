@@ -115,6 +115,31 @@ export default function Home() {
   const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น
   const [selectedNews, setSelectedNews] = useState<Announcement | null>(null); // ประกาศที่กดอ่าน
 
+  // ล็อกการเลื่อนของหน้าข้างหลังตอนเปิด modal
+  //
+  // ถ้าไม่ล็อก หมุนล้อบน modal แล้วพอเนื้อหาใน modal สุดทาง เบราว์เซอร์จะส่งต่อ
+  // ไปเลื่อนหน้าข้างหลังแทน (scroll chaining) ปิด modal มาอีกทีอยู่คนละที่กับตอนกด
+  //
+  // ⚠️ ต้องชดเชยความกว้าง scrollbar ด้วย ไม่งั้นตอนซ่อน scrollbar เนื้อหาทั้งหน้า
+  // จะกระตุกไปทางขวา 8px (เว็บนี้ตั้ง ::-webkit-scrollbar ไว้ 8px ใน globals.css)
+  const isOverlayOpen = Boolean(
+    selectedCoach || selectedNews || facilityLightbox || isGalleryOpen || isFacilityOpen
+  );
+  useEffect(() => {
+    if (!isOverlayOpen) return;
+
+    const { overflow, paddingRight } = document.body.style;
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (gap > 0) document.body.style.paddingRight = `${gap}px`;
+
+    return () => {
+      document.body.style.overflow = overflow;
+      document.body.style.paddingRight = paddingRight;
+    };
+  }, [isOverlayOpen]);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -476,12 +501,27 @@ export default function Home() {
               <p className="py-12 text-center font-light text-[#8c8681]">เร็วๆ นี้</p>
             </>
           ) : (() => {
-            // ยังไม่กาง = โชว์ 3 คนแรก ที่เหลือซ่อนไว้หลังปุ่ม
-            const display = showAllCoaches ? coaches : coaches.slice(0, 3);
+            // โชว์ได้ถึง 2 แถวเต็ม (6 คน) เกินกว่านั้นค่อยซ่อนหลังปุ่ม
+            // โรงเรียนส่วนใหญ่มีโค้ชไม่ถึง 6 คน = เห็นครบทุกคนโดยไม่ต้องกดอะไร
+            const VISIBLE = 6;
+            const display = showAllCoaches ? coaches : coaches.slice(0, VISIBLE);
             const hiddenCount = coaches.length - display.length;
 
-            // เหลื่อมการ์ดให้เป็นจังหวะ — ต้องเป็นคลาสเต็มสตริง Tailwind ถึงจะเก็บไปคอมไพล์
-            const OFFSET = ["md:mt-0", "md:mt-14", "md:mt-6"];
+            // จำนวนคอลัมน์: ปกติ 3 แต่ถ้าหารแล้วเหลือเศษ 1 ให้ใช้ 4 แทน
+            // เพราะเศษ 1 = แถวสุดท้ายมีการ์ดใบเดียวลอยอยู่กลางช่องว่างกว้าง ๆ
+            // (4 คน → 4 คอลัมน์แถวเดียว · 7 คน → 4+3 · 10 คน → 4+4+2)
+            const useFour = display.length > 3 && display.length % 3 === 1;
+            const cols = useFour ? 4 : 3;
+
+            // ต้องเป็นคลาสเต็มสตริง Tailwind ถึงจะเก็บไปคอมไพล์ ต่อสตริงเองไม่ได้
+            const BASIS = useFour
+              ? "md:basis-[calc(25%-21px)]"
+              : "md:basis-[calc(33.333%-18.667px)]";
+
+            // เหลื่อมการ์ดตามตำแหน่งในแถว — 4 คอลัมน์การ์ดแคบกว่า ระยะเหลื่อมจึงสั้นลง
+            const OFFSET = useFour
+              ? ["md:mt-0", "md:mt-10", "md:mt-4", "md:mt-12"]
+              : ["md:mt-0", "md:mt-14", "md:mt-6"];
 
             return (
               <>
@@ -514,7 +554,11 @@ export default function Home() {
                 </div>
 
                 {/* การ์ดโค้ช — เหลื่อมกันบนจอกว้าง เรียงตรงบนจอเล็ก */}
-                <div className="grid grid-cols-1 items-start gap-7 sm:grid-cols-2 md:grid-cols-3">
+                {/* ⚠️ flex-wrap + justify-center ไม่ใช่ grid โดยตั้งใจ
+                    grid จะดันการ์ดของแถวสุดท้ายไปชิดซ้ายแล้วเหลือช่องว่างข้างเดียว
+                    เช่นมีโค้ช 4 คน = แถวสองมีใบเดียวลอยอยู่ซ้ายสุด ดูเหมือนโหลดไม่ครบ
+                    flex จัดกลางให้แทน แถวไหนไม่เต็มก็ยังดูตั้งใจ */}
+                <div className="flex flex-wrap items-start justify-center gap-7">
                   {display.map((coach, i) => {
                     const img = coach.home_image || coach.profile_picture;
                     const name =
@@ -529,7 +573,7 @@ export default function Home() {
                         key={coach.id}
                         type="button"
                         onClick={() => setSelectedCoach(coach)}
-                        className={`group flex flex-col text-left ${OFFSET[i % 3]}`}
+                        className={`group flex basis-full flex-col text-left sm:basis-[calc(50%-14px)] ${BASIS} ${OFFSET[i % cols]}`}
                       >
                         <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#262220]">
                           {img ? (
@@ -545,15 +589,12 @@ export default function Home() {
                             </div>
                           )}
 
-                          {/* ไล่เฉดล่างไว้กันชื่อจมกับภาพตอน hover */}
-                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-
-                          <span
-                            className="absolute right-3.5 top-2.5 text-[58px] font-bold leading-none"
-                            style={{ color: isHead ? COACH_ACCENT : "rgba(255,255,255,0.14)" }}
-                          >
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
+                          {/* ⚠️ ไล่เฉดนี้ต้องติดอยู่ตลอด ไม่ใช่เฉพาะตอน hover
+                              รูปโค้ชมาจากหลายแหล่ง บางใบพื้นขาวล้วน วางบนแถบเข้มแล้วเป็น
+                              บล็อกขาวโพลนตัดกันแรงมาก เฉดนี้ทำให้ขอบล่างจมเข้าหาพื้นแถบ
+                              รูปที่เข้มอยู่แล้วจะแทบไม่เห็นความต่าง */}
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#141210] via-[#141210]/45 to-transparent" />
+                          <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/15" />
 
                           {isHead && (
                             <span
@@ -569,7 +610,17 @@ export default function Home() {
                           className="flex flex-col gap-2 pt-4"
                           style={{ borderTop: isHead ? `2px solid ${COACH_ACCENT}` : "1px solid #2e2a27" }}
                         >
-                          <span className="text-2xl font-semibold leading-tight text-white">{name}</span>
+                          {/* เลขลำดับเคยวางทับรูป ซึ่งคอนทราสต์ขึ้นอยู่กับรูปล้วน ๆ
+                              เจอจริงคือ 03 บนรูปพื้นขาวหายสนิท ย้ายมาไว้บนพื้นแถบแทน */}
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-2xl font-semibold leading-tight text-white">{name}</span>
+                            <span
+                              className="flex-none text-[34px] font-bold leading-none"
+                              style={{ color: isHead ? COACH_ACCENT : "rgba(255,255,255,0.16)" }}
+                            >
+                              {String(i + 1).padStart(2, "0")}
+                            </span>
+                          </div>
                           <span className="text-xs font-light" style={{ color: COACH_ACCENT }}>
                             {role}
                             {coach.specialization ? ` · ระดับ ${coach.specialization}` : ""}
@@ -1062,8 +1113,9 @@ export default function Home() {
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setSelectedCoach(null)}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            {/* overscroll-contain กันล้อเลื่อนทะลุไปหาหน้าข้างหลังตอนเนื้อหาในนี้สุดทาง */}
             <div
-              className="relative max-h-[90vh] w-full max-w-md overflow-y-auto bg-white shadow-xl"
+              className="relative max-h-[90vh] w-full max-w-md overflow-y-auto overscroll-contain bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
               style={kanitFont}
             >
