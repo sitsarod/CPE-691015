@@ -202,6 +202,8 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.GET("/users", userController.GetAllUsersController)
 			adminUserGroup.GET("/role", userController.GetUserByRoleController)
 			adminUserGroup.GET("/students", userController.GetActiveStudentsController)
+			adminUserGroup.GET("/students/media-summary", evaluationController.GetActiveStudentsMediaSummary) // แอดมิน: รายชื่อนักเรียน+จำนวนรูป/วิดีโอที่ถูกแท็ก (ลิสต์โฟลเดอร์เสมือน)
+			adminUserGroup.GET("/students/:customer_id/posts", photoPostController.AdminGetStudentPosts)      // แอดมิน: รูป/วิดีโอที่นักเรียนคนนี้ถูกแท็กไว้ (ดูแยกรายคน)
 			adminUserGroup.POST("/users", userController.AdminCreateUserController)
 
 			adminUserGroup.GET("/users/:id", userController.AdminGetUserDetailController)

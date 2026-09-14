@@ -347,15 +347,45 @@ func (ctrl *PhotoPostController) GetMyPosts(c *gin.Context) {
 		return
 	}
 
-	photos, err := ctrl.photoPostService.GetDetectedPhotosByStudentID(customerID)
+	posts, err := ctrl.buildPostItems(customerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	videos, err := ctrl.videoService.GetDetectedVideosByStudentID(customerID)
+
+	c.JSON(http.StatusOK, gin.H{"data": posts})
+}
+
+// AdminGetStudentPosts handles GET /api/admin/students/:customer_id/posts
+//
+// เหมือน GetMyPosts ทุกอย่าง ต่างกันแค่ระบุ customer_id ผ่าน URL แทนการ resolve จาก JWT ของ
+// ผู้ล็อกอิน — ให้แอดมินดูรูป/วิดีโอที่นักเรียนคนไหนก็ได้ถูกแท็กไว้ (จัดกลุ่มดูทีละคนแทนที่จะกอง
+// ปนกันทั้งหมด — ไม่มีการ copy ไฟล์จริงไปแยกโฟลเดอร์ ยังเก็บที่เดิมบน storage เหมือนเดิม)
+func (ctrl *PhotoPostController) AdminGetStudentPosts(c *gin.Context) {
+	customerID, ok := uintParam(c, "customer_id", "รหัสนักเรียน")
+	if !ok {
+		return
+	}
+
+	posts, err := ctrl.buildPostItems(customerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": posts})
+}
+
+// buildPostItems รวมรูป+วิดีโอที่นักเรียนคนนี้ถูกแท็กไว้เป็นลิสต์เดียว เรียงล่าสุดก่อน — ใช้ร่วมกัน
+// ทั้ง GetMyPosts (ของตัวเอง) และ AdminGetStudentPosts (แอดมินดูของคนอื่น) กันตรรกะรวม/เรียงซ้ำสองที่
+func (ctrl *PhotoPostController) buildPostItems(customerID uint) ([]dto.PostItem, error) {
+	photos, err := ctrl.photoPostService.GetDetectedPhotosByStudentID(customerID)
+	if err != nil {
+		return nil, err
+	}
+	videos, err := ctrl.videoService.GetDetectedVideosByStudentID(customerID)
+	if err != nil {
+		return nil, err
 	}
 
 	posts := make([]dto.PostItem, 0, len(photos)+len(videos))
@@ -366,6 +396,5 @@ func (ctrl *PhotoPostController) GetMyPosts(c *gin.Context) {
 		posts = append(posts, dto.PostItem{ID: v.ID, Type: "video", RawID: v.RawVideoID, CreatedAt: v.CreatedAt})
 	}
 	sort.Slice(posts, func(i, j int) bool { return posts[i].CreatedAt.After(posts[j].CreatedAt) })
-
-	c.JSON(http.StatusOK, gin.H{"data": posts})
+	return posts, nil
 }
