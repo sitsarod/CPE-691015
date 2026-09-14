@@ -26,6 +26,8 @@ export interface CoursePackageDTO {
   current_enrollments?: number;
   price: number;
   duration_days?: number;
+  // แพ็กเกจทดลองเรียนฟรี — 1 ครั้ง ราคา 0 สมัครได้ครั้งเดียวต่อคนต่อคอร์ส
+  is_trial?: boolean;
   schedules: PackageScheduleInfoDTO[];
 }
 
@@ -70,6 +72,7 @@ export interface CreatePackageReq {
   max_seats: number;
   price: number;
   duration_days?: number;
+  is_trial?: boolean;
   schedules: PackageScheduleInfoDTO[];
 }
 
@@ -79,6 +82,7 @@ export interface UpdatePackageReq {
   max_seats?: number;
   price?: number;
   duration_days?: number;
+  is_trial?: boolean;
   schedules?: PackageScheduleInfoDTO[];
 }
 
@@ -100,5 +104,6 @@ export interface PackageFormInput {
   max_seats: number | "";
   price: number | "";
   duration_days: number | "";
+  is_trial?: boolean;
   schedules: ScheduleFormInput[];
 }

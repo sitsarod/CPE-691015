@@ -28,6 +28,7 @@ export default function CourseSummaryCard({
   const packages = course.packages ?? [];
   const outcomes = course.learning_outcomes ?? [];
   const range = priceRange(packages);
+  const hasTrial = packages.some((p) => p.is_trial);
 
   const groupSizes = packages.map(seatsTotal).filter((n) => n > 0);
   const smallestGroup = groupSizes.length > 0 ? Math.min(...groupSizes) : 0;
@@ -86,6 +87,11 @@ export default function CourseSummaryCard({
               <Layers className="h-3.5 w-3.5" />
               {packages.length} แพ็กเกจ
             </span>
+            {hasTrial && (
+              <span className="inline-flex items-center font-semibold text-[#CC0000]">
+                ทดลองเรียนฟรี
+              </span>
+            )}
             {smallestGroup > 0 && (
               <span className="inline-flex items-center gap-1.5">
                 <Users2 className="h-3.5 w-3.5" />

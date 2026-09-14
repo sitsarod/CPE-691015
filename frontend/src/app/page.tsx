@@ -26,7 +26,8 @@ const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as 
 
 // แพ็กเกจตัวแทนของคอร์ส = ราคาถูกสุดที่ตั้งราคาแล้ว (ถ้าไม่มีก็ใช้ตัวแรก)
 function representativePackage(course: CourseDTO): CoursePackageDTO | null {
-  const pkgs = course.packages ?? [];
+  // แพ็กเกจทดลอง (1 ครั้ง ราคา 0) ไม่ใช่ตัวแทนของคอร์ส — จะทำให้ขึ้น "เริ่มต้น 1 ครั้ง"
+  const pkgs = (course.packages ?? []).filter((p) => !p.is_trial);
   if (pkgs.length === 0) return null;
   const priced = pkgs.filter((p) => p.price > 0);
   const pool = priced.length > 0 ? priced : pkgs;
