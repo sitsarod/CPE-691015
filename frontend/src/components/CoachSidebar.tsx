@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Clock, Wallet, UserCircle, Users, ListTodo, Star, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
+import { Home, Calendar, Clock, Wallet, UserCircle, Camera, ListTodo, Star, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 
 const navItems = [
   { href: "/coach/dashboard", icon: <Home />, label: "หน้าแรก" },
   { href: "/coach/schedule", icon: <Calendar />, label: "ตารางงาน" },
   { href: "/coach/availability", icon: <Clock />, label: "เวลาว่าง" },
   { href: "/coach/evalution", icon: <ListTodo />, label: "ประเมินผู้เรียน" },
-  { href: "/coach/detect", icon: <Users />, label: "จำแนกผู้เรียน" },
+  { href: "/coach/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
   { href: "/coach/feedback", icon: <Star />, label: "รีวิวของฉัน" },
   { href: "/coach/payment", icon: <Wallet />, label: "การเงิน" },
 ];

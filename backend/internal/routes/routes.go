@@ -255,6 +255,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			evaluationGroup.POST("", evaluationController.CreateEvaluation)
 			evaluationGroup.GET("/students", evaluationController.GetMyStudents) // โค้ช: รายชื่อนักเรียนของตัวเอง (?course_id= กรองเฉพาะคอร์ส)
+			evaluationGroup.GET("/students/all", evaluationController.GetAllActiveStudents) // โค้ช/แอดมิน: นักเรียนทั้งโรงเรียน (ใช้ตอนแท็กรูป/วิดีโอ)
 			evaluationGroup.GET("/courses", evaluationController.GetMyCourses)   // โค้ช: รายชื่อคอร์สที่ตัวเองสอน
 			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
 			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations) // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้

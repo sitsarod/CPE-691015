@@ -16,6 +16,13 @@ export async function fetchMyCourses(): Promise<EvaluableCourse[]> {
   return res.data ?? [];
 }
 
+// [GET] รายชื่อนักเรียนที่ลงทะเบียนเรียนอยู่จริงทั้งโรงเรียน ไม่กรองตามโค้ช/คอร์ส (โค้ชหรือแอดมิน)
+// ใช้ตอนแท็กนักเรียนในรูป/วิดีโอ (หน้า coach/detect) เพราะคนอัปโหลดอาจไม่ใช่คนสอนคอร์สนั้นก็ได้
+export async function fetchAllActiveStudents(): Promise<EvaluableStudent[]> {
+  const res = await apiFetch<{ data: EvaluableStudent[] }>("/evaluations/students/all");
+  return res.data ?? [];
+}
+
 // [GET] ประวัติการประเมินทั้งหมดที่โค้ชที่ล็อกอินอยู่เคยให้ไว้ (ทุกนักเรียน)
 export async function fetchMyGivenEvaluations(): Promise<Evaluation[]> {
   const res = await apiFetch<{ data: Evaluation[] }>("/evaluations/me/given");
