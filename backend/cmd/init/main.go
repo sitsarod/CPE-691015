@@ -24,7 +24,7 @@ func main() {
 	if dsn == "" {
 		log.Fatal("กรุณาตั้งค่า DATABASE_URL ในไฟล์ .env ด้วยซะล่ะ!")
 	}
-	
+
 	// เชื่อมต่อฐานข้อมูล
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -33,7 +33,7 @@ func main() {
 	fmt.Println("เชื่อมต่อสำเร็จแล้ว!")
 	// 2. clear database and auto migrate models
 	db.Exec("DROP SCHEMA public CASCADE;")
-    db.Exec("CREATE SCHEMA public;")
+	db.Exec("CREATE SCHEMA public;")
 
 	// ต้องเปิดใหม่ทุกครั้ง เพราะ DROP SCHEMA ลบ extension ไปด้วย และต้องมาก่อน AutoMigrate
 	if err := services.EnableVectorExtension(db); err != nil {
@@ -78,6 +78,7 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.PasswordResetOTP{},
+		&models.EmailVerificationOTP{},
 		&models.Court{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
@@ -144,6 +145,10 @@ func main() {
 	seedHomeContent(db)
 	seedHeroSlides(db)
 	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
+
+	// บัญชีที่ seed ไว้ข้างบนสร้างตรงด้วย tx.Create ไม่ได้ผ่าน UserService.CreateUser
+	// จึงไม่มี email_verified_at ติดมา — ปักให้ครบตรงนี้ที่เดียว ไม่งั้น login ไม่ได้เลย
+	if err := services.BackfillEmailVerifiedForExistingUsers(db); err != nil {
+		log.Fatalf("%v", err)
+	}
 }
-
-

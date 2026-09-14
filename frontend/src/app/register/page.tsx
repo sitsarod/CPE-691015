@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Button from "@/components/Button";
 import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
+import DateField, { maxDateForMinAge } from "@/components/DateField";
 import { registerAPI } from "@/services/authAPI";
-import { saveSession } from "@/services/session";
 
 export default function RegisterPage() {
   const router = useRouter(); 
@@ -21,8 +21,16 @@ export default function RegisterPage() {
     parentEmail: "", parentPhoneNumber: "",
   });
 
+  const maxBirthDate = maxDateForMinAge(3);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // ตัดอักขระที่ไม่ใช่ตัวเลขทิ้งทันทีที่พิมพ์
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setFormData({ ...formData, [e.target.name]: digitsOnly });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,14 +60,32 @@ export default function RegisterPage() {
       newErrors.password = "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
     } else if (new TextEncoder().encode(formData.password).length > 72) {
       newErrors.password = "รหัสผ่านยาวเกินไป (ภาษาอังกฤษไม่เกิน 72 ตัว หรือภาษาไทยไม่เกิน 24 ตัว)";
+    } else if (!/\d/.test(formData.password)) {
+      newErrors.password = "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว";
     }
 
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน";
     }
 
-    if (formData.phoneNumber.length !== 10) {
-      newErrors.phoneNumber = "กรุณาระบุหมายเลขโทรศัพท์มือถือให้ครบ 10 หลัก";
+    if (!/^0\d{9}$/.test(formData.phoneNumber)) {
+      newErrors.phoneNumber = "กรุณาระบุหมายเลขโทรศัพท์มือถือให้ครบ 10 หลัก ขึ้นต้นด้วย 0";
+    }
+
+    if (formData.parentPhoneNumber && !/^0\d{9}$/.test(formData.parentPhoneNumber)) {
+      newErrors.parentPhoneNumber = "กรุณาระบุหมายเลขโทรศัพท์ให้ครบ 10 หลัก ขึ้นต้นด้วย 0";
+    }
+
+    if (formData.birthDate) {
+      const birthDate = new Date(formData.birthDate);
+      const now = new Date();
+      const minBirthDate = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+
+      if (birthDate > now) {
+        newErrors.birthDate = "วันเกิดต้องไม่ใช่วันที่ในอนาคต";
+      } else if (birthDate > minBirthDate) {
+        newErrors.birthDate = "อายุต้องไม่ต่ำกว่า 3 ปี";
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -70,12 +96,12 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const data = await registerAPI({
+      await registerAPI({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
         password: formData.password,
-        role: "customer", 
+        role: "customer",
         customer: {
           nickname: formData.nickname,
           gender: formData.gender,
@@ -88,12 +114,8 @@ export default function RegisterPage() {
         }
       });
 
-      // ใช้ตัวเดียวกับหน้าเข้าสู่ระบบ — เดิมตรงนี้ลืมเขียน lastName
-      // ทำให้แถบเมนูด้านข้างแสดงแค่ชื่อต้นหลังสมัครเสร็จ
-      saveSession(data);
-
-      router.push("/login");
-      router.refresh();
+      // ยังเข้าระบบไม่ได้ทันที — ต้องยืนยันอีเมลด้วย OTP ที่ส่งไปให้ก่อน
+      router.push(`/register/verify?email=${encodeURIComponent(formData.email)}`);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลงทะเบียน");
     } finally {
@@ -137,9 +159,11 @@ export default function RegisterPage() {
             options={[{ label: "ชาย", value: "male" }, { label: "หญิง", value: "female" }]} 
           />
 
-          <InputField 
-            label="วันเกิด" name="birthDate" type="date" required onChange={handleChange} 
-            error={errors.birthDate} 
+          <DateField
+            label="วันเกิด" name="birthDate" required
+            value={formData.birthDate}
+            onChange={(val) => setFormData({ ...formData, birthDate: val })}
+            max={maxBirthDate} error={errors.birthDate}
           />
 
           <InputField 
@@ -157,9 +181,11 @@ export default function RegisterPage() {
             error={errors.confirmPassword} containerClassName="w-full sm:w-[calc(50%-0.75rem)]" 
           />
 
-          <InputField 
-            label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" placeholder="ระบุหมายเลขโทรศัพท์มือถือ (10 หลัก)" required onChange={handleChange} 
-            error={errors.phoneNumber} 
+          <InputField
+            label="หมายเลขโทรศัพท์มือถือ" name="phoneNumber" placeholder="ระบุหมายเลขโทรศัพท์มือถือ (10 หลัก ขึ้นต้นด้วย 0)"
+            inputMode="numeric" maxLength={10} value={formData.phoneNumber}
+            required onChange={handlePhoneChange}
+            error={errors.phoneNumber}
           />
 
           <InputField
@@ -177,9 +203,11 @@ export default function RegisterPage() {
             error={errors.parentEmail}
           />
 
-          <InputField 
-            label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง" onChange={handleChange} 
-            error={errors.parentPhoneNumber} 
+          <InputField
+            label="หมายเลขโทรศัพท์ผู้ปกครอง (ถ้ามี)" name="parentPhoneNumber" placeholder="ระบุหมายเลขโทรศัพท์ผู้ปกครอง (10 หลัก ขึ้นต้นด้วย 0)"
+            inputMode="numeric" maxLength={10} value={formData.parentPhoneNumber}
+            onChange={handlePhoneChange}
+            error={errors.parentPhoneNumber}
           />
 
           <div className="flex justify-end space-x-3 w-full mt-6 pt-4 border-t border-gray-100">

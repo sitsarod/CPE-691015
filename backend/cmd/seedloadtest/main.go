@@ -106,11 +106,12 @@ func seedClassLoadTest(db *gorm.DB) {
 		email := fmt.Sprintf("loadtest%d@gmail.com", n)
 		err := db.Transaction(func(tx *gorm.DB) error {
 			user := models.User{
-				FirstName: "โหลดเทสต์",
-				LastName:  fmt.Sprintf("คนที่ %d", n),
-				Email:     email,
-				Password:  string(hashed),
-				Role:      models.CustomerRole,
+				FirstName:       "โหลดเทสต์",
+				LastName:        fmt.Sprintf("คนที่ %d", n),
+				Email:           email,
+				Password:        string(hashed),
+				Role:            models.CustomerRole,
+				EmailVerifiedAt: &now,
 			}
 			if err := tx.Create(&user).Error; err != nil {
 				return err
