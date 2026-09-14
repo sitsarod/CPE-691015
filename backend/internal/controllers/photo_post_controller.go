@@ -46,7 +46,8 @@ func NewPhotoPostController(
 
 // UploadPhotoPost handles POST /api/photo-posts
 //
-// โค้ช/แอดมินอัปโหลดรูป แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในรูปบ้าง (ถ้าส่ง course_id มา)
+// โค้ช/แอดมินอัปโหลดรูป แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในรูปบ้าง (เทียบกับนักเรียนทั้งโรงเรียน
+// ไม่ต้องเลือกคอร์สก่อน — ดูเหตุผลที่ FaceTaggingService.DetectStudentsInPhoto)
 // ⚠️ ผลที่คืนไปเป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง — ต้องผ่าน AssignStudentsToPhoto อีกที
 func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
@@ -65,17 +66,6 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	if err != nil {
 		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
-	}
-
-	// course_id ไม่บังคับ — ไม่ส่งมาก็อัปโหลดได้ปกติ แค่ไม่มีการจำแนกให้
-	var courseID uint
-	if raw := c.PostForm("course_id"); raw != "" {
-		id, err := strconv.ParseUint(raw, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
-			return
-		}
-		courseID = uint(id)
 	}
 
 	file, err := fh.Open()
@@ -124,20 +114,19 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 
 	// จำแนกใบหน้าแบบ best-effort — face-service ล่มหรือยังไม่ตั้งค่า ต้องไม่ทำให้อัปโหลดล้มเหลว
 	// (หลักการเดียวกับเช็คชื่อที่ยังใช้ QR ต่อได้เมื่อระบบใบหน้าใช้ไม่ได้) โค้ชแท็กเองได้อยู่แล้ว
-	if courseID != 0 && role == "coach" {
-		matches, faceCount, err := ctrl.taggingService.DetectStudentsInPhoto(c.Request.Context(), userID, courseID, raw)
-		if err != nil {
-			log.Printf("จำแนกใบหน้าในรูป raw_photo=%d ไม่สำเร็จ: %v", rawPhoto.ID, err)
-		} else {
-			resp.FaceCount = faceCount
-			for _, m := range matches {
-				resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
-					CustomerID: m.CustomerID,
-					Nickname:   m.Nickname,
-					Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
-					BBox:       m.BBox,
-				})
-			}
+	// ทำทั้งโค้ชและแอดมิน เพราะเทียบกับนักเรียนทั้งโรงเรียนแล้ว ไม่ต้องรู้ว่าใครสอนคอร์สไหน
+	matches, faceCount, err := ctrl.taggingService.DetectStudentsInPhoto(c.Request.Context(), raw)
+	if err != nil {
+		log.Printf("จำแนกใบหน้าในรูป raw_photo=%d ไม่สำเร็จ: %v", rawPhoto.ID, err)
+	} else {
+		resp.FaceCount = faceCount
+		for _, m := range matches {
+			resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
+				CustomerID: m.CustomerID,
+				Nickname:   m.Nickname,
+				Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
+				BBox:       m.BBox,
+			})
 		}
 	}
 

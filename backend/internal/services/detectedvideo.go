@@ -96,7 +96,17 @@ func (s *DetectedVideoService) ManuallyAssignStudentsToVideo(rawVideoID uint, vi
 		return nil, nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลการวิเคราะห์วิดีโอเดิมได้")
 	}
 
+	// กัน customerID ซ้ำในชุดที่ส่งมา (เช่น โค้ช reassign สอง detection คนละแถวไปเป็นคนเดียวกันโดยไม่ตั้งใจ —
+	// วิดีโอเจอคนเดิมได้หลายเฟรมอยู่แล้ว ยิ่งเสี่ยงซ้ำ) ไม่งั้นจะสร้างแท็กซ้ำหลายแถวให้นักเรียนคนเดียวกัน
+	// ในวิดีโอเดียวกัน ไปโผล่ซ้ำในฟีดโพสต์ของเขา
+	seen := make(map[uint]bool, len(customerIDs))
+
 	for _, customerID := range customerIDs {
+		if seen[customerID] {
+			continue
+		}
+		seen[customerID] = true
+
 		// ตรวจสอบว่านักเรียนมีจริงหรือไม่
 		var cust models.Customer
 		if err := s.db.First(&cust, customerID).Error; err != nil {

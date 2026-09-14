@@ -106,6 +106,36 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": responses})
 }
 
+// GetAllActiveStudents handles GET /api/evaluations/students/all
+//
+// รายชื่อนักเรียนที่ลงทะเบียนเรียนอยู่จริงทั้งโรงเรียน ไม่กรองตามโค้ช/คอร์สเลย — ใช้ตอนแท็ก
+// นักเรียนในรูป/วิดีโอ (หน้า coach/detect) เพราะคนอัปโหลดอาจไม่ใช่คนสอนคอร์สของคนในรูปนั้นก็ได้
+// เปิดให้ทั้งโค้ชและแอดมินเรียกได้ (ต่างจาก GetMyStudents ที่จำกัดแค่โค้ช)
+func (ctrl *EvaluationController) GetAllActiveStudents(c *gin.Context) {
+	_, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูรายชื่อนักเรียนทั้งหมดได้"})
+		return
+	}
+
+	students, err := ctrl.evalService.GetAllActiveStudents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	responses := make([]dto.EvaluableStudentResponse, 0, len(students))
+	for _, s := range students {
+		responses = append(responses, dto.EvaluableStudentResponse{
+			CustomerID:     s.ID,
+			Nickname:       s.Nickname,
+			ProfilePicture: s.ProfilePicture,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
 // GetMyCourses handles GET /api/evaluations/courses
 // โค้ชดึงรายชื่อคอร์สที่ตัวเองมีตารางสอนอยู่จริง — ใช้เลือกก่อนดูรายชื่อนักเรียนแยกตามคอร์ส
 func (ctrl *EvaluationController) GetMyCourses(c *gin.Context) {

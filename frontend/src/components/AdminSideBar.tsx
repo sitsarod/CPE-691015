@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, User,Users , UserCircle, Book, ListChecks, CalendarClock, MoreHorizontal, X, ScanFace } from "lucide-react";
+import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, User,Users , UserCircle, Book, ListChecks, CalendarClock, MoreHorizontal, X, ScanFace, Camera } from "lucide-react";
 
 const navItems = [
   { href: "/admin/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin/courses", icon: <ClipboardList />, label: "จัดการข้อมูลคอร์ส" },
   { href: "/admin/attendance", icon: <UserRoundCheck />, label: "เช็คชื่อ" },
   { href: "/admin/face-review", icon: <ScanFace />, label: "ตรวจสอบรูปใบหน้า" },
+  { href: "/admin/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
   { href: "/admin/feedback", icon: <MessageSquareMore />, label: "คำติชม" },
   { href: "/admin/announcements", icon: <Megaphone />, label: "ประกาศข่าวสาร" },
   { href: "/admin/studentmanagement", icon: <Users />, label: "จัดการข้อมูลนักเรียน" },
