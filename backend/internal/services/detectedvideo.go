@@ -172,8 +172,9 @@ func (s *DetectedVideoService) DeleteMyVideoTag(customerID, rawVideoID uint) err
 	return nil
 }
 
-// DeleteOldRawVideos ลบวิดีโอที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
-// เหตุผล/ลำดับการลบเหมือน DeletedPhotoService.DeleteOldRawPhotos ทุกอย่าง
+// DeleteOldRawVideos ลบวิดีโอที่ "ถึงมือนักเรียน" มานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
+// เหตุผล/ลำดับการลบเหมือน DeletedPhotoService.DeleteOldRawPhotos ทุกอย่าง (นับอายุจากตอนถูกแท็ก
+// เข้าโปรไฟล์ ไม่ใช่ตอนอัปโหลดดิบ — ดูเหตุผลเต็มที่นั่น)
 func (s *DetectedVideoService) DeleteOldRawVideos(olderThan time.Duration) (int64, error) {
 	if s.mediaStorage == nil {
 		return 0, nil
@@ -181,9 +182,32 @@ func (s *DetectedVideoService) DeleteOldRawVideos(olderThan time.Duration) (int6
 
 	cutoff := time.Now().Add(-olderThan)
 
-	var videos []models.RawVideo
-	if err := s.db.Where("created_at < ?", cutoff).Find(&videos).Error; err != nil {
+	// หา MAX เองในโค้ด Go แทนให้ฐานข้อมูลทำ — เหตุผลเดียวกับ DeleteOldRawPhotos
+	var tags []models.DetectedVideo
+	if err := s.db.Select("raw_video_id, created_at").Find(&tags).Error; err != nil {
 		return 0, err
+	}
+	latestTagByVideo := make(map[uint]time.Time, len(tags))
+	for _, t := range tags {
+		if existing, ok := latestTagByVideo[t.RawVideoID]; !ok || t.CreatedAt.After(existing) {
+			latestTagByVideo[t.RawVideoID] = t.CreatedAt
+		}
+	}
+
+	var allVideos []models.RawVideo
+	if err := s.db.Find(&allVideos).Error; err != nil {
+		return 0, err
+	}
+
+	var videos []models.RawVideo
+	for _, video := range allVideos {
+		referenceTime := video.CreatedAt
+		if taggedAt, ok := latestTagByVideo[video.ID]; ok {
+			referenceTime = taggedAt
+		}
+		if referenceTime.Before(cutoff) {
+			videos = append(videos, video)
+		}
 	}
 
 	var deleted int64

@@ -9,7 +9,7 @@ import { fetchMyPosts } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 import PostMediaThumb from "@/components/PostMediaThumb";
 import PostViewerModal from "@/components/PostViewerModal";
-import { Grid2X2, ClipboardCheck, ImageOff } from "lucide-react";
+import { Grid2X2, ClipboardCheck, ImageOff, Info } from "lucide-react";
 
 
 const ROLE_LABEL: Record<string, string> = {
@@ -333,24 +333,38 @@ export default function ProfileView({
                 <p className="text-sm">ยังไม่มีรูปหรือวิดีโอที่คุณถูกแท็กไว้</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
-                {posts.map((post, i) => (
-                  <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
-                    <PostMediaThumb
-                      post={post}
-                      onOpen={() => setViewingIndex(i)}
-                      onDeleted={() =>
-                        setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)))
-                      }
-                    />
-                    {post.type === "video" && (
-                      <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        วิดีโอ
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <>
+                {/* แจ้งเตือนว่ารูป/วิดีโอต้นฉบับจะถูกลบอัตโนมัติ (ดู photoPostRetention ฝั่ง backend
+                    cmd/serve/main.go) กันคนไม่รู้แล้วเสียดายทีหลัง — กดปุ่มดาวน์โหลดที่รูป/วิดีโอ
+                    แต่ละอันเพื่อเก็บไว้เองก่อนหมดเวลา
+                    ⚠️ นับ 7 วันจากตอนที่ถูกแท็กเข้าโปรไฟล์นี้ (ตอนที่เห็นในหน้านี้ครั้งแรก) ไม่ใช่
+                    ตอนที่โค้ช/แอดมินอัปโหลดไฟล์ดิบเข้าระบบ (ดู DeleteOldRawPhotos/DeleteOldRawVideos) */}
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 sm:text-sm">
+                  <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <p>
+                    รูปและวิดีโอต้นฉบับจะถูกลบออกจากระบบอัตโนมัติภายใน 7 วันหลังถูกแท็กเข้าโปรไฟล์นี้
+                    หากต้องการเก็บไว้ กรุณากดดาวน์โหลดก่อนหมดเวลา
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
+                  {posts.map((post, i) => (
+                    <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
+                      <PostMediaThumb
+                        post={post}
+                        onOpen={() => setViewingIndex(i)}
+                        onDeleted={() =>
+                          setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)))
+                        }
+                      />
+                      {post.type === "video" && (
+                        <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          วิดีโอ
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

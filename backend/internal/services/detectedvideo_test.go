@@ -86,7 +86,8 @@ func TestVerifyCanViewRawVideo(t *testing.T) {
 	})
 }
 
-// วิดีโอที่อัปโหลดมาเกิน 7 วันต้องถูกลบถาวรทั้งแถว+แท็ก+ไฟล์จริง ส่วนที่เพิ่งอัปโหลดต้องไม่โดนหางเลข
+// วิดีโอที่ถูกแท็กเข้าโปรไฟล์มาเกิน 7 วันต้องถูกลบถาวรทั้งแถว+แท็ก+ไฟล์จริง ส่วนที่เพิ่งแท็ก
+// ต้องไม่โดนหางเลข (นับอายุจากตอนแท็ก ไม่ใช่ตอนอัปโหลดดิบ — ดู DeleteOldRawVideos)
 func TestDeleteOldRawVideos(t *testing.T) {
 	db := newTestDB(t, &models.RawVideo{}, &models.DetectedVideo{}, &models.Customer{})
 	cleanupPrivateMediaRoot(t)
@@ -108,9 +109,6 @@ func TestDeleteOldRawVideos(t *testing.T) {
 	if err := db.Create(&oldVideo).Error; err != nil {
 		t.Fatalf("สร้างวิดีโอเก่าไม่สำเร็จ: %v", err)
 	}
-	if err := db.Model(&oldVideo).UpdateColumn("created_at", time.Now().Add(-10*24*time.Hour)).Error; err != nil {
-		t.Fatalf("ปรับวันที่ย้อนหลังไม่สำเร็จ: %v", err)
-	}
 
 	newVideo := models.RawVideo{StorageKey: newKey, VideoURL: "/videos/2/raw"}
 	if err := db.Create(&newVideo).Error; err != nil {
@@ -119,7 +117,13 @@ func TestDeleteOldRawVideos(t *testing.T) {
 
 	customer := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-video-retention"}
 	db.Create(&customer)
-	db.Create(&models.DetectedVideo{CustomerID: customer.ID, RawVideoID: oldVideo.ID, VideoURL: oldVideo.VideoURL})
+
+	oldTag := models.DetectedVideo{CustomerID: customer.ID, RawVideoID: oldVideo.ID, VideoURL: oldVideo.VideoURL}
+	db.Create(&oldTag)
+	if err := db.Model(&oldTag).UpdateColumn("created_at", time.Now().Add(-10*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่แท็กย้อนหลังไม่สำเร็จ: %v", err)
+	}
+	db.Create(&models.DetectedVideo{CustomerID: customer.ID, RawVideoID: newVideo.ID, VideoURL: newVideo.VideoURL})
 
 	deleted, err := svc.DeleteOldRawVideos(7 * 24 * time.Hour)
 	if err != nil {
@@ -137,8 +141,8 @@ func TestDeleteOldRawVideos(t *testing.T) {
 
 	var remainingTags int64
 	db.Model(&models.DetectedVideo{}).Count(&remainingTags)
-	if remainingTags != 0 {
-		t.Fatalf("แท็กของวิดีโอเก่าต้องถูกลบไปด้วย แต่ยังเหลือ %d", remainingTags)
+	if remainingTags != 1 {
+		t.Fatalf("แท็กของวิดีโอเก่าต้องถูกลบไปด้วย เหลือแค่แท็กของวิดีโอใหม่ แต่เหลือ %d", remainingTags)
 	}
 
 	if _, _, err := storage.Open(ctx, MediaKindVideo, oldKey); !errors.Is(err, ErrMediaNotFound) {
@@ -146,6 +150,56 @@ func TestDeleteOldRawVideos(t *testing.T) {
 	}
 	if _, _, err := storage.Open(ctx, MediaKindVideo, newKey); err != nil {
 		t.Fatalf("ไฟล์ใหม่ไม่ควรถูกลบ แต่ได้: %v", err)
+	}
+}
+
+// วิดีโอที่อัปโหลดมานานแล้วแต่เพิ่งถูกโค้ชตรวจทาน+แท็กเข้าโปรไฟล์เมื่อไม่นานมานี้ ต้องไม่ถูกลบ
+// ส่วนวิดีโอที่ไม่เคยถูกแท็กเลยยังใช้เวลาอัปโหลดดิบเป็นเกณฑ์เหมือนเดิม (เหตุผลเดียวกับฝั่งรูป)
+func TestDeleteOldRawVideosCountsFromTagTimeNotUpload(t *testing.T) {
+	db := newTestDB(t, &models.RawVideo{}, &models.DetectedVideo{}, &models.Customer{})
+	cleanupPrivateMediaRoot(t)
+
+	storage := NewLocalMediaStorage()
+	svc := NewDetectedVideoService(db).WithMediaStorage(storage)
+	ctx := context.Background()
+
+	recentlyTaggedKey, err := storage.Save(ctx, MediaKindVideo, bytes.NewReader([]byte("recently-tagged")), ".mp4")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์ไม่สำเร็จ: %v", err)
+	}
+	neverTaggedKey, err := storage.Save(ctx, MediaKindVideo, bytes.NewReader([]byte("never-tagged")), ".mp4")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์ไม่สำเร็จ: %v", err)
+	}
+
+	recentlyTagged := models.RawVideo{StorageKey: recentlyTaggedKey, VideoURL: "/videos/1/raw"}
+	db.Create(&recentlyTagged)
+	if err := db.Model(&recentlyTagged).UpdateColumn("created_at", time.Now().Add(-30*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่อัปโหลดย้อนหลังไม่สำเร็จ: %v", err)
+	}
+	customer := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-video-tag-recent"}
+	db.Create(&customer)
+	db.Create(&models.DetectedVideo{CustomerID: customer.ID, RawVideoID: recentlyTagged.ID, VideoURL: recentlyTagged.VideoURL})
+
+	neverTagged := models.RawVideo{StorageKey: neverTaggedKey, VideoURL: "/videos/2/raw"}
+	db.Create(&neverTagged)
+	if err := db.Model(&neverTagged).UpdateColumn("created_at", time.Now().Add(-30*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่อัปโหลดย้อนหลังไม่สำเร็จ: %v", err)
+	}
+
+	deleted, err := svc.DeleteOldRawVideos(7 * 24 * time.Hour)
+	if err != nil {
+		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("ควรลบแค่วิดีโอที่ไม่เคยถูกแท็กเลย 1 คลิป แต่ลบไป %d", deleted)
+	}
+
+	if _, _, err := storage.Open(ctx, MediaKindVideo, recentlyTaggedKey); err != nil {
+		t.Fatalf("วิดีโอที่เพิ่งแท็กไม่ควรถูกลบ แต่ได้: %v", err)
+	}
+	if _, _, err := storage.Open(ctx, MediaKindVideo, neverTaggedKey); !errors.Is(err, ErrMediaNotFound) {
+		t.Fatalf("วิดีโอที่ไม่เคยถูกแท็กเลยและอัปโหลดมานานแล้วควรถูกลบ แต่ได้: %v", err)
 	}
 }
 
