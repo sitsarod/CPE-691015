@@ -615,17 +615,20 @@ export default function EnrollmentPage() {
                     ราคาที่ต้องชำระ
                   </span>
                   <span className="text-xl font-black text-[#CC0000]">
-                    {selected.pkg.price
-                      ? `${selected.pkg.price.toLocaleString("th-TH")} บาท`
-                      : "สอบถามราคา"}
+                    {selected.pkg.is_trial
+                      ? "ฟรี (ทดลองเรียน)"
+                      : selected.pkg.price
+                        ? `${selected.pkg.price.toLocaleString("th-TH")} บาท`
+                        : "สอบถามราคา"}
                   </span>
                 </div>
 
                 <div className="mt-4 flex items-start rounded-lg border border-yellow-200 bg-yellow-50 p-3">
                   <AlertCircle className="mr-2 mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
                   <p className="text-xs text-yellow-700">
-                    เมื่อกดยืนยัน ระบบจะใช้เวลาในการดำเนินการ 3-7 วัน
-                    แอดมินจะทำการตรวจสอบและสร้างบิลเรียกเก็บเงินให้ท่านในลำดับถัดไป
+                    {selected.pkg.is_trial
+                      ? "แอดมินจะตรวจสอบและยืนยันสิทธิ์ทดลองเรียนให้ ไม่มีค่าคอร์ส แต่ยังต้องชำระค่าสนามของคาบที่มาเรียน · ทดลองได้ครั้งเดียวต่อคอร์ส"
+                      : "เมื่อกดยืนยัน ระบบจะใช้เวลาในการดำเนินการ 3-7 วัน แอดมินจะทำการตรวจสอบและสร้างบิลเรียกเก็บเงินให้ท่านในลำดับถัดไป"}
                   </p>
                 </div>
               </div>

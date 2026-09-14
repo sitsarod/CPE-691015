@@ -232,7 +232,7 @@ export default function AdminEnrollmentsPage() {
                 {item.package?.course?.course_name}
               </p>
               <p className="text-xs text-gray-600">
-                แพ็กเกจ {item.package?.sessions_count} ครั้ง ·{' '}
+                {item.package?.is_trial ? 'ทดลองเรียนฟรี' : `แพ็กเกจ ${item.package?.sessions_count} ครั้ง`} ·{' '}
                 <span className="font-semibold text-gray-900">
                   {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </span>
@@ -286,7 +286,7 @@ export default function AdminEnrollmentsPage() {
                     {item.package?.course?.course_name}
                   </div>
                   <div className="truncate text-xs text-gray-600">
-                    แพ็กเกจ {item.package?.sessions_count} ครั้ง
+                    {item.package?.is_trial ? 'ทดลองเรียนฟรี' : `แพ็กเกจ ${item.package?.sessions_count} ครั้ง`}
                   </div>
                 </td>
                 <td className="p-4 font-semibold text-gray-900">

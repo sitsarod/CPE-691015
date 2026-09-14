@@ -82,6 +82,7 @@ export interface AdminEnrollmentCourse {
 }
 
 export interface AdminEnrollmentPackage {
+  is_trial?: boolean;
   id: number;
   sessions_count: number;
   price: number;

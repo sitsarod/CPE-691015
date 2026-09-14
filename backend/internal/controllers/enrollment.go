@@ -43,7 +43,9 @@ func mapEnrollmentError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrPackageSeatsFull),
 		errors.Is(err, services.ErrEnrollmentNotPending),
 		errors.Is(err, services.ErrEnrollmentNotCancellable),
-		errors.Is(err, services.ErrEnrollmentBillingLocked):
+		errors.Is(err, services.ErrEnrollmentBillingLocked),
+		errors.Is(err, services.ErrTrialAlreadyUsed),
+		errors.Is(err, services.ErrTrialNotForExisting):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:

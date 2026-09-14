@@ -26,6 +26,9 @@ type Package struct {
 
     // DurationDays = จำนวนวันที่เรียนได้ นับจากวันที่เริ่มมีสิทธิ์เรียน (Enrollment.StartedAt)
     DurationDays uint `json:"duration_days" gorm:"default:30"`
+
+    // IsTrial = แพ็กเกจทดลองเรียนฟรี · บังคับ 1 ครั้ง ราคา 0 ไม่ออกบิล สมัครได้ครั้งเดียวต่อคนต่อคอร์ส
+    IsTrial bool `json:"is_trial" gorm:"not null;default:false"`
     // Foreign Key
     CourseID uint    `json:"course_id" valid:"required~courseId is required"`
     Course   *Course `json:"course,omitempty" gorm:"foreignKey:CourseID"`

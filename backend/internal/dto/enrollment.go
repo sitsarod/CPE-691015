@@ -193,6 +193,7 @@ type AdminEnrollmentPackageDTO struct {
     ID            uint                      `json:"id"`
     SessionsCount uint                      `json:"sessions_count"`
     Price         float64                   `json:"price"`
+    IsTrial       bool                      `json:"is_trial"`
     Course        *AdminEnrollmentCourseDTO `json:"course"`
 }
 
@@ -250,6 +251,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver uint) AdminEnrollmen
             ID:            e.Package.ID,
             SessionsCount: e.Package.SessionsCount,
             Price:         e.Package.Price,
+            IsTrial:       e.Package.IsTrial,
         }
         if e.Package.Course != nil {
             pkg.Course = &AdminEnrollmentCourseDTO{
