@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 )
 
@@ -49,6 +51,12 @@ type User struct {
 	// ระบบจะอ่านได้เป็น 0 ซึ่งตรงกับค่าเริ่มต้น คนที่ล็อกอินค้างอยู่จึงไม่ถูก
 	// เตะออกจากระบบตอนอัปเดตโค้ด
 	TokenVersion int `json:"-" gorm:"not null;default:0"`
+
+	// EmailVerifiedAt เวลาที่ยืนยันความเป็นเจ้าของอีเมลผ่าน OTP แล้ว (nil = ยังไม่ยืนยัน)
+	//
+	// บัญชีที่สมัครเองผ่านหน้าเว็บต้องยืนยันก่อนถึงจะ login ได้ (กันสมัครด้วยอีเมลปลอม/
+	// อีเมลของคนอื่น) ส่วนบัญชีที่แอดมินสร้างให้ถือว่ายืนยันแล้วทันที เพราะแอดมินเห็นตัวจริง
+	EmailVerifiedAt *time.Time `json:"-"`
 
 	Customer          *Customer          `json:"customer" gorm:"foreignKey:UserID"`
 	Coach     		  *Coach             `json:"coach" gorm:"foreignKey:UserID"`

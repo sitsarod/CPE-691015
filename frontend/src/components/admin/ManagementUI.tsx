@@ -19,7 +19,7 @@ export const isActive = (status?: string) => {
   return s !== "inactive" && s !== "suspended" && s !== "rejected";
 };
 
-/* ===================== การ์ดสรุปตัวเลข (ปรับเงาให้พอดี ไม่ฟุ้งเกินไป) ===================== */
+/* ===================== การ์ดสรุปตัวเลข ===================== */
 export function SummaryCard({
   label,
   value,
@@ -32,15 +32,22 @@ export function SummaryCard({
   tint: string;
 }) {
   return (
-    <div className="group rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
-      <div className="flex items-center justify-between">
+    <div className="group relative overflow-hidden rounded-3xl bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-gray-900/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_32px_-8px_rgba(0,0,0,0.12)] hover:ring-gray-900/10">
+      {/* วงกลมสีจางลอยมุมขวาบน ใช้สีเดียวกับ tint ของไอคอน ให้แต่ละการ์ดมีธีมสีของตัวเอง */}
+      <div
+        className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.08] transition-transform duration-500 ease-out group-hover:scale-125 ${tint}`}
+      />
+
+      <div className="relative flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-gray-500">{label}</p>
           <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-gray-900">
             {value.toLocaleString()}
           </p>
         </div>
-        <div className={`grid h-11 w-11 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${tint}`}>
+        <div
+          className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl shadow-sm ring-1 ring-black/5 transition-transform duration-300 group-hover:scale-110 ${tint}`}
+        >
           <Icon className="h-5 w-5" />
         </div>
       </div>

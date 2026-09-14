@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, User,Users , UserCircle, Book, ListChecks, CalendarClock, MoreHorizontal, X, ScanFace, Camera } from "lucide-react";
+import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megaphone, BookUser, UserCircle, Book, ListChecks, CalendarClock, MoreHorizontal, X, ScanFace, Camera } from "lucide-react";
 
 const navItems = [
   { href: "/admin/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -14,10 +14,8 @@ const navItems = [
   { href: "/admin/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
   { href: "/admin/feedback", icon: <MessageSquareMore />, label: "คำติชม" },
   { href: "/admin/announcements", icon: <Megaphone />, label: "ประกาศข่าวสาร" },
-  { href: "/admin/studentmanagement", icon: <Users />, label: "จัดการข้อมูลนักเรียน" },
-  { href: "/admin/coachmanagement", icon: <User />, label: "จัดการข้อมูลโค้ช" },
+  { href: "/admin/members", icon: <BookUser />, label: "จัดการสมาชิก" },
   { href: "/admin/coachschedule", icon: <CalendarClock />, label: "จัดตารางสอน" },
-  { href: "/admin/usermanagement", icon: <BookUser />, label: "จัดการข้อมูลผู้ใช้งาน" },
   { href: "/admin/enrollments", icon: <Book />, label: "การลงทะเบียนเรียน" },
   // "จัดการแชท (Chat Sessions)" ย้ายไปเปิดจากปุ่ม "สอบถาม" มุมขวาบนของ AdminTopBar แล้ว
   { href: "/admin/auto-qa", icon: <ListChecks />, label: "จัดการ Q&A" },

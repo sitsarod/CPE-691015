@@ -42,7 +42,12 @@ func SetupRoutes(r *gin.Engine) {
 	userService := services.NewUserService(db).WithFaceStorage(cloudinaryService)
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
-	authController := controllers.NewAuthController(authService, userService)
+	mailer := services.NewMailer()
+	emailVerificationService := services.NewEmailVerificationService(db, mailer)
+	authController := controllers.NewAuthController(authService, userService, emailVerificationService)
+
+	passwordResetService := services.NewPasswordResetService(db, mailer)
+	passwordResetController := controllers.NewPasswordResetController(passwordResetService)
 
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
@@ -127,6 +132,15 @@ func SetupRoutes(r *gin.Engine) {
 			authGroup.POST("/login", middlewares.LoginRateLimit(), authController.Login)
 			authGroup.POST("/register", middlewares.SensitiveRateLimit(), authController.Register)
 			authGroup.POST("/refresh", authController.Refresh)
+			authGroup.POST("/verify-registration-otp", middlewares.LoginRateLimit(), authController.VerifyRegistrationOTP)
+			authGroup.POST("/resend-registration-otp", middlewares.SensitiveRateLimit(), authController.ResendRegistrationOTP)
+
+			passwordGroup := authGroup.Group("/password")
+			{
+				passwordGroup.POST("/request-otp", middlewares.SensitiveRateLimit(), passwordResetController.RequestOTP)
+				passwordGroup.POST("/verify-otp", middlewares.LoginRateLimit(), passwordResetController.VerifyOTP)
+				passwordGroup.POST("/reset", middlewares.SensitiveRateLimit(), passwordResetController.ResetPassword)
+			}
 		}
 		publicUserGroup := api.Group("/users")
 		{
@@ -144,6 +158,8 @@ func SetupRoutes(r *gin.Engine) {
 
 		protected := api.Group("")
 		protected.Use(middlewares.AuthMiddleware(db))
+
+		protected.PATCH("/me/password", middlewares.SensitiveRateLimit(), passwordResetController.ChangePassword)
 
 		adminOnly := api.Group("")
 		adminOnly.Use(middlewares.AuthMiddleware(db), middlewares.RequireRole("admin"))

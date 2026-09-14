@@ -23,6 +23,7 @@ import {
   updateCoachAttendanceStatus,
 } from "@/services/attendanceAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
+import DateField from "@/components/DateField";
 import type { AttendanceHistoryItem, AttendanceStatus, CoachHistoryItem } from "@/types/attendance";
 import {
   STATUS_LABEL,
@@ -319,42 +320,29 @@ export default function AttendanceHistoryPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(11.5rem,1fr)_minmax(11.5rem,1fr)_minmax(0,1.2fr)_minmax(0,1.5fr)_auto] sm:gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">ตั้งแต่วันที่</label>
-          <div className="relative mt-1">
-            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="date"
-              value={from}
-              max={to || undefined}
-              onChange={(e) => {
-                resetOpenState();
-                setOffset(0);
-                setFrom(e.target.value);
-              }}
-              // iOS Safari ให้ช่องวันที่กว้างตามตัวเองจนล้นทับช่องข้าง ๆ ต้องปิด appearance แล้วยอมหดตาม grid
-              className="block h-12 min-w-0 appearance-none bg-white w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-            />
-          </div>
-        </div>
+        <DateField
+          label="ตั้งแต่วันที่"
+          value={from}
+          max={to || undefined}
+          onChange={(val) => {
+            resetOpenState();
+            setOffset(0);
+            setFrom(val);
+          }}
+          buttonClassName="h-12 rounded-xl border border-gray-300 bg-white px-3 text-gray-900 transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+        />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">ถึงวันที่</label>
-          <div className="relative mt-1">
-            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="date"
-              value={to}
-              min={from || undefined}
-              onChange={(e) => {
-                resetOpenState();
-                setOffset(0);
-                setTo(e.target.value);
-              }}
-              className="block h-12 min-w-0 appearance-none bg-white w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-            />
-          </div>
-        </div>
+        <DateField
+          label="ถึงวันที่"
+          value={to}
+          min={from || undefined}
+          onChange={(val) => {
+            resetOpenState();
+            setOffset(0);
+            setTo(val);
+          }}
+          buttonClassName="h-12 rounded-xl border border-gray-300 bg-white px-3 text-gray-900 transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+        />
 
         <div>
           <label className="block text-sm font-medium text-gray-700">คอร์ส</label>

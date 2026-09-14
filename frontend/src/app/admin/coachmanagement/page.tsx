@@ -1,26 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useIsMobile } from "@/hooks/useIsMobile";
-import {
-  useCoachManagement,
-  CoachManagementDesktop,
-  CoachManagementMobile,
-} from "./components";
-
-/**
- * หน้าจัดการโค้ช (แอดมิน)
- *
- * ทำแค่สามอย่าง: เรียกสมอง เช็คขนาดจอ เลือกหน้าจอที่ตรงกับขนาดนั้น
- * ของจริงอยู่ที่ ./components
- *
- * ⚠️ ต้องเรียก hook ก่อนแล้วค่อยเลือกหน้าจอเสมอ
- *
- * กฎของ React ห้ามเรียก hook แบบมีเงื่อนไข และถ้าย้ายการเรียกเข้าไปในแต่ละหน้าจอ
- * สองฝั่งจะมีสถานะคนละชุด พอหมุนจอทีข้อมูลที่โหลดไว้จะหายที
- */
+// หน้านี้ถูกรวมเข้ากับ /admin/members แล้ว (แท็บ "โค้ช") — เหลือไว้แค่ redirect
+// กันลิงก์เก่า/บุ๊กมาร์กเดิมพัง
 export default function CoachManagementPage() {
-  const manager = useCoachManagement();
-  const isMobile = useIsMobile();
-
-  return isMobile ? <CoachManagementMobile manager={manager} /> : <CoachManagementDesktop manager={manager} />;
+  redirect("/admin/members?tab=coach");
 }

@@ -1,6 +1,7 @@
 import Modal from "@/components/Modal";
 import InputField from "@/components/InputField";
 import SelectField from "@/components/SelectField";
+import DateField, { maxDateForMinAge } from "@/components/DateField";
 import { AdminCreateUserInput } from "@/services/userAPI";
 import { COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS, COACH_PAYMENT_TYPE_OPTIONS, BANK_OPTIONS } from "@/types/coach";
 import { FormError } from "@/components/admin/ManagementUI";
@@ -107,10 +108,11 @@ export function CreateMemberModal({
               />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField
-                label="วันเกิด" type="date" required
+              <DateField
+                label="วันเกิด" required
                 value={customer.birthDate ? customer.birthDate.slice(0, 10) : ""}
-                onChange={(e) => setCustomer({ birthDate: e.target.value || null })}
+                onChange={(val) => setCustomer({ birthDate: val || null })}
+                max={maxDateForMinAge(3)}
               />
               <InputField
                 label="เบอร์โทรศัพท์ (10 หลัก)" required inputMode="numeric" maxLength={10}
@@ -152,7 +154,7 @@ export function CreateMemberModal({
                 value={coach.uid}
                 onChange={(e) => setCoach({ uid: e.target.value.replace(/\D/g, "").slice(0, 13) })}
               />
-              <InputField label="วันเกิด" type="date" required value={coach.birth_date} onChange={(e) => setCoach({ birth_date: e.target.value })} />
+              <DateField label="วันเกิด" required value={coach.birth_date} onChange={(val) => setCoach({ birth_date: val })} />
             </div>
             <InputField label="ที่อยู่" required value={coach.address} onChange={(e) => setCoach({ address: e.target.value })} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

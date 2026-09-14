@@ -6,6 +6,7 @@ import { Announcement, AnnouncementVisibility, Category } from '@/types/announce
 import { MAX_UPLOAD_MB, IMAGE_ACCEPT, validateImageFile } from '@/utils/imageUpload';
 import AnnouncementCoverCropModal from '@/components/AnnouncementCoverCropModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import DateField from '@/components/DateField';
 import { Plus, Edit2, Trash2, Calendar, Tag, X, Image as ImageIcon, Loader2, Users, Eye, Crop, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ป้ายกำกับ + สีของตัวเลือก "แสดงให้ใครเห็น" — ใช้ทั้งในฟอร์มและตารางแสดงผล
@@ -743,12 +744,11 @@ export default function AdminAnnouncementsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     วันที่เริ่มต้นประกาศ <span className="font-normal text-gray-400">— ค่าเริ่มต้นคือวันนี้</span>
                   </label>
-                  <input
-                    type="date"
+                  <DateField
                     required
                     value={formData.start_date}
-                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
+                    onChange={(val) => setFormData({...formData, start_date: val})}
+                    buttonClassName="px-4 py-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-[#CC0000]/20 focus:border-[#CC0000] outline-none transition-all"
                   />
                   <p className="mt-1 text-xs text-gray-400">ถ้าจะประกาศวันนี้ไม่ต้องแก้ไขช่องนี้ หรือเลือกวันในอนาคตเพื่อตั้งประกาศล่วงหน้า</p>
                 </div>

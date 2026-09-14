@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { BillingDTO } from './types';
+import DateField from '@/components/DateField';
 
 const BILLING_TYPES = [
   { id: 1, name: "ค่าเรียน / คอร์สเรียน" },
@@ -114,11 +115,10 @@ export default function EditBillingModal({
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600 block">วันที่ครบกำหนดชำระ</label>
-            <input
-              type="date"
+            <DateField
               value={form.billingdue_date}
-              onChange={(e) => setForm(prev => ({ ...prev, billingdue_date: e.target.value }))}
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
+              onChange={(val) => setForm(prev => ({ ...prev, billingdue_date: val }))}
+              buttonClassName="px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:bg-white text-slate-800"
               required
             />
           </div>

@@ -61,6 +61,23 @@ export interface VerifyOTPResponseDTO {
   resetToken: string;
 }
 
+// DTO สำหรับ Response ของ Register — ไม่มี token ให้ทันทีอีกต่อไป
+// เพราะบัญชีต้องยืนยันอีเมลผ่าน OTP ก่อนถึงจะ login ได้ (ดู VerifyEmailOTPReq)
+export interface RegisterResponseDTO {
+  message: string;
+  requiresVerification: boolean;
+  email: string;
+}
+
+export interface VerifyEmailOTPReq {
+  email: string;
+  otp: string;
+}
+
+export interface ResendEmailOTPReq {
+  email: string;
+}
+
 export interface RegisterCustomerReq {
   firstName: string;
   lastName: string;

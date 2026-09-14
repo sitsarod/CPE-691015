@@ -132,6 +132,12 @@ func (s *UserService) CreateUser(user *models.User) error {
 		return err
 	}
 
+	if user.Role == models.CustomerRole && user.Customer != nil {
+		if err := ValidateCustomerBirthDate(user.Customer.BirthDate); err != nil {
+			return err
+		}
+	}
+
 	var existingUser models.User
 
 	if err := s.db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
