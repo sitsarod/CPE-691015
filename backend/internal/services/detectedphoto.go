@@ -101,7 +101,16 @@ func (s *DetectedPhotoService) AssignStudentsToPhoto(rawPhotoID uint, photoURL s
 		return nil, nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลเดิมของรูปนี้ได้")
 	}
 
+	// กัน customerID ซ้ำในชุดที่ส่งมา (เช่น โค้ช reassign สอง detection คนละแถวไปเป็นคนเดียวกันโดยไม่ตั้งใจ)
+	// ไม่งั้นจะสร้างแท็กซ้ำหลายแถวให้นักเรียนคนเดียวกันในรูปเดียวกัน ไปโผล่ซ้ำในฟีดโพสต์ของเขา
+	seen := make(map[uint]bool, len(customerIDs))
+
 	for _, customerID := range customerIDs {
+		if seen[customerID] {
+			continue
+		}
+		seen[customerID] = true
+
 		var cust models.Customer
 		if err := s.db.First(&cust, customerID).Error; err != nil {
 			continue // ข้ามถ้าไม่พบ
