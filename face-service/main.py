@@ -38,7 +38,11 @@ MAX_VIDEO_B64_BYTES = 280 * 1024 * 1024
 #
 # ⚠️ ยิ่งค่านี้น้อย ยิ่งมีโอกาสพลาดคนที่โผล่มาสั้น ๆ ระหว่างช่วงที่ไม่ได้สุ่มตรวจ (เข้ามาแล้วออกไป
 # ก่อนถึงเฟรมถัดไปที่สุ่ม) เป็น trade-off ความไวกับความครบถ้วนที่ปรับได้ตรงนี้ค่าเดียว
-MAX_VIDEO_SAMPLE_FRAMES = 16
+#
+# ยิ่งเยอะยิ่งมีโอกาสสุ่มโดนจังหวะหน้าชัด/นิ่ง (bestMatch ฝั่ง Go เก็บคะแนนดีที่สุดต่อคนอยู่แล้ว
+# เพิ่มเฟรมมีแต่ทำให้คะแนนเท่าเดิมหรือดีขึ้น ไม่มีทางแย่ลง) แต่แลกกับเวลาประมวลผลต่อคลิป — 32 ยังปลอดภัย
+# จาก faceEngineVideoTimeout (90 วิ ฝั่ง Go) ตามที่ประเมินไว้ ถ้าจะเพิ่มกว่านี้ต้องวัดเวลาจริงก่อน
+MAX_VIDEO_SAMPLE_FRAMES = 32
 
 # เพดานความยาววิดีโอที่จะ "จำแนกให้" — ยาวเกินนี้ข้ามการจำแนกไปเฉย ๆ (แต่โค้ชยังอัปโหลด/เก็บ/แท็ก
 # เองได้ปกติ เหมือนตอน face-service ล่ม) ฟีเจอร์นี้ออกแบบมาสำหรับคลิปสั้น ๆ ที่โพสต์แล้วลบทิ้งเองใน
@@ -87,7 +91,7 @@ class DetectedFace(BaseModel):
     quality: float
     bbox: list[float]
     # frame_image คือทั้งเฟรมที่ย่อขนาดแล้ว (ไม่ใช่แค่ครอปหน้า) เข้ารหัส JPEG แบบ base64 — มีเฉพาะ
-    # ที่มาจาก /embed-all-video เท่านั้น (ดู encode_frame_with_bbox) bbox ด้านบนอ้างอิงรูปนี้เสมอ
+    # ที่มาจาก /embed-all-video เท่านั้น (ดู encode_frame) bbox ด้านบนอ้างอิงรูปนี้เสมอ
     # (สเกลตามรูปที่ย่อแล้ว ไม่ใช่เฟรมต้นฉบับ) รูปจาก /embed-all ไม่ต้องส่งกลับมา เพราะฝั่งเว็บมี
     # ไฟล์รูปต้นฉบับอยู่แล้วเอง วาดกรอบทับเองได้โดยไม่ต้องรอรูปจากที่นี่
     frame_image: str | None = None
@@ -264,9 +268,16 @@ def encode_frame(frame) -> tuple[str | None, float]:
     """
     h, w = frame.shape[:2]
     scale = min(1.0, FRAME_IMAGE_MAX_DIMENSION / max(h, w))
-    resized = cv2.resize(frame, (int(w * scale), int(h * scale))) if scale < 1.0 else frame
+    # INTER_AREA คือ interpolation ที่ OpenCV เอกสารแนะนำเองสำหรับ "ย่อขนาดลง" โดยเฉพาะ (ต่างจาก
+    # ดีฟอลต์ INTER_LINEAR ที่เหมาะกับขยายมากกว่า) ให้ผลเนียนกว่า ไม่ค่อยแตกเป็นบล็อก/aliasing
+    # ⚠️ ช่วยแค่ "ภาพที่โชว์ให้โค้ชดู" เท่านั้น ไม่กระทบคะแนนความมั่นใจเลย เพราะ embedding คำนวณ
+    # จากเฟรมต้นฉบับก่อนย่อขนาดตรงนี้อยู่แล้ว (ดู embed_all_video ที่เรียก model.get ก่อน encode_frame)
+    resized = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA) if scale < 1.0 else frame
 
-    ok, buf = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    # quality 90 ไม่ใช่ 80 — โค้ชบ่นว่าภาพแตก/ดูยาก คุณภาพสูงขึ้นแลกกับไฟล์ใหญ่ขึ้นนิดหน่อย
+    # (คุ้มเพราะเป็นรูปเดี่ยว ๆ ไม่กี่รูปต่อวิดีโอ ไม่ใช่ทุกเฟรมที่สุ่มตรวจ) ไม่กระทบคะแนนความมั่นใจ
+    # เหมือน INTER_AREA ด้านบน เพราะ embedding คำนวณจากเฟรมต้นฉบับก่อนเข้ารหัส JPEG ตรงนี้อยู่แล้ว
+    ok, buf = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 90])
     if not ok:
         return None, scale
 
