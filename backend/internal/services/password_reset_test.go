@@ -230,13 +230,13 @@ func TestResetPasswordHappyPath(t *testing.T) {
 	svc.RequestOTP(user.Email, "1.1.1.1")
 	resetToken, _ := svc.VerifyOTP(user.Email, mailer.otp(t))
 
-	if err := svc.ResetPassword(resetToken, "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+	if err := svc.ResetPassword(resetToken, "รหัสผ่านใหม่ที่ยาวพอ1"); err != nil {
 		t.Fatalf("ควรตั้งรหัสใหม่ได้ แต่ได้: %v", err)
 	}
 
 	var updated models.User
 	db.First(&updated, user.ID)
-	if bcrypt.CompareHashAndPassword([]byte(updated.Password), []byte("รหัสผ่านใหม่ที่ยาวพอ")) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(updated.Password), []byte("รหัสผ่านใหม่ที่ยาวพอ1")) != nil {
 		t.Fatal("รหัสผ่านใหม่ใช้ไม่ได้")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(updated.Password), []byte("รหัสเดิมของฉัน")) == nil {
@@ -253,7 +253,7 @@ func TestResetPasswordRejectsNonResetToken(t *testing.T) {
 
 	accessToken := mustAccessToken(t, user.ID, string(user.Role))
 
-	if err := svc.ResetPassword(accessToken, "รหัสผ่านใหม่ที่ยาวพอ"); !errors.Is(err, ErrResetTokenInvalid) {
+	if err := svc.ResetPassword(accessToken, "รหัสผ่านใหม่ที่ยาวพอ1"); !errors.Is(err, ErrResetTokenInvalid) {
 		t.Fatalf("access token ต้องใช้แทน reset token ไม่ได้ แต่ได้: %v", err)
 	}
 }
@@ -263,7 +263,7 @@ func TestResetPasswordRejectsGarbageToken(t *testing.T) {
 	svc, _, _, _ := newResetTest(t)
 
 	for _, bad := range []string{"", "abc", "a.b.c"} {
-		if err := svc.ResetPassword(bad, "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+		if err := svc.ResetPassword(bad, "รหัสผ่านใหม่ที่ยาวพอ1"); err == nil {
 			t.Fatalf("token %q ต้องถูกปฏิเสธ", bad)
 		}
 	}
@@ -288,13 +288,13 @@ func TestChangePassword(t *testing.T) {
 	svc, _, db, user := newResetTest(t)
 
 	t.Run("รหัสเดิมถูกต้องเปลี่ยนได้", func(t *testing.T) {
-		if err := svc.ChangePassword(user.ID, "รหัสเดิมของฉัน", "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+		if err := svc.ChangePassword(user.ID, "รหัสเดิมของฉัน", "รหัสผ่านใหม่ที่ยาวพอ1"); err != nil {
 			t.Fatalf("ควรเปลี่ยนได้ แต่ได้: %v", err)
 		}
 
 		var updated models.User
 		db.First(&updated, user.ID)
-		if bcrypt.CompareHashAndPassword([]byte(updated.Password), []byte("รหัสผ่านใหม่ที่ยาวพอ")) != nil {
+		if bcrypt.CompareHashAndPassword([]byte(updated.Password), []byte("รหัสผ่านใหม่ที่ยาวพอ1")) != nil {
 			t.Fatal("รหัสผ่านใหม่ใช้ไม่ได้")
 		}
 	})
@@ -371,7 +371,7 @@ func TestResetPasswordBumpsTokenVersion(t *testing.T) {
 	svc.RequestOTP(user.Email, "1.1.1.1")
 	resetToken, _ := svc.VerifyOTP(user.Email, mailer.otp(t))
 
-	if err := svc.ResetPassword(resetToken, "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+	if err := svc.ResetPassword(resetToken, "รหัสผ่านใหม่ที่ยาวพอ1"); err != nil {
 		t.Fatalf("ควรตั้งรหัสใหม่ได้ แต่ได้: %v", err)
 	}
 
@@ -387,7 +387,7 @@ func TestResetPasswordBumpsTokenVersion(t *testing.T) {
 func TestChangePasswordBumpsTokenVersion(t *testing.T) {
 	svc, _, db, user := newResetTest(t)
 
-	if err := svc.ChangePassword(user.ID, "รหัสเดิมของฉัน", "รหัสผ่านใหม่ที่ยาวพอ"); err != nil {
+	if err := svc.ChangePassword(user.ID, "รหัสเดิมของฉัน", "รหัสผ่านใหม่ที่ยาวพอ1"); err != nil {
 		t.Fatalf("ควรเปลี่ยนได้ แต่ได้: %v", err)
 	}
 
@@ -405,7 +405,7 @@ func TestChangePasswordBumpsTokenVersion(t *testing.T) {
 func TestChangePasswordWithWrongCurrentDoesNotBumpVersion(t *testing.T) {
 	svc, _, db, user := newResetTest(t)
 
-	if err := svc.ChangePassword(user.ID, "รหัสผิด", "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+	if err := svc.ChangePassword(user.ID, "รหัสผิด", "รหัสผ่านใหม่ที่ยาวพอ1"); err == nil {
 		t.Fatal("รหัสเดิมผิดต้องไม่ผ่าน")
 	}
 
@@ -426,10 +426,10 @@ func TestSetPasswordRefusesUserWithoutID(t *testing.T) {
 	_, _, db, user := newResetTest(t)
 
 	// ผู้ใช้เปล่าที่ยังไม่มี ID
-	if err := SetPassword(db, &models.User{}, "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+	if err := SetPassword(db, &models.User{}, "รหัสผ่านใหม่ที่ยาวพอ1"); err == nil {
 		t.Fatal("ผู้ใช้ที่ไม่มี ID ต้องถูกปฏิเสธ")
 	}
-	if err := SetPassword(db, nil, "รหัสผ่านใหม่ที่ยาวพอ"); err == nil {
+	if err := SetPassword(db, nil, "รหัสผ่านใหม่ที่ยาวพอ1"); err == nil {
 		t.Fatal("ผู้ใช้ที่เป็น nil ต้องถูกปฏิเสธ")
 	}
 

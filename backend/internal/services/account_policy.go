@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"CPE-691015/internal/models"
@@ -174,6 +175,10 @@ const (
 var (
 	ErrPasswordTooShort = errors.New("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
 	ErrPasswordTooLong  = errors.New("รหัสผ่านยาวเกินไป (ภาษาอังกฤษไม่เกิน 72 ตัว หรือภาษาไทยไม่เกิน 24 ตัว)")
+
+	// ErrPasswordNoDigit กันรหัสผ่านที่เป็นตัวอักษรล้วน (เช่น "password") ซึ่งเดาง่าย
+	// เพราะเดิมเช็คแค่ความยาว ตัวอักษรอะไรก็ได้ที่ยาวพอก็ผ่านด่านนี้ไปได้
+	ErrPasswordNoDigit = errors.New("รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว")
 )
 
 // SetPassword คือ "ทางเดียว" ที่ควรใช้เปลี่ยนรหัสผ่านของผู้ใช้
@@ -228,6 +233,48 @@ func ValidatePasswordStrength(password string) error {
 	// เพดาน — นับเป็นไบต์ ตามข้อจำกัดจริงของ bcrypt
 	if len(password) > PasswordMaxLengthBytes {
 		return ErrPasswordTooLong
+	}
+
+	if !strings.ContainsAny(password, "0123456789") {
+		return ErrPasswordNoDigit
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// วันเกิด — เฉพาะของผู้เรียน (customer)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CustomerMinAgeYears อายุขั้นต่ำที่สมัครเรียนได้
+//
+// กันเคสวันเกิดเป็นวันนี้หรือเมื่อวาน ซึ่งเดิมผ่านด่านได้เพราะ binding tag
+// เช็คแค่ว่า "มีค่าส่งมา" ไม่ได้เช็คว่าค่านั้นสมเหตุสมผลไหม
+const CustomerMinAgeYears = 3
+
+var (
+	// ErrBirthDateInFuture กันวันเกิดที่เป็นวันที่ยังไม่มาถึง
+	ErrBirthDateInFuture = errors.New("วันเกิดต้องไม่ใช่วันที่ในอนาคต")
+
+	// ErrBirthDateTooYoung กันสมัครด้วยอายุต่ำกว่าเกณฑ์ (เช่น เกิดวันนี้)
+	ErrBirthDateTooYoung = fmt.Errorf("อายุต้องไม่ต่ำกว่า %d ปี", CustomerMinAgeYears)
+)
+
+// ValidateCustomerBirthDate ตรวจว่าวันเกิดที่กรอกมาสมเหตุสมผลไหม
+//
+// ค่าว่าง (IsZero) ปล่อยผ่านตรงนี้ — ความบังคับ "ต้องกรอก" เป็นหน้าที่ของ binding
+// tag ที่ชั้น DTO อยู่แล้ว ฟังก์ชันนี้ตรวจแค่ "ถ้ามีค่า ค่านั้นต้องสมเหตุสมผล"
+func ValidateCustomerBirthDate(birthDate time.Time) error {
+	if birthDate.IsZero() {
+		return nil
+	}
+
+	now := time.Now()
+	if birthDate.After(now) {
+		return ErrBirthDateInFuture
+	}
+
+	if birthDate.After(now.AddDate(-CustomerMinAgeYears, 0, 0)) {
+		return ErrBirthDateTooYoung
 	}
 	return nil
 }
