@@ -8,6 +8,13 @@ export async function fetchMyPosts(): Promise<PostItem[]> {
   return res.data ?? [];
 }
 
+// [GET] โพสต์ (รูป+วิดีโอ) ทั้งหมดที่นักเรียนคนที่ระบุถูกแท็กไว้ — เฉพาะแอดมิน ใช้ดูแยกรายคน
+// (หน้า admin/detect/media) ไม่ใช่ของตัวเอง จึงต้องระบุ customerId ตรงๆ แทนดึงจาก JWT
+export async function fetchStudentPosts(customerId: number): Promise<PostItem[]> {
+  const res = await apiFetch<{ data: PostItem[] }>(`/admin/students/${customerId}/posts`);
+  return res.data ?? [];
+}
+
 /**
  * [GET] ดึงเนื้อรูป/วิดีโอของโพสต์มาแสดง — ต้องเป็น blob เพราะไฟล์เก็บแบบ private
  * ต้องแนบ token ซึ่ง <img>/<video src> ทำไม่ได้ (เหมือน fetchFaceImageObjectURL)

@@ -25,6 +25,17 @@ type EvaluableStudentResponse struct {
 	ProfilePicture string `json:"profile_picture,omitempty"`
 }
 
+// StudentMediaSummaryResponse คือนักเรียนหนึ่งคน พร้อมจำนวนรูป/วิดีโอที่ถูกแท็กไว้ — ใช้แสดงเป็น
+// ลิสต์ "โฟลเดอร์เสมือน" ในหน้าแอดมิน (admin/detect/media) ให้เห็นว่าใครมีโพสต์รอดูบ้างโดยไม่ต้อง
+// กดเข้าไปเช็คทีละคน
+type StudentMediaSummaryResponse struct {
+	CustomerID     uint   `json:"customer_id"`
+	Nickname       string `json:"nickname"`
+	ProfilePicture string `json:"profile_picture,omitempty"`
+	PhotoCount     int64  `json:"photo_count"`
+	VideoCount     int64  `json:"video_count"`
+}
+
 // EvaluableCourseResponse คือคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง
 type EvaluableCourseResponse struct {
 	CourseID   uint   `json:"course_id"`
