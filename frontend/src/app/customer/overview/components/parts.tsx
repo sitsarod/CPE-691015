@@ -88,10 +88,10 @@ export function StatCell({
   accentRed?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 bg-white px-4 py-4 sm:px-5 sm:py-5">
+    <div className="flex min-w-0 flex-col gap-1.5 bg-white px-4 py-4 sm:px-5 sm:py-5">
       <span className="text-xs font-light text-gray-500">{label}</span>
       <span
-        className={`text-2xl font-semibold leading-none tabular-nums sm:text-3xl ${
+        className={`truncate text-2xl font-semibold leading-none tabular-nums sm:text-3xl ${
           accentRed ? "text-[#CC0000]" : "text-gray-900"
         }`}
       >

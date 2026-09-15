@@ -63,7 +63,7 @@ export default function EditBillingModal({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs transition-opacity duration-300">
-      <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col p-6 relative border border-slate-200 animate-fadeIn">
+      <div className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl flex flex-col p-6 relative border border-slate-200 animate-fadeIn">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"

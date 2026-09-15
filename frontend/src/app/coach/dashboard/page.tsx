@@ -218,7 +218,7 @@ export default function CoachDashboardPage() {
         <div className="mb-5 flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
           <div className="flex items-baseline gap-3">
             <h2 className="text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">คาบสอนที่จะถึง</h2>
-            <span className="whitespace-nowrap text-[13px] font-light text-gray-500">5 คาบสอนถัดไปของคุณ</span>
+            <span className="hidden whitespace-nowrap text-[13px] font-light text-gray-500 sm:inline">5 คาบสอนถัดไปของคุณ</span>
           </div>
           <Link href="/coach/schedule" className="whitespace-nowrap text-[13px] font-light text-gray-500 hover:text-[#CC0000]">
             ดูตารางงานทั้งหมด
