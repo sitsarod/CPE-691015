@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users, UserCheck, MoreVertical, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users, UserCheck, UserPlus, MoreVertical, MapPin } from "lucide-react";
 
 import { getAllCoachesAPI, fetchAllCoachAvailabilities, CoachListItem } from "@/services/coachAPI";
 import { getWeekSessions, WeekSession } from "@/services/workScheduleAPI";
@@ -241,18 +241,42 @@ export default function CoachSchedulePage() {
         </div>
       )}
 
+      {/* คำอธิบายแถบสีซ้ายของการ์ด — ไม่งั้นสีสามสีไม่มีใครรู้ว่าแปลว่าอะไร */}
+      <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-slate-500">
+        {[
+          { c: "#CC0000", label: "ยังไม่ได้จัดโค้ช" },
+          { c: "#D97706", label: "มีโค้ชแล้วแต่ยังไม่พอ" },
+          { c: "#10B981", label: "จัดโค้ชครบแล้ว" },
+        ].map((x) => (
+          <span key={x.label} className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-1 rounded-sm" style={{ backgroundColor: x.c }} />
+            {x.label}
+          </span>
+        ))}
+      </div>
+
       {/* Weekly session board */}
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[1100px]">
             {/* Day headers */}
             <div className="grid border-b border-slate-200 bg-slate-50" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
               {weekDays.map((d) => {
                 const isToday = toISODate(d) === todayISO;
+                // นับคาบที่ยังไม่ได้จัดโค้ชของวันนั้น ให้เห็นตั้งแต่หัวคอลัมน์
+                // ไม่ต้องไล่อ่านการ์ดทีละใบว่าวันไหนยังค้าง
+                const unassigned = (sessionsByDate.get(toISODate(d)) ?? []).filter(
+                  (s) => s.assigned_coaches.length === 0,
+                ).length;
                 return (
                   <div key={d.toISOString()} className={`py-3 text-center border-l border-slate-200 first:border-l-0 ${isToday ? "bg-rose-50" : ""}`}>
                     <div className={`text-xs font-bold ${isToday ? "text-[#CC0000]" : "text-slate-600"}`}>{DAY_LABELS[d.getDay()]}</div>
                     <div className={`text-[11px] ${isToday ? "text-[#CC0000] font-bold" : "text-slate-400"}`}>{d.getDate()} {TH_MONTHS[d.getMonth()]}</div>
+                    {unassigned > 0 && (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#FFECEC] px-2 py-0.5 text-[10px] font-bold text-[#CC0000]">
+                        ค้าง {unassigned}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -278,11 +302,18 @@ export default function CoachSchedulePage() {
                           const hasCoach = s.assigned_coaches.length > 0;
                           const suggested = suggestedCoaches(s.going_count, perCoach);
                           const short = suggested - s.assigned_coaches.length; // ขาดโค้ชกี่คน (>0 = ยังไม่พอ)
+
+                          // แถบสีซ้ายบอกสถานะโค้ชของคาบนี้ — อ่านได้จากระยะไกลโดยไม่ต้องอ่านตัวหนังสือ
+                          // เดิมต่างกันแค่บรรทัดเล็ก ๆ ท้ายการ์ด ไล่หาคาบที่ยังไม่มีโค้ชทั้งสัปดาห์แทบไม่ไหว
+                          const statusBar = !hasCoach ? "#CC0000" : short > 0 ? "#D97706" : "#10B981";
                           return (
                             <button
                               key={`${s.course_id}-${s.date}-${s.start_time}-${s.end_time}`}
                               onClick={() => { setActiveSession(s); setActiveIsPast(isPast); }}
-                              className={`w-full text-left rounded-xl border ${color.soft} p-3 transition hover:shadow-md cursor-pointer ${isPast ? "opacity-60" : ""}`}
+                              style={{ borderLeft: `4px solid ${statusBar}` }}
+                              className={`w-full text-left rounded-xl border ${color.soft} ${
+                                hasCoach ? "" : "border-dashed bg-white"
+                              } p-3 pl-2.5 transition hover:shadow-md cursor-pointer ${isPast ? "opacity-60" : ""}`}
                             >
                               <div className="flex items-center gap-2">
                                 <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${color.bar}`} />
@@ -303,11 +334,16 @@ export default function CoachSchedulePage() {
                               </div>
 
                               <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-                                <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 {hasCoach ? (
-                                  <span className="text-slate-600 truncate">{s.assigned_coaches.map((c) => c.coach_name).join(", ")}</span>
+                                  <>
+                                    <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                    <span className="truncate text-slate-600">{s.assigned_coaches.map((c) => c.coach_name).join(", ")}</span>
+                                  </>
                                 ) : (
-                                  <span className="font-semibold text-[#CC0000]">ยังไม่มีโค้ช</span>
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-[#FFECEC] px-1.5 py-0.5 text-[11px] font-bold text-[#CC0000]">
+                                    <UserPlus className="h-3 w-3 shrink-0" />
+                                    ยังไม่ได้จัดโค้ช
+                                  </span>
                                 )}
                               </div>
                               {hasCoach && short > 0 && (

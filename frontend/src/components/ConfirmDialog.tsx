@@ -9,6 +9,7 @@ interface Props {
   confirmText?: string;
   cancelText?: string;
   tone?: "danger" | "default";
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -19,6 +20,7 @@ export default function ConfirmDialog({
   confirmText = "ตกลง",
   cancelText,
   tone = "default",
+  busy = false,
   onConfirm,
   onCancel,
 }: Props) {
@@ -27,7 +29,10 @@ export default function ConfirmDialog({
   const isDanger = tone === "danger";
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4" onClick={onCancel}>
+    <div
+      className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+      onClick={busy ? undefined : onCancel}
+    >
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
@@ -49,7 +54,8 @@ export default function ConfirmDialog({
           </div>
           <button
             onClick={onCancel}
-            className="p-1 text-gray-400 transition-colors hover:text-gray-600"
+            disabled={busy}
+            className="p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:opacity-40"
             aria-label="ปิด"
           >
             <X className="h-5 w-5" />
@@ -60,18 +66,21 @@ export default function ConfirmDialog({
           {cancelText && (
             <button
               onClick={onCancel}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50"
+              disabled={busy}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40"
             >
               {cancelText}
             </button>
           )}
+          {/* กันกดซ้ำ — การลบยิงสองครั้งได้ error ก้อนที่สองโดยไม่จำเป็น */}
           <button
             onClick={onConfirm}
-            className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors ${
+            disabled={busy}
+            className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors disabled:opacity-60 ${
               isDanger ? "bg-[#CC0000] hover:bg-[#990000]" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {confirmText}
+            {busy ? "กำลังทำงาน..." : confirmText}
           </button>
         </div>
       </div>

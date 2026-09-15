@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { AdminTabs } from "@/components/admin/shared/AdminTabs";
 import {
@@ -70,6 +71,18 @@ function MembersTabs() {
 
       {tab === "all" &&
         (isMobile ? <MemberManagementMobile manager={memberManager} /> : <MemberManagementDesktop manager={memberManager} />)}
+
+      {/* กล่องยืนยันของทั้งสามแท็บ — แทน confirm() ของเบราว์เซอร์ซึ่งตัดข้อความยาวทิ้ง
+          แยกตัวละแท็บเพราะแต่ละ manager ถือสถานะของตัวเอง */}
+      {[memberManager, studentManager, coachManager].map((m, i) => (
+        <ConfirmDialog
+          key={i}
+          {...m.confirmDialog}
+          title="ยืนยันการทำรายการ"
+          confirmText="ยืนยัน"
+          cancelText="ยกเลิก"
+        />
+      ))}
     </div>
   );
 }
