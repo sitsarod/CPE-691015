@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, CalendarClock } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
 import AvailabilityGridView from "@/components/AvailabilityGridView";
 import { CoachListItem, fetchCoachAvailability } from "@/services/coachAPI";
 import { AvailabilitySlot } from "@/types/coach";
-import { BRAND } from "@/components/admin/ManagementUI";
 
 interface Props {
   isOpen: boolean;
@@ -52,8 +51,18 @@ export function ViewCoachScheduleModal({ isOpen, onClose, coach }: Props) {
       footer={<Button variant="outline" onClick={onClose}>ปิด</Button>}
     >
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND }} />
+        // โครงตารางเวลาว่างตอนโหลด — 7 คอลัมน์เท่าของจริง กล่องจะได้ไม่เปลี่ยนขนาด
+        <div className="animate-pulse">
+          <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="h-4 rounded bg-gray-200" />
+            ))}
+          </div>
+          <div className="mt-2 grid gap-1" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            {Array.from({ length: 28 }).map((_, i) => (
+              <div key={i} className="h-10 rounded bg-gray-100" />
+            ))}
+          </div>
         </div>
       ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>

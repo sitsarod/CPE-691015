@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, Trash2, Loader2 } from "lucide-react";
+import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import {
   fetchNotifications,
   markNotificationRead,
@@ -160,10 +160,19 @@ export default function NotificationsHistory() {
       {/* List */}
       <div>
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            กำลังโหลด...
-          </div>
+          // โครงรายการตอนโหลด — ล้อแถวจริง (จุดสถานะ + หัวข้อ + เนื้อหา + เวลา)
+          <ul className="animate-pulse border-t border-gray-200">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <li key={i} className="flex gap-4 border-b border-gray-100 px-2 py-4">
+                <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-gray-200" />
+                <span className="min-w-0 flex-1 space-y-2">
+                  <span className="block h-4 w-48 max-w-full rounded bg-gray-200" />
+                  <span className="block h-3.5 w-full max-w-md rounded bg-gray-100" />
+                  <span className="block h-3 w-28 rounded bg-gray-100" />
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : notifs.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
             <div className="grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-gray-300">

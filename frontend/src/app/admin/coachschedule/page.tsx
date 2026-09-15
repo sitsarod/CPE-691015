@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Loader2, Users, UserCheck, UserPlus, MoreVertical, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw, AlertCircle, Users, UserCheck, UserPlus, MoreVertical, MapPin } from "lucide-react";
 
 import { getAllCoachesAPI, fetchAllCoachAvailabilities, CoachListItem } from "@/services/coachAPI";
 import { getWeekSessions, WeekSession } from "@/services/workScheduleAPI";
@@ -283,8 +283,24 @@ export default function CoachSchedulePage() {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-24">
-                <Loader2 className="h-6 w-6 animate-spin text-[#CC0000]" />
+              // โครงบอร์ดตอนโหลด — 7 คอลัมน์พร้อมการ์ดจำลอง ให้ความสูงใกล้ของจริง
+              // เดิมเป็นไอคอนหมุนกลางช่องว่าง พอข้อมูลมาถึงบอร์ดจะกระโดดขึ้นมาทั้งแผง
+              <div className="grid animate-pulse" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+                {Array.from({ length: 7 }).map((_, col) => (
+                  <div key={col} className="min-h-[320px] space-y-2 border-l border-slate-100 p-2 first:border-l-0">
+                    {Array.from({ length: [2, 3, 2, 3, 1, 2, 1][col] }).map((__, i) => (
+                      <div key={i} className="rounded-xl border border-slate-100 bg-white p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-200" />
+                          <span className="h-3.5 w-20 rounded bg-slate-200" />
+                        </div>
+                        <div className="mt-2 h-3 w-24 rounded bg-slate-100" />
+                        <div className="mt-2 h-3 w-16 rounded bg-slate-100" />
+                        <div className="mt-2 h-3 w-20 rounded bg-slate-100" />
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
