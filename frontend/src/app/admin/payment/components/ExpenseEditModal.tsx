@@ -92,7 +92,7 @@ export default function ExpenseEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative flex w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-fadeIn">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-fadeIn">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 cursor-pointer"

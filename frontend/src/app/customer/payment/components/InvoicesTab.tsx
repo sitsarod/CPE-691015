@@ -254,9 +254,9 @@ export default function InvoicesTab({
                       ))}
                     </div>
                     {inv.transactionid && (
-                      <div className="text-[11px] text-gray-500 bg-white border border-gray-200 p-3 rounded-xl flex items-center justify-between">
-                        <span className="font-bold">Transaction Reference ID:</span>
-                        <code className="font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded">{inv.transactionid}</code>
+                      <div className="text-[11px] text-gray-500 bg-white border border-gray-200 p-3 rounded-xl flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                        <span className="font-bold shrink-0">Transaction Reference ID:</span>
+                        <code className="min-w-0 break-all font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded sm:text-right">{inv.transactionid}</code>
                       </div>
                     )}
                   </div>

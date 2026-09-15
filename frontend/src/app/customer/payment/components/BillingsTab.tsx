@@ -142,7 +142,7 @@ export default function BillingsTab({
         {/* Status Filter Dropdown */}
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-          <span className="text-xs text-gray-500 font-bold whitespace-nowrap">เลือกประเภทรายการ:</span>
+          <span className="hidden text-xs text-gray-500 font-bold whitespace-nowrap sm:inline">เลือกประเภทรายการ:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
