@@ -172,7 +172,7 @@ export default function CustomerPaymentPage() {
 
   const handlePayExistingInvoice = (invoice: InvoiceDTO) => {
     setCheckoutAmount(invoice.invoicetotalamount);
-    setCheckoutBillingIds(invoice.paymentitems.map(item => item.billing_id));
+    setCheckoutBillingIds((invoice.paymentitems ?? []).map(item => item.billing_id));
     setCheckoutInvoiceId(invoice.id);
     setCheckoutMode("existing");
     setUploadedSlipUrl(invoice.slipurl || "");

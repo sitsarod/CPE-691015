@@ -174,12 +174,6 @@ export default function CoachDashboardPage() {
             >
               แจ้งเวลาว่าง
             </Link>
-            <Link
-              href="/coach/schedule"
-              className="flex items-center rounded-lg bg-[#CC0000] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#990000]"
-            >
-              เช็คชื่อคาบนี้
-            </Link>
           </div>
         </div>
 

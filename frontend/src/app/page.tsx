@@ -518,13 +518,6 @@ export default function Home() {
           แถบพื้นเข้มเต็มความกว้าง ตัดกับส่วนอื่นของหน้าที่เป็นพื้นขาว เพื่อให้หน้ามีจังหวะ
           สีแดงบนพื้นเข้มใช้ ACCENT ไม่ใช่ ACCENT เพราะ #CC0000 บนพื้นดำอ่านไม่ออก */}
       <section id="coaches" className="relative overflow-hidden border-t border-gray-200 bg-white py-16 md:py-20">
-        {/* คำใหญ่จาง ๆ เป็นพื้นหลัง ซ่อนบนจอเล็กเพราะจะเบียดเนื้อหา */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-8 top-8 hidden select-none text-[152px] font-bold leading-none tracking-[-0.04em] text-gray-900/[0.035] md:block"
-        >
-          COACHES
-        </span>
 
         <div className="relative mx-auto max-w-6xl px-6 md:px-10">
           {coaches.length === 0 ? (
@@ -566,10 +559,6 @@ export default function Home() {
                 {/* แถวหัว: หัวข้อซ้าย / สถิติขวา */}
                 <div className="mb-11 flex flex-col gap-9 md:flex-row md:items-end md:justify-between">
                   <div className="flex max-w-[520px] flex-col gap-3.5">
-                    <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: ACCENT }}>
-                      <span className="h-px w-6" style={{ backgroundColor: ACCENT }} />
-                      02 · OUR COACHES
-                    </span>
                     <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-gray-900 md:text-[52px]">
                       {content?.coaches_title || "ทีมโค้ชของเรา"}
                     </h2>
@@ -716,7 +705,6 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6 md:px-10">
           <SectionHeading
             title={content?.facility_title || "ภาพบรรยากาศ"}
-            sub={content?.facility_subtitle || "Facility"}
             right={
               <button
                 type="button"
@@ -815,7 +803,6 @@ export default function Home() {
           <div className="mx-auto max-w-6xl px-6 md:px-10">
             <SectionHeading
               title="ข่าวและประกาศ"
-              sub="News"
               right={
                 <button
                   onClick={handleOpenGallery}
