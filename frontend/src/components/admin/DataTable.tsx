@@ -1,6 +1,4 @@
 import React from "react";
-import { Loader2 } from "lucide-react";
-import { BRAND } from "@/components/admin/ManagementUI";
 
 export interface Column<T> {
   header: string;
@@ -40,11 +38,22 @@ export function DataTable<T>({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr>
-                <td colSpan={columns.length} className="px-6 py-16 text-center">
-                  <Loader2 className="mx-auto h-7 w-7 animate-spin" style={{ color: BRAND }} />
-                </td>
-              </tr>
+              // แถวจำลองตอนโหลด — จำนวนคอลัมน์เท่าของจริง ตารางจึงไม่กระโดดตอนข้อมูลมาถึง
+              // เดิมเป็นไอคอนหมุนแถวเดียวกลางตาราง
+              <>
+                {Array.from({ length: 5 }).map((_, r) => (
+                  <tr key={r} className="animate-pulse">
+                    {columns.map((_c, i) => (
+                      <td key={i} className="px-6 py-4">
+                        <div
+                          className="h-4 rounded bg-gray-200"
+                          style={{ width: i === 0 ? "60%" : i === columns.length - 1 ? "24px" : "45%" }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </>
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-20 text-center text-gray-400 font-normal">

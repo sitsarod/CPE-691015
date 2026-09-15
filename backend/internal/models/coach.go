@@ -6,13 +6,13 @@ import (
 
 type Coach struct {
 	gorm.Model
-	UserID            uint            `json:"user_id" valid:"required~UserID is required"`
-    User              *User           `json:"user" ` 
-	
-	Phone          string `json:"phone" gorm:"type:varchar(20)" valid:"required~phone is required"`
+	UserID uint  `json:"user_id" valid:"required~UserID is required"`
+	User   *User `json:"user" `
+
+	Phone string `json:"phone" gorm:"type:varchar(20)" valid:"required~phone is required"`
 	// LineID / Facebook เป็นช่องทางติดต่อเสริม ไม่บังคับกรอก
-	LineID         string `json:"lineId" gorm:"type:varchar(100)"`
-	Facebook       string `json:"facebook" gorm:"type:varchar(255)"`
+	LineID   string `json:"lineId" gorm:"type:varchar(100)"`
+	Facebook string `json:"facebook" gorm:"type:varchar(255)"`
 	// Uid = เลขบัตรประชาชนของโค้ช
 	//
 	// ⚠️ ไม่มีแท็ก unique โดยตั้งใจ ด้วยเหตุผลเดียวกับ User.Email
@@ -29,9 +29,9 @@ type Coach struct {
 	BankAccount    string `json:"bank_account" gorm:"type:varchar(255)" valid:"required~bankAccount is required"`
 	PaymentInfo    string `json:"payment_info" gorm:"type:varchar(255)" valid:"required~paymentInfo is required"`
 	// PromptPay = พร้อมเพย์ของโค้ช (เบอร์มือถือหรือเลขบัตรประชาชน) — ไม่บังคับกรอก
-	PromptPay      string `json:"prompt_pay" gorm:"type:varchar(50)"`
+	PromptPay string `json:"prompt_pay" gorm:"type:varchar(50)"`
 	// Status = สถานะการใช้งานของโค้ช "active" (ใช้งานอยู่) หรือ "inactive" (พักงาน)
-	Status         string `json:"status" gorm:"type:varchar(20);default:'active'"`
+	Status string `json:"status" gorm:"type:varchar(20);default:'active'"`
 	// PaymentType กำหนดวิธีจ่ายค่าจ้างของโค้ชคนนี้: "per_session" (รายครั้ง) หรือ "monthly" (รายเดือน)
 	// มีค่าเดียวต่อโค้ชหนึ่งคน — ไม่ให้กรอกอัตราทั้งสองแบบพร้อมกันเพื่อกันข้อมูลขัดแย้งกัน
 	PaymentType string  `json:"payment_type" gorm:"type:varchar(20);default:'per_session'" valid:"required~paymentType is required"`
@@ -75,8 +75,17 @@ type Coach struct {
 	// FeatureOnHome เลือกให้โค้ชคนนี้แสดงในส่วนบุคลากรของหน้าแรกสาธารณะ
 	FeatureOnHome bool `json:"feature_on_home" gorm:"default:false"`
 
+	// IsHeadCoach = หัวหน้าผู้ฝึกสอน แอดมินติ๊กเอง
+	//
+	// ⚠️ ทั้งระบบต้องมีคนเดียว บังคับที่ services.SetHeadCoach ซึ่งเคลียร์คนเดิม
+	// ให้ในทรานแซกชันเดียวกัน — ห้ามเซ็ตคอลัมน์นี้ตรง ๆ จากที่อื่น
+	//
+	// เดิมหน้าแรกเดาจาก "ใครมาเป็นคนแรกในรายการ" ซึ่งเปลี่ยนได้เองเมื่อลำดับเปลี่ยน
+	// คนที่ไม่ใช่หัวหน้าโค้ชจึงถูกป้ายว่าเป็นหัวหน้าโดยไม่มีใครสั่ง
+	IsHeadCoach bool `json:"is_head_coach" gorm:"default:false"`
+
 	CoachAvailability []CoachAvailability `json:"coach_availability" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	WorkSchedules     []WorkSchedule      `json:"work_schedules" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 	Photos            []Photo             `json:"photo" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
-	CoachAttendances []CoachAttendance `json:"coach_attendances" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
+	CoachAttendances  []CoachAttendance   `json:"coach_attendances" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`
 }

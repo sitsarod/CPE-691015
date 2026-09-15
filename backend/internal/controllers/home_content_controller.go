@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -8,6 +10,7 @@ import (
 	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type HomeContentController struct {
@@ -159,6 +162,31 @@ func (ctrl *HomeContentController) SetCoachFeature(c *gin.Context) {
 	res, err := ctrl.service.SetCoachFeature(uint(id), req.FeatureOnHome)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// SetHeadCoach ตั้ง/ยกเลิกหัวหน้าผู้ฝึกสอน — ตั้งคนใหม่จะปลดคนเดิมให้เอง
+func (ctrl *HomeContentController) SetHeadCoach(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสโค้ชไม่ถูกต้อง"})
+		return
+	}
+	var req dto.HeadCoachReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
+		return
+	}
+	res, err := ctrl.service.SetHeadCoach(uint(id), req.IsHeadCoach)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ระบุ"})
+			return
+		}
+		log.Printf("[api] ตั้งหัวหน้าผู้ฝึกสอนไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกได้ กรุณาลองใหม่"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": res})

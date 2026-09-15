@@ -5,7 +5,7 @@ import { reviewAPI } from '@/services/reviewAPI';
 import { Review } from '@/types/review';
 import Toast from '@/components/Toast';
 import { ReviewStatCard } from '@/components/review/ReviewUI';
-import { Star, Search, MessageSquareText, Sparkles, BookOpen, Loader2 } from 'lucide-react';
+import { Star, Search, MessageSquareText, Sparkles, BookOpen } from 'lucide-react';
 
 // ==================== Star Rating (read-only) ====================
 function StarRating({ value, size = 16 }: { value: number; size?: number }) {
@@ -194,11 +194,24 @@ export default function CoachFeedbackPage() {
 
       {/* Loading / Review grid */}
       {loading ? (
-        <div className="bg-white/50 backdrop-blur-xs flex items-center justify-center p-12 rounded-2xl border border-slate-200">
-          <div className="text-slate-500 font-bold text-xs animate-pulse flex items-center gap-2">
-            <Loader2 size={16} className="animate-spin" />
-            กำลังโหลดข้อมูลรีวิว...
-          </div>
+        // การ์ดรีวิวจำลอง — ล้อกริดจริง (2 คอลัมน์บนจอใหญ่) หน้าจะได้ไม่กระโดด
+        <div className="grid animate-pulse grid-cols-1 gap-4 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 flex-none rounded-full bg-gray-200" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-36 max-w-full rounded bg-gray-200" />
+                  <div className="h-3 w-24 rounded bg-gray-100" />
+                </div>
+                <div className="h-4 w-20 flex-none rounded bg-gray-100" />
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="h-3.5 w-full rounded bg-gray-100" />
+                <div className="h-3.5 w-4/5 rounded bg-gray-100" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 py-16 text-center text-gray-400">

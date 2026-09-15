@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, Calendar, RefreshCw, ChevronLeft, ChevronRight, Clock, MapPin, BookOpen, FileText, X } from "lucide-react";
+import { AlertCircle, Calendar, RefreshCw, ChevronLeft, ChevronRight, Clock, MapPin, BookOpen, FileText, X } from "lucide-react";
 
 import { fetchMyCoachProfile, fetchCoachSchedules } from "@/services/coachAPI";
 import { WorkScheduleItem } from "@/types/coach";
@@ -121,11 +121,59 @@ export default function CoachSchedulePage() {
   const goNextWeek = () => setWeekStart((d) => { const n = new Date(d); n.setDate(d.getDate() + 7); return n; });
   const goThisWeek = () => setWeekStart(startOfWeek(new Date()));
 
+  // โครงหน้าตอนโหลด — ล้อ layout จริง (หัวเรื่อง + ปุ่มเลื่อนสัปดาห์ + บอร์ด 7 คอลัมน์)
+  // เดิมเป็นไอคอนหมุนกลางจอ พอข้อมูลมาถึงบอร์ดจะกระโดดขึ้นมาทั้งแผง
   if (isLoading) {
     return (
-      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center text-gray-500">
-        <Loader2 className="w-12 h-12 animate-spin text-[#CC0000] mb-4" />
-        <span className="text-sm font-semibold tracking-wide animate-pulse">กำลังโหลดตารางงาน...</span>
+      <div className="max-w-7xl mx-auto animate-pulse space-y-6">
+        <div className="flex flex-col justify-between gap-4 border-b border-gray-150 pb-6 lg:flex-row lg:items-center">
+          <div className="space-y-2">
+            <div className="h-9 w-64 max-w-full rounded bg-gray-200" />
+            <div className="h-3.5 w-80 max-w-full rounded bg-gray-100" />
+          </div>
+          <div className="flex items-center gap-2 self-start lg:self-auto">
+            <div className="h-9 w-9 rounded-lg bg-gray-100" />
+            <div className="h-9 w-[200px] rounded bg-gray-200" />
+            <div className="h-9 w-9 rounded-lg bg-gray-100" />
+            <div className="h-9 w-9 rounded-lg bg-gray-100" />
+          </div>
+        </div>
+
+        {/* บอร์ดสัปดาห์ (จอ md+) */}
+        <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
+          <div className="grid border-b border-slate-200 bg-slate-50" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="space-y-1.5 border-l border-slate-200 py-3 first:border-l-0">
+                <div className="mx-auto h-3 w-10 rounded bg-slate-200" />
+                <div className="mx-auto h-2.5 w-12 rounded bg-slate-100" />
+              </div>
+            ))}
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            {Array.from({ length: 7 }).map((_, col) => (
+              <div key={col} className="min-h-[300px] space-y-2 border-l border-slate-100 p-2 first:border-l-0">
+                {Array.from({ length: [1, 2, 1, 2, 0, 2, 1][col] }).map((__, i) => (
+                  <div key={i} className="space-y-2 rounded-xl border border-slate-100 p-3">
+                    <div className="h-3.5 w-20 rounded bg-slate-200" />
+                    <div className="h-3 w-24 rounded bg-slate-100" />
+                    <div className="h-3 w-16 rounded bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* รายการ (จอเล็ก) */}
+        <div className="space-y-3 md:hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="h-4 w-40 max-w-full rounded bg-slate-200" />
+              <div className="h-3 w-28 rounded bg-slate-100" />
+              <div className="h-3 w-20 rounded bg-slate-100" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

@@ -209,23 +209,51 @@ export function useAdminResource<TItem, TDetail = unknown>(
     [closeModal, reload],
   );
 
+  // งานที่รอให้แอดมินกดยืนยัน (null = ไม่มีกล่องเปิดอยู่)
+  const [pending, setPending] = useState<{
+    message: string;
+    action: () => Promise<void>;
+    failMessage: string;
+    tone: "danger" | "default";
+  } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
   /**
    * ถามยืนยันก่อนทำ แล้วโหลดข้อมูลใหม่เมื่อเสร็จ
    *
    * ใช้กับการลบและการสลับสถานะ ซึ่งเป็นการกระทำที่ย้อนกลับไม่ได้หรือย้อนยาก
    */
+  // ⚠️ ห้ามกลับไปใช้ confirm() ของเบราว์เซอร์
+  // ข้อความยืนยันการลบยาวหลายบรรทัด (บอกว่าอะไรหายอะไรอยู่) แต่ Chrome ตัดจบ
+  // ด้วย "..." แอดมินจึงอ่านไม่ครบว่ากดแล้วจะเกิดอะไรขึ้นบ้าง
   const confirmAndRun = useCallback(
-    async (message: string, action: () => Promise<void>, failMessage: string) => {
-      if (!confirm(message)) return;
-      try {
-        await action();
-        await reload();
-      } catch (err: unknown) {
-        alert(errorMessage(err, failMessage));
-      }
+    async (
+      message: string,
+      action: () => Promise<void>,
+      failMessage: string,
+      tone: "danger" | "default" = "default",
+    ) => {
+      setPending({ message, action, failMessage, tone });
     },
-    [reload],
+    [],
   );
+
+  const closeConfirm = useCallback(() => setPending(null), []);
+
+  const runPending = useCallback(async () => {
+    if (!pending || confirmBusy) return;
+    setConfirmBusy(true);
+    try {
+      await pending.action();
+      await reload();
+      setPending(null);
+    } catch (err: unknown) {
+      setPending(null);
+      setError(errorMessage(err, pending.failMessage));
+    } finally {
+      setConfirmBusy(false);
+    }
+  }, [pending, confirmBusy, reload]);
 
   const term = searchTerm.trim().toLowerCase();
   const filtered = term ? items.filter((item) => config.matches(item, term)) : items;
@@ -256,5 +284,14 @@ export function useAdminResource<TItem, TDetail = unknown>(
     setFormError,
     submit,
     confirmAndRun,
+    // ส่งให้หน้าเอาไปผูกกับ <ConfirmDialog> — ทุกหน้าที่ใช้ hook นี้ต้องเรนเดอร์กล่อง
+    confirmDialog: {
+      open: pending !== null,
+      message: pending?.message ?? "",
+      tone: pending?.tone ?? "default",
+      busy: confirmBusy,
+      onConfirm: runPending,
+      onCancel: closeConfirm,
+    },
   };
 }

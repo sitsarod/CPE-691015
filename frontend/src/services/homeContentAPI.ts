@@ -92,6 +92,15 @@ export const homeContentAPI = {
     return res.data;
   },
 
+  // ตั้ง/ยกเลิกหัวหน้าผู้ฝึกสอน — ตั้งคนใหม่ backend จะปลดคนเดิมให้เอง
+  setHeadCoach: async (coachId: number, isHeadCoach: boolean): Promise<PublicCoach> => {
+    const res = await apiFetch<ApiResponse<PublicCoach>>(`/admin/home-content/coaches/${coachId}/head`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_head_coach: isHeadCoach }),
+    });
+    return res.data;
+  },
+
   // reuse pattern เดียวกับ announcementAPI.uploadImage — โพสต์ไป /upload พร้อม Bearer token
   uploadImage: async (file: File): Promise<string> => {
     const formData = new FormData();

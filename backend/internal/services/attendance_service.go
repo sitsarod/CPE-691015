@@ -167,13 +167,15 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	session := models.AttendanceSession{
-		PackageID:         pkg.ID,
-		SessionDate:       sessionDateValue(now),
-		Status:            models.AttendanceSessionOpen,
-		OpenedAt:          now,
-		OpenedByUserID:    adminUserID,
-		ScheduleStartTime: sch.StartTime,
-		ScheduleEndTime:   sch.EndTime,
+		PackageID:      pkg.ID,
+		SessionDate:    sessionDateValue(now),
+		Status:         models.AttendanceSessionOpen,
+		OpenedAt:       now,
+		OpenedByUserID: adminUserID,
+		// สแนปช็อตต้องเป็นรูปแบบมาตรฐาน เพราะถูกเอาไปเทียบกับ work_schedules
+		// ที่แอดมินกรอกจากอีกหน้าหนึ่ง (ดู normalizeClockTime)
+		ScheduleStartTime: normalizeClockTime(sch.StartTime),
+		ScheduleEndTime:   normalizeClockTime(sch.EndTime),
 	}
 
 	siblings, err := s.siblingPackageIDs(s.db, &session)

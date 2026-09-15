@@ -13,6 +13,7 @@ import {
   Trash2,
   ChevronDown,
   X,
+  Star,
 } from 'lucide-react';
 import { StatItem, FacilityTile, FaqItem, HeroSlide, PublicCoach } from '@/types/homeContent';
 import { homeContentAPI } from '@/services/homeContentAPI';
@@ -357,9 +358,11 @@ export function SlideGrid({
 export function CoachGrid({
   coaches,
   onToggle,
+  onSetHead,
 }: {
   coaches: PublicCoach[];
   onToggle: (coach: PublicCoach) => void;
+  onSetHead: (coach: PublicCoach) => void;
 }) {
   if (coaches.length === 0) {
     return <p className="text-sm text-gray-400">ยังไม่มีข้อมูลโค้ชในระบบ</p>;
@@ -372,14 +375,19 @@ export function CoachGrid({
           [coach.firstName, coach.lastName].filter(Boolean).join(' ') ||
           `โค้ช #${coach.id}`;
         return (
-          <button
+          // ⚠️ ห้ามเป็น <button> ครอบทั้งใบ เพราะข้างในมีปุ่ม "ตั้งเป็นหัวหน้า" อีกตัว
+          // ปุ่มซ้อนปุ่มเป็น HTML ที่ไม่ถูกต้อง เบราว์เซอร์จะยิง onClick ตัวนอกไปด้วย
+          <div
             key={coach.id}
-            onClick={() => onToggle(coach)}
-            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+            className={`flex flex-col gap-2 rounded-xl border p-3 transition-colors ${
               coach.feature_on_home
                 ? 'border-[#CC0000] bg-[#FFF0F0]'
-                : 'border-gray-200 hover:bg-gray-50'
+                : 'border-gray-200'
             }`}
+          >
+          <button
+            onClick={() => onToggle(coach)}
+            className="flex items-center gap-3 text-left"
           >
             {coach.profile_picture ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -405,6 +413,19 @@ export function CoachGrid({
               {coach.feature_on_home && <Check size={14} />}
             </span>
           </button>
+
+          <button
+            onClick={() => onSetHead(coach)}
+            className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+              coach.is_head_coach
+                ? 'border-[#CC0000] bg-[#CC0000] text-white'
+                : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }`}
+          >
+            <Star size={13} className={coach.is_head_coach ? 'fill-current' : ''} />
+            {coach.is_head_coach ? 'หัวหน้าผู้ฝึกสอน' : 'ตั้งเป็นหัวหน้า'}
+          </button>
+          </div>
         );
       })}
     </div>

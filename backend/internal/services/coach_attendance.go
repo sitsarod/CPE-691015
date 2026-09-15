@@ -37,6 +37,8 @@ func (s *AttendanceService) findCoachByQR(code string) (*models.Coach, error) {
 }
 
 // checkInCoach บันทึกว่าโค้ชมาสอนคาบนี้
+//
+// ผ่าน loadOpenSession ด่านเดียวกับนักเรียน — คาบที่สแกนไม่ได้แล้ว โค้ชก็ไม่ควรสแกนได้
 func (s *AttendanceService) checkInCoach(
 	sessionID uint,
 	coach *models.Coach,
@@ -45,6 +47,9 @@ func (s *AttendanceService) checkInCoach(
 }
 
 // recordCoachAttendance คือทางเขียนบันทึกเช็คชื่อของโค้ชทางเดียวในระบบ
+//
+// ใช้ร่วมกันทั้งโค้ชสแกน QR เอง (qr_code, recordedBy=nil) และแอดมินเช็คให้ (manual, recordedBy=แอดมิน)
+// รวมไว้ที่เดียวเพื่อให้สองทางผ่านด่านเดียวกันและได้ตารางงานฉุกเฉินเหมือนกัน
 func (s *AttendanceService) recordCoachAttendance(
 	sessionID uint,
 	coach *models.Coach,
@@ -58,6 +63,9 @@ func (s *AttendanceService) recordCoachAttendance(
 
 	var record models.CoachAttendance
 
+	// ทรานแซกชันเดียว เพราะการสแกนหนึ่งครั้งอาจสร้างตารางงานให้ด้วย
+	// ถ้าบันทึกเช็คชื่อล้มเหลวทีหลัง ตารางงานที่เพิ่งสร้างต้องหายไปด้วย
+	// ไม่งั้นเหลือตารางงานลอย ๆ ที่ไปโผล่ในการคำนวณค่าจ้าง
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		session, err := s.loadOpenSession(tx, sessionID)
 		if err != nil {
@@ -81,6 +89,8 @@ func (s *AttendanceService) recordCoachAttendance(
 			RecordedByUserID:    recordedBy,
 		}
 
+		// พึ่ง unique index แทน SELECT-แล้ว-INSERT — สแกนรัวสองครั้ง
+		// สอง request จะอ่านเจอ "ยังไม่มี" พร้อมกันทั้งคู่
 		if err := tx.Create(&record).Error; err != nil {
 			if isUniqueViolation(err) {
 				return ErrCoachAlreadyWorkedIn
@@ -109,6 +119,16 @@ func (s *AttendanceService) recordCoachAttendance(
 }
 
 // ensureCoachWorkSchedule ทำให้แน่ใจว่าโค้ชมีตารางงานของคาบนี้ คืน true ถ้ามีอยู่ก่อนแล้ว
+//
+// รองรับกรณีจองสนามเพิ่มกะทันหันแล้วเรียกโค้ชมาเสริม ซึ่งแอดมินยังไม่ได้ assign
+//
+// ⚠️ ตั้งใจไม่เรียก validateScheduleSlot
+// กฎเวลาว่าง/เวลาชน/สนามซ้อน มีไว้กันแอดมินวางแผนผิด แต่ตรงนี้โค้ชมายืนอยู่จริงแล้ว
+// ปฏิเสธไปก็ไม่ได้ทำให้เขาไม่ได้สอน แค่ทำให้ข้อมูลหาย — ติดธง IsEmergency ให้มาตรวจแทน
+// (ธงเดียวกับที่แอดมินติ๊ก "กรณีฉุกเฉิน" ตอน assign เอง)
+//
+// ⚠️ ต้องเป็น find-or-create ห้าม create เปล่า ๆ
+// ทุกแถว WorkSchedule คือค่าจ้างหนึ่งหน่วย สร้างซ้ำคาบเดิม = โค้ชได้เงินสองเท่า
 func (s *AttendanceService) ensureCoachWorkSchedule(
 	tx *gorm.DB,
 	coachID uint,
@@ -131,12 +151,31 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 		return true, nil
 	}
 
+	// ⚠️ ยังไม่พอ — ต้องเช็คแถวที่ "เวลาซ้อนกัน" ด้วย ไม่ใช่แค่เวลาตรงเป๊ะ
+	//
+	// classScheduleScope จับคู่ด้วยเวลาแบบตรงเป๊ะ ถ้าแอดมินมอบหมายโค้ชไว้ 18:00-20:00
+	// แต่คาบเรียนจริงคือ 16:00-20:00 (เวลาที่แอดมินกรอกไม่มีอะไรบังคับให้ตรงกับ
+	// package_schedules) การค้นด้วยเวลาจะไม่เจอแถวเดิม แล้วสร้างแถวใหม่ขึ้นมา
+	//
+	// ผลคือโค้ชมีตารางงานสองแถวของคาบเดียวกัน = ค่าจ้างสองหน่วย
+	// (พิสูจน์แล้ว: แถวตารางงาน 1 → 2 · sessions=2 expected=600 ทั้งที่สอนคาบเดียว)
+	//
+	// แถวที่เวลาซ้อนกันในวันเดียวกันของโค้ชคนเดียวกัน = คาบเดียวกันแน่นอน
+	// เพราะคนหนึ่งสอนสองคาบพร้อมกันไม่ได้ (validateScheduleSlot บังคับกฎนี้อยู่แล้ว
+	// สำหรับเส้นที่แอดมินมอบหมาย) จึงถือว่ามีอยู่แล้ว ไม่สร้างเพิ่ม
+	if overlapping, err := s.coachHasOverlappingSchedule(tx, coachID, session); err != nil {
+		return false, err
+	} else if overlapping {
+		return true, nil
+	}
+
 	var pkg models.Package
 	if err := tx.Select("id", "course_id").First(&pkg, session.PackageID).Error; err != nil {
 		return false, errors.New("ไม่พบแพ็กเกจของรอบนี้")
 	}
 
 	// ผูก PackageScheduleID ให้ด้วยถ้าหาเจอ แถวที่สร้างอัตโนมัติจะได้หน้าตา
+	// เหมือนแถวที่แอดมิน assign เอง ไม่ใช่ของแปลกปลอมในตาราง
 	var packageScheduleID *uint
 	var ps models.PackageSchedule
 	if err := tx.Where("package_id = ? AND day_of_week = ?",
@@ -147,9 +186,11 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 
 	schedule := models.WorkSchedule{
 		Date:      date,
-		StartTime: session.ScheduleStartTime,
-		EndTime:   session.ScheduleEndTime,
+		StartTime: normalizeClockTime(session.ScheduleStartTime),
+		EndTime:   normalizeClockTime(session.ScheduleEndTime),
 
+		// court_number เว้นว่างให้แอดมินเติม — AttendanceSession ไม่เก็บสนาม
+		// และ validateScheduleSlot เองก็ถือว่าสนามเป็น optional อยู่แล้ว
 		Description: "เพิ่มอัตโนมัติจากการสแกนเช็คชื่อของโค้ช",
 
 		CoachID:           coachID,
@@ -162,6 +203,47 @@ func (s *AttendanceService) ensureCoachWorkSchedule(
 	}
 	if err := tx.Create(&schedule).Error; err != nil {
 		return false, errors.New("ไม่สามารถเพิ่มตารางงานให้โค้ชได้")
+	}
+	return false, nil
+}
+
+// coachHasOverlappingSchedule บอกว่าโค้ชมีตารางงานที่ช่วงเวลาซ้อนกับคาบนี้ในวันเดียวกันแล้วหรือยัง
+//
+// ใช้เป็นด่านที่สองต่อจากการค้นด้วยเวลาแบบตรงเป๊ะ (ดู ensureCoachWorkSchedule)
+// เพื่อกันการสร้างแถวซ้ำเมื่อเวลาที่แอดมินกรอกไม่ตรงกับเวลาคาบจริง
+//
+// เทียบเป็น "นาที" ไม่ใช่สตริง เพราะข้อมูลในฐานมีทั้ง "18:00" และ "18:00:00"
+// (timeToMinutesWS รองรับทั้งสองแบบ)
+func (s *AttendanceService) coachHasOverlappingSchedule(
+	tx *gorm.DB,
+	coachID uint,
+	session *models.AttendanceSession,
+) (bool, error) {
+	start, err1 := timeToMinutesWS(session.ScheduleStartTime)
+	end, err2 := timeToMinutesWS(session.ScheduleEndTime)
+	if err1 != nil || err2 != nil {
+		// รอบรุ่นเก่าที่ไม่มีสแนปช็อตเวลา เทียบการซ้อนไม่ได้ ถือว่าไม่ซ้อน
+		return false, nil
+	}
+
+	date := session.SessionDate.Format("2006-01-02")
+
+	var rows []models.WorkSchedule
+	if err := tx.Select("id", "start_time", "end_time").
+		Where("coach_id = ? AND date = ?", coachID, date).
+		Find(&rows).Error; err != nil {
+		return false, errors.New("ไม่สามารถตรวจตารางงานของโค้ชได้")
+	}
+
+	for _, w := range rows {
+		ws, e1 := timeToMinutesWS(w.StartTime)
+		we, e2 := timeToMinutesWS(w.EndTime)
+		if e1 != nil || e2 != nil {
+			continue
+		}
+		if start < we && ws < end {
+			return true, nil
+		}
 	}
 	return false, nil
 }

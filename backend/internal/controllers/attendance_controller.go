@@ -57,6 +57,13 @@ func mapAttendanceError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrFaceEngineUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 
+	// ชนกับรอบที่มีอยู่ = ข้อมูลต้องมีคนไปแก้ ไม่ใช่ระบบพัง
+	//
+	// ⚠️ ต้องส่ง err.Error() ออกไปจริง ๆ เพราะข้อความบอกว่าไปชนกับรอบไหน
+	// (วัน/เวลาของรอบที่มีอยู่) แอดมินต้องเอาไปตามแก้ต่อได้ ไม่ใช่ข้อความลอย ๆ
+	case errors.Is(err, services.ErrMissedClassCollision):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+
 	case errors.Is(err, services.ErrSessionClosed),
 		errors.Is(err, services.ErrSessionExists),
 		errors.Is(err, services.ErrNotInClassTime),
@@ -75,7 +82,15 @@ func mapAttendanceError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// ⚠️ ห้ามส่ง err.Error() ของ GORM/pgx ออกไป
+		//
+		// ผู้ใช้เคยเห็นข้อความเต็ม ๆ ว่า
+		//   duplicate key value violates unique constraint "idx_..." (SQLSTATE 23505)
+		// ซึ่งบอกชื่อ index และโครงสร้างตารางให้คนนอก และผู้ใช้เอาไปทำอะไรไม่ได้
+		//
+		// รายละเอียดไปอยู่ใน log ฝั่งเซิร์ฟเวอร์แทน
+		log.Printf("[api] จัดการการเช็คชื่อไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ระบบขัดข้อง กรุณาลองใหม่ หรือแจ้งผู้ดูแลระบบ"})
 	}
 }
 
@@ -92,7 +107,8 @@ func uintParam(c *gin.Context, name, label string) (uint, bool) {
 func (ctrl *AttendanceController) GetOpenablePackages(c *gin.Context) {
 	items, err := ctrl.service.GetOpenablePackages()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] ดึงรายการแพ็กเกจที่เปิดรอบได้ ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายการแพ็กเกจได้"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": items})
@@ -124,7 +140,8 @@ func (ctrl *AttendanceController) OpenSession(c *gin.Context) {
 func (ctrl *AttendanceController) GetOpenSessions(c *gin.Context) {
 	items, err := ctrl.service.GetOpenSessions()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] ดึงรอบที่เปิดค้างอยู่ ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายการรอบที่เปิดค้างอยู่ได้"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": items})

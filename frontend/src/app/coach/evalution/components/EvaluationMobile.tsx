@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import EvaluationSkeleton from './EvaluationSkeleton';
 import { CheckCircle2, CircleAlert, X, List, ChevronRight } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { EvaluationManager, EvaluationStudent, WeeklyEvaluation, FilterTab, formatRelative } from './useEvaluation';
@@ -163,11 +164,7 @@ export function EvaluationMobile({ manager }: { manager: EvaluationManager }) {
     pendingCount,
   } = manager;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-gray-400">กำลังโหลดรายชื่อนักเรียน...</div>
-    );
-  }
+  if (loading) return <EvaluationSkeleton variant="mobile" />;
 
   if (loadError) {
     return <div className="px-4 py-20 text-center text-sm text-red-500">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>;

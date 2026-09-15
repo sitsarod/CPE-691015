@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Dumbbell, CircleCheck, CircleSlash, Loader2, Phone, Eye, CalendarClock, Power, Trash2, ChevronRight } from "lucide-react";
+import { Dumbbell, CircleCheck, CircleSlash, Phone, Eye, CalendarClock, Power, Trash2, ChevronRight } from "lucide-react";
 import { Pill, SummaryCard } from "@/components/admin/ManagementUI";
 import { AdminPageHeader, AdminErrorBanner } from "@/components/admin/shared/AdminPageShell";
 import { MemberFilterToolbar } from "@/components/admin/MemberFilterToolbar";
@@ -49,9 +49,19 @@ export function CoachManagementMobile({ manager }: { manager: CoachManagement })
       {/* การ์ด — กดที่ใดก็ได้ของการ์ดเพื่อเปิดเมนูจัดการ */}
       <div className="mt-6 space-y-2.5">
         {manager.isLoading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-7 w-7 animate-spin text-[#E63946]" />
-          </div>
+          // การ์ดจำลองตอนโหลด — ล้อการ์ดจริง (รูปกลม + ชื่อ + อีเมล + ป้ายระดับ)
+          <>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex animate-pulse items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="h-11 w-11 flex-none rounded-full bg-gray-200" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-40 max-w-full rounded bg-gray-200" />
+                  <div className="h-3 w-32 max-w-full rounded bg-gray-100" />
+                </div>
+                <div className="h-6 w-14 flex-none rounded-full bg-gray-100" />
+              </div>
+            ))}
+          </>
         ) : manager.filteredCoaches.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-white py-16 text-center text-sm text-gray-400">
             ไม่พบข้อมูลโค้ชในระบบ

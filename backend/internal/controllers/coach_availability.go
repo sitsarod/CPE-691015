@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -25,7 +26,8 @@ func NewCoachAvailabilityController(s *services.CoachAvailabilityService) *Coach
 func (ctrl *CoachAvailabilityController) GetAllAvailabilities(c *gin.Context) {
 	all, err := ctrl.service.GetAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve availabilities: " + err.Error()})
+		log.Printf("[api] ดึงเวลาว่างทั้งหมด ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
 		return
 	}
 	c.JSON(http.StatusOK, all)
@@ -53,7 +55,8 @@ func (ctrl *CoachAvailabilityController) GetAvailability(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve availability: " + err.Error()})
+		log.Printf("[api] ดึงเวลาว่าง ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
 		return
 	}
 
@@ -75,10 +78,14 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 		return
 	}
 
-	if len(req.Availabilities) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "availabilities must not be empty"})
-		return
-	}
+	// ⚠️ ตั้งใจไม่บล็อกรายการว่าง
+	//
+	// เดิมตอบ 400 เมื่อส่ง [] มา ทำให้โค้ชที่จะลาออกหรือพักยาว "ล้างตารางตัวเองไม่ได้"
+	// ต้องไปขอแอดมินแก้ให้ ทั้งที่เป็นข้อมูลของตัวเอง
+	//
+	// การล้างทั้งหมดยังคงเดินผ่านด่านเดิมทุกด่าน — ถ้ายังมีคาบสอนที่ถูกมอบหมายไว้
+	// ในอนาคต ensureNoScheduleConflict จะปฏิเสธพร้อมบอกว่าติดคาบไหน
+	// (ล้างได้เมื่อไม่มีงานค้าง ซึ่งเป็นเงื่อนไขที่ถูกต้อง)
 
 	// ดึงตัวตนผู้เรียกจาก JWT เพื่อตรวจสิทธิ์ความเป็นเจ้าของ (กัน IDOR)
 	userID, role, ok := GetAuthContext(c)
@@ -104,7 +111,8 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update availability: " + err.Error()})
+		log.Printf("[api] บันทึกเวลาว่าง ไม่สำเร็จ: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกเวลาว่างได้"})
 		return
 	}
 

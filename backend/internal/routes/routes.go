@@ -53,6 +53,8 @@ func SetupRoutes(r *gin.Engine) {
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
 
 	expenseService := services.NewExpenseService(db)
+	settingsService := services.NewSettingsService(db)
+	settingsController := controllers.NewSettingsController(settingsService)
 	expenseController := controllers.NewExpenseController(expenseService, cloudinaryService)
 
 	r.Use(middlewares.CORSMiddleware())
@@ -241,6 +243,13 @@ func SetupRoutes(r *gin.Engine) {
 
 		api.GET("/notifications/stream", notificationController.Stream)
 
+		// ค่าตั้งค่าระดับองค์กร — อ่านได้ทุกคนที่ล็อกอิน แก้ได้เฉพาะแอดมิน
+		// (เดิมค่านี้อยู่ใน localStorage ของแต่ละเครื่อง ทำให้แอดมินเห็นกฎไม่ตรงกัน)
+		protected.GET("/settings/coach-ratio", settingsController.GetCoachRatio)
+
+		// --- QR ประจำตัว ---
+		// อ้างตัวตนจาก JWT อย่างเดียว ไม่มี path param จึงดึง QR ของคนอื่นไม่ได้
+		// ใช้ได้ทั้งนักเรียนและโค้ช (แอดมินจะได้ 404 เพราะไม่มี QR ประจำตัว)
 		protected.GET("/me/qr", personalQRController.GetMyQR)
 
 		consentGroup := protected.Group("/consents/face")
@@ -408,10 +417,13 @@ func SetupRoutes(r *gin.Engine) {
 
 		protected.POST("/upload", expenseController.UploadFileHandler)
 
+		adminOnly.PUT("/admin/settings/coach-ratio", settingsController.UpdateCoachRatio)
+
 		expensesGroup := adminOnly.Group("/expenses")
 		{
 			expensesGroup.GET("/", expenseController.GetAllExpenses)
 			expensesGroup.POST("/", expenseController.CreateExpense)
+			expensesGroup.POST("/batch", expenseController.CreateExpensesBatch) // หลายรายการในทรานแซกชันเดียว (ค่าจ้าง + โบนัส)
 			expensesGroup.PATCH("/:id", expenseController.UpdateExpense)
 			expensesGroup.DELETE("/:id", expenseController.DeleteExpense)
 		}
@@ -452,6 +464,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			adminHomeGroup.GET("/coaches", homeContentController.GetAllCoachesForHome)
 			adminHomeGroup.PATCH("/coaches/:id/feature", homeContentController.SetCoachFeature)
+			adminHomeGroup.PATCH("/coaches/:id/head", homeContentController.SetHeadCoach) // หัวหน้าผู้ฝึกสอน มีได้คนเดียว
 		}
 
 		api.GET("/announcements", announcementController.GetActiveAnnouncements)

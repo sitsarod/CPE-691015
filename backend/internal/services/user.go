@@ -1,13 +1,12 @@
 package services
 
 import (
-
-	"CPE-691015/internal/models"
 	"CPE-691015/internal/dto"
+	"CPE-691015/internal/models"
 	"errors"
-	"time"
-	"gorm.io/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"time"
 )
 
 // Sentinel errors ของการลบผู้ใช้ — ให้ controller แมป HTTP status ได้ถูก
@@ -20,7 +19,7 @@ var (
 	ErrDeleteSelf = errors.New("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ")
 )
 
-type UserService struct{
+type UserService struct {
 	db *gorm.DB
 
 	// faceStorage ใช้ตอนลบสมาชิก เพื่อลบไฟล์รูปใบหน้าบน Cloudinary ให้หมดจริง
@@ -119,7 +118,7 @@ func (s *UserService) GetUserProfile(id uint) (*models.User, error) {
 
 // CreateUser inserts a new user and their customer profile into the database [POST]
 func (s *UserService) CreateUser(user *models.User) error {
-	
+
 	// กติกาอีเมลขึ้นกับบทบาท (ดู email_policy.go)
 	// ผู้เรียน/โค้ชใช้อีเมลอะไรก็ได้ ส่วนแอดมินห้ามใช้อีเมลฟรีสาธารณะ
 	cleanEmail := NormalizeEmail(user.Email)
@@ -177,55 +176,52 @@ func (s *UserService) CreateUser(user *models.User) error {
 	return s.db.Create(user).Error
 }
 
-
 // UpdateUser updates an existing user and their customer/coach details [PATCH]
 func (s *UserService) UpdateUser(id uint, input dto.UpdateProfileInput) (*models.User, error) {
-    var user models.User
+	var user models.User
 
-    err := s.db.Preload("Customer").Preload("Coach").First(&user, id).Error
-    if err != nil {
-        return nil, err
-    }
+	err := s.db.Preload("Customer").Preload("Coach").First(&user, id).Error
+	if err != nil {
+		return nil, err
+	}
 
+	// ชื่อ นามสกุล และอีเมล ย้ายไปให้แอดมินแก้ผ่าน PATCH /api/admin/users/:id แล้ว
+	// (ดูเหตุผลที่คอมเมนต์ของ dto.UpdateProfileInput) เส้นนี้จึงเหลือแค่ช่องทางติดต่อ
 
-    // ชื่อ นามสกุล และอีเมล ย้ายไปให้แอดมินแก้ผ่าน PATCH /api/admin/users/:id แล้ว
-    // (ดูเหตุผลที่คอมเมนต์ของ dto.UpdateProfileInput) เส้นนี้จึงเหลือแค่ช่องทางติดต่อ
+	if user.Role == "customer" && user.Customer != nil {
+		customerUpdate := make(map[string]interface{})
+		if input.PhoneNumber != "" {
+			customerUpdate["phone_number"] = input.PhoneNumber
+		}
+		if input.ParentEmail != "" {
+			customerUpdate["parent_email"] = input.ParentEmail
+		}
+		if input.ParentPhoneNumber != "" {
+			customerUpdate["parent_phone_number"] = input.ParentPhoneNumber
+		}
+		// LineID / Facebook ไม่บังคับ จึงยอมให้ส่งค่าว่างมาเพื่อลบข้อมูลเดิมได้
+		if input.LineID != nil {
+			customerUpdate["line_id"] = *input.LineID
+		}
+		if input.Facebook != nil {
+			customerUpdate["facebook"] = *input.Facebook
+		}
+		// รูปโปรไฟล์ (อัปโหลดขึ้น Cloudinary แล้วส่ง URL มาบันทึก)
+		if input.ProfilePicture != nil {
+			customerUpdate["profile_picture"] = *input.ProfilePicture
+		}
 
-    if user.Role == "customer" && user.Customer != nil {
-        customerUpdate := make(map[string]interface{})
-        if input.PhoneNumber != "" {
-            customerUpdate["phone_number"] = input.PhoneNumber
-        }
-        if input.ParentEmail != "" {
-            customerUpdate["parent_email"] = input.ParentEmail
-        }
-        if input.ParentPhoneNumber != "" {
-            customerUpdate["parent_phone_number"] = input.ParentPhoneNumber
-        }
-        // LineID / Facebook ไม่บังคับ จึงยอมให้ส่งค่าว่างมาเพื่อลบข้อมูลเดิมได้
-        if input.LineID != nil {
-            customerUpdate["line_id"] = *input.LineID
-        }
-        if input.Facebook != nil {
-            customerUpdate["facebook"] = *input.Facebook
-        }
-        // รูปโปรไฟล์ (อัปโหลดขึ้น Cloudinary แล้วส่ง URL มาบันทึก)
-        if input.ProfilePicture != nil {
-            customerUpdate["profile_picture"] = *input.ProfilePicture
-        }
+		if len(customerUpdate) > 0 {
+			if err := s.db.Model(user.Customer).Updates(customerUpdate).Error; err != nil {
+				return nil, err
+			}
+		}
+	} else if user.Role == "coach" {
 
-        if len(customerUpdate) > 0 {
-            if err := s.db.Model(user.Customer).Updates(customerUpdate).Error; err != nil {
-                return nil, err
-            }
-        }
-    } else if user.Role == "coach" {
+	}
 
-    }
-
-   
-    s.db.Preload("Customer").Preload("Coach").First(&user, id) 
-    return &user, nil
+	s.db.Preload("Customer").Preload("Coach").First(&user, id)
+	return &user, nil
 }
 
 // Delete removes a user from the database [DELETE]
@@ -294,25 +290,27 @@ func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, act
 	// ไฟล์ภาพใบหน้าบนดิสก์ลบ "หลัง" commit เท่านั้น เพราะการลบไฟล์ย้อนกลับไม่ได้
 	// ถ้าลบระหว่าง transaction แล้ว rollback ทีหลัง จะได้แถวที่ยังอยู่แต่ไฟล์หายไป
 	// ซึ่งซ่อมไม่ได้ (ดูเหตุผลเต็มที่ services.RemovePhotoFiles)
-	var photoFiles []string
-	var faceKeys []string
+	var files erasureFiles
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		var files []string
-		var keys []string
+		var found erasureFiles
 		var err error
 
 		switch user.Role {
 		case models.CustomerRole:
-			files, keys, err = deleteCustomerData(tx, user.ID)
+			found, err = deleteCustomerData(tx, user.ID, actorUserID)
 		case models.CoachRole:
-			files, keys, err = deleteCoachData(tx, user.ID)
+			found, err = deleteCoachData(tx, user.ID, actorUserID)
 		}
 		if err != nil {
 			return err
 		}
-		photoFiles = files
-		faceKeys = keys
+		files.merge(found)
+
+		// ล้างก่อน Delete เพราะหลัง soft delete แถวจะหลุด scope ของ GORM แล้ว update ไม่โดน
+		if err := scrubUserPII(tx, user.ID); err != nil {
+			return err
+		}
 
 		return tx.Delete(&user).Error
 	})
@@ -320,8 +318,9 @@ func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, act
 		return err
 	}
 
-	RemovePhotoFiles(photoFiles)
-	DestroyFaceImageFiles(faceStorage, faceKeys)
+	RemovePhotoFiles(files.photos)
+	removeUploadedFiles(files.uploads)
+	DestroyFaceImageFiles(faceStorage, files.faceKeys)
 	return nil
 }
 
@@ -367,55 +366,88 @@ func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, act
 // คืนรายการ URL ของไฟล์ภาพที่ต้องลบตามหลัง transaction commit
 // คืนสองรายการที่ต้องเอาไปลบ "หลัง" commit:
 // URL ของไฟล์ในเครื่อง (ตาราง photos) และ StorageKey บน Cloudinary (ตาราง face_images)
-func deleteCustomerData(tx *gorm.DB, userID uint) ([]string, []string, error) {
+func deleteCustomerData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFiles, error) {
+	var files erasureFiles
+
 	var customer models.Customer
 	if err := tx.Where("user_id = ?", userID).First(&customer).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
-			return nil, nil, nil
+			return files, nil
 		}
-		return nil, nil, err
+		return files, err
+	}
+
+	// ปิดประวัติความยินยอมก่อนลบข้อมูลชีวภาพ จะได้มีบันทึกว่าถูกทำลายเมื่อไหร่
+	subject := &consentSubject{
+		Role:       models.CustomerRole,
+		CustomerID: &customer.ID,
+		Status:     customer.FaceConsentStatus,
+	}
+	if err := endFaceConsent(tx, subject, actorUserID); err != nil {
+		return files, err
 	}
 
 	// ภาพใบหน้าเป็นข้อมูลชีวภาพ (PDPA ม.26)
 	// เมื่อไม่มีสถานะนักเรียนแล้ว ฐานที่ใช้เก็บก็หมดไปด้วย จึงต้องลบทันที
 	photoFiles, err := DeleteCustomerPhotos(tx, customer.ID)
 	if err != nil {
-		return nil, nil, err
+		return files, err
 	}
+	files.photos = photoFiles
 
 	// รูปที่ใช้เช็คชื่ออยู่คนละตารางกับ photos ต้องลบแยก
 	// ไม่งั้นแถวค้างถาวรโดยไม่มีเจ้าของ และไฟล์บนคลาวด์ไม่มีใครชี้ถึงอีกเลย
 	faceKeys, err := DeleteCustomerFaceImages(tx, customer.ID)
 	if err != nil {
-		return nil, nil, err
+		return files, err
+	}
+	files.faceKeys = faceKeys
+
+	files.uploads = append(files.uploads, customer.ProfilePicture)
+
+	if err := scrubCustomerPII(tx, customer.ID); err != nil {
+		return files, err
 	}
 
 	if err := tx.Delete(&customer).Error; err != nil {
-		return nil, nil, err
+		return files, err
 	}
-	return photoFiles, faceKeys, nil
+	return files, nil
 }
 
 // deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
 //
 // คืนสองรายการที่ต้องเอาไปลบ "หลัง" commit เหมือนฝั่งผู้เรียน:
 // URL ของไฟล์ในเครื่อง (ตาราง photos) และ StorageKey บน Cloudinary (ตาราง face_images)
-func deleteCoachData(tx *gorm.DB, userID uint) ([]string, []string, error) {
+func deleteCoachData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFiles, error) {
+	var files erasureFiles
+
 	var coach models.Coach
 	if err := tx.Where("user_id = ?", userID).First(&coach).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// ไม่มีโปรไฟล์ก็ไม่ต้องลบอะไร ไม่ถือว่าผิดพลาด
-			return nil, nil, nil
+			return files, nil
 		}
-		return nil, nil, err
+		return files, err
+	}
+
+	// ปิดประวัติความยินยอมก่อนลบข้อมูลชีวภาพ จะได้มีบันทึกว่าถูกทำลายเมื่อไหร่
+	subject := &consentSubject{
+		Role:    models.CoachRole,
+		CoachID: &coach.ID,
+		Status:  coach.FaceConsentStatus,
+	}
+	if err := endFaceConsent(tx, subject, actorUserID); err != nil {
+		return files, err
 	}
 
 	// ข้อมูลชีวภาพ เหตุผลเดียวกับฝั่งผู้เรียน
 	photoFiles, err := DeleteCoachPhotos(tx, coach.ID)
 	if err != nil {
-		return nil, nil, err
+		return files, err
 	}
+	files.photos = photoFiles
 
 	// รูปที่ใช้สแกนหน้าเช็คชื่อเข้างานอยู่คนละตารางกับ photos ต้องลบแยก
 	//
@@ -425,13 +457,15 @@ func deleteCoachData(tx *gorm.DB, userID uint) ([]string, []string, error) {
 	// PDPA ที่เขียนกำกับไว้เองด้านบน
 	faceKeys, err := DeleteCoachFaceImages(tx, coach.ID)
 	if err != nil {
-		return nil, nil, err
+		return files, err
 	}
+	files.faceKeys = faceKeys
+	files.uploads = append(files.uploads, coach.ProfilePicture, coach.HomeImage)
 
 	// เวลาว่างประจำสัปดาห์ — เป็นข้อมูลสำหรับจัดตารางล่วงหน้าเท่านั้น ไม่มีคุณค่าย้อนหลัง
 	// ถ้าไม่ลบ โค้ชที่ออกไปแล้วจะยังโผล่เป็นตัวเลือกในหน้าจัดตารางของแอดมิน
 	if err := tx.Where("coach_id = ?", coach.ID).Delete(&models.CoachAvailability{}).Error; err != nil {
-		return nil, nil, err
+		return files, err
 	}
 
 	// คาบสอนตั้งแต่วันนี้เป็นต้นไป — ยังไม่เกิดขึ้นจริง ต้องเอาออกจากปฏิทิน
@@ -442,13 +476,17 @@ func deleteCoachData(tx *gorm.DB, userID uint) ([]string, []string, error) {
 	today := time.Now().Format("2006-01-02")
 	if err := tx.Where("coach_id = ? AND date >= ?", coach.ID, today).
 		Delete(&models.WorkSchedule{}).Error; err != nil {
-		return nil, nil, err
+		return files, err
+	}
+
+	if err := scrubCoachPII(tx, coach.ID); err != nil {
+		return files, err
 	}
 
 	if err := tx.Delete(&coach).Error; err != nil {
-		return nil, nil, err
+		return files, err
 	}
-	return photoFiles, faceKeys, nil
+	return files, nil
 }
 
 // IsActiveStudent ตรวจสอบว่าลูกค้ามีคอร์สที่กำลังเรียนอยู่หรือไม่
@@ -456,9 +494,8 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 	var customer models.Customer
 	err := s.db.Where("user_id = ?", userID).First(&customer).Error
 	if err != nil {
-		return false, nil 
+		return false, nil
 	}
-
 
 	expireStaleEnrollments(s.db)
 
@@ -474,52 +511,52 @@ func (s *UserService) IsActiveStudent(userID uint) (bool, error) {
 }
 
 func (s *UserService) GetActiveStudents() ([]models.User, error) {
-    var users []models.User
+	var users []models.User
 
-    expireStaleEnrollments(s.db)
+	expireStaleEnrollments(s.db)
 
-    err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
-        Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
-        Where("enrollments.deleted_at IS NULL").
-        Where(
-            s.db.Where("enrollments.status = ? AND enrollments.remaining_sessions > 0",
-                models.EnrollmentStatusActive).
-                Or("EXISTS (?)", unconsumedCarryOver(s.db)),
-        ).
-        Group("users.id").
-        Preload("Customer").
-        Find(&users).Error
+	err := s.db.Joins("JOIN customers ON customers.user_id = users.id").
+		Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
+		Where("enrollments.deleted_at IS NULL").
+		Where(
+			s.db.Where("enrollments.status = ? AND enrollments.remaining_sessions > 0",
+				models.EnrollmentStatusActive).
+				Or("EXISTS (?)", unconsumedCarryOver(s.db)),
+		).
+		Group("users.id").
+		Preload("Customer").
+		Find(&users).Error
 
-    return users, err
+	return users, err
 }
 
 // unconsumedCarryOver = ครั้งที่ระบบทบไว้ให้แล้วแต่ยังไม่ถูกดูดเข้าใบใหม่และยังไม่หมดอายุ
 func unconsumedCarryOver(db *gorm.DB) *gorm.DB {
-    return db.Model(&models.SessionCarryOver{}).
-        Select("1").
-        Where("session_carry_overs.customer_id = customers.id").
-        Where("session_carry_overs.deleted_at IS NULL").
-        Where("session_carry_overs.consumed_by_enrollment_id IS NULL").
-        Where("session_carry_overs.expires_at > ?", time.Now())
+	return db.Model(&models.SessionCarryOver{}).
+		Select("1").
+		Where("session_carry_overs.customer_id = customers.id").
+		Where("session_carry_overs.deleted_at IS NULL").
+		Where("session_carry_overs.consumed_by_enrollment_id IS NULL").
+		Where("session_carry_overs.expires_at > ?", time.Now())
 }
 
 // CountCarryOverSessions = จำนวนครั้งที่ทบไว้ให้ลูกค้าคนนี้และยังรอใช้อยู่
 func (s *UserService) CountCarryOverSessions(userID uint) int64 {
-    customerID, err := ResolveCustomerID(s.db, userID)
-    if err != nil {
-        return 0
-    }
+	customerID, err := ResolveCustomerID(s.db, userID)
+	if err != nil {
+		return 0
+	}
 
-    var total *int64
-    s.db.Model(&models.SessionCarryOver{}).
-        Select("SUM(sessions)").
-        Where("customer_id = ? AND consumed_by_enrollment_id IS NULL AND expires_at > ?",
-            customerID, time.Now()).
-        Scan(&total)
-    if total == nil {
-        return 0
-    }
-    return *total
+	var total *int64
+	s.db.Model(&models.SessionCarryOver{}).
+		Select("SUM(sessions)").
+		Where("customer_id = ? AND consumed_by_enrollment_id IS NULL AND expires_at > ?",
+			customerID, time.Now()).
+		Scan(&total)
+	if total == nil {
+		return 0
+	}
+	return *total
 }
 
 // FindAccountByIdentifier ค้นหาบัญชีผู้ใช้จาก Email หรือ PhoneNumber

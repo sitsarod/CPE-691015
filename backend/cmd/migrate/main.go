@@ -86,7 +86,9 @@ func main() {
 		&models.Court{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
+		&models.AppSetting{},
 		&models.LegalDocumentRevision{},
+		
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}
@@ -160,6 +162,12 @@ func main() {
 
 	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
+	}
+
+	// รูปแบบเวลาต้องเป็นแบบเดียวก่อนขั้นอื่น เพราะขั้นที่เหลือจับคู่คลาสด้วยเวลา
+	// ถ้าล้มต้องหยุด — ปล่อยให้ปนกันจะทำให้การจับคู่พลาดเป็นบางแถวแบบเดาไม่ได้
+	if err := services.NormalizeClockTimeColumns(db); err != nil {
+		log.Fatalf("แปลงรูปแบบเวลาให้เป็นมาตรฐานเดียวไม่สำเร็จ: %v", err)
 	}
 
 	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {

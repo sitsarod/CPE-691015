@@ -80,6 +80,7 @@ func main() {
 		&models.PasswordResetOTP{},
 		&models.EmailVerificationOTP{},
 		&models.Court{},
+		&models.AppSetting{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
 		&models.LegalDocumentRevision{},

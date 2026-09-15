@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -29,6 +30,10 @@ var (
 // ทำใน tx เดียวเพราะการแก้ครั้งหนึ่งอาจแตะทั้งตาราง users และตารางโปรไฟล์
 // ถ้าเขียนสำเร็จแค่ตารางเดียวจะได้ข้อมูลที่ไม่ตรงกันครึ่ง ๆ กลาง ๆ
 func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) (*models.User, error) {
+	// ใช้เทียบสถานะโค้ชก่อน/หลัง เพื่อจับจังหวะ "พักงาน" แล้วไปแจ้งเตือนหลัง commit
+	var previousCoachStatus string
+	var suspendedCoachID uint
+
 	var user models.User
 	if err := s.db.Preload("Customer").Preload("Coach").First(&user, id).Error; err != nil {
 		return nil, err
@@ -108,6 +113,11 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 
 			p := req.Coach
 
+			// จำสถานะเดิมไว้ก่อนเขียน เพื่อรู้ว่าครั้งนี้เป็นการ "พักงาน" หรือไม่
+			// (ต้องอ่านก่อน update ไม่งั้นเทียบอะไรไม่ได้)
+			previousCoachStatus = user.Coach.Status
+			suspendedCoachID = user.Coach.ID
+
 			// เลขบัตรประชาชนเป็น unique จึงต้องเช็คก่อนว่าไม่ไปชนของคนอื่น
 			if p.Uid != nil {
 				uid := strings.TrimSpace(*p.Uid)
@@ -136,18 +146,22 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 			setStr(data, "payment_info", p.PaymentInfo)
 			setStr(data, "prompt_pay", p.PromptPay)
 			setStr(data, "status", p.Status)
-			setStr(data, "payment_type", p.PaymentType)
 			setStr(data, "bio", p.Bio)
 			setStr(data, "home_image", p.HomeImage)
-			if p.PayRate != nil {
-				data["pay_rate"] = *p.PayRate
-			}
 
 			if len(data) > 0 {
 				if err := tx.Model(&models.Coach{}).
 					Where("id = ?", user.Coach.ID).Updates(data).Error; err != nil {
 					return err
 				}
+			}
+
+			// ⚠️ payment_type / pay_rate แยกออกมาจาก data ข้างบนโดยตั้งใจ
+			// สองฟิลด์นี้มีผลย้อนหลังกับค่าจ้าง เส้นนี้เคยเขียนตรง ๆ โดยไม่มีด่านอะไรเลย
+			// ทั้งที่ CoachService.AdminUpdate มีด่านอยู่ = กฎเดียวกันสองมาตรฐาน
+			if err := ApplyCoachPayChange(tx, user.Coach.ID,
+				p.PaymentType, p.PayRate, time.Now()); err != nil {
+				return err
 			}
 		}
 
@@ -162,6 +176,20 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 	if err := s.db.Preload("Customer").Preload("Coach").First(&updated, id).Error; err != nil {
 		return nil, err
 	}
+
+	// ⚠️ พักงานโค้ชแล้วคาบในอนาคตยังค้างอยู่ ต้องไม่เงียบ
+	//
+	// แจ้งหลัง commit — การแจ้งเตือนล้มเหลวต้องไม่ทำให้การแก้ข้อมูลที่สำเร็จแล้วถูก rollback
+	// (ดูเหตุผลเต็มที่ NotifyCoachSuspension)
+	if suspendedCoachID != 0 && updated.Coach != nil &&
+		previousCoachStatus != coachStatusInactive &&
+		updated.Coach.Status == coachStatusInactive {
+		if _, err := NotifyCoachSuspension(s.db, suspendedCoachID); err != nil {
+			log.Printf("[coach] แจ้งเตือนคาบค้างของโค้ช #%d ที่ถูกพักงานไม่สำเร็จ: %v",
+				suspendedCoachID, err)
+		}
+	}
+
 	return &updated, nil
 }
 
@@ -204,8 +232,8 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 		if req.Coach == nil {
 			return nil, ErrProfileRequired
 		}
-		if !isValidPaymentType(req.Coach.PaymentType) {
-			return nil, ErrCoachInvalidPaymentType
+		if err := ValidateCoachPay(req.Coach.PaymentType, req.Coach.PayRate); err != nil {
+			return nil, err
 		}
 	}
 
