@@ -34,6 +34,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
@@ -109,12 +110,16 @@ func createAdmin(db *gorm.DB, reader *bufio.Reader, email string) {
 
 	password := askPassword(reader)
 
+	// ยืนยันอีเมลให้ทันที — เครื่องมือนี้รันได้เฉพาะคนที่เข้าถึงเซิร์ฟเวอร์อยู่แล้ว
+	// ไม่มีหน้าเว็บให้กรอก OTP ต่อ ถ้าปล่อยว่างไว้จะได้แอดมินที่ login ไม่ได้เลย
+	now := time.Now()
 	user := &models.User{
-		Role:      models.AdminRole,
-		FirstName: firstName,
-		LastName:  lastName,
-		Email:     email,
-		Password:  password,
+		Role:            models.AdminRole,
+		FirstName:       firstName,
+		LastName:        lastName,
+		Email:           email,
+		Password:        password,
+		EmailVerifiedAt: &now,
 	}
 
 	if err := services.NewUserService(db).CreateUser(user); err != nil {

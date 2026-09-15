@@ -49,6 +49,7 @@ import type {
   AttendanceStatus,
   FaceLookup,
   UnbilledCourtSession,
+  CheckInResult,
 } from "@/types/attendance";
 
 import QRScanner from "./components/QRScanner";
@@ -81,6 +82,20 @@ function readKiosk(): KioskState | null {
     // ignore
   }
   return null;
+}
+
+// studentCheckInText ข้อความแถบผลลัพธ์หลังเช็คชื่อ: ชื่อจริง (ชื่อเล่น) · คอร์ส · แพ็กเกจ · ครั้งที่เหลือ
+function studentCheckInText(s: CheckInResult) {
+  const fullName = s.full_name.trim();
+  const name = fullName && s.nickname ? `${fullName} (${s.nickname})` : fullName || s.nickname;
+  const detail = [
+    s.course_name,
+    s.package_sessions ? `แพ็กเกจ ${s.package_sessions} ครั้ง` : "",
+    `เหลือ ${s.remaining_sessions} ครั้ง`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { name, detail };
 }
 
 // session_date มาเป็น date ล้วน (UTC midnight ของวันตามเวลาสนาม)
@@ -327,12 +342,8 @@ export default function AdminAttendancePage() {
               : "ยังไม่ได้ลงตารางงานคาบนี้ไว้ — เพิ่มให้อัตโนมัติแล้ว กรุณาไปเติมสนาม",
           });
         } else {
-          const student = result.student;
-          setOutcome({
-            ok: true,
-            title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
-            detail: `เหลือ ${student.remaining_sessions} ครั้ง`,
-          });
+          const { name, detail } = studentCheckInText(result.student);
+          setOutcome({ ok: true, title: `เช็คชื่อสำเร็จ — ${name}`, detail });
         }
       } catch (err: unknown) {
         const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
@@ -442,12 +453,8 @@ export default function AdminAttendancePage() {
             : "ยังไม่ได้ลงตารางงานคาบนี้ไว้ — เพิ่มเป็นกรณีฉุกเฉินแล้ว กรุณาไปเติมสนาม",
         });
       } else {
-        const student = result.student;
-        setOutcome({
-          ok: true,
-          title: `เช็คชื่อสำเร็จ — ${student.full_name.trim() || student.nickname}`,
-          detail: `เหลือ ${student.remaining_sessions} ครั้ง`,
-        });
+        const { name, detail } = studentCheckInText(result.student);
+        setOutcome({ ok: true, title: `เช็คชื่อสำเร็จ — ${name}`, detail });
       }
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";
@@ -473,11 +480,8 @@ export default function AdminAttendancePage() {
     if (!session) return;
     try {
       const result = await manualCheckIn(session.id, enrollmentId, "แอดมินเช็คชื่อให้ที่สนาม");
-      setOutcome({
-        ok: true,
-        title: `เช็คชื่อให้ ${result.full_name.trim() || result.nickname} แล้ว`,
-        detail: `เหลือ ${result.remaining_sessions} ครั้ง`,
-      });
+      const { name, detail } = studentCheckInText(result);
+      setOutcome({ ok: true, title: `เช็คชื่อให้ ${name} แล้ว`, detail });
       await refreshSession();
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : "ไม่ทราบสาเหตุ";

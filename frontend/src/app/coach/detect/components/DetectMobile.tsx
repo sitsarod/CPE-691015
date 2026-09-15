@@ -21,10 +21,6 @@ import { DetectManager, DetectStudent, Detection, BatchItem, MAX_BATCH_FILES, AU
 export function DetectMobile({ manager }: { manager: DetectManager }) {
   const {
     inputRef,
-    courses,
-    coursesLoading,
-    selectedCourseId,
-    setSelectedCourseId,
     students,
     items,
     analyzingAll,
@@ -106,29 +102,6 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
 
       {/* Upload card */}
       <div className="rounded-2xl border-2 border-[#CC0000]/80 bg-white p-4 shadow-sm">
-        {/* เลือกคอร์สก่อนเสมอ — ทุกไฟล์ในชุดเดียวกันผูกกับคอร์สเดียวกัน กันรายชื่อทุกคอร์สปนกันตอนแท็ก */}
-        <div>
-          <label className="mb-1 block text-sm font-bold text-gray-700">คอร์ส</label>
-          <select
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : '')}
-            disabled={coursesLoading}
-            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm outline-none transition-all focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="" disabled>
-              {coursesLoading ? 'กำลังโหลดคอร์ส...' : 'เลือกคอร์สที่ถ่ายรูป/วิดีโอนี้มา...'}
-            </option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {!coursesLoading && courses.length === 0 && (
-            <p className="mt-1.5 text-xs text-amber-600">ยังไม่พบคอร์สที่คุณมีตารางสอนอยู่</p>
-          )}
-        </div>
-
         {/* แตะเพื่อเลือกไฟล์ — มือถือไม่มีลากวางไฟล์ ใช้ปุ่มแตะเปิดตัวเลือกไฟล์/แกลเลอรีแทน */}
         <button
           type="button"
@@ -199,7 +172,7 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
         <button
           type="button"
           onClick={analyzeAll}
-          disabled={readyToAnalyzeCount === 0 || analyzingAll || selectedCourseId === ''}
+          disabled={readyToAnalyzeCount === 0 || analyzingAll}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#CC0000] py-3.5 text-base font-bold text-white shadow-md shadow-[#CC0000]/20 transition-colors active:bg-[#990000] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {analyzingAll ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
@@ -257,11 +230,12 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
               onPointerLeave={endSlideDrag}
               onPointerCancel={endSlideDrag}
             >
-              {analyzedItems.map((item) => (
+              {analyzedItems.map((item, i) => (
                 <div key={item.uid} className="w-full flex-shrink-0">
                   <ItemReviewPanel
                     item={item}
                     students={students}
+                    isActive={i === activeIndex}
                     onConfirm={(detectionUid) => confirmDetection(item.uid, detectionUid)}
                     onConfirmAllPending={() => confirmAllPending(item.uid)}
                     onReassign={(detectionUid, studentId) => reassignDetection(item.uid, detectionUid, studentId)}
@@ -269,6 +243,8 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
                     onAddMissed={() => addMissedStudent(item.uid)}
                     onSave={() => saveItem(item.uid)}
                     allReviewed={isItemReviewed(item)}
+                    onGoPrevFile={goPrev}
+                    onGoNextFile={goNext}
                   />
                 </div>
               ))}
@@ -292,6 +268,7 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
 function ItemReviewPanel({
   item,
   students,
+  isActive,
   onConfirm,
   onConfirmAllPending,
   onReassign,
@@ -299,9 +276,13 @@ function ItemReviewPanel({
   onAddMissed,
   onSave,
   allReviewed,
+  onGoPrevFile,
+  onGoNextFile,
 }: {
   item: BatchItem;
   students: DetectStudent[];
+  // true เฉพาะไฟล์ที่กำลังโชว์อยู่บนสไลด์ตอนนี้ — กันลูกศรคีย์บอร์ดของไฟล์ที่ซ่อนอยู่ทำงานพร้อมกันหมด
+  isActive: boolean;
   onConfirm: (detectionUid: string) => void;
   onConfirmAllPending: () => void;
   onReassign: (detectionUid: string, studentId: number) => void;
@@ -309,9 +290,80 @@ function ItemReviewPanel({
   onAddMissed: () => void;
   onSave: () => void;
   allReviewed: boolean;
+  // เลื่อนไฟล์ (สไลด์นอกสุด) ด้วยลูกศรเดียวกัน เฉพาะตอนไม่มีคนให้เลื่อนดูในไฟล์นี้แล้ว (≤1 คน)
+  onGoPrevFile: () => void;
+  onGoNextFile: () => void;
 }) {
   const detections = item.detections ?? [];
   const pendingCount = detections.filter((d) => d.status === 'pending').length;
+
+  // เลื่อนดูทีละคนที่ตรวจพบ (ปัดซ้าย/ขวาหรือแตะปุ่ม ‹ › เหมือนสไลด์เลื่อนไฟล์ด้านนอก)
+  const [activeDetectionIndex, setActiveDetectionIndex] = useState(0);
+  useEffect(() => {
+    setActiveDetectionIndex((i) => Math.min(i, Math.max(0, detections.length - 1)));
+  }, [detections.length]);
+
+  const goPrevDetection = () => setActiveDetectionIndex((i) => Math.max(0, i - 1));
+  const goNextDetection = () => setActiveDetectionIndex((i) => Math.min(detections.length - 1, i + 1));
+
+  // เผื่อมือถือที่ต่อคีย์บอร์ดจริง (แท็บเล็ต) — ลูกศรเลื่อน "คนในไฟล์นี้" เป็นหลัก ถ้าเหลือคนเดียว/ไม่มี
+  // คนให้เลื่อนแล้ว ยกให้ไปเลื่อน "ไฟล์" แทน กันปุ่มเดียวกันไม่ทำอะไรเลย — ทำงานเฉพาะไฟล์ที่แอคทีฟอยู่
+  useEffect(() => {
+    if (!isActive) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (detections.length > 1) {
+        if (e.key === 'ArrowLeft') goPrevDetection();
+        else goNextDetection();
+      } else {
+        if (e.key === 'ArrowLeft') onGoPrevFile();
+        else onGoNextFile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, detections.length, onGoPrevFile, onGoNextFile]);
+
+  const handleAddMissed = () => {
+    onAddMissed();
+    setActiveDetectionIndex(detections.length);
+  };
+
+  const activeDetection: Detection | null = detections[activeDetectionIndex] ?? null;
+
+  // ปัดนิ้ว/ลากด้วยเมาส์เพื่อเลื่อนดูคนถัดไป (โดยเฉพาะเฟรมวิดีโอที่สุ่มมาโชว์) เหมือนสไลด์เลื่อนไฟล์
+  // ด้านนอกทุกอย่าง แค่ทำงานแค่ "ระดับคน" เท่านั้น — ต้อง stopPropagation ตอนกดลงไป กันไม่ให้สไลด์ไฟล์
+  // ด้านนอกแย่งลากไปพร้อมกัน (ไม่งั้นจะเลื่อนทั้งไฟล์และคนพร้อมกันในลากเดียว)
+  const detectionViewportRef = useRef<HTMLDivElement>(null);
+  const detectionDragStartXRef = useRef(0);
+  const [isDetectionDragging, setIsDetectionDragging] = useState(false);
+  const [detectionDragOffset, setDetectionDragOffset] = useState(0);
+
+  const handleDetectionPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (detections.length <= 1) return;
+    if ((e.target as HTMLElement).closest('button, select, input, a, textarea')) return;
+    e.stopPropagation();
+    setIsDetectionDragging(true);
+    detectionDragStartXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleDetectionPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDetectionDragging) return;
+    setDetectionDragOffset(e.clientX - detectionDragStartXRef.current);
+  };
+
+  const endDetectionDrag = () => {
+    if (!isDetectionDragging) return;
+    setIsDetectionDragging(false);
+    const width = detectionViewportRef.current?.offsetWidth || 1;
+    const threshold = width * 0.15;
+    if (detectionDragOffset < -threshold) goNextDetection();
+    else if (detectionDragOffset > threshold) goPrevDetection();
+    setDetectionDragOffset(0);
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -343,7 +395,9 @@ function ItemReviewPanel({
       )}
 
       {/* รูปที่อัปโหลดพร้อมกรอบ+ชื่อทับใบหน้าที่ตรวจพบ — ไว้ตรวจทานเท่านั้น ตัวไฟล์จริงไม่ถูกแก้ */}
-      {!item.isVideo && <PhotoPreviewWithMarks file={item.file} detections={detections} />}
+      {!item.isVideo && (
+        <PhotoPreviewWithMarks file={item.file} detections={detections} activeDetectionUid={activeDetection?.uid ?? null} />
+      )}
 
       {pendingCount > 0 && (
         <button
@@ -355,23 +409,62 @@ function ItemReviewPanel({
         </button>
       )}
 
-      <div className="mt-4 flex flex-col gap-3">
-        {detections.map((d) => (
-          <DetectionRow
-            key={d.uid}
-            detection={d}
-            students={students}
-            onConfirm={() => onConfirm(d.uid)}
-            onReassign={(studentId) => onReassign(d.uid, studentId)}
-            onRemove={() => onRemove(d.uid)}
-          />
-        ))}
-      </div>
+      {detections.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={goPrevDetection}
+              disabled={activeDetectionIndex === 0}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[56px] text-center text-xs font-bold text-gray-500">
+              คนที่ {activeDetectionIndex + 1} / {detections.length}
+            </span>
+            <button
+              type="button"
+              onClick={goNextDetection}
+              disabled={activeDetectionIndex === detections.length - 1}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div ref={detectionViewportRef} className="overflow-hidden">
+            <div
+              className={`flex touch-pan-y select-none ${
+                isDetectionDragging ? '' : 'transition-transform duration-300 ease-out'
+              }`}
+              style={{ transform: `translateX(calc(-${activeDetectionIndex * 100}% + ${detectionDragOffset}px))` }}
+              onPointerDown={handleDetectionPointerDown}
+              onPointerMove={handleDetectionPointerMove}
+              onPointerUp={endDetectionDrag}
+              onPointerLeave={endDetectionDrag}
+              onPointerCancel={endDetectionDrag}
+            >
+              {detections.map((d) => (
+                <div key={d.uid} className="w-full flex-shrink-0">
+                  <DetectionRow
+                    detection={d}
+                    students={students}
+                    onConfirm={() => onConfirm(d.uid)}
+                    onReassign={(studentId) => onReassign(d.uid, studentId)}
+                    onRemove={() => onRemove(d.uid)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* เพิ่มผู้เรียนที่ตกหล่น */}
       <button
         type="button"
-        onClick={onAddMissed}
+        onClick={handleAddMissed}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm font-semibold text-gray-500 transition-colors active:border-[#CC0000]/40 active:text-[#CC0000]"
       >
         <Plus size={16} />
@@ -416,7 +509,15 @@ function ItemReviewPanel({
 // ==================== รูปพร้อมกรอบ+ชื่อทับใบหน้า (เฉพาะตอนตรวจทาน) ====================
 // bbox ที่ backend ส่งมาเป็นพิกเซลของรูปต้นฉบับ — แปลงเป็น % ของขนาดจริง (naturalWidth/Height)
 // เพื่อวางกรอบให้ตรงตำแหน่งไม่ว่ารูปจะถูกย่อแสดงผลเล็กแค่ไหนบนจอ (ตรรกะเดียวกับฝั่งคอม)
-function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: Detection[] }) {
+function PhotoPreviewWithMarks({
+  file,
+  detections,
+  activeDetectionUid,
+}: {
+  file: File;
+  detections: Detection[];
+  activeDetectionUid: string | null;
+}) {
   const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
 
@@ -430,7 +531,8 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
       <img
         src={previewUrl}
         alt=""
-        className="block w-full"
+        draggable={false}
+        className="block w-full select-none"
         onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
       />
       {naturalSize &&
@@ -443,6 +545,8 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
           const x2 = Math.min(naturalSize.w, bx2 + padX);
           const y2 = Math.min(naturalSize.h, by2 + padY);
 
+          const isActive = d.uid === activeDetectionUid;
+
           return (
             <div
               key={d.uid}
@@ -454,11 +558,17 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
                 height: `${((y2 - y1) / naturalSize.h) * 100}%`,
               }}
             >
-              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
-              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2 py-1 text-xs font-black text-white shadow-md">
-                {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
-              </span>
+              {isActive ? (
+                <>
+                  <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
+                  <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2 py-1 text-xs font-black text-white shadow-md">
+                    {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
+                  </span>
+                </>
+              ) : (
+                <div className="absolute inset-0 rounded-md border-2 border-white/70 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+              )}
             </div>
           );
         })}
@@ -603,7 +713,8 @@ function VideoFrameMark({
       <img
         src={`data:image/jpeg;base64,${frameImage}`}
         alt=""
-        className="block w-full"
+        draggable={false}
+        className="block w-full select-none"
         onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
       />
       {naturalSize &&

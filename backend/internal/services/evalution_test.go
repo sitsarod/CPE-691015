@@ -207,6 +207,35 @@ func TestGetMyStudentsFiltersByCourse(t *testing.T) {
 	})
 }
 
+// GetAllActiveStudents ใช้กับงานแท็กรูป/วิดีโอ (FaceTaggingService) ต้องได้นักเรียนที่ active
+// ของ "ทุกโค้ชรวมกัน" ไม่กรองตามโค้ช/คอร์สเลย เพราะคนอัปโหลดอาจไม่ใช่คนสอนคอร์สนั้น
+func TestGetAllActiveStudents(t *testing.T) {
+	db := evalTestDB(t)
+	svc := NewEvaluationService(db)
+
+	coachA := seedCoachFor(t, db, 100, "uid-eval-all-a")
+	coachB := seedCoachFor(t, db, 200, "uid-eval-all-b")
+
+	pkgA := seedCourseTaughtBy(t, db, coachA)
+	pkgB := seedCourseTaughtBy(t, db, coachB)
+
+	activeA := seedEnrolledCustomer(t, db, pkgA, models.EnrollmentStatusActive, "qr-all-active-a")
+	activeB := seedEnrolledCustomer(t, db, pkgB, models.EnrollmentStatusActive, "qr-all-active-b")
+	seedEnrolledCustomer(t, db, pkgA, models.EnrollmentStatusAwaitingPayment, "qr-all-awaiting")
+
+	students, err := svc.GetAllActiveStudents()
+	if err != nil {
+		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+	}
+	ids := map[uint]bool{}
+	for _, s := range students {
+		ids[s.ID] = true
+	}
+	if len(students) != 2 || !ids[activeA] || !ids[activeB] {
+		t.Fatalf("ควรได้นักเรียน active ของทั้งสองโค้ชรวมกัน (id=%d,%d) แต่ได้ %+v", activeA, activeB, students)
+	}
+}
+
 // ต้องได้เฉพาะคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง ไม่ปนคอร์สของโค้ชคนอื่น
 func TestGetMyCourses(t *testing.T) {
 	db := evalTestDB(t)

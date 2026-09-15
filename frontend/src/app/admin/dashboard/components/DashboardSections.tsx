@@ -170,7 +170,7 @@ export function RealtimeInsights({ insights }: { insights: Insights }) {
           <div className="flex items-baseline justify-between">
             <span className="text-xs font-light text-gray-500">ทีมผู้สอน ({insights.coachCount} คน)</span>
             <Link
-              href="/admin/coachmanagement"
+              href="/admin/members?tab=coach"
               className="text-xs font-medium text-[#CC0000] hover:text-[#990000]"
             >
               จัดการ

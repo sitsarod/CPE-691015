@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Expense } from './types';
 import { UpdateExpenseReq } from '@/types/payment';
+import DateField from '@/components/DateField';
 
 // ป้ายชื่อประเภทรายจ่าย (แสดงอย่างเดียว — ห้ามเปลี่ยนประเภทตอนแก้ไข)
 const EXPENSE_TYPE_LABEL: Record<string, string> = {
@@ -197,11 +198,10 @@ export default function ExpenseEditModal({
 
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-slate-600">วันที่ทำรายการ</label>
-              <input
-                type="date"
+              <DateField
                 value={form.expensedate}
-                onChange={(e) => setForm(prev => ({ ...prev, expensedate: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#CD0D13]"
+                onChange={(val) => setForm(prev => ({ ...prev, expensedate: val }))}
+                buttonClassName="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#CD0D13]"
                 required
               />
             </div>

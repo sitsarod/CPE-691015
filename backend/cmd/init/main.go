@@ -78,10 +78,12 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.PasswordResetOTP{},
+		&models.EmailVerificationOTP{},
 		&models.Court{},
 		&models.AppSetting{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
+		&models.LegalDocumentRevision{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)
@@ -144,4 +146,10 @@ func main() {
 	seedHomeContent(db)
 	seedHeroSlides(db)
 	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
+
+	// บัญชีที่ seed ไว้ข้างบนสร้างตรงด้วย tx.Create ไม่ได้ผ่าน UserService.CreateUser
+	// จึงไม่มี email_verified_at ติดมา — ปักให้ครบตรงนี้ที่เดียว ไม่งั้น login ไม่ได้เลย
+	if err := services.BackfillEmailVerifiedForExistingUsers(db); err != nil {
+		log.Fatalf("%v", err)
+	}
 }

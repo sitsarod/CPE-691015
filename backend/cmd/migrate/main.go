@@ -82,12 +82,21 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.PasswordResetOTP{},
+		&models.EmailVerificationOTP{},
 		&models.Court{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
 		&models.AppSetting{},
+		&models.LegalDocumentRevision{},
+		
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
+	}
+
+	// ต้องรันก่อนอื่นหลัง AutoMigrate — ไม่งั้นบัญชีเดิมทุกบัญชีจะ login ไม่ได้ทันที
+	// เพราะ email_verified_at เพิ่งเพิ่มเป็น NULL หมด (ดูเหตุผลที่ฟังก์ชันนี้)
+	if err := services.BackfillEmailVerifiedForExistingUsers(db); err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	if !hadCourtFeeColumn {

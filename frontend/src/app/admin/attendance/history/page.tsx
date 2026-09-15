@@ -23,6 +23,7 @@ import {
   updateCoachAttendanceStatus,
 } from "@/services/attendanceAPI";
 import { fetchAllCourses } from "@/services/courseAPI";
+import DateField from "@/components/DateField";
 import type { AttendanceHistoryItem, AttendanceStatus, CoachHistoryItem } from "@/types/attendance";
 import {
   STATUS_LABEL,
@@ -318,61 +319,53 @@ export default function AttendanceHistoryPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)_minmax(0,1fr)_auto] sm:gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">ตั้งแต่วันที่</label>
-          <div className="relative mt-1">
-            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="date"
-              value={from}
-              max={to || undefined}
-              onChange={(e) => {
-                resetOpenState();
-                setOffset(0);
-                setFrom(e.target.value);
-              }}
-              className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-            />
-          </div>
-        </div>
+      <div className="mt-6 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(11.5rem,1fr)_minmax(11.5rem,1fr)_minmax(0,1.2fr)_minmax(0,1.5fr)_auto] sm:gap-4">
+        <DateField
+          label="ตั้งแต่วันที่"
+          value={from}
+          max={to || undefined}
+          onChange={(val) => {
+            resetOpenState();
+            setOffset(0);
+            setFrom(val);
+          }}
+          buttonClassName="h-12 rounded-xl border border-gray-300 bg-white px-3 text-gray-900 transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+        />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">ถึงวันที่</label>
-          <div className="relative mt-1">
-            <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="date"
-              value={to}
-              min={from || undefined}
-              onChange={(e) => {
-                resetOpenState();
-                setOffset(0);
-                setTo(e.target.value);
-              }}
-              className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-            />
-          </div>
-        </div>
+        <DateField
+          label="ถึงวันที่"
+          value={to}
+          min={from || undefined}
+          onChange={(val) => {
+            resetOpenState();
+            setOffset(0);
+            setTo(val);
+          }}
+          buttonClassName="h-12 rounded-xl border border-gray-300 bg-white px-3 text-gray-900 transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+        />
 
         <div>
           <label className="block text-sm font-medium text-gray-700">คอร์ส</label>
-          <select
-            value={courseId}
-            onChange={(e) => {
-              resetOpenState();
-              setOffset(0);
-              setCourseId(Number(e.target.value));
-            }}
-            className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
-          >
-            <option value={0}>ทุกคอร์ส</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.course_name}
-              </option>
-            ))}
-          </select>
+          <div className="relative mt-1">
+            {/* Safari วาด select เตี้ยกว่า input ช่องนี้เลยตกลงมาต่ำกว่าช่องอื่น — ปิด appearance แล้วตั้งความสูงเอง */}
+            <select
+              value={courseId}
+              onChange={(e) => {
+                resetOpenState();
+                setOffset(0);
+                setCourseId(Number(e.target.value));
+              }}
+              className="block h-12 w-full appearance-none rounded-xl border border-gray-300 bg-white pl-3 pr-9 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+            >
+              <option value={0}>ทุกคอร์ส</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.course_name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          </div>
         </div>
 
         <div>
@@ -387,7 +380,7 @@ export default function AttendanceHistoryPage() {
                 if (e.key === "Enter") load();
               }}
               placeholder="ชื่อ นามสกุล หรือชื่อเล่น"
-              className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
+              className="h-12 w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-gray-900 outline-none transition focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20"
             />
           </div>
         </div>
@@ -395,7 +388,7 @@ export default function AttendanceHistoryPage() {
         <button
           onClick={load}
           disabled={isLoading}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-2.5 font-semibold text-white transition hover:bg-[#A30A0E] disabled:opacity-60"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-2.5 font-semibold text-white transition hover:bg-[#A30A0E] disabled:opacity-60"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           ค้นหา
@@ -582,7 +575,7 @@ export default function AttendanceHistoryPage() {
                       <tr>
                         <th className="px-4 py-3">ชื่อ</th>
                         <th className="w-20 px-4 py-3">เวลา</th>
-                        <th className="w-28 px-4 py-3">สถานะ</th>
+                        <th className="w-44 px-4 py-3">สถานะ</th>
                         <th className="w-36 px-4 py-3">วิธีบันทึก</th>
                         <th className="w-40 px-4 py-3">หมายเหตุ</th>
                         <th className="w-36 px-4 py-3" />

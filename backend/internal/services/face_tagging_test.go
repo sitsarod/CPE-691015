@@ -43,27 +43,19 @@ func TestDetectStudentsInPhotoRequiresEngine(t *testing.T) {
 	db := evalTestDB(t)
 	svc := NewFaceTaggingService(db, &fakeFaceEngine{enabled: false}, NewEvaluationService(db))
 
-	_, _, err := svc.DetectStudentsInPhoto(context.Background(), 100, 1, []byte("รูป"))
+	_, _, err := svc.DetectStudentsInPhoto(context.Background(), []byte("รูป"))
 	if !errors.Is(err, ErrFaceTaggingUnavailable) {
 		t.Fatalf("ควรได้ ErrFaceTaggingUnavailable แต่ได้: %v", err)
 	}
 }
 
-// คอร์สที่ไม่มีนักเรียนเลย ต้องไม่เสียเวลาเรียกโมเดล — ไม่มีใครให้เทียบอยู่แล้ว
+// ไม่มีนักเรียนลงทะเบียนอยู่เลยทั้งโรงเรียน ต้องไม่เสียเวลาเรียกโมเดล — ไม่มีใครให้เทียบอยู่แล้ว
 func TestDetectStudentsInPhotoSkipsModelWhenRosterEmpty(t *testing.T) {
 	db := evalTestDB(t)
 	engine := &fakeFaceEngine{enabled: true}
 	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
 
-	coachID := seedCoachFor(t, db, 100, "uid-tag-empty")
-	pkgID := seedCourseTaughtBy(t, db, coachID)
-
-	var pkg models.Package
-	if err := db.First(&pkg, pkgID).Error; err != nil {
-		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
-	}
-
-	matches, faceCount, err := svc.DetectStudentsInPhoto(context.Background(), 100, pkg.CourseID, []byte("รูป"))
+	matches, faceCount, err := svc.DetectStudentsInPhoto(context.Background(), []byte("รูป"))
 	if err != nil {
 		t.Fatalf("ไม่ควร error: %v", err)
 	}
@@ -71,7 +63,7 @@ func TestDetectStudentsInPhotoSkipsModelWhenRosterEmpty(t *testing.T) {
 		t.Fatalf("ควรได้ผลว่างเปล่า แต่ได้ matches=%d faceCount=%d", len(matches), faceCount)
 	}
 	if engine.allCalls != 0 {
-		t.Fatalf("ไม่ควรเรียกโมเดลเลยเมื่อไม่มีนักเรียนในคอร์ส แต่เรียกไป %d ครั้ง", engine.allCalls)
+		t.Fatalf("ไม่ควรเรียกโมเดลเลยเมื่อไม่มีนักเรียนลงทะเบียนเลย แต่เรียกไป %d ครั้ง", engine.allCalls)
 	}
 }
 
@@ -96,12 +88,7 @@ func TestDetectStudentsInPhotoSkipsLowQualityFaces(t *testing.T) {
 	pkgID := seedCourseTaughtBy(t, db, coachID)
 	seedEnrolledCustomer(t, db, pkgID, models.EnrollmentStatusActive, "qr-tag-lowq")
 
-	var pkg models.Package
-	if err := db.First(&pkg, pkgID).Error; err != nil {
-		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
-	}
-
-	matches, faceCount, err := svc.DetectStudentsInPhoto(context.Background(), 100, pkg.CourseID, []byte("รูป"))
+	matches, faceCount, err := svc.DetectStudentsInPhoto(context.Background(), []byte("รูป"))
 	if err != nil {
 		t.Fatalf("ไม่ควร error: %v", err)
 	}
@@ -118,26 +105,19 @@ func TestDetectStudentsInVideoRequiresEngine(t *testing.T) {
 	db := evalTestDB(t)
 	svc := NewFaceTaggingService(db, &fakeFaceEngine{enabled: false}, NewEvaluationService(db))
 
-	_, _, err := svc.DetectStudentsInVideo(context.Background(), 100, 1, []byte("วิดีโอ"))
+	_, _, err := svc.DetectStudentsInVideo(context.Background(), []byte("วิดีโอ"))
 	if !errors.Is(err, ErrFaceTaggingUnavailable) {
 		t.Fatalf("ควรได้ ErrFaceTaggingUnavailable แต่ได้: %v", err)
 	}
 }
 
+// ไม่มีนักเรียนลงทะเบียนอยู่เลยทั้งโรงเรียน ต้องไม่เสียเวลาเรียกโมเดล
 func TestDetectStudentsInVideoSkipsModelWhenRosterEmpty(t *testing.T) {
 	db := evalTestDB(t)
 	engine := &fakeFaceEngine{enabled: true}
 	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
 
-	coachID := seedCoachFor(t, db, 100, "uid-tag-video-empty")
-	pkgID := seedCourseTaughtBy(t, db, coachID)
-
-	var pkg models.Package
-	if err := db.First(&pkg, pkgID).Error; err != nil {
-		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
-	}
-
-	matches, faceCount, err := svc.DetectStudentsInVideo(context.Background(), 100, pkg.CourseID, []byte("วิดีโอ"))
+	matches, faceCount, err := svc.DetectStudentsInVideo(context.Background(), []byte("วิดีโอ"))
 	if err != nil {
 		t.Fatalf("ไม่ควร error: %v", err)
 	}
@@ -145,7 +125,7 @@ func TestDetectStudentsInVideoSkipsModelWhenRosterEmpty(t *testing.T) {
 		t.Fatalf("ควรได้ผลว่างเปล่า แต่ได้ matches=%d faceCount=%d", len(matches), faceCount)
 	}
 	if engine.videoCalls != 0 {
-		t.Fatalf("ไม่ควรเรียกโมเดลเลยเมื่อไม่มีนักเรียนในคอร์ส แต่เรียกไป %d ครั้ง", engine.videoCalls)
+		t.Fatalf("ไม่ควรเรียกโมเดลเลยเมื่อไม่มีนักเรียนลงทะเบียนเลย แต่เรียกไป %d ครั้ง", engine.videoCalls)
 	}
 	if engine.allCalls != 0 {
 		t.Fatalf("เส้นทางวิดีโอต้องไม่เรียก EmbedAll (รูป) เลย แต่เรียกไป %d ครั้ง", engine.allCalls)
@@ -159,11 +139,6 @@ func TestDetectStudentsInVideoMergesSamePersonAcrossFrames(t *testing.T) {
 	coachID := seedCoachFor(t, db, 100, "uid-tag-video-merge")
 	pkgID := seedCourseTaughtBy(t, db, coachID)
 	seedEnrolledCustomer(t, db, pkgID, models.EnrollmentStatusActive, "qr-tag-video-merge")
-
-	var pkg models.Package
-	if err := db.First(&pkg, pkgID).Error; err != nil {
-		t.Fatalf("หาแพ็กเกจไม่เจอ: %v", err)
-	}
 
 	// สองหน้านี้ไม่มีใครลงทะเบียนใบหน้าไว้เลย (ทดสอบ pgvector จริงต้องใช้ Postgres — ดูคอมเมนต์
 	// บนสุดของไฟล์) แต่ยังยืนยันได้ว่าเส้นทางวิดีโอเรียก EmbedAllVideo ครั้งเดียวไม่ว่าจะมีกี่เฟรม
@@ -181,7 +156,7 @@ func TestDetectStudentsInVideoMergesSamePersonAcrossFrames(t *testing.T) {
 	}
 	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
 
-	_, faceCount, err := svc.DetectStudentsInVideo(context.Background(), 100, pkg.CourseID, []byte("วิดีโอ"))
+	_, faceCount, err := svc.DetectStudentsInVideo(context.Background(), []byte("วิดีโอ"))
 	if err != nil {
 		t.Fatalf("ไม่ควร error: %v", err)
 	}

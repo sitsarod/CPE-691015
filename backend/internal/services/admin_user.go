@@ -91,6 +91,9 @@ func (s *UserService) AdminUpdateUser(id uint, req *dto.AdminUpdateUserRequest) 
 			setStr(data, "parent_phone_number", p.ParentPhoneNumber)
 			setStr(data, "status", p.Status)
 			if p.BirthDate != nil {
+				if err := ValidateCustomerBirthDate(*p.BirthDate); err != nil {
+					return err
+				}
 				data["birth_date"] = *p.BirthDate
 			}
 
@@ -220,6 +223,11 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 		if req.Customer == nil {
 			return nil, ErrProfileRequired
 		}
+		if req.Customer.BirthDate != nil {
+			if err := ValidateCustomerBirthDate(*req.Customer.BirthDate); err != nil {
+				return nil, err
+			}
+		}
 	case models.CoachRole:
 		if req.Coach == nil {
 			return nil, ErrProfileRequired
@@ -248,6 +256,11 @@ func (s *UserService) AdminCreateUser(req *dto.AdminCreateUserRequest) (*models.
 	user := req.ToUser()
 	user.Email = cleanEmail
 	user.Password = string(hashed)
+
+	// บัญชีที่แอดมินสร้างให้ถือว่ายืนยันอีเมลแล้วทันที ไม่ต้องผ่าน OTP ซ้ำ
+	// เพราะแอดมินเห็นตัวจริงอยู่แล้ว (ต่างจากสมัครเองผ่านหน้าเว็บที่ยังไม่รู้ว่าใครเป็นคนกรอก)
+	now := time.Now()
+	user.EmailVerifiedAt = &now
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// เช็คอีเมลซ้ำในทรานแซกชันเดียวกับการเขียน เพื่อลดช่องที่สองคำขอ

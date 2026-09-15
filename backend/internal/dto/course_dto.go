@@ -44,6 +44,7 @@ type CoursePackageDTO struct {
 	Price         float64 `json:"price"`
 	MaxSeats      uint    `json:"max_seats"`
 	DurationDays uint `json:"duration_days"`
+	IsTrial      bool `json:"is_trial"`
 	CurrentEnrollments uint                     `json:"current_enrollments"`
 	Schedules          []PackageScheduleInfoDTO `json:"schedules"`
 }

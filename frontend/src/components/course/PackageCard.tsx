@@ -47,9 +47,15 @@ export default function PackageCard({
       <div className="flex flex-1 flex-col p-6">
         {/* หัวการ์ด: จำนวนครั้ง */}
         <div className="mb-5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-            แพ็กเกจ
-          </span>
+          {pkg.is_trial ? (
+            <span className="inline-block rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-bold text-[#CC0000]">
+              ทดลองเรียนฟรี
+            </span>
+          ) : (
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              แพ็กเกจ
+            </span>
+          )}
           <h4 className="mt-1 text-2xl font-black tracking-tight text-gray-900">
             {pkg.sessions_count} ครั้ง
           </h4>
@@ -154,22 +160,32 @@ export default function PackageCard({
         )}
 
         {/* ราคา */}
-        <div className="mt-auto border-t border-gray-100 pt-4">
-          <p className="mb-0.5 text-xs font-medium text-gray-400">ราคาแพ็กเกจ</p>
-          <p className="text-3xl font-black leading-none text-[#CC0000]">
-            {pkg.price ? pkg.price.toLocaleString("th-TH") : "—"}
-            {pkg.price > 0 && (
-              <span className="ml-1.5 text-base font-bold tracking-normal text-gray-400">
-                บาท
-              </span>
-            )}
-          </p>
-          {!pkg.price && (
-            <p className="mt-1 text-sm font-semibold text-gray-500">
-              {formatPrice(pkg.price)}
+        {pkg.is_trial ? (
+          <div className="mt-auto border-t border-gray-100 pt-4">
+            <p className="mb-0.5 text-xs font-medium text-gray-400">ราคาแพ็กเกจ</p>
+            <p className="text-3xl font-black leading-none text-[#CC0000]">ฟรี</p>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-gray-400">
+              ทดลองได้ครั้งเดียวต่อคอร์ส · ยังต้องชำระค่าสนามของคาบที่มาเรียน
             </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="mt-auto border-t border-gray-100 pt-4">
+            <p className="mb-0.5 text-xs font-medium text-gray-400">ราคาแพ็กเกจ</p>
+            <p className="text-3xl font-black leading-none text-[#CC0000]">
+              {pkg.price ? pkg.price.toLocaleString("th-TH") : "—"}
+              {pkg.price > 0 && (
+                <span className="ml-1.5 text-base font-bold tracking-normal text-gray-400">
+                  บาท
+                </span>
+              )}
+            </p>
+            {!pkg.price && (
+              <p className="mt-1 text-sm font-semibold text-gray-500">
+                {formatPrice(pkg.price)}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* ปุ่ม */}
         {onSelect && (
@@ -184,7 +200,7 @@ export default function PackageCard({
             }`}
           >
             {!full && <TicketCheck className="h-4 w-4" />}
-            {full ? "ที่นั่งเต็มแล้ว" : ctaLabel}
+            {full ? "ที่นั่งเต็มแล้ว" : pkg.is_trial ? "ขอทดลองเรียนฟรี" : ctaLabel}
           </button>
         )}
       </div>

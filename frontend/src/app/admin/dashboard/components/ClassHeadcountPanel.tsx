@@ -61,7 +61,7 @@ export default function ClassHeadcountPanel() {
   return (
     <section>
       <SectionHeader
-        title="ยอดคนมาเรียนวันนี้"
+        title="ยอดคนที่ยืนยันจะมาเรียนวันนี้"
         meta={header ?? undefined}
         right={
           <button
@@ -99,7 +99,7 @@ export default function ClassHeadcountPanel() {
             <thead>
               <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
                 <th className="py-2 pr-3 font-semibold">คาบเรียน</th>
-                <th className="py-2 px-2 text-center font-semibold">มา</th>
+                <th className="py-2 px-2 text-center font-semibold">ยืนยันมา</th>
                 <th className="py-2 pl-2 text-center font-semibold">ยังไม่ตอบ</th>
               </tr>
             </thead>

@@ -39,6 +39,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
           max_seats: pkg.max_seats ?? ("" as const),
           price: pkg.price,
           duration_days: pkg.duration_days ?? ("" as const),
+          is_trial: pkg.is_trial ?? false,
           schedules: (pkg.schedules || []).map((sch: PackageScheduleInfoDTO, i: number) => ({
             id: `sch-${i}-${Date.now()}`,
             day_of_week: sch.day_of_week,
@@ -88,6 +89,11 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
   
   const updatePackageField = (pkgId: string, field: keyof PackageFormInput, value: string | number | boolean) => {
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, [field]: value } : pkg));
+  };
+
+  // แพ็กเกจทดลองบังคับ 1 ครั้ง ราคา 0 (backend บังคับซ้ำอีกชั้น)
+  const setTrial = (pkgId: string, checked: boolean) => {
+    setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, is_trial: checked, ...(checked ? { sessions_count: 1, price: 0 } : {}) } : pkg));
   };
 
   const addSchedule = (pkgId: string) => {
@@ -154,6 +160,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            is_trial: !!pkg.is_trial,
             ...durationField,
             schedules: schedulesDto
           }, token);
@@ -163,6 +170,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            is_trial: !!pkg.is_trial,
             ...durationField,
             schedules: schedulesDto
           }, token);
@@ -262,12 +270,21 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
               </button>
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1} {pkg.isNew && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded ml-2">ใหม่</span>}</h3>
+
+              <label className="mb-4 flex w-fit cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox" checked={!!pkg.is_trial} onChange={(e) => setTrial(pkg.id, e.target.checked)}
+                  className="h-4 w-4 accent-[#CC0000]"
+                />
+                แพ็กเกจทดลองเรียนฟรี
+                <span className="text-xs font-normal text-gray-400">(1 ครั้ง · ราคา 0 บาท · สมัครได้ครั้งเดียวต่อคนต่อคอร์ส)</span>
+              </label>
               
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
-                    type="number" required min="1" value={pkg.sessions_count} onChange={(e) => updatePackageField(pkg.id, "sessions_count", e.target.value)}
+                    type="number" required min="1" disabled={!!pkg.is_trial} value={pkg.sessions_count} onChange={(e) => updatePackageField(pkg.id, "sessions_count", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]"
                   />
                 </div>
@@ -291,7 +308,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>
                   <input
-                    type="number" required min="0" value={pkg.price} onChange={(e) => updatePackageField(pkg.id, "price", e.target.value)}
+                    type="number" required min="0" disabled={!!pkg.is_trial} value={pkg.price} onChange={(e) => updatePackageField(pkg.id, "price", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]"
                   />
                 </div>
@@ -364,7 +381,8 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         </div>
       </div>
 
-      <div className="flex justify-end pt-6 border-t border-gray-200 gap-3">
+      {/* ลอยค้างไว้ขอบล่าง — ฟอร์มยาว แก้แพ็กเกจท้าย ๆ แล้วไม่ต้องเลื่อนหาปุ่ม · มือถือยกขึ้นพ้นแถบเมนูล่าง */}
+      <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-40 flex justify-end gap-3 border-t border-gray-200 bg-white/95 py-4 backdrop-blur md:bottom-0">
         <button 
           type="button" onClick={onCancel} disabled={isSaving}
           className="px-6 py-3 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors font-bold disabled:opacity-50"

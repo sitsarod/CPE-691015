@@ -14,6 +14,21 @@ import (
 type CreateEnrollmentReq struct {
     CustomerID uint `json:"customer_id" binding:"required"`
     PackageID  uint `json:"package_id" binding:"required"`
+
+    // AcceptedTermsVersion = เลขเวอร์ชันข้อตกลงที่นักเรียนกดยอมรับ · ต้องตรงกับฉบับปัจจุบัน
+    AcceptedTermsVersion string `json:"accepted_terms_version"`
+}
+
+type EnrollmentTermsSection struct {
+    Heading string   `json:"heading"`
+    Items   []string `json:"items"`
+}
+
+// EnrollmentTermsRes คือข้อตกลงการสมัครเรียนที่แสดงให้อ่านก่อนกดสมัคร
+type EnrollmentTermsRes struct {
+    Version  string                   `json:"version"`
+    Title    string                   `json:"title"`
+    Sections []EnrollmentTermsSection `json:"sections"`
 }
 
 // CreateEnrollmentRes ส่งข้อมูลกลับไปให้หน้าเว็บเพื่อพาไปหน้าชำระเงิน
@@ -178,6 +193,7 @@ type AdminEnrollmentPackageDTO struct {
     ID            uint                      `json:"id"`
     SessionsCount uint                      `json:"sessions_count"`
     Price         float64                   `json:"price"`
+    IsTrial       bool                      `json:"is_trial"`
     Course        *AdminEnrollmentCourseDTO `json:"course"`
 }
 
@@ -235,6 +251,7 @@ func ToAdminEnrollmentDTO(e *models.Enrollment, carriedOver uint) AdminEnrollmen
             ID:            e.Package.ID,
             SessionsCount: e.Package.SessionsCount,
             Price:         e.Package.Price,
+            IsTrial:       e.Package.IsTrial,
         }
         if e.Package.Course != nil {
             pkg.Course = &AdminEnrollmentCourseDTO{

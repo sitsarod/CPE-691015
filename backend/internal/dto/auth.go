@@ -38,7 +38,7 @@ type RegisterCustomerProfile struct {
 	Nickname    string     `json:"nickname" binding:"required"`
 	Gender      string     `json:"gender" binding:"required,oneof=male female"`
 	BirthDate   *time.Time `json:"birthDate" binding:"required"`
-	PhoneNumber string     `json:"phoneNumber" binding:"required,numeric,len=10"`
+	PhoneNumber string     `json:"phoneNumber" binding:"required,numeric,len=10,startswith=0"`
 
 	// ช่องทางติดต่อเสริม ไม่บังคับกรอก
 	LineID   string `json:"lineId"`
@@ -47,7 +47,7 @@ type RegisterCustomerProfile struct {
 	// ข้อมูลผู้ปกครอง ไม่บังคับ — หน้าบ้านส่ง null มาได้เมื่อไม่กรอก
 	// (encoding/json แปลง null ลง string เป็นค่าว่างให้อยู่แล้ว ไม่ error)
 	ParentEmail       string `json:"parentEmail" binding:"omitempty,email"`
-	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10"`
+	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10,startswith=0"`
 }
 
 // ToUser แปลง request เป็น models.User ที่พร้อมบันทึก

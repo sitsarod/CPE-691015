@@ -2,13 +2,12 @@
 import { apiFetch } from "@/services/apiClient";
 import type { AssignResult, UploadPhotoPostResult, UploadVideoResult } from "@/types/detect";
 
-// [POST] อัปโหลดวิดีโอ — ส่ง courseId ไปด้วยเพื่อให้ระบบจำแนกใบหน้าเทียบกับนักเรียนของคอร์สนั้น
+// [POST] อัปโหลดวิดีโอ — ระบบจำแนกใบหน้าเทียบกับนักเรียนทั้งโรงเรียนให้อัตโนมัติ ไม่ต้องเลือกคอร์ส
 // (เหมือน uploadDetectPhoto ทุกอย่าง) ผลที่ได้เป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง
 // ต้องยืนยันผ่าน assignVideoStudents อีกที
-export async function uploadDetectVideo(file: File, courseId: number): Promise<UploadVideoResult> {
+export async function uploadDetectVideo(file: File): Promise<UploadVideoResult> {
   const form = new FormData();
   form.append("video", file, file.name);
-  form.append("course_id", String(courseId));
   const res = await apiFetch<{ message: string; data: UploadVideoResult }>("/videos", {
     method: "POST",
     body: form,
@@ -16,12 +15,11 @@ export async function uploadDetectVideo(file: File, courseId: number): Promise<U
   return res.data;
 }
 
-// [POST] อัปโหลดรูป — ส่ง courseId ไปด้วยเพื่อให้ระบบจำแนกใบหน้าเทียบกับนักเรียนของคอร์สนั้น
+// [POST] อัปโหลดรูป — ระบบจำแนกใบหน้าเทียบกับนักเรียนทั้งโรงเรียนให้อัตโนมัติ ไม่ต้องเลือกคอร์ส
 // ผลที่ได้เป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง ต้องยืนยันผ่าน assignPhotoStudents อีกที
-export async function uploadDetectPhoto(file: File, courseId: number): Promise<UploadPhotoPostResult> {
+export async function uploadDetectPhoto(file: File): Promise<UploadPhotoPostResult> {
   const form = new FormData();
   form.append("photo", file, file.name);
-  form.append("course_id", String(courseId));
   const res = await apiFetch<{ message: string; data: UploadPhotoPostResult }>("/photo-posts", {
     method: "POST",
     body: form,

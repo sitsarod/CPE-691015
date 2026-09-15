@@ -42,7 +42,12 @@ func SetupRoutes(r *gin.Engine) {
 	userService := services.NewUserService(db).WithFaceStorage(cloudinaryService)
 	userController := controllers.NewUserController(userService)
 	authService := services.NewAuthService(db)
-	authController := controllers.NewAuthController(authService, userService)
+	mailer := services.NewMailer()
+	emailVerificationService := services.NewEmailVerificationService(db, mailer)
+	authController := controllers.NewAuthController(authService, userService, emailVerificationService)
+
+	passwordResetService := services.NewPasswordResetService(db, mailer)
+	passwordResetController := controllers.NewPasswordResetController(passwordResetService)
 
 	bankAccountService := services.NewBankAccountService(db)
 	bankAccountController := controllers.NewBankAccountController(bankAccountService)
@@ -82,6 +87,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	consentService := services.NewConsentService(db, cloudinaryService)
 	consentController := controllers.NewConsentController(consentService)
+	legalDocumentController := controllers.NewLegalDocumentController(services.NewLegalDocumentService(db))
 
 	evaluationService := services.NewEvaluationService(db)
 	evaluationController := controllers.NewEvaluationController(evaluationService, db)
@@ -128,6 +134,15 @@ func SetupRoutes(r *gin.Engine) {
 			authGroup.POST("/login", middlewares.LoginRateLimit(), authController.Login)
 			authGroup.POST("/register", middlewares.SensitiveRateLimit(), authController.Register)
 			authGroup.POST("/refresh", authController.Refresh)
+			authGroup.POST("/verify-registration-otp", middlewares.LoginRateLimit(), authController.VerifyRegistrationOTP)
+			authGroup.POST("/resend-registration-otp", middlewares.SensitiveRateLimit(), authController.ResendRegistrationOTP)
+
+			passwordGroup := authGroup.Group("/password")
+			{
+				passwordGroup.POST("/request-otp", middlewares.SensitiveRateLimit(), passwordResetController.RequestOTP)
+				passwordGroup.POST("/verify-otp", middlewares.LoginRateLimit(), passwordResetController.VerifyOTP)
+				passwordGroup.POST("/reset", middlewares.SensitiveRateLimit(), passwordResetController.ResetPassword)
+			}
 		}
 		publicUserGroup := api.Group("/users")
 		{
@@ -135,6 +150,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		api.GET("/enrollments/courses", enrollmentController.GetAvailableCourses)
+		api.GET("/enrollments/terms", enrollmentController.GetTerms)
 
 		publicCourseGroup := api.Group("/courses")
 		{
@@ -144,6 +160,8 @@ func SetupRoutes(r *gin.Engine) {
 
 		protected := api.Group("")
 		protected.Use(middlewares.AuthMiddleware(db))
+
+		protected.PATCH("/me/password", middlewares.SensitiveRateLimit(), passwordResetController.ChangePassword)
 
 		adminOnly := api.Group("")
 		adminOnly.Use(middlewares.AuthMiddleware(db), middlewares.RequireRole("admin"))
@@ -202,6 +220,8 @@ func SetupRoutes(r *gin.Engine) {
 			adminUserGroup.GET("/users", userController.GetAllUsersController)
 			adminUserGroup.GET("/role", userController.GetUserByRoleController)
 			adminUserGroup.GET("/students", userController.GetActiveStudentsController)
+			adminUserGroup.GET("/students/media-summary", evaluationController.GetActiveStudentsMediaSummary) // แอดมิน: รายชื่อนักเรียน+จำนวนรูป/วิดีโอที่ถูกแท็ก (ลิสต์โฟลเดอร์เสมือน)
+			adminUserGroup.GET("/students/:customer_id/posts", photoPostController.AdminGetStudentPosts)      // แอดมิน: รูป/วิดีโอที่นักเรียนคนนี้ถูกแท็กไว้ (ดูแยกรายคน)
 			adminUserGroup.POST("/users", userController.AdminCreateUserController)
 
 			adminUserGroup.GET("/users/:id", userController.AdminGetUserDetailController)
@@ -262,6 +282,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			evaluationGroup.POST("", evaluationController.CreateEvaluation)
 			evaluationGroup.GET("/students", evaluationController.GetMyStudents) // โค้ช: รายชื่อนักเรียนของตัวเอง (?course_id= กรองเฉพาะคอร์ส)
+			evaluationGroup.GET("/students/all", evaluationController.GetAllActiveStudents) // โค้ช/แอดมิน: นักเรียนทั้งโรงเรียน (ใช้ตอนแท็กรูป/วิดีโอ)
 			evaluationGroup.GET("/courses", evaluationController.GetMyCourses)   // โค้ช: รายชื่อคอร์สที่ตัวเองสอน
 			evaluationGroup.GET("/me", evaluationController.GetMyEvaluations)
 			evaluationGroup.GET("/me/given", evaluationController.GetMyGivenEvaluations) // โค้ช: ประวัติการประเมินที่ตัวเองให้ไว้
@@ -335,6 +356,11 @@ func SetupRoutes(r *gin.Engine) {
 
 		adminOnly.GET("/admin/class-confirmations/headcount", classConfirmationController.GetHeadcounts)
 		adminOnly.GET("/admin/class-confirmations/roster", classConfirmationController.GetClassRoster)
+
+		protected.GET("/attendance/me", attendanceController.GetMyHistory)
+
+		adminOnly.GET("/admin/legal-documents", legalDocumentController.List)
+		adminOnly.PUT("/admin/legal-documents/:key", legalDocumentController.Update)
 
 		adminEnrollmentReviewGroup := adminOnly.Group("/admin/enrollments")
 		{

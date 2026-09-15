@@ -101,7 +101,16 @@ func (s *DetectedPhotoService) AssignStudentsToPhoto(rawPhotoID uint, photoURL s
 		return nil, nil, errors.New("ไม่สามารถรีเซ็ตข้อมูลเดิมของรูปนี้ได้")
 	}
 
+	// กัน customerID ซ้ำในชุดที่ส่งมา (เช่น โค้ช reassign สอง detection คนละแถวไปเป็นคนเดียวกันโดยไม่ตั้งใจ)
+	// ไม่งั้นจะสร้างแท็กซ้ำหลายแถวให้นักเรียนคนเดียวกันในรูปเดียวกัน ไปโผล่ซ้ำในฟีดโพสต์ของเขา
+	seen := make(map[uint]bool, len(customerIDs))
+
 	for _, customerID := range customerIDs {
+		if seen[customerID] {
+			continue
+		}
+		seen[customerID] = true
+
 		var cust models.Customer
 		if err := s.db.First(&cust, customerID).Error; err != nil {
 			continue // ข้ามถ้าไม่พบ
@@ -168,16 +177,17 @@ func (s *DetectedPhotoService) DeleteMyPhotoTag(customerID, rawPhotoID uint) err
 	return nil
 }
 
-// DeleteOldRawPhotos ลบรูปโพสต์ที่อัปโหลดมานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
+// DeleteOldRawPhotos ลบรูปโพสต์ที่ "ถึงมือนักเรียน" มานานเกิน olderThan ทิ้งถาวร (แถว + แท็ก + ไฟล์จริง)
 //
 // เรียกจาก background job รายวัน — ให้เวลาผู้ถูกแท็กดาวน์โหลดเก็บไว้เองก่อนถูกลบถาวร
 // (ปุ่มดาวน์โหลดอยู่ที่แท็บ Posts ในโปรไฟล์)
 //
-// ⚠️ ลบ DetectedPhoto (แท็ก) ก่อนเสมอ แล้วค่อยลบ RawPhoto — ถ้าสลับลำดับแล้วลบไฟล์/แถว
-// RawPhoto ไปก่อน DetectedPhoto ที่ยังชี้ถึงมันจะกลายเป็นแถวกำพร้าค้างอยู่ถาวร
+// ⚠️ นับอายุจากตอนที่ถูกแท็กเข้าโปรไฟล์จริง (DetectedPhoto.created_at) ไม่ใช่ตอนอัปโหลดดิบ
+// (RawPhoto.created_at) — ไม่งั้นเวลาที่โค้ชใช้ตรวจทาน/ยืนยันก่อนกด assign จะไปกินเวลา 7 วัน
+// ที่ควรเป็นของนักเรียนไปฟรีๆ ทั้งที่นักเรียนยังไม่เคยเห็นรูปเลยด้วยซ้ำ
 //
-// เป็น hard delete (Unscoped) เหมือนรูปใบหน้าอ้างอิง — เหตุผลเดียวกันคือเป็นรูปของคนจริง
-// ลบแล้วต้องหายจริง ไม่ใช่แค่ซ่อนจาก query ปกติ
+// รูปที่ยังไม่เคยถูกแท็กเลย (AI หาไม่เจอใคร หรือโค้ชยังไม่ได้ตรวจทาน) ไม่มี "ตอนถึงมือนักเรียน"
+// ให้นับ ใช้เวลาอัปโหลดดิบแทนไปก่อน กันไฟล์ที่ไม่มีใครสนใจค้างอยู่ในระบบไม่จำกัดเวลา
 func (s *DetectedPhotoService) DeleteOldRawPhotos(olderThan time.Duration) (int64, error) {
 	if s.mediaStorage == nil {
 		return 0, nil // ยังไม่ได้ผูกที่เก็บไฟล์ไว้ ข้ามไปเงียบๆ เหมือน worker อื่นที่พึ่งพา dependency ภายนอก
@@ -185,9 +195,34 @@ func (s *DetectedPhotoService) DeleteOldRawPhotos(olderThan time.Duration) (int6
 
 	cutoff := time.Now().Add(-olderThan)
 
-	var photos []models.RawPhoto
-	if err := s.db.Where("created_at < ?", cutoff).Find(&photos).Error; err != nil {
+	// เวลาแท็กล่าสุดต่อรูป (ดึงมาครั้งเดียวเป็น map กัน N+1 query ตอนวนเช็คทีละรูปด้านล่าง)
+	// หา MAX เองในโค้ด Go แทนให้ฐานข้อมูลทำ — ดึงเป็น model ปกติผ่าน Find ให้ GORM แปลงเวลาให้ถูกต้อง
+	// เอง (ต่างจาก raw aggregate ที่ scan กลับเป็น time.Time ตรงๆ ไม่ได้บนไดรเวอร์ sqlite ที่ใช้เทส)
+	var tags []models.DetectedPhoto
+	if err := s.db.Select("raw_photo_id, created_at").Find(&tags).Error; err != nil {
 		return 0, err
+	}
+	latestTagByPhoto := make(map[uint]time.Time, len(tags))
+	for _, t := range tags {
+		if existing, ok := latestTagByPhoto[t.RawPhotoID]; !ok || t.CreatedAt.After(existing) {
+			latestTagByPhoto[t.RawPhotoID] = t.CreatedAt
+		}
+	}
+
+	var allPhotos []models.RawPhoto
+	if err := s.db.Find(&allPhotos).Error; err != nil {
+		return 0, err
+	}
+
+	var photos []models.RawPhoto
+	for _, photo := range allPhotos {
+		referenceTime := photo.CreatedAt
+		if taggedAt, ok := latestTagByPhoto[photo.ID]; ok {
+			referenceTime = taggedAt
+		}
+		if referenceTime.Before(cutoff) {
+			photos = append(photos, photo)
+		}
 	}
 
 	var deleted int64

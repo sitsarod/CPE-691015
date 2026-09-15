@@ -561,6 +561,32 @@ func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 	})
 }
 
+// GetMyHistory [GET] /api/attendance/me — ประวัติเข้าเรียนของตัวเอง อ้างตัวตนจาก JWT ไม่มี path param
+func (ctrl *AttendanceController) GetMyHistory(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	filter, err := historyFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := ctrl.service.GetMyHistory(userID, filter.Limit, filter.Offset)
+	if err != nil {
+		if errors.Is(err, services.ErrCustomerProfileNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		mapAttendanceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
 // ExportHistory [GET] /api/attendance/history/export — CSV ของทั้งช่วง ไม่มีเพดานแถว
 func (ctrl *AttendanceController) ExportHistory(c *gin.Context) {
 	filter, err := historyFilter(c)

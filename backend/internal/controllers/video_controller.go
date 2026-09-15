@@ -38,7 +38,8 @@ func NewVideoController(
 
 // UploadVideo handles POST /api/coaches/videos
 //
-// โค้ช/แอดมินอัปโหลดวิดีโอ แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในคลิปบ้าง (ถ้าส่ง course_id มา)
+// โค้ช/แอดมินอัปโหลดวิดีโอ แล้วระบบลองจำแนกว่ามีนักเรียนคนไหนอยู่ในคลิปบ้าง (เทียบกับนักเรียน
+// ทั้งโรงเรียน ไม่ต้องเลือกคอร์สก่อน — ดูเหตุผลที่ FaceTaggingService.DetectStudentsInVideo)
 // ⚠️ ผลที่คืนไปเป็นแค่ "ข้อเสนอ" ยังไม่ได้แท็กใครจริง — ต้องผ่าน ManuallyAssignStudents อีกที
 // (เหมือน UploadPhotoPost ทุกอย่าง — ก่อนหน้านี้เคยเขียน DetectedVideo ลง DB ทันทีตอนอัปโหลด
 // ด้วยผลจากระบบ mock แบบสุ่ม ทำให้คนที่ AI เดา "ยังไม่ได้ยืนยัน" ไปโผล่ในแท็บ Posts ของนักเรียน
@@ -70,17 +71,6 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	if err != nil {
 		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
-	}
-
-	// course_id ไม่บังคับ — ไม่ส่งมาก็อัปโหลดได้ปกติ แค่ไม่มีการจำแนกให้ (เหมือน UploadPhotoPost)
-	var courseID uint
-	if raw := c.PostForm("course_id"); raw != "" {
-		id, err := strconv.ParseUint(raw, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
-			return
-		}
-		courseID = uint(id)
 	}
 
 	file, err := fh.Open()
@@ -120,21 +110,20 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 
 	// จำแนกใบหน้าแบบ best-effort — face-service ล่มหรือยังไม่ตั้งค่า ต้องไม่ทำให้อัปโหลดล้มเหลว
 	// (หลักการเดียวกับเช็คชื่อที่ยังใช้ QR ต่อได้เมื่อระบบใบหน้าใช้ไม่ได้) โค้ชแท็กเองได้อยู่แล้ว
-	if courseID != 0 && role == "coach" {
-		matches, faceCount, err := ctrl.taggingService.DetectStudentsInVideo(c.Request.Context(), userID, courseID, raw)
-		if err != nil {
-			log.Printf("จำแนกใบหน้าในวิดีโอ raw_video=%d ไม่สำเร็จ: %v", rawVideo.ID, err)
-		} else {
-			resp.FaceCount = faceCount
-			for _, m := range matches {
-				resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
-					CustomerID: m.CustomerID,
-					Nickname:   m.Nickname,
-					Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
-					BBox:       m.BBox,
-					FrameImage: m.FrameImage, // เฟรมที่แมตช์ได้ (ย่อขนาดแล้ว) ให้โค้ชวาดกรอบดูภาพจริงตอนตรวจทาน
-				})
-			}
+	// ทำทั้งโค้ชและแอดมิน เพราะเทียบกับนักเรียนทั้งโรงเรียนแล้ว ไม่ต้องรู้ว่าใครสอนคอร์สไหน
+	matches, faceCount, err := ctrl.taggingService.DetectStudentsInVideo(c.Request.Context(), raw)
+	if err != nil {
+		log.Printf("จำแนกใบหน้าในวิดีโอ raw_video=%d ไม่สำเร็จ: %v", rawVideo.ID, err)
+	} else {
+		resp.FaceCount = faceCount
+		for _, m := range matches {
+			resp.Students = append(resp.Students, dto.DetectedStudentSuggestion{
+				CustomerID: m.CustomerID,
+				Nickname:   m.Nickname,
+				Confidence: m.Confidence * 100, // คืนเป็นเปอร์เซ็นต์ให้หน้าเว็บใช้ได้ตรง ๆ
+				BBox:       m.BBox,
+				FrameImage: m.FrameImage, // เฟรมที่แมตช์ได้ (ย่อขนาดแล้ว) ให้โค้ชวาดกรอบดูภาพจริงตอนตรวจทาน
+			})
 		}
 	}
 

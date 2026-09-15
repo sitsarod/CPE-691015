@@ -71,6 +71,9 @@ export default function CourseDetail({
             icon={<Layers className="h-3.5 w-3.5" />}
             label={`${packages.length} แพ็กเกจให้เลือก`}
           />
+          {packages.some((p) => p.is_trial) && (
+            <SummaryChip icon={<CircleCheck className="h-3.5 w-3.5" />} label="ทดลองเรียนฟรี" highlight />
+          )}
           {totalHoursRange.length > 0 && (
             <SummaryChip
               icon={<Clock3 className="h-3.5 w-3.5" />}

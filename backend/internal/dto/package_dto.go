@@ -9,12 +9,14 @@ type PackageScheduleReq struct {
 
 // CreatePackageReq รับข้อมูลตอนสร้างแพ็กเกจใหม่
 type CreatePackageReq struct {
-	CourseID      uint                 `json:"course_id" binding:"required"`
-	SessionsCount uint                 `json:"sessions_count" binding:"required"`
-	HoursCount    uint                 `json:"hours_count" binding:"required"`
-	MaxSeats      uint                 `json:"max_seats" binding:"required"`
-	Price         float64              `json:"price" binding:"required"`
-	DurationDays uint `json:"duration_days" binding:"omitempty,max=366"`
+	CourseID      uint `json:"course_id" binding:"required"`
+	SessionsCount uint `json:"sessions_count" binding:"required"`
+	HoursCount    uint `json:"hours_count" binding:"required"`
+	MaxSeats      uint `json:"max_seats" binding:"required"`
+	// gte=0 ไม่ใช่ required — required ถือว่า 0 คือไม่ได้กรอก แพ็กเกจทดลองราคา 0 จะสร้างไม่ได้
+	Price        float64 `json:"price" binding:"gte=0"`
+	DurationDays uint    `json:"duration_days" binding:"omitempty,max=366"`
+	IsTrial      bool    `json:"is_trial"`
 
 	Schedules []PackageScheduleReq `json:"schedules" binding:"required,dive"`
 }
@@ -24,8 +26,9 @@ type UpdatePackageReq struct {
 	SessionsCount *uint    `json:"sessions_count" binding:"omitempty"`
 	HoursCount    *uint    `json:"hours_count" binding:"omitempty"`
 	MaxSeats      *uint    `json:"max_seats" binding:"omitempty"`
-	Price         *float64 `json:"price" binding:"omitempty"`
-	DurationDays *uint `json:"duration_days" binding:"omitempty,min=1,max=366"`
+	Price         *float64 `json:"price" binding:"omitempty,gte=0"`
+	DurationDays  *uint    `json:"duration_days" binding:"omitempty,min=1,max=366"`
+	IsTrial       *bool    `json:"is_trial"`
 
 	Schedules *[]PackageScheduleReq `json:"schedules" binding:"omitempty,dive"`
 }

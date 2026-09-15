@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, ClipboardList, Calendar, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
+import { Home, Wallet, ClipboardList, Calendar, History, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 
 const navItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/customer/payment", icon: <Wallet />, label: "การเงิน" },
   { href: "/customer/enrollment", icon: <ClipboardList />, label: "คอร์สของฉัน" },
   { href: "/customer/schedule", icon: <Calendar />, label: "ตารางเรียน" },
+  { href: "/customer/attendance", icon: <History />, label: "ประวัติเข้าเรียน" },
   { href: "/customer/feedback", icon: <StarCheck />, label: "รีวิวของฉัน" },
 ];
 

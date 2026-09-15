@@ -72,7 +72,16 @@ function LoginForm() {
       
       router.refresh();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+      const message = err instanceof Error ? err.message : "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+
+      // ข้อความนี้มาจาก services.ErrEmailNotVerified ฝั่ง backend เท่านั้น —
+      // พาไปกรอก OTP ต่อแทนที่จะโชว์แค่ข้อความ error เฉย ๆ
+      if (message.includes("ยังไม่ได้ยืนยัน")) {
+        router.push(`/register/verify?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      setErrorMsg(message);
     } finally {
       setIsLoading(false);
     }

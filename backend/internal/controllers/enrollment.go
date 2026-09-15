@@ -30,7 +30,8 @@ func mapEnrollmentError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrCustomerProfileNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 
-	case errors.Is(err, services.ErrEnrollmentRejectReason):
+	case errors.Is(err, services.ErrEnrollmentRejectReason),
+		errors.Is(err, services.ErrEnrollmentTermsNotAccepted):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrEnrollmentForbidden):
@@ -42,7 +43,9 @@ func mapEnrollmentError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrPackageSeatsFull),
 		errors.Is(err, services.ErrEnrollmentNotPending),
 		errors.Is(err, services.ErrEnrollmentNotCancellable),
-		errors.Is(err, services.ErrEnrollmentBillingLocked):
+		errors.Is(err, services.ErrEnrollmentBillingLocked),
+		errors.Is(err, services.ErrTrialAlreadyUsed),
+		errors.Is(err, services.ErrTrialNotForExisting):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
@@ -58,6 +61,11 @@ func (ctrl *EnrollmentController) GetAvailableCourses(c *gin.Context) {
         return
     }
     c.JSON(http.StatusOK, gin.H{"data": courses})
+}
+
+// GetTerms [GET] /api/enrollments/terms — ข้อตกลงการสมัครเรียนฉบับปัจจุบัน (public)
+func (ctrl *EnrollmentController) GetTerms(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"data": ctrl.service.GetTerms()})
 }
 
 // EnrollCourse
@@ -76,7 +84,7 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
 		return
 	}
 
-    result, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
+    result, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID, input.AcceptedTermsVersion)
     if err != nil {
         mapEnrollmentError(c, err)
         return

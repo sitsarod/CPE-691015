@@ -44,6 +44,12 @@ func (s *authService) Login(input dto.LoginInput) (string, string, *models.User,
 		return "", "", nil, errors.New("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 	}
 
+	// บัญชีที่สมัครเองผ่านหน้าเว็บต้องยืนยันอีเมลก่อนถึงจะ login ได้
+	// (บัญชีที่แอดมินสร้างให้ถูกปักว่ายืนยันแล้วตั้งแต่ตอนสร้าง จึงไม่โดนด่านนี้)
+	if user.EmailVerifiedAt == nil {
+		return "", "", nil, ErrEmailNotVerified
+	}
+
 	accessToken, refreshToken, err := issueTokens(&user)
 	if err != nil {
 		return "", "", nil, err

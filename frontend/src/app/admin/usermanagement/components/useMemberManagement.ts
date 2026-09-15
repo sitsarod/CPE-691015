@@ -64,19 +64,26 @@ function validateCreateForm(form: AdminCreateUserInput): string | null {
   if (form.password.length < 8) {
     return "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
   }
+  if (!/\d/.test(form.password)) {
+    return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว";
+  }
 
   if (form.role === "customer") {
     const c = form.customer;
     if (!c?.nickname.trim()) return "กรุณากรอก: ชื่อเล่น";
     if (!c.gender) return "กรุณาเลือก: เพศ";
     if (!c.birthDate) return "กรุณากรอก: วันเกิด";
-    if (!/^\d{10}$/.test(c.phoneNumber)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
+    if (new Date(c.birthDate) > new Date()) return "วันเกิดต้องไม่ใช่วันที่ในอนาคต";
+    const minBirthDate = new Date();
+    minBirthDate.setFullYear(minBirthDate.getFullYear() - 3);
+    if (new Date(c.birthDate) > minBirthDate) return "อายุต้องไม่ต่ำกว่า 3 ปี";
+    if (!/^0\d{9}$/.test(c.phoneNumber)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0";
   }
 
   if (form.role === "coach") {
     const co = form.coach;
     if (!co?.nickname.trim()) return "กรุณากรอก: ชื่อเล่น";
-    if (!/^\d{10}$/.test(co.phone)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
+    if (!/^0\d{9}$/.test(co.phone)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0";
     if (!/^\d{13}$/.test(co.uid)) return "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก";
     if (!co.birth_date) return "กรุณากรอก: วันเกิด";
     if (!co.address.trim()) return "กรุณากรอก: ที่อยู่";

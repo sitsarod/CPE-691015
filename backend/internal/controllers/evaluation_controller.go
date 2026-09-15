@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"CPE-691015/internal/dto"
+	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -100,6 +101,98 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 			CustomerID:     s.ID,
 			Nickname:       s.Nickname,
 			ProfilePicture: s.ProfilePicture,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// GetAllActiveStudents handles GET /api/evaluations/students/all
+//
+// รายชื่อนักเรียนที่ลงทะเบียนเรียนอยู่จริงทั้งโรงเรียน ไม่กรองตามโค้ช/คอร์สเลย — ใช้ตอนแท็ก
+// นักเรียนในรูป/วิดีโอ (หน้า coach/detect) เพราะคนอัปโหลดอาจไม่ใช่คนสอนคอร์สของคนในรูปนั้นก็ได้
+// เปิดให้ทั้งโค้ชและแอดมินเรียกได้ (ต่างจาก GetMyStudents ที่จำกัดแค่โค้ช)
+func (ctrl *EvaluationController) GetAllActiveStudents(c *gin.Context) {
+	_, role, ok := GetAuthContext(c)
+	if !ok || (role != "coach" && role != "admin") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูรายชื่อนักเรียนทั้งหมดได้"})
+		return
+	}
+
+	students, err := ctrl.evalService.GetAllActiveStudents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	responses := make([]dto.EvaluableStudentResponse, 0, len(students))
+	for _, s := range students {
+		responses = append(responses, dto.EvaluableStudentResponse{
+			CustomerID:     s.ID,
+			Nickname:       s.Nickname,
+			ProfilePicture: s.ProfilePicture,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// GetActiveStudentsMediaSummary handles GET /api/admin/students/media-summary
+//
+// เหมือน GetAllActiveStudents แต่แนบจำนวนรูป/วิดีโอที่แต่ละคนถูกแท็กไว้มาด้วย — ใช้แสดงเป็นลิสต์
+// ในหน้า admin/detect/media ให้แอดมินเห็นว่าใครมีโพสต์รอดูบ้างโดยไม่ต้องกดเข้าไปเช็คทีละคน
+// เฉพาะแอดมิน (ต่างจาก GetAllActiveStudents ที่โค้ชก็เรียกได้ เพราะหน้านี้เป็นของแอดมินโดยเฉพาะ)
+func (ctrl *EvaluationController) GetActiveStudentsMediaSummary(c *gin.Context) {
+	_, role, ok := GetAuthContext(c)
+	if !ok || role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะผู้ดูแลระบบเท่านั้นที่ดูสรุปนี้ได้"})
+		return
+	}
+
+	students, err := ctrl.evalService.GetAllActiveStudents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// นับรูป/วิดีโอต่อคนในคำสั่งเดียว (กลุ่มตาม customer_id) แทนวนสั่งทีละคน กัน N+1 query
+	type countRow struct {
+		CustomerID uint
+		Count      int64
+	}
+	var photoCounts, videoCounts []countRow
+	if err := ctrl.db.Model(&models.DetectedPhoto{}).
+		Select("customer_id, COUNT(*) AS count").
+		Group("customer_id").
+		Scan(&photoCounts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนรูปได้"})
+		return
+	}
+	if err := ctrl.db.Model(&models.DetectedVideo{}).
+		Select("customer_id, COUNT(*) AS count").
+		Group("customer_id").
+		Scan(&videoCounts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนวิดีโอได้"})
+		return
+	}
+
+	photoCountByCustomer := make(map[uint]int64, len(photoCounts))
+	for _, r := range photoCounts {
+		photoCountByCustomer[r.CustomerID] = r.Count
+	}
+	videoCountByCustomer := make(map[uint]int64, len(videoCounts))
+	for _, r := range videoCounts {
+		videoCountByCustomer[r.CustomerID] = r.Count
+	}
+
+	responses := make([]dto.StudentMediaSummaryResponse, 0, len(students))
+	for _, s := range students {
+		responses = append(responses, dto.StudentMediaSummaryResponse{
+			CustomerID:     s.ID,
+			Nickname:       s.Nickname,
+			ProfilePicture: s.ProfilePicture,
+			PhotoCount:     photoCountByCustomer[s.ID],
+			VideoCount:     videoCountByCustomer[s.ID],
 		})
 	}
 

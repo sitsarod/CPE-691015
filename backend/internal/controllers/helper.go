@@ -46,6 +46,7 @@ var fieldLabelTH = map[string]string{
 	"Gender":            "เพศ",
 	"BirthDate":         "วันเกิด",
 	"PhoneNumber":       "หมายเลขโทรศัพท์",
+	"Phone":             "หมายเลขโทรศัพท์",
 	"ParentEmail":       "อีเมลผู้ปกครอง",
 	"ParentPhoneNumber": "หมายเลขโทรศัพท์ผู้ปกครอง",
 }
@@ -80,6 +81,8 @@ func bindErrorMessage(err error) string {
 		return label + "ต้องเป็นตัวเลขเท่านั้น"
 	case "len":
 		return label + "ต้องมี " + e.Param() + " หลัก"
+	case "startswith":
+		return label + "ต้องขึ้นต้นด้วยเลข " + e.Param()
 	case "max":
 		return label + "ต้องยาวไม่เกิน " + e.Param() + " ตัวอักษร"
 	case "min":

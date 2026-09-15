@@ -9,6 +9,7 @@ import { createExpensesBatch, updateExpense, deleteExpense } from "@/services/pa
 import { fetchCoachById, fetchCoachPayroll } from "@/services/coachAPI";
 import type { CoachPayrollLine } from "@/services/coachAPI";
 import { CreateExpenseReq, UpdateExpenseReq } from "@/types/payment";
+import DateField from '@/components/DateField';
 
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
 interface CoachWageInfo {
@@ -566,11 +567,10 @@ export default function ExpensesTab({
           <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2">
             <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">วันที่ทำรายการ</label>
-              <input
-                type="date"
+              <DateField
                 value={expenseForm.expensedate}
-                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
+                onChange={(val) => setExpenseForm(prev => ({ ...prev, expensedate: val }))}
+                buttonClassName="h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
                 required
               />
             </div>

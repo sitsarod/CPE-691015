@@ -19,8 +19,6 @@ import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, Ar
 // โทนสี/ฟอนต์ของดีไซน์ 2b แต่คงโทนสีเดิมของเว็บ (ขาว + แดง #CC0000) และใช้ฟอนต์ Kanit
 const ACCENT = "#CC0000";
 
-// สีแดงสำหรับส่วนที่พื้นเข้ม (ส่วนโค้ช) — #CC0000 บนพื้นดำคอนทราสต์ไม่พอ
-const COACH_ACCENT = "#FF4D4D";
 
 // สีเน้น (red accent) แบบ Tailwind arbitrary value — ใช้ซ้ำหลายที่
 const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as const;
@@ -29,7 +27,8 @@ const kanitFont = { fontFamily: "var(--font-kanit), system-ui, sans-serif" } as 
 
 // แพ็กเกจตัวแทนของคอร์ส = ราคาถูกสุดที่ตั้งราคาแล้ว (ถ้าไม่มีก็ใช้ตัวแรก)
 function representativePackage(course: CourseDTO): CoursePackageDTO | null {
-  const pkgs = course.packages ?? [];
+  // แพ็กเกจทดลอง (1 ครั้ง ราคา 0) ไม่ใช่ตัวแทนของคอร์ส — จะทำให้ขึ้น "เริ่มต้น 1 ครั้ง"
+  const pkgs = (course.packages ?? []).filter((p) => !p.is_trial);
   if (pkgs.length === 0) return null;
   const priced = pkgs.filter((p) => p.price > 0);
   const pool = priced.length > 0 ? priced : pkgs;
@@ -306,6 +305,46 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {/* ส่วนโค้ช — ล้อโครงจริง หัวเรื่องซ้าย/สถิติขวา แล้วการ์ด 3 ใบเหลื่อมกัน
+            ไม่งั้นพอข้อมูลมาถึงหน้าจะกระโดดยาวเท่าความสูงของส่วนนี้ทั้งส่วน */}
+        <section className="border-t border-gray-200 py-16 md:py-20">
+          <div className="mx-auto max-w-6xl px-6 md:px-10">
+            <div className="mb-11 flex flex-col gap-9 md:flex-row md:items-end md:justify-between">
+              <div className="flex max-w-[520px] flex-col gap-3.5">
+                <div className="h-3 w-36 rounded bg-gray-200" />
+                <div className="h-11 w-64 max-w-full rounded bg-gray-200 md:h-14" />
+                <div className="h-3.5 w-80 max-w-full rounded bg-gray-100" />
+              </div>
+              <div className="flex flex-none divide-x divide-gray-200">
+                {[0, 1].map((i) => (
+                  <div key={i} className="flex flex-col gap-2 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
+                    <div className="h-7 w-14 rounded bg-gray-200" />
+                    <div className="h-3 w-20 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-start justify-center gap-7">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className={`flex basis-full flex-col sm:basis-[calc(50%-14px)] md:basis-[calc(33.333%-18.667px)] ${
+                    ["md:mt-0", "md:mt-14", "md:mt-6"][i]
+                  }`}
+                >
+                  <div className="aspect-[4/5] w-full bg-gray-200" />
+                  <div className="flex flex-col gap-2 border-t border-gray-200 pt-4">
+                    <div className="h-6 w-32 rounded bg-gray-200" />
+                    <div className="h-3 w-40 rounded bg-gray-100" />
+                    <div className="h-3 w-24 rounded bg-gray-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
@@ -426,7 +465,7 @@ export default function Home() {
                         <span className="whitespace-nowrap text-base font-medium text-gray-900">{priceText}</span>
                         <Link
                           href={`/courses/${course.id}`}
-                          className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                          className="inline-flex w-fit items-center gap-1 border border-[#CC0000] bg-[#CC0000] px-4 py-2 text-[13px] font-normal text-white transition-colors hover:border-[#A30A0E] hover:bg-[#A30A0E]"
                         >
                           เลือกคอร์ส
                           <ArrowRight className="h-3.5 w-3.5" />
@@ -447,7 +486,7 @@ export default function Home() {
                       <span className="text-base font-medium text-gray-900">{priceText}</span>
                       <Link
                         href={`/courses/${course.id}`}
-                        className="inline-flex w-fit items-center gap-1 border border-gray-300 px-4 py-2 text-[13px] font-light text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] md:justify-self-end"
+                        className="inline-flex w-fit items-center gap-1 border border-[#CC0000] bg-[#CC0000] px-4 py-2 text-[13px] font-normal text-white transition-colors hover:border-[#A30A0E] hover:bg-[#A30A0E] md:justify-self-end"
                       >
                         เลือกคอร์ส
                         <ArrowRight className="h-3.5 w-3.5" />
@@ -477,12 +516,12 @@ export default function Home() {
 
       {/* ===== 02 บุคลากร =====
           แถบพื้นเข้มเต็มความกว้าง ตัดกับส่วนอื่นของหน้าที่เป็นพื้นขาว เพื่อให้หน้ามีจังหวะ
-          สีแดงบนพื้นเข้มใช้ COACH_ACCENT ไม่ใช่ ACCENT เพราะ #CC0000 บนพื้นดำอ่านไม่ออก */}
-      <section id="coaches" className="relative overflow-hidden bg-[#141210] py-16 md:py-20">
+          สีแดงบนพื้นเข้มใช้ ACCENT ไม่ใช่ ACCENT เพราะ #CC0000 บนพื้นดำอ่านไม่ออก */}
+      <section id="coaches" className="relative overflow-hidden border-t border-gray-200 bg-white py-16 md:py-20">
         {/* คำใหญ่จาง ๆ เป็นพื้นหลัง ซ่อนบนจอเล็กเพราะจะเบียดเนื้อหา */}
         <span
           aria-hidden
-          className="pointer-events-none absolute -right-8 top-8 hidden select-none text-[152px] font-bold leading-none tracking-[-0.04em] text-white/[0.035] md:block"
+          className="pointer-events-none absolute -right-8 top-8 hidden select-none text-[152px] font-bold leading-none tracking-[-0.04em] text-gray-900/[0.035] md:block"
         >
           COACHES
         </span>
@@ -490,14 +529,14 @@ export default function Home() {
         <div className="relative mx-auto max-w-6xl px-6 md:px-10">
           {coaches.length === 0 ? (
             <>
-              <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: COACH_ACCENT }}>
-                <span className="h-px w-6" style={{ backgroundColor: COACH_ACCENT }} />
+              <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: ACCENT }}>
+                <span className="h-px w-6" style={{ backgroundColor: ACCENT }} />
                 02 · OUR COACHES
               </span>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900 md:text-4xl">
                 {content?.coaches_title || "ทีมโค้ชของเรา"}
               </h2>
-              <p className="py-12 text-center font-light text-[#8c8681]">เร็วๆ นี้</p>
+              <p className="py-12 text-center font-light text-gray-400">เร็วๆ นี้</p>
             </>
           ) : (() => {
             // โชว์ได้ถึง 2 แถวเต็ม (6 คน) เกินกว่านั้นค่อยซ่อนหลังปุ่ม
@@ -527,26 +566,26 @@ export default function Home() {
                 {/* แถวหัว: หัวข้อซ้าย / สถิติขวา */}
                 <div className="mb-11 flex flex-col gap-9 md:flex-row md:items-end md:justify-between">
                   <div className="flex max-w-[520px] flex-col gap-3.5">
-                    <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: COACH_ACCENT }}>
-                      <span className="h-px w-6" style={{ backgroundColor: COACH_ACCENT }} />
+                    <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: ACCENT }}>
+                      <span className="h-px w-6" style={{ backgroundColor: ACCENT }} />
                       02 · OUR COACHES
                     </span>
-                    <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-white md:text-[52px]">
+                    <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-gray-900 md:text-[52px]">
                       {content?.coaches_title || "ทีมโค้ชของเรา"}
                     </h2>
-                    <p className="text-sm font-light leading-relaxed text-[#a6a09a]">
+                    <p className="text-sm font-light leading-relaxed text-gray-500">
                       {content?.coaches_subtitle ||
                         "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็ก"}
                     </p>
                   </div>
 
-                  <div className="flex flex-none divide-x divide-[#2e2a27]">
+                  <div className="flex flex-none divide-x divide-gray-200">
                     {coachStats.map((s, i) => (
                       <div key={i} className="flex flex-col gap-1.5 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
-                        <span className="text-[28px] font-semibold leading-none md:text-[34px]" style={{ color: COACH_ACCENT }}>
+                        <span className="text-[28px] font-semibold leading-none md:text-[34px]" style={{ color: ACCENT }}>
                           {s.value}
                         </span>
-                        <span className="text-[11px] font-light text-[#8c8681]">{s.label}</span>
+                        <span className="text-[11px] font-light text-gray-500">{s.label}</span>
                       </div>
                     ))}
                   </div>
@@ -577,7 +616,7 @@ export default function Home() {
                         onClick={() => setSelectedCoach(coach)}
                         className={`group flex basis-full flex-col text-left sm:basis-[calc(50%-14px)] ${BASIS} ${OFFSET[i % cols]}`}
                       >
-                        <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#262220]">
+                        <div className="relative aspect-[4/5] w-full overflow-hidden bg-gray-100">
                           {img ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -586,7 +625,7 @@ export default function Home() {
                               className="h-full w-full object-cover object-top transition duration-700 group-hover:scale-[1.04]"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[#57514c]">
+                            <div className="flex h-full w-full items-center justify-center text-gray-300">
                               <UserRound className="h-14 w-14" />
                             </div>
                           )}
@@ -595,13 +634,13 @@ export default function Home() {
                               รูปโค้ชมาจากหลายแหล่ง บางใบพื้นขาวล้วน วางบนแถบเข้มแล้วเป็น
                               บล็อกขาวโพลนตัดกันแรงมาก เฉดนี้ทำให้ขอบล่างจมเข้าหาพื้นแถบ
                               รูปที่เข้มอยู่แล้วจะแทบไม่เห็นความต่าง */}
-                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#141210] via-[#141210]/45 to-transparent" />
-                          <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/15" />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white via-white/45 to-transparent" />
+                          <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/5" />
 
                           {isHead && (
                             <span
-                              className="absolute bottom-0 left-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#141210]"
-                              style={{ backgroundColor: COACH_ACCENT }}
+                              className="absolute bottom-0 left-0 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-white"
+                              style={{ backgroundColor: ACCENT }}
                             >
                               HEAD COACH
                             </span>
@@ -611,34 +650,34 @@ export default function Home() {
 
                         <div
                           className="flex flex-col gap-2 pt-4"
-                          style={{ borderTop: isHead ? `2px solid ${COACH_ACCENT}` : "1px solid #2e2a27" }}
+                          style={{ borderTop: isHead ? `2px solid ${ACCENT}` : "1px solid #e5e7eb" }}
                         >
                           {/* เลขลำดับเคยวางทับรูป ซึ่งคอนทราสต์ขึ้นอยู่กับรูปล้วน ๆ
                               เจอจริงคือ 03 บนรูปพื้นขาวหายสนิท ย้ายมาไว้บนพื้นแถบแทน */}
                           <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-2xl font-semibold leading-tight text-white">{name}</span>
+                            <span className="text-2xl font-semibold leading-tight text-gray-900">{name}</span>
                             <span
                               className="flex-none text-[34px] font-bold leading-none"
-                              style={{ color: isHead ? COACH_ACCENT : "rgba(255,255,255,0.16)" }}
+                              style={{ color: isHead ? ACCENT : "rgba(17,24,39,0.13)" }}
                             >
                               {String(i + 1).padStart(2, "0")}
                             </span>
                           </div>
-                          <span className="text-xs font-light" style={{ color: COACH_ACCENT }}>
+                          <span className="text-xs font-light" style={{ color: ACCENT }}>
                             {role}
                             {coach.specialization ? ` · ระดับ ${coach.specialization}` : ""}
                           </span>
                           {coach.coach_license?.trim() && (
-                            <span className="text-xs font-light text-[#8c8681]">{coach.coach_license}</span>
+                            <span className="text-xs font-light text-gray-400">{coach.coach_license}</span>
                           )}
                           {coach.bio?.trim() && (
-                            <span className="line-clamp-3 text-[12.5px] font-light leading-relaxed text-[#a6a09a]">
+                            <span className="line-clamp-3 text-[12.5px] font-light leading-relaxed text-gray-500">
                               {coach.bio}
                             </span>
                           )}
                           <span
                             className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-light opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                            style={{ color: COACH_ACCENT }}
+                            style={{ color: ACCENT }}
                           >
                             ดูรายละเอียด
                             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -652,12 +691,12 @@ export default function Home() {
                 {/* แถวปิดท้าย — โผล่เฉพาะตอนมีโค้ชเกินที่แสดงอยู่
                     ไม่งั้นจะเหลือเส้นคาดกับที่ว่างลอย ๆ โดยไม่มีอะไรอยู่ในนั้น */}
                 {(hiddenCount > 0 || showAllCoaches) && (
-                  <div className="mt-12 flex justify-end border-t border-[#2e2a27] pt-6">
+                  <div className="mt-12 flex justify-end border-t border-gray-200 pt-6">
                     <button
                       type="button"
                       onClick={() => setShowAllCoaches((v) => !v)}
-                      className="group inline-flex flex-none items-center gap-2 px-5 py-3 text-[13px] font-medium text-[#141210] transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: COACH_ACCENT }}
+                      className="group inline-flex flex-none items-center gap-2 px-5 py-3 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: ACCENT }}
                     >
                       {showAllCoaches ? "ย่อรายชื่อโค้ช" : `ดูโค้ชทั้ง ${coaches.length} คน`}
                       <ArrowRight
@@ -1106,8 +1145,8 @@ export default function Home() {
       </footer>
 
       {/* ===== Modal รายละเอียดโค้ช =====
-          หน้าตาต้องต่อเนื่องกับแถบโค้ชที่กดมา — พื้นเข้ม ไม่มีมุมมน ไม่มีเงา
-          เดิมเป็นกล่องขาวมุมมนมีเงา + ชิปมนสีชมพู/ม่วง ซึ่งหลุดจากทั้งหน้า */}
+          มุม 0 ไม่มีเงา เหมือนส่วนอื่นของหน้า
+          เดิมเป็นกล่องมุมมนมีเงา + ชิปมนสีชมพู/ม่วง ซึ่งหลุดจากทั้งหน้า */}
       {selectedCoach && (() => {
         const c = selectedCoach;
         const img = c.home_image || c.profile_picture;
@@ -1123,67 +1162,67 @@ export default function Home() {
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
             onClick={() => setSelectedCoach(null)}
           >
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
             {/* จอเล็กเรียงบนล่างแล้วเลื่อนทั้งกล่อง · จอ sm ขึ้นไปวางรูปซ้ายเนื้อหาขวา
                 กล่องจะได้เป็นแนวนอน ไม่สูงจนต้องเลื่อนกว่าจะอ่านประวัติจบ */}
             <div
-              className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden border border-[#2e2a27] bg-[#141210] sm:grid sm:grid-cols-[300px_1fr]"
+              className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden border border-gray-200 bg-white sm:grid sm:grid-cols-[300px_1fr]"
               onClick={(e) => e.stopPropagation()}
               style={kanitFont}
             >
               <button
                 onClick={() => setSelectedCoach(null)}
-                className="absolute right-0 top-0 z-10 grid h-10 w-10 place-items-center border-b border-l border-[#2e2a27] bg-[#141210]/85 text-[#a6a09a] transition-colors hover:text-white"
+                className="absolute right-0 top-0 z-10 grid h-10 w-10 place-items-center border-b border-l border-gray-200 bg-white/85 text-gray-400 transition-colors hover:text-gray-900"
                 aria-label="ปิด"
               >
                 <X className="h-4 w-4" />
               </button>
 
-              <div className="relative h-[280px] w-full flex-none bg-[#262220] sm:h-full">
+              <div className="relative h-[280px] w-full flex-none bg-gray-100 sm:h-full">
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={displayName} className="h-full w-full object-cover object-top" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[#57514c]">
+                  <div className="flex h-full w-full items-center justify-center text-gray-300">
                     <UserRound className="h-16 w-16" />
                   </div>
                 )}
                 {/* เฉพาะจอเล็กที่รูปอยู่เหนือเนื้อหา — ให้ขอบล่างจมเข้าหาพื้นกล่อง */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#141210] to-transparent sm:hidden" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white to-transparent sm:hidden" />
               </div>
 
               {/* min-h-0 ขาดไม่ได้ — ลูกของ flex มีความสูงขั้นต่ำเท่าเนื้อหาโดยปริยาย
                   ถ้าไม่ปลดออก กล่องจะยืดตามเนื้อหาแทนที่จะให้ตรงนี้เลื่อน */}
               <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-7 sm:max-h-[88vh] sm:flex-none">
                 <div className="flex flex-col gap-1.5 pr-10">
-                  <span className="text-[30px] font-semibold leading-tight tracking-tight text-white">
+                  <span className="text-[30px] font-semibold leading-tight tracking-tight text-gray-900">
                     {displayName}
                   </span>
                   {fullName && c.nickname && (
-                    <span className="text-sm font-light text-[#8c8681]">{fullName}</span>
+                    <span className="text-sm font-light text-gray-400">{fullName}</span>
                   )}
                 </div>
 
                 {details.length > 0 && (
-                  <dl className="flex flex-col divide-y divide-[#2e2a27] border-y border-[#2e2a27]">
+                  <dl className="flex flex-col divide-y divide-gray-200 border-y border-gray-200">
                     {details.map((d) => (
                       <div key={d.label} className="flex items-baseline gap-5 py-3">
-                        <dt className="w-[72px] flex-none text-[11px] font-light tracking-[0.1em] text-[#6f6862]">
+                        <dt className="w-[72px] flex-none text-[11px] font-light tracking-[0.1em] text-gray-400">
                           {d.label}
                         </dt>
-                        <dd className="text-sm font-normal text-white">{d.value}</dd>
+                        <dd className="text-sm font-normal text-gray-900">{d.value}</dd>
                       </div>
                     ))}
                   </dl>
                 )}
 
                 {c.bio?.trim() ? (
-                  <p className="whitespace-pre-line text-[13.5px] font-light leading-[1.8] text-[#a6a09a]">
+                  <p className="whitespace-pre-line text-[13.5px] font-light leading-[1.8] text-gray-600">
                     {c.bio}
                   </p>
                 ) : (
-                  <p className="text-[13.5px] font-light text-[#57514c]">ยังไม่มีรายละเอียดเพิ่มเติม</p>
+                  <p className="text-[13.5px] font-light text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
                 )}
 
                 {/* ⚠️ ห้ามเขียนว่า "จองคลาสกับโค้ชคนนี้" — ระบบสมัครเรียนเลือกเป็นคอร์ส
@@ -1191,8 +1230,8 @@ export default function Home() {
                     พาไปหน้าคอร์สแทน ซึ่งเป็นก้าวถัดไปที่มีอยู่จริง */}
                 <Link
                   href="/courses"
-                  className="group mt-auto inline-flex w-fit items-center gap-2 px-5 py-3 text-[13px] font-medium text-[#141210] transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: COACH_ACCENT }}
+                  className="group mt-auto inline-flex w-fit items-center gap-2 px-5 py-3 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: ACCENT }}
                 >
                   ดูคอร์สเรียนทั้งหมด
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
