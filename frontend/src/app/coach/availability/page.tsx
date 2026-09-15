@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, Save, Pencil, X } from "lucide-react";
+import { AlertCircle, Save, Pencil, X } from "lucide-react";
 
 import { fetchMyCoachProfile, fetchCoachAvailability, updateCoachAvailability } from "@/services/coachAPI";
 import { AvailabilitySlot } from "@/types/coach";
@@ -208,11 +208,45 @@ export default function CoachAvailabilityPage() {
     }
   };
 
+  // โครงหน้าตอนโหลด — ล้อ layout จริง (หัวเรื่อง + ปุ่มแก้ไข + ตาราง 7 วัน x ช่วงเวลา)
   if (isLoading) {
     return (
-      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center text-gray-500">
-        <Loader2 className="w-12 h-12 animate-spin text-[#CC0000] mb-4" />
-        <span className="text-sm font-semibold tracking-wide animate-pulse">กำลังโหลดข้อมูล...</span>
+      <div className="max-w-7xl mx-auto animate-pulse space-y-6">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+          <div className="space-y-2">
+            <div className="h-9 w-56 max-w-full rounded bg-gray-200" />
+            <div className="h-3.5 w-80 max-w-full rounded bg-gray-100" />
+          </div>
+          <div className="h-11 w-40 self-start rounded-xl bg-gray-100 md:self-auto" />
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {/* หัวตาราง */}
+          <div className="flex border-b border-slate-200 bg-slate-50">
+            <div className="w-[92px] shrink-0 px-4 py-3.5">
+              <div className="h-3 w-8 rounded bg-slate-200" />
+            </div>
+            <div className="flex flex-1 items-center gap-6 px-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-2.5 w-8 rounded bg-slate-200" />
+              ))}
+            </div>
+          </div>
+          {/* แถวละวัน */}
+          {Array.from({ length: 7 }).map((_, d) => (
+            <div key={d} className="flex items-center border-b border-slate-100 last:border-b-0">
+              <div className="w-[92px] shrink-0 px-4 py-4">
+                <div className="h-3.5 w-10 rounded bg-slate-200" />
+              </div>
+              <div className="flex-1 px-4 py-4">
+                <div
+                  className="h-7 rounded bg-slate-100"
+                  style={{ width: `${[70, 45, 85, 30, 60, 50, 25][d]}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
