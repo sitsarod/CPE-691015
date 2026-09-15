@@ -65,7 +65,13 @@ export async function openSession(packageId: number): Promise<AttendanceSession>
     method: "POST",
     body: JSON.stringify({ package_id: packageId }),
   });
-  return res.data;
+  return normalizeSession(res.data);
+}
+
+// backend (Go) marshal slice ว่างเป็น null — การันตีว่า roster/coaches เป็น array เสมอ
+// กัน .map/.filter/.length พังทั้งหน้าสแกนและ RosterList เมื่อรอบยังไม่มีผู้เรียน/โค้ช
+function normalizeSession(s: AttendanceSession): AttendanceSession {
+  return { ...s, roster: s.roster ?? [], coaches: s.coaches ?? [] };
 }
 
 // [GET] รอบที่ยังเปิดค้างอยู่ทั้งหมด
@@ -77,7 +83,7 @@ export async function fetchOpenSessions(): Promise<OpenSessionSummary[]> {
 // [GET] รอบพร้อมรายชื่อและตัวเลขสรุป
 export async function fetchSession(sessionId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(`/attendance/sessions/${sessionId}`);
-  return res.data;
+  return normalizeSession(res.data);
 }
 
 // [POST] สแกนแล้วบันทึกจริงในครั้งเดียว โควตาถูกหักที่นี่
@@ -268,7 +274,8 @@ export async function downloadHistoryCsv(
 // [GET] คาบที่ผ่านวันมาแล้ว มีโค้ชถูกมอบหมาย แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
 export async function fetchMissedClasses(): Promise<MissedClass[]> {
   const res = await apiFetch<Envelope<MissedClass[]>>("/attendance/missed-classes");
-  return res.data ?? [];
+  // นอกจาก list ราก ต้องกัน coaches ของแต่ละรายการที่ backend ส่งเป็น null ด้วย
+  return (res.data ?? []).map(item => ({ ...item, coaches: item.coaches ?? [] }));
 }
 
 // [POST] เคลียร์คาบที่ค้าง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าใครมาสอนบ้าง

@@ -141,8 +141,9 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       ]);
       setSaved(c);
       setDraft(c);
-      setCoaches(co);
-      setSlides(sl);
+      // backend ส่ง list ว่างเป็น null — กัน .filter/.length ในหน้า settings พังตอนยังไม่มีสไลด์/โค้ช
+      setCoaches(co ?? []);
+      setSlides(sl ?? []);
     } catch (error) {
       console.error('โหลดข้อมูลหน้าแรกไม่สำเร็จ:', error);
       alert('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ');

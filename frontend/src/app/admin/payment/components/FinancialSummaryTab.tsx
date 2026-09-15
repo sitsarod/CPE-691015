@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { BillingDTO, Expense } from './types';
 import ImageLightbox from '@/components/ImageLightbox';
+import DateField from '@/components/DateField';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 const MONTH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -106,8 +107,11 @@ export default function FinancialSummaryTab({
   billings,
   expenses
 }: FinancialSummaryTabProps) {
-  // ตัวกรองช่วงเวลาตาม spec: เดือนนี้ · ปีนี้ · 7 วัน · 30 วัน · ทั้งหมด (ค่าเริ่มต้น = เดือนนี้)
-  const [summaryTimeframe, setSummaryTimeframe] = useState<'month' | 'year' | '7d' | '30d' | 'all'>('month');
+  // ตัวกรองช่วงเวลา: เดือนนี้ · ปีนี้ · 7 วัน · 30 วัน · เลือกช่วงเวลาเอง (ค่าเริ่มต้น = เดือนนี้)
+  const [summaryTimeframe, setSummaryTimeframe] = useState<'month' | 'year' | '7d' | '30d' | 'custom'>('month');
+  // ช่วงเวลาที่กำหนดเอง (รูปแบบ YYYY-MM-DD · ว่าง = ไม่จำกัดฝั่งนั้น)
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [summaryFilterStatus, setSummaryFilterStatus] = useState<'all' | 'pending' | 'paid' | 'unpaid'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null); // สลิปที่กำลังเปิดดูใน lightbox
@@ -142,9 +146,20 @@ export default function FinancialSummaryTab({
       start.setHours(0, 0, 0, 0);
       return { start: start.getTime(), end: endOfToday };
     }
-    // 'all' — ทั้งหมด
-    return { start: -Infinity, end: Infinity };
-  }, [summaryTimeframe]);
+    // 'custom' — ช่วงเวลาที่กำหนดเอง (ครอบทั้งวันของ start และ end)
+    // ฝั่งที่ยังไม่ได้เลือกให้เปิดกว้างไว้ (ไม่จำกัด) — เลือกอย่างเดียวก็ยังกรองได้
+    const parseStart = (s: string) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) return -Infinity;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0).getTime();
+    };
+    const parseEnd = (s: string) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) return Infinity;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999).getTime();
+    };
+    return { start: parseStart(customStart), end: parseEnd(customEnd) };
+  }, [summaryTimeframe, customStart, customEnd]);
 
   // Helper to check if date is in selected timeframe
   const isDateInTimeframe = useCallback((dateStr: string) => {
@@ -297,7 +312,7 @@ export default function FinancialSummaryTab({
   // รีเซ็ตกลับหน้าแรกเมื่อฟิลเตอร์/ช่วงเวลา/คำค้นเปลี่ยน
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, summaryFilterStatus, summaryTimeframe]);
+  }, [searchTerm, summaryFilterStatus, summaryTimeframe, customStart, customEnd]);
   const totalPages = Math.max(1, Math.ceil(filteredSummaryLogs.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pagedLogs = useMemo(
@@ -307,27 +322,65 @@ export default function FinancialSummaryTab({
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Timeframe Filter Bar — เดือนนี้ · ปีนี้ · 7 วัน · 30 วัน · ทั้งหมด (ควบคุมทุกอย่างในแท็บ) */}
-      <div ref={statsScrollRef} className="flex flex-nowrap items-center gap-3 overflow-x-auto no-scrollbar">
-        {[
-          { id: 'month' as const, label: 'เดือนนี้' },
-          { id: 'year' as const, label: 'ปีนี้' },
-          { id: '7d' as const, label: '7 วัน' },
-          { id: '30d' as const, label: '30 วัน' },
-          { id: 'all' as const, label: 'ทั้งหมด' }
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setSummaryTimeframe(t.id)}
-            className={`shrink-0 whitespace-nowrap rounded-xl px-[18px] py-[9px] text-[12.5px] transition-colors cursor-pointer ${
-              summaryTimeframe === t.id
-                ? 'bg-[#CD0D13] font-semibold text-white'
-                : 'border border-gray-300 font-normal text-slate-600 hover:bg-gray-50'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Timeframe Filter Bar — เดือนนี้ · ปีนี้ · 7 วัน · 30 วัน · เลือกช่วงเวลาเอง (ควบคุมทุกอย่างในแท็บ) */}
+      <div className="space-y-3">
+        <div ref={statsScrollRef} className="flex flex-nowrap items-center gap-3 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'month' as const, label: 'เดือนนี้' },
+            { id: 'year' as const, label: 'ปีนี้' },
+            { id: '7d' as const, label: '7 วัน' },
+            { id: '30d' as const, label: '30 วัน' },
+            { id: 'custom' as const, label: 'เลือกช่วงเวลา' }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setSummaryTimeframe(t.id)}
+              className={`shrink-0 whitespace-nowrap rounded-xl px-[18px] py-[9px] text-[12.5px] transition-colors cursor-pointer ${
+                summaryTimeframe === t.id
+                  ? 'bg-[#CD0D13] font-semibold text-white'
+                  : 'border border-gray-300 font-normal text-slate-600 hover:bg-gray-50'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* แผงเลือกช่วงเวลาเอง — โผล่เฉพาะโหมด custom (ว่างข้างใดข้างหนึ่ง = ไม่จำกัดฝั่งนั้น) */}
+        {summaryTimeframe === 'custom' && (
+          <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-[11.5px] font-medium text-slate-500">ตั้งแต่วันที่</label>
+              <DateField
+                value={customStart}
+                onChange={setCustomStart}
+                max={customEnd || undefined}
+                placeholder="วันเริ่มต้น"
+                buttonClassName="h-11 w-full flex items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 focus:border-[#CD0D13]"
+              />
+            </div>
+            <span className="hidden pb-3 text-slate-400 sm:block">–</span>
+            <div className="flex-1">
+              <label className="mb-1 block text-[11.5px] font-medium text-slate-500">ถึงวันที่</label>
+              <DateField
+                value={customEnd}
+                onChange={setCustomEnd}
+                min={customStart || undefined}
+                placeholder="วันสิ้นสุด"
+                buttonClassName="h-11 w-full flex items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 focus:border-[#CD0D13]"
+              />
+            </div>
+            {(customStart || customEnd) && (
+              <button
+                type="button"
+                onClick={() => { setCustomStart(''); setCustomEnd(''); }}
+                className="shrink-0 whitespace-nowrap rounded-lg border border-gray-300 px-4 py-[11px] text-[12.5px] font-medium text-slate-600 transition-colors hover:bg-gray-50"
+              >
+                ล้างช่วงเวลา
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stats — 6 ช่อง grid 3×2 แถบ 1px-gutter + จุดสี */}

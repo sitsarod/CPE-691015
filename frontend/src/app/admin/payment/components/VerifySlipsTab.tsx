@@ -78,7 +78,9 @@ export default function VerifySlipsTab({
       } else if (slipFilter === 'rejected') {
         matchesStatus = b.billingstatus === 'unfunded' && !!b.slipurl;
       } else if (slipFilter === 'unpaid') {
-        matchesStatus = b.billingstatus === 'unfunded' || b.billingstatus === 'overdue';
+        // ค้างชำระ = ยังไม่เคยแนบสลิปเลย — กันบิลที่ถูก "ปฏิเสธ" (unfunded + มีสลิป) ปนเข้ามา
+        // เพราะบิลที่ถูกปฏิเสธก็ถูกคืนสถานะเป็น unfunded เหมือนกัน แต่ยังมี slipurl ติดอยู่
+        matchesStatus = (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') && !b.slipurl;
       }
 
       const studentName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.toLowerCase();

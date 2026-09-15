@@ -116,9 +116,6 @@ export default function CoachBankAccountCard({
     <div className="rounded-2xl border border-gray-200 overflow-hidden">
       <div className="p-4 sm:p-6">
         <div className="flex items-start gap-3 sm:gap-4">
-          <div className="p-3 rounded-xl bg-red-50 flex-shrink-0">
-            <Landmark className="w-6 h-6 text-[#CC0000]" />
-          </div>
 
           <div className="min-w-0">
             <h2 className="font-bold text-gray-900">บัญชีรับเงิน</h2>

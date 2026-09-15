@@ -21,7 +21,12 @@ export async function fetchEnrollmentTerms(): Promise<EnrollmentTerms> {
   if (!response.ok || !resData.data) {
     throw new Error(resData.error || resData.message || "ไม่สามารถโหลดข้อตกลงการสมัครเรียนได้");
   }
-  return resData.data;
+  // backend ส่ง slice ว่างเป็น null — การันตี sections และ items ของแต่ละ section เป็น array เสมอ
+  const terms = resData.data;
+  return {
+    ...terms,
+    sections: (terms.sections ?? []).map(section => ({ ...section, items: section.items ?? [] })),
+  };
 }
 
 
