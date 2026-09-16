@@ -182,7 +182,7 @@ export default function CoachSchedulePage() {
           <button onClick={goPrevWeek} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer" title="สัปดาห์ก่อนหน้า">
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-[210px] text-center">
+          <div className="min-w-0 flex-1 text-center sm:min-w-[210px] sm:flex-none">
             <p className="text-sm font-bold text-gray-800">{weekRangeLabel}</p>
             <button onClick={goThisWeek} className="text-[11px] font-semibold text-[#CC0000] hover:underline cursor-pointer">กลับมาสัปดาห์นี้</button>
           </div>
