@@ -114,6 +114,7 @@ export interface UseHomeContentDraft {
   deleteSlide: (slide: HeroSlide) => Promise<void>;
   moveSlide: (index: number, dir: -1 | 1) => Promise<void>;
   setSlideFocal: (id: number, x: number, y: number) => Promise<void>;
+  setSlideZoom: (id: number, zoom: number) => Promise<void>;
   // โค้ช (บันทึกทันที)
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => Promise<void>;
@@ -246,6 +247,30 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     []
   );
 
+  // ตั้งระดับซูมของสไลด์ (100-300 = 1x-3x) — อัปเดต local ทันทีให้ preview ลื่น แล้วค่อยยิง API
+  // เรียกตอน "ปล่อยแถบเลื่อน" ครั้งเดียว ไม่ใช่ทุกก้าวระหว่างลาก จึงไม่ถล่ม API
+  const setSlideZoom = useCallback(
+    async (id: number, zoom: number) => {
+      const z = Math.round(Math.min(300, Math.max(100, zoom)));
+      let prev: HeroSlide | undefined;
+      setSlides((list) =>
+        list.map((s) => {
+          if (s.id === id) prev = s;
+          return s.id === id ? { ...s, zoom: z } : s;
+        })
+      );
+      try {
+        const updated = await homeContentAPI.updateSlide(id, { zoom: z });
+        setSlides((list) => list.map((s) => (s.id === id ? updated : s)));
+      } catch (error) {
+        // ย้อนค่ากลับถ้าบันทึกไม่สำเร็จ
+        if (prev) setSlides((list) => list.map((s) => (s.id === id ? prev! : s)));
+        alert(`บันทึกระดับซูมไม่สำเร็จ: ${(error as Error).message}`);
+      }
+    },
+    []
+  );
+
   const deleteSlide = useCallback(async (slide: HeroSlide) => {
     if (!(await confirmAction({ message: 'ลบรูปสไลด์นี้?', tone: 'danger' }))) return;
     try {
@@ -316,6 +341,7 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     deleteSlide,
     moveSlide,
     setSlideFocal,
+    setSlideZoom,
     coaches,
     toggleCoach,
     setHeadCoach,

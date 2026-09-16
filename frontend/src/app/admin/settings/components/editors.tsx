@@ -14,7 +14,6 @@ import {
   ChevronDown,
   X,
   Star,
-  Crosshair,
 } from 'lucide-react';
 import { StatItem, FacilityTile, FaqItem, HeroSlide, PublicCoach } from '@/types/homeContent';
 import { homeContentAPI } from '@/services/homeContentAPI';
@@ -258,54 +257,73 @@ export function FaqListEditor({
   );
 }
 
-// ---------- ตัวเลือกจุดโฟกัสของสไลด์ (ลากหมุด + ปุ่ม snap 9 จุด) ----------
-// preview เป็น object-cover + object-position ตามหมุด = เห็นภาพครอปจริงระหว่างลาก
-// ค่าที่ได้ (x,y เป็น %) เอาไปใช้เป็น object-position บนหน้าแรกตรง ๆ
-const SNAP = [0, 50, 100];
+// ---------- ตัวเลือกจุดโฟกัสของสไลด์ (จับลากภาพแบบ pan) ----------
+// preview เป็น object-cover + object-position = เห็นภาพครอปจริงระหว่างลาก
+// ลากภาพเพื่อเลื่อน focal (x,y เป็น %) แล้วเอาไปใช้เป็น object-position บนหน้าแรกตรง ๆ
 function FocalPointPicker({
   slide,
   index,
   onSetFocal,
+  onSetZoom,
 }: {
   slide: HeroSlide;
   index: number;
   onSetFocal: (id: number, x: number, y: number) => void;
+  onSetZoom: (id: number, zoom: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
-  // ระหว่างลากเก็บค่าชั่วคราวใน state เพื่อให้ preview ลื่น ปล่อยเมาส์ค่อย commit
+  // ลากแบบ pan: จำจุดที่เริ่มลาก (ตำแหน่งเมาส์ + focal ตอนนั้น) แล้วเลื่อน focal ตามระยะที่ลาก
+  // ระหว่างลากเก็บค่าชั่วคราวใน state เพื่อให้ preview ลื่น ปล่อยเมาส์ค่อย commit ลง API
+  const panStart = useRef<{ px: number; py: number; fx: number; fy: number } | null>(null);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const x = drag ? drag.x : slide.focal_x;
   const y = drag ? drag.y : slide.focal_y;
 
-  const posFromEvent = (e: React.PointerEvent) => {
+  // ระหว่างลากแถบซูมเก็บค่าชั่วคราวเพื่อ preview ลื่น (100-300 = 1x-3x) ปล่อยแถบค่อย commit
+  const [zoomDraft, setZoomDraft] = useState<number | null>(null);
+  const zoom = zoomDraft ?? slide.zoom ?? 100;
+
+  // ระยะที่ลาก (px) → focal ใหม่ (%) แบบ pan: ลากภาพไปทางขวา = เห็นฝั่งซ้ายมากขึ้น → focal ลด
+  // หารด้วยระดับซูม ยิ่งซูมมากยิ่งขยับละเอียด (เหมือนแพนภาพที่ถูกขยาย)
+  const panFromEvent = (e: React.PointerEvent) => {
+    const s = panStart.current;
     const box = boxRef.current;
-    if (!box) return { x, y };
+    if (!s || !box) return { x, y };
     const r = box.getBoundingClientRect();
+    const scale = zoom / 100;
+    const dx = (((e.clientX - s.px) / r.width) * 100) / scale;
+    const dy = (((e.clientY - s.py) / r.height) * 100) / scale;
     return {
-      x: Math.min(100, Math.max(0, Math.round(((e.clientX - r.left) / r.width) * 100))),
-      y: Math.min(100, Math.max(0, Math.round(((e.clientY - r.top) / r.height) * 100))),
+      x: Math.min(100, Math.max(0, Math.round(s.fx - dx))),
+      y: Math.min(100, Math.max(0, Math.round(s.fy - dy))),
     };
   };
 
   return (
     <div className="space-y-2">
+      {/* กรอบตัวอย่าง = จำลองแบนเนอร์บนหน้าเว็บจริง (กว้าง 21:9 + ไล่เฉดดำซ้าย + พาดหัวตัวอย่าง)
+          แอดมินจะได้เห็นเลยว่าเวลาโดนครอปบนหน้าแรก ส่วนไหนของภาพจะถูกเก็บไว้ */}
       <div
         ref={boxRef}
         onPointerDown={(e) => {
           e.preventDefault();
           e.currentTarget.setPointerCapture(e.pointerId);
-          setDrag(posFromEvent(e));
+          // เริ่มจาก focal ปัจจุบัน (ไม่กระโดด) แล้วค่อยเลื่อนตามที่ลาก — คลิกเฉย ๆ ไม่ทำอะไร
+          panStart.current = { px: e.clientX, py: e.clientY, fx: slide.focal_x, fy: slide.focal_y };
+          setDrag({ x: slide.focal_x, y: slide.focal_y });
         }}
         onPointerMove={(e) => {
-          if (drag !== null) setDrag(posFromEvent(e));
+          if (panStart.current) setDrag(panFromEvent(e));
         }}
-        onPointerUp={(e) => {
-          if (drag === null) return;
-          const p = posFromEvent(e);
+        onPointerUp={() => {
+          const p = drag;
+          panStart.current = null;
           setDrag(null);
-          if (p.x !== slide.focal_x || p.y !== slide.focal_y) onSetFocal(slide.id, p.x, p.y);
+          if (p && (p.x !== slide.focal_x || p.y !== slide.focal_y)) onSetFocal(slide.id, p.x, p.y);
         }}
-        className="relative aspect-video cursor-crosshair touch-none select-none overflow-hidden rounded-lg bg-gray-100"
+        className={`relative aspect-[5/2] touch-none select-none overflow-hidden rounded-lg bg-gray-100 ${
+          drag !== null ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -314,47 +332,83 @@ function FocalPointPicker({
           loading="lazy"
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ objectPosition: `${x}% ${y}%` }}
+          style={{
+            objectPosition: `${x}% ${y}%`,
+            transform: zoom > 100 ? `scale(${zoom / 100})` : undefined,
+            transformOrigin: `${x}% ${y}%`,
+          }}
         />
-        {/* เส้นเล็ง + หมุดโฟกัส */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: `${x}%` }} />
-          <div className="absolute left-0 h-px w-full bg-white/60" style={{ top: `${y}%` }} />
-          <div
-            className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#CC0000]/85 shadow-md"
-            style={{ left: `${x}%`, top: `${y}%` }}
-          >
-            <Crosshair size={13} className="text-white" />
-          </div>
+
+        {/* ===== เลียนแบบหน้าเว็บจริง ===== ไล่เฉดดำจากซ้าย + ล่าง เหมือน hero บนหน้าแรก */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+        {/* พาดหัวตัวอย่าง — วางตำแหน่งเดียวกับ headline จริง (กลางแนวตั้ง ชิดซ้าย) */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-1 px-3">
+          <span className="text-[7px] font-light uppercase tracking-[0.18em] text-white/80">
+            ตัวอย่างพาดหัว
+          </span>
+          <span className="text-xs font-semibold leading-tight text-white drop-shadow sm:text-sm">
+            ข้อความพาดหัว
+            <br />
+            จะทับตรงนี้
+          </span>
         </div>
+
         <span className="absolute left-0 top-0 bg-[#CC0000] px-2 py-0.5 text-xs font-medium text-white">
           #{index + 1}
           {!slide.is_active && ' · ซ่อน'}
         </span>
+        <span className="absolute right-0 top-0 bg-black/55 px-2 py-0.5 text-[10px] font-light text-white">
+          ตัวอย่างหน้าเว็บ
+        </span>
       </div>
 
-      {/* แถวปุ่ม snap 9 จุด + ค่าปัจจุบัน */}
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <div className="grid grid-cols-3 gap-0.5" title="เลือกจุดโฟกัสด่วน">
-          {SNAP.map((py) =>
-            SNAP.map((px) => {
-              const active = slide.focal_x === px && slide.focal_y === py;
-              return (
-                <button
-                  key={`${px}-${py}`}
-                  type="button"
-                  aria-label={`โฟกัส ${px}% ${py}%`}
-                  onClick={() => onSetFocal(slide.id, px, py)}
-                  className={`h-3.5 w-3.5 rounded-[3px] border transition-colors ${
-                    active
-                      ? 'border-[#CC0000] bg-[#CC0000]'
-                      : 'border-gray-300 bg-white hover:border-[#CC0000] hover:bg-[#FFECEC]'
-                  }`}
-                />
-              );
-            })
-          )}
-        </div>
+      {/* คำอธิบายวิธีใช้ — ลากภาพด้วยเมาส์เพื่อเลือกส่วนที่อยากให้เด่น */}
+      <p className="px-0.5 text-[11px] leading-snug text-gray-500">
+        <span className="font-medium text-gray-600">ลากภาพด้วยเมาส์</span> ไปยังส่วนที่อยากให้เด่น —
+        ส่วนนั้นจะถูกเก็บไว้เสมอเวลาแบนเนอร์โดนครอปบนจอมือถือ/จอกว้าง
+      </p>
+
+      {/* แถบเลื่อนซูม — 1x ถึง 3x ซูมเข้าหาจุดโฟกัสที่เลือกไว้ (commit ตอนปล่อยแถบ) */}
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="flex-none text-[11px] text-gray-500">ซูม</span>
+        <input
+          type="range"
+          min={100}
+          max={300}
+          step={5}
+          value={zoom}
+          onChange={(e) => setZoomDraft(Number(e.target.value))}
+          onPointerUp={() => {
+            if (zoomDraft !== null && zoomDraft !== (slide.zoom ?? 100)) onSetZoom(slide.id, zoomDraft);
+            setZoomDraft(null);
+          }}
+          onKeyUp={() => {
+            if (zoomDraft !== null && zoomDraft !== (slide.zoom ?? 100)) onSetZoom(slide.id, zoomDraft);
+            setZoomDraft(null);
+          }}
+          className="h-1.5 flex-1 cursor-pointer accent-[#CC0000]"
+          aria-label="ระดับซูมของภาพ"
+        />
+        <span className="w-9 flex-none text-right text-[11px] tabular-nums text-gray-500">
+          {(zoom / 100).toFixed(1)}x
+        </span>
+        {zoom > 100 && (
+          <button
+            type="button"
+            onClick={() => {
+              setZoomDraft(null);
+              onSetZoom(slide.id, 100);
+            }}
+            className="flex-none rounded px-1.5 py-0.5 text-[10px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#CC0000]"
+            title="รีเซ็ตซูมกลับ 1x"
+          >
+            รีเซ็ต
+          </button>
+        )}
+      </div>
+
+      {/* ค่าจุดโฟกัสปัจจุบัน (อ่านอย่างเดียว) */}
+      <div className="flex justify-end px-0.5">
         <span className="text-[11px] tabular-nums text-gray-400">
           โฟกัส {x}% · {y}%
         </span>
@@ -372,6 +426,7 @@ export function SlideGrid({
   onDelete,
   onMove,
   onSetFocal,
+  onSetZoom,
 }: {
   slides: HeroSlide[];
   uploading: boolean;
@@ -380,6 +435,7 @@ export function SlideGrid({
   onDelete: (slide: HeroSlide) => void;
   onMove: (index: number, dir: -1 | 1) => void;
   onSetFocal: (id: number, x: number, y: number) => void;
+  onSetZoom: (id: number, zoom: number) => void;
 }) {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -397,7 +453,7 @@ export function SlideGrid({
           }`}
         >
           <div className="p-2">
-            <FocalPointPicker slide={slide} index={i} onSetFocal={onSetFocal} />
+            <FocalPointPicker slide={slide} index={i} onSetFocal={onSetFocal} onSetZoom={onSetZoom} />
           </div>
           <div className="flex items-center justify-between gap-1 border-t border-gray-100 bg-white px-2 py-2">
             <div className="flex items-center gap-1">

@@ -16,6 +16,8 @@ export interface HeroSlideItem {
   // จุดโฟกัสภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปโหมด cover (ไม่ส่ง = กึ่งกลาง)
   focal_x?: number;
   focal_y?: number;
+  // ระดับซูมเป็น % (100 = ปกติ, ไม่ส่ง = ไม่ซูม) ใช้เป็น transform: scale() รอบจุดโฟกัส เฉพาะโหมด cover
+  zoom?: number;
 }
 
 interface HeroSliderProps {
@@ -150,7 +152,9 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick, fit = "
         style={{ transform: `translateX(-${currentIndex * 100}%)` }}
       >
         {slides.map((slide, index) => (
-          <div key={index} className="min-w-full h-full relative bg-black">
+          // overflow-hidden สำคัญ — ตอนซูม (transform: scale) รูปจะขยายเกินกล่อง
+          // ถ้าไม่ตัด รูปของสไลด์ข้าง ๆ จะล้นมาทับสไลด์ที่กำลังโชว์อยู่ (เห็นภาพถัดไปโผล่)
+          <div key={index} className="min-w-full h-full relative overflow-hidden bg-black">
             {/* พื้นหลังเบลอจากรูปเดียวกัน เติมพื้นที่ขอบ (letterbox) — เฉพาะโหมด contain
                 โหมด cover ภาพเต็มกรอบอยู่แล้วจึงไม่ต้องมี */}
             {!isCover && (
@@ -164,7 +168,9 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick, fit = "
               />
             )}
             {/* รูปจริง — contain: โชว์เต็มใบไม่ตัดขอบ · cover: เต็มกรอบยอมตัดขอบ
-                โหมด cover ใช้จุดโฟกัสที่แอดมินตั้ง (object-position) เพื่อคุมว่าจะเก็บส่วนไหนไว้ */}
+                โหมด cover ใช้จุดโฟกัสที่แอดมินตั้ง (object-position) เพื่อคุมว่าจะเก็บส่วนไหนไว้
+                ถ้าตั้งซูม > 100% จะ scale ภาพขึ้นโดยยึดจุดโฟกัสเป็นศูนย์กลาง (transform-origin)
+                กรอบมี overflow-hidden อยู่แล้ว ส่วนที่เกินจึงถูกตัด = ซูมเข้าหาจุดโฟกัส */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={slide.image_url}
@@ -172,7 +178,11 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick, fit = "
               className={`relative w-full h-full select-none pointer-events-none ${isCover ? "object-cover" : "object-contain"}`}
               style={
                 isCover
-                  ? { objectPosition: `${slide.focal_x ?? 50}% ${slide.focal_y ?? 50}%` }
+                  ? {
+                      objectPosition: `${slide.focal_x ?? 50}% ${slide.focal_y ?? 50}%`,
+                      transform: (slide.zoom ?? 100) > 100 ? `scale(${(slide.zoom ?? 100) / 100})` : undefined,
+                      transformOrigin: `${slide.focal_x ?? 50}% ${slide.focal_y ?? 50}%`,
+                    }
                   : undefined
               }
               draggable={false}

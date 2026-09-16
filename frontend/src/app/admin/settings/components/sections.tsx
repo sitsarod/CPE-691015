@@ -30,6 +30,7 @@ export interface SectionCtx {
   deleteSlide: (slide: HeroSlide) => void;
   moveSlide: (index: number, dir: -1 | 1) => void;
   setSlideFocal: (id: number, x: number, y: number) => void;
+  setSlideZoom: (id: number, zoom: number) => void;
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => void;
   setHeadCoach: (coach: PublicCoach) => void;
@@ -183,6 +184,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
             onDelete={ctx.deleteSlide}
             onMove={ctx.moveSlide}
             onSetFocal={ctx.setSlideFocal}
+            onSetZoom={ctx.setSlideZoom}
           />
         </>
       );

@@ -10,6 +10,8 @@ export interface HeroSlide {
   // จุดโฟกัสภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปบนหน้าแรก (50/50 = กึ่งกลาง)
   focal_x: number;
   focal_y: number;
+  // ระดับซูมเป็น % (100 = ปกติ, 300 = ซูม 3 เท่า) ใช้เป็น transform: scale() รอบจุดโฟกัส
+  zoom: number;
 }
 
 export interface PublicCoach {
@@ -146,6 +148,7 @@ export interface CreateHeroSlideReq {
   is_active?: boolean;
   focal_x?: number;
   focal_y?: number;
+  zoom?: number;
 }
 
 export interface UpdateHeroSlideReq {
@@ -156,4 +159,5 @@ export interface UpdateHeroSlideReq {
   is_active?: boolean;
   focal_x?: number;
   focal_y?: number;
+  zoom?: number;
 }
