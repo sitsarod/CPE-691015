@@ -23,14 +23,14 @@ func (ctrl *BillingController) CreateBilling(c *gin.Context) {
 	var input dto.CreateBillingRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
 		return
 	}
 
 	// คนออกบิลอ้างจาก JWT เท่านั้น ไม่รับจาก body (กันปลอม audit trail)
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -40,7 +40,7 @@ func (ctrl *BillingController) CreateBilling(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "สร้างบิลเรียกเก็บเงินสำเร็จ"})
+	respondJSON(c, http.StatusCreated, gin.H{"message": "สร้างบิลเรียกเก็บเงินสำเร็จ"})
 }
 
 // CreateSplitBilling คำนวณและหารค่าใช้จ่ายสนามจากเช็คอินของนักเรียน
@@ -48,14 +48,14 @@ func (ctrl *BillingController) CreateSplitBilling(c *gin.Context) {
 	var input dto.CreateSplitBillingRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
 		return
 	}
 
 	// คนออกบิลอ้างจาก JWT เท่านั้น ไม่รับจาก body (กันปลอม audit trail)
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -74,75 +74,75 @@ func (ctrl *BillingController) CreateSplitBilling(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "สร้างบิลหารเฉลี่ยสำเร็จ"})
+	respondJSON(c, http.StatusCreated, gin.H{"message": "สร้างบิลหารเฉลี่ยสำเร็จ"})
 }
 
 // GetAllBillings ดึงรายการบิลทั้งหมด (Admin)
 func (ctrl *BillingController) GetAllBillings(c *gin.Context) {
 	billings, err := ctrl.service.GetAllBillings()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลรายการบิลได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลรายการบิลได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.ToBillingDTOs(billings)})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.ToBillingDTOs(billings)})
 }
 
 // GetCustomerBillings ดึงรายการบิลของลูกค้ารายเจาะจง (Customer)
 func (ctrl *BillingController) GetCustomerBillings(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	if !CheckIDOR(c, uint(id)) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 
 	billings, err := ctrl.service.GetBillingsByCustomerID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลรายการบิลของนักเรียนได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลรายการบิลของนักเรียนได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.ToBillingDTOs(billings)})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.ToBillingDTOs(billings)})
 }
 
 // GetBillingByID ดึงบิลตาม ID
 func (ctrl *BillingController) GetBillingByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	billing, err := ctrl.service.GetBillingByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
 	if !CheckIDOR(c, billing.CustomerID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.ToBillingDTO(billing)})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.ToBillingDTO(billing)})
 }
 
 // UpdateBilling แก้ไขรายละเอียดบิล (PATCH)
 func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	var input dto.UpdateBillingRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
@@ -167,7 +167,7 @@ func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 	// ผู้แก้ไขอ้างจาก JWT เท่านั้น (บันทึกเป็น UpdatedBy ของบิล)
 	actorID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -177,7 +177,7 @@ func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "แก้ไขข้อมูลบิลสำเร็จ",
 		"data":    dto.ToBillingDTO(billing),
 	})
@@ -187,7 +187,7 @@ func (ctrl *BillingController) UpdateBilling(c *gin.Context) {
 func (ctrl *BillingController) DeleteBilling(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
@@ -197,7 +197,7 @@ func (ctrl *BillingController) DeleteBilling(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ลบบิลเรียบร้อยแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ลบบิลเรียบร้อยแล้ว"})
 }
 
 

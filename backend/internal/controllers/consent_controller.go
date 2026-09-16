@@ -27,7 +27,7 @@ func NewConsentController(service *services.ConsentService) *ConsentController {
 //
 // [GET] /api/consents/face/policy
 func (ctrl *ConsentController) GetPolicy(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"data": ctrl.service.GetPolicy()})
+	respondJSON(c, http.StatusOK, gin.H{"data": ctrl.service.GetPolicy()})
 }
 
 // GetMyConsent ดูสถานะความยินยอมของตัวเอง
@@ -36,7 +36,7 @@ func (ctrl *ConsentController) GetPolicy(c *gin.Context) {
 func (ctrl *ConsentController) GetMyConsent(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -46,7 +46,7 @@ func (ctrl *ConsentController) GetMyConsent(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": status})
+	respondJSON(c, http.StatusOK, gin.H{"data": status})
 }
 
 // RecordConsent บันทึกการยินยอม/ปฏิเสธ
@@ -58,13 +58,13 @@ func (ctrl *ConsentController) GetMyConsent(c *gin.Context) {
 func (ctrl *ConsentController) RecordConsent(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var input dto.RecordFaceConsentReq
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุการตัดสินใจให้ถูกต้อง (granted หรือ declined)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุการตัดสินใจให้ถูกต้อง (granted หรือ declined)"})
 		return
 	}
 
@@ -81,7 +81,7 @@ func (ctrl *ConsentController) RecordConsent(c *gin.Context) {
 		message = "รับทราบแล้ว ระบบจะไม่เก็บข้อมูลใบหน้าของท่าน และจะใช้ QR code ส่วนบุคคลในการเช็คชื่อ"
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": message, "data": status})
+	respondJSON(c, http.StatusOK, gin.H{"message": message, "data": status})
 }
 
 // WithdrawConsent ถอนความยินยอมและลบข้อมูลใบหน้าที่เก็บไว้
@@ -90,7 +90,7 @@ func (ctrl *ConsentController) RecordConsent(c *gin.Context) {
 func (ctrl *ConsentController) WithdrawConsent(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -100,7 +100,7 @@ func (ctrl *ConsentController) WithdrawConsent(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ถอนความยินยอมเรียบร้อยแล้ว ระบบจะใช้ QR code ส่วนบุคคลในการเช็คชื่อแทน",
 		"data":    status,
 	})
@@ -116,7 +116,7 @@ func (ctrl *ConsentController) GetConsentHistory(c *gin.Context) {
 	if raw := c.Query("user_id"); raw != "" {
 		parsed, err := strconv.ParseUint(raw, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user_id ต้องเป็นตัวเลขเท่านั้น"})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": "user_id ต้องเป็นตัวเลขเท่านั้น"})
 			return
 		}
 		targetUserID = uint(parsed)
@@ -128,7 +128,7 @@ func (ctrl *ConsentController) GetConsentHistory(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // metaFrom เก็บ IP และ User-Agent ไว้เป็นหลักฐานประกอบการให้ความยินยอม
@@ -148,15 +148,15 @@ func (ctrl *ConsentController) respondError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrCustomerNotFound),
 		errors.Is(err, services.ErrCoachProfileNotFound),
 		errors.Is(err, services.ErrConsentUserNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrInvalidConsentAction):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 	// แอดมินไม่มีอะไรให้ยินยอม — 403 เพราะเป็นเรื่องบทบาท ไม่ใช่ข้อมูลหาย
 	case errors.Is(err, services.ErrConsentNotApplicable):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrNothingToWithdraw):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "เกิดข้อผิดพลาดในการดำเนินการเกี่ยวกับความยินยอม"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "เกิดข้อผิดพลาดในการดำเนินการเกี่ยวกับความยินยอม"})
 	}
 }

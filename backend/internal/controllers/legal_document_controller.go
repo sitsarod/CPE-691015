@@ -22,23 +22,23 @@ func NewLegalDocumentController(service *services.LegalDocumentService) *LegalDo
 func (ctrl *LegalDocumentController) List(c *gin.Context) {
 	docs, err := ctrl.service.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": docs})
+	respondJSON(c, http.StatusOK, gin.H{"data": docs})
 }
 
 // Update [PUT] /api/admin/legal-documents/:key — บันทึกฉบับใหม่ (ไม่เขียนทับฉบับเดิม)
 func (ctrl *LegalDocumentController) Update(c *gin.Context) {
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var req dto.UpdateLegalDocumentReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน หรือรูปแบบไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน หรือรูปแบบไม่ถูกต้อง"})
 		return
 	}
 
@@ -47,13 +47,13 @@ func (ctrl *LegalDocumentController) Update(c *gin.Context) {
 		var be *services.BusinessError
 		switch {
 		case errors.Is(err, services.ErrLegalDocUnknown):
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrLegalDocInvalid):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		case errors.As(err, &be):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 		return
 	}
@@ -62,5 +62,5 @@ func (ctrl *LegalDocumentController) Update(c *gin.Context) {
 	if req.RequiresReconsent {
 		message = "บันทึกเอกสารเป็นเวอร์ชันใหม่แล้ว — ผู้ใช้ต้องยอมรับฉบับใหม่"
 	}
-	c.JSON(http.StatusOK, gin.H{"data": doc, "message": message})
+	respondJSON(c, http.StatusOK, gin.H{"data": doc, "message": message})
 }

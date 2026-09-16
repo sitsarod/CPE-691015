@@ -241,9 +241,17 @@ func (s *homeContentService) CreateSlide(req *dto.CreateHeroSlideReq) (*dto.Hero
 		LinkURL:   req.LinkURL,
 		SortOrder: req.SortOrder,
 		IsActive:  true,
+		FocalX:    50,
+		FocalY:    50,
 	}
 	if req.IsActive != nil {
 		slide.IsActive = *req.IsActive
+	}
+	if req.FocalX != nil {
+		slide.FocalX = clampPercent(*req.FocalX)
+	}
+	if req.FocalY != nil {
+		slide.FocalY = clampPercent(*req.FocalY)
 	}
 	if err := s.db.Create(&slide).Error; err != nil {
 		return nil, err
@@ -272,11 +280,28 @@ func (s *homeContentService) UpdateSlide(id uint, req *dto.UpdateHeroSlideReq) (
 	if req.IsActive != nil {
 		slide.IsActive = *req.IsActive
 	}
+	if req.FocalX != nil {
+		slide.FocalX = clampPercent(*req.FocalX)
+	}
+	if req.FocalY != nil {
+		slide.FocalY = clampPercent(*req.FocalY)
+	}
 	if err := s.db.Save(&slide).Error; err != nil {
 		return nil, err
 	}
 	d := mapToHeroSlideDTO(&slide)
 	return &d, nil
+}
+
+// clampPercent จำกัดค่าจุดโฟกัสให้อยู่ในช่วง 0-100 เสมอ
+func clampPercent(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 func (s *homeContentService) DeleteSlide(id uint) error {
@@ -462,6 +487,8 @@ func mapToHeroSlideDTO(m *models.HeroSlide) dto.HeroSlideDTO {
 		LinkURL:   m.LinkURL,
 		SortOrder: m.SortOrder,
 		IsActive:  m.IsActive,
+		FocalX:    m.FocalX,
+		FocalY:    m.FocalY,
 	}
 }
 

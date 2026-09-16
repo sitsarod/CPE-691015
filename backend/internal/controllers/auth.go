@@ -107,7 +107,7 @@ func (ctrl *authController) Login(c *gin.Context) {
 	var input dto.LoginInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
@@ -115,18 +115,18 @@ func (ctrl *authController) Login(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, services.ErrEmailNotVerified) {
 			// ให้หน้าบ้านรู้ว่าต้องพาไปหน้ากรอก OTP ต่อ ไม่ใช่แค่ขึ้น error เฉย ๆ
-			c.JSON(http.StatusForbidden, gin.H{
+			respondJSON(c, http.StatusForbidden, gin.H{
 				"error":                err.Error(),
 				"requiresVerification": true,
 				"email":                input.Email,
 			})
 			return
 		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, authSuccessResponse("เข้าสู่ระบบสำเร็จคัป", token, refreshToken, user))
+	respondJSON(c, http.StatusOK, authSuccessResponse("เข้าสู่ระบบสำเร็จคัป", token, refreshToken, user))
 }
 
 // Register สมัครสมาชิกใหม่ (เสมอเป็นบทบาท customer — ดู dto.RegisterRequest.ToUser)
@@ -142,13 +142,13 @@ func (ctrl *authController) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
 	input := req.ToUser()
 	if err := ctrl.userService.CreateUser(input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -159,7 +159,7 @@ func (ctrl *authController) Register(c *gin.Context) {
 		message = "สมัครสมาชิกสำเร็จ แต่ส่งอีเมลยืนยันไม่สำเร็จ กรุณากดขอรหัสยืนยันใหม่อีกครั้ง"
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message":              message,
 		"requiresVerification": true,
 		"email":                input.Email,
@@ -170,13 +170,13 @@ func (ctrl *authController) Register(c *gin.Context) {
 func (ctrl *authController) VerifyRegistrationOTP(c *gin.Context) {
 	var req dto.VerifyEmailOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
 	user, token, refreshToken, err := ctrl.emailVerificationService.VerifyOTP(req.Email, req.OTP)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -184,29 +184,29 @@ func (ctrl *authController) VerifyRegistrationOTP(c *gin.Context) {
 	// ไปประกอบ response ให้เหมือนกับตอน login ปกติ
 	full, err := ctrl.userService.GetUserProfile(user.ID)
 	if err != nil {
-		c.JSON(http.StatusCreated, gin.H{"message": "ยืนยันอีเมลสำเร็จ กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusCreated, gin.H{"message": "ยืนยันอีเมลสำเร็จ กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, authSuccessResponse("ยืนยันอีเมลสำเร็จ เข้าสู่ระบบให้อัตโนมัติ", token, refreshToken, full))
+	respondJSON(c, http.StatusOK, authSuccessResponse("ยืนยันอีเมลสำเร็จ เข้าสู่ระบบให้อัตโนมัติ", token, refreshToken, full))
 }
 
 // ResendRegistrationOTP ขอรหัสยืนยันอีเมลใบใหม่ (กรณีโค้ดเดิมหมดอายุหรือหาไม่เจอ)
 func (ctrl *authController) ResendRegistrationOTP(c *gin.Context) {
 	var req dto.ResendEmailOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
 	// ตอบสำเร็จเสมอไม่ว่าจะพบบัญชีจริงหรือไม่ — service เงียบเรื่องนี้อยู่แล้ว
 	// (ดูเหตุผลที่ EmailVerificationService.ResendOTP)
 	if err := ctrl.emailVerificationService.ResendOTP(req.Email, c.ClientIP()); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ส่งรหัสยืนยันใหม่แล้ว กรุณาตรวจสอบอีเมล"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ส่งรหัสยืนยันใหม่แล้ว กรุณาตรวจสอบอีเมล"})
 }
 
 // Refresh รับ refresh token แล้วออก access token (+ refresh token) ชุดใหม่
@@ -215,18 +215,18 @@ func (ctrl *authController) Refresh(c *gin.Context) {
 		RefreshToken string `json:"refreshToken" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ refresh token"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุ refresh token"})
 		return
 	}
 
 	token, refreshToken, err := ctrl.authService.Refresh(input.RefreshToken)
 	if err != nil {
 		// 401 เพื่อให้ฝั่ง client รู้ว่าต้องกลับไป login ใหม่
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"token":        token,
 		"refreshToken": refreshToken,
 	})

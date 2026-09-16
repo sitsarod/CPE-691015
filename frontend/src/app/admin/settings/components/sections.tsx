@@ -29,6 +29,7 @@ export interface SectionCtx {
   toggleSlide: (slide: HeroSlide) => void;
   deleteSlide: (slide: HeroSlide) => void;
   moveSlide: (index: number, dir: -1 | 1) => void;
+  setSlideFocal: (id: number, x: number, y: number) => void;
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => void;
   setHeadCoach: (coach: PublicCoach) => void;
@@ -181,6 +182,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
             onToggle={ctx.toggleSlide}
             onDelete={ctx.deleteSlide}
             onMove={ctx.moveSlide}
+            onSetFocal={ctx.setSlideFocal}
           />
         </>
       );
@@ -290,15 +292,6 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
               </Field>
               <Field label="คำโปรย">
                 <input type="text" value={draft.coaches_subtitle} onChange={(e) => setField('coaches_subtitle', e.target.value)} className={inputClass} />
-              </Field>
-              <Field label="ข้อความปิดท้ายส่วนโค้ช">
-                <input
-                  type="text"
-                  value={draft.coaches_note}
-                  onChange={(e) => setField('coaches_note', e.target.value)}
-                  placeholder="เช่น โค้ชทุกคนผ่านการตรวจประวัติ..."
-                  className={inputClass}
-                />
               </Field>
             </div>
           </div>

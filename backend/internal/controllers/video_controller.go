@@ -47,7 +47,7 @@ func NewVideoController(
 func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดวิดีโอได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดวิดีโอได้"})
 		return
 	}
 
@@ -62,20 +62,20 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 
 	fh, err := c.FormFile("video")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์วิดีโอ (ฟิลด์ 'video')"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์วิดีโอ (ฟิลด์ 'video')"})
 		return
 	}
 
 	// ตรวจว่าเป็นวิดีโอจริงและขนาดไม่เกิน ก่อนเขียนอะไรลงที่เก็บไฟล์ (ดูเหตุผลใน upload.go)
 	ext, err := ValidateVideoUpload(fh)
 	if err != nil {
-		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	file, err := fh.Open()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
 	defer file.Close()
@@ -84,13 +84,13 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	// UploadPhotoPost ปลอดภัยเพราะ ValidateVideoUpload คุมขนาดไว้ที่ MaxVideoUploadBytes มาแล้ว
 	raw, err := io.ReadAll(io.LimitReader(file, MaxVideoUploadBytes))
 	if err != nil || len(raw) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
 
 	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindVideo, bytes.NewReader(raw), ext)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์วิดีโอล้มเหลว"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์วิดีโอล้มเหลว"})
 		return
 	}
 
@@ -98,7 +98,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	if err != nil {
 		// เขียนแถวไม่สำเร็จ = ไฟล์ที่เพิ่งอัปไม่มีใครชี้ถึงอีกเลย ต้องลบทันที (เหมือน FaceImageService.Upload)
 		_ = ctrl.mediaStorage.Delete(c.Request.Context(), services.MediaKindVideo, storageKey)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -127,7 +127,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "อัปโหลดวิดีโอสำเร็จ", "data": resp})
+	respondJSON(c, http.StatusOK, gin.H{"message": "อัปโหลดวิดีโอสำเร็จ", "data": resp})
 }
 
 // GetVideoRaw handles GET /api/videos/:raw_video_id/raw — เนื้อไฟล์วิดีโอจริง
@@ -136,7 +136,7 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 func (ctrl *VideoController) GetVideoRaw(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -147,22 +147,22 @@ func (ctrl *VideoController) GetVideoRaw(c *gin.Context) {
 
 	var rawVideo models.RawVideo
 	if err := ctrl.db.First(&rawVideo, rawVideoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
 		return
 	}
 
 	if err := services.VerifyCanViewRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
 	body, contentType, err := ctrl.mediaStorage.Open(c.Request.Context(), services.MediaKindVideo, rawVideo.StorageKey)
 	if err != nil {
 		if errors.Is(err, services.ErrMediaNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์วิดีโอนี้แล้ว"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์วิดีโอนี้แล้ว"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์วิดีโอได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์วิดีโอได้"})
 		return
 	}
 	defer body.Close()
@@ -178,13 +178,13 @@ func (ctrl *VideoController) GetVideoRaw(c *gin.Context) {
 func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลวิดีโอนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลวิดีโอนี้ได้"})
 		return
 	}
 
 	rawVideoIDParam, err := strconv.ParseUint(c.Param("raw_video_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสวิดีโอไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสวิดีโอไม่ถูกต้อง"})
 		return
 	}
 	rawVideoID := uint(rawVideoIDParam)
@@ -192,13 +192,13 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 	// ค้นหา RawVideo เพื่อเช็คความถูกต้องและดึง URL
 	var rawVideo models.RawVideo
 	if err := ctrl.db.First(&rawVideo, rawVideoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
 		return
 	}
 
 	// เฉพาะแอดมิน หรือโค้ชเจ้าของวิดีโอนี้เท่านั้นที่แก้ไขได้ (กัน IDOR ข้ามวิดีโอของโค้ชคนอื่น)
 	if err := services.VerifyCoachOwnsRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -207,13 +207,13 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 		StudentIDs []uint `json:"student_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรายการ ID นักเรียนไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รูปแบบรายการ ID นักเรียนไม่ถูกต้อง"})
 		return
 	}
 
 	results, skipped, err := ctrl.videoService.ManuallyAssignStudentsToVideo(rawVideoID, rawVideo.VideoURL, req.StudentIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -222,7 +222,7 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 		studentIDs = append(studentIDs, r.CustomerID)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message":            "อัปเดตรายชื่อนักเรียนที่มีส่วนร่วมในวิดีโอนี้สำเร็จแล้ว",
 		"student_ids":        studentIDs,
 		"skipped_no_consent": skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
@@ -234,19 +234,19 @@ func (ctrl *VideoController) ManuallyAssignStudents(c *gin.Context) {
 func (ctrl *VideoController) GetMyDetectedVideos(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
 	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
 		return
 	}
 
 	detectedVideos, err := ctrl.videoService.GetDetectedVideosByStudentID(customerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -261,7 +261,7 @@ func (ctrl *VideoController) GetMyDetectedVideos(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetVideoDetectedStudents handles GET /api/coaches/videos/:raw_video_id/students
@@ -269,30 +269,30 @@ func (ctrl *VideoController) GetMyDetectedVideos(c *gin.Context) {
 func (ctrl *VideoController) GetVideoDetectedStudents(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
 		return
 	}
 
 	rawVideoIDParam, err := strconv.ParseUint(c.Param("raw_video_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสวิดีโอไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสวิดีโอไม่ถูกต้อง"})
 		return
 	}
 	rawVideoID := uint(rawVideoIDParam)
 
 	var rawVideo models.RawVideo
 	if err := ctrl.db.First(&rawVideo, rawVideoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลวิดีโอต้นฉบับ"})
 		return
 	}
 	if err := services.VerifyCoachOwnsRawVideo(ctrl.db, &rawVideo, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
 	list, err := ctrl.videoService.GetDetectedVideosByRawVideoID(rawVideoID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -315,5 +315,5 @@ func (ctrl *VideoController) GetVideoDetectedStudents(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	respondJSON(c, http.StatusOK, gin.H{"data": response})
 }

@@ -7,6 +7,9 @@ export interface HeroSlide {
   link_url: string;
   sort_order: number;
   is_active: boolean;
+  // จุดโฟกัสภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปบนหน้าแรก (50/50 = กึ่งกลาง)
+  focal_x: number;
+  focal_y: number;
 }
 
 export interface PublicCoach {
@@ -72,7 +75,6 @@ export interface HomeContent {
   hero_headline: string;
   hero_subtext: string;
   courses_footnote: string;
-  coaches_note: string;
   facility_title: string;
   facility_subtitle: string;
   footer_cta_title: string;
@@ -124,7 +126,6 @@ export interface UpdateHomeContentReq {
   hero_headline?: string;
   hero_subtext?: string;
   courses_footnote?: string;
-  coaches_note?: string;
   facility_title?: string;
   facility_subtitle?: string;
   footer_cta_title?: string;
@@ -143,6 +144,8 @@ export interface CreateHeroSlideReq {
   link_url?: string;
   sort_order?: number;
   is_active?: boolean;
+  focal_x?: number;
+  focal_y?: number;
 }
 
 export interface UpdateHeroSlideReq {
@@ -151,4 +154,6 @@ export interface UpdateHeroSlideReq {
   link_url?: string;
   sort_order?: number;
   is_active?: boolean;
+  focal_x?: number;
+  focal_y?: number;
 }

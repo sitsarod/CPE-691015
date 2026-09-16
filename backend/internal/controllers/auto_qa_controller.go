@@ -29,13 +29,13 @@ func NewAutoQAController(s services.AutoQAService, cloud *services.CloudinarySer
 func (ctrl *AutoQAController) UploadChatAttachment(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการส่ง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการส่ง"})
 		return
 	}
 
 	ext, kind, err := ValidateChatAttachment(file)
 	if err != nil {
-		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -49,32 +49,32 @@ func (ctrl *AutoQAController) UploadChatAttachment(c *gin.Context) {
 	if ctrl.cloudinary != nil {
 		src, err := file.Open()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
 			return
 		}
 		defer src.Close()
 
 		url, err := ctrl.cloudinary.UploadFileToFolder(c.Request.Context(), src, "chat")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ: " + err.Error()})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ: " + err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, dto.ChatUploadResponse{URL: url, Type: kind, Name: displayName})
+		respondJSON(c, http.StatusOK, dto.ChatUploadResponse{URL: url, Type: kind, Name: displayName})
 		return
 	}
 
 	// fallback เก็บไฟล์ในเครื่อง (โฟลเดอร์ ./uploads/chat) — ตั้งชื่อไฟล์เองทั้งหมด
 	uploadDir := filepath.Join("./uploads", "chat")
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
 		return
 	}
 	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
 	if err := c.SaveUploadedFile(file, filepath.Join(uploadDir, filename)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์อัปโหลดไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์อัปโหลดไม่สำเร็จ"})
 		return
 	}
-	c.JSON(http.StatusOK, dto.ChatUploadResponse{
+	respondJSON(c, http.StatusOK, dto.ChatUploadResponse{
 		URL:  "http://localhost:8000/uploads/chat/" + filename,
 		Type: kind,
 		Name: displayName,
@@ -103,10 +103,10 @@ func autoQAErrorStatus(err error) int {
 func (ctrl *AutoQAController) GetPublicAutoQAs(c *gin.Context) {
 	res, err := ctrl.service.GetPublicAutoQAs()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // === Knowledge Base Handlers ===
@@ -114,84 +114,84 @@ func (ctrl *AutoQAController) GetPublicAutoQAs(c *gin.Context) {
 func (ctrl *AutoQAController) CreateAutoQA(c *gin.Context) {
 	var req dto.CreateAutoQAReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.CreateAutoQA(&req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": res})
+	respondJSON(c, http.StatusCreated, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) GetAutoQAByID(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
 		return
 	}
 
 	res, err := ctrl.service.GetAutoQAByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "AutoQA not found"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "AutoQA not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) GetAllAutoQAs(c *gin.Context) {
 	res, err := ctrl.service.GetAllAutoQAs()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) UpdateAutoQA(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
 		return
 	}
 
 	var req dto.UpdateAutoQAReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.UpdateAutoQA(uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) DeleteAutoQA(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid AutoQA ID"})
 		return
 	}
 
 	err = ctrl.service.DeleteAutoQA(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "AutoQA deleted successfully"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "AutoQA deleted successfully"})
 }
 
 // === Chat Session Handlers ===
@@ -199,34 +199,34 @@ func (ctrl *AutoQAController) DeleteAutoQA(c *gin.Context) {
 func (ctrl *AutoQAController) CreateChatSession(c *gin.Context) {
 	var req dto.CreateChatSessionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.CreateChatSession(&req)
 	if err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": res})
+	respondJSON(c, http.StatusCreated, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) GetChatSessionByID(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 
 	res, err := ctrl.service.GetChatSessionByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "Chat Session not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // StreamChatSession เปิด SSE ส่งสัญญาณ "มีข้อความใหม่ในห้องนี้" แบบเรียลไทม์ — สาธารณะ ไม่ต้องล็อกอิน
@@ -239,20 +239,20 @@ func (ctrl *AutoQAController) StreamChatSession(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 	sessionID := uint(id)
 
 	// ตรวจว่าห้องนี้มีอยู่จริงก่อนเปิด stream ค้างไว้ (กันเปิด goroutine ทิ้งไว้เปล่าๆ กับ id มั่ว)
 	if _, err := ctrl.service.GetChatSessionByID(sessionID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "Chat Session not found"})
 		return
 	}
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "เซิร์ฟเวอร์ไม่รองรับ streaming"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "เซิร์ฟเวอร์ไม่รองรับ streaming"})
 		return
 	}
 
@@ -289,51 +289,51 @@ func (ctrl *AutoQAController) StreamChatSession(c *gin.Context) {
 func (ctrl *AutoQAController) GetAllChatSessions(c *gin.Context) {
 	res, err := ctrl.service.GetAllChatSessions()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) UpdateChatSession(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 
 	var req dto.UpdateChatSessionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.UpdateChatSession(uint(id), &req)
 	if err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) DeleteChatSession(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 
 	err = ctrl.service.DeleteChatSession(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Chat Session deleted successfully"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "Chat Session deleted successfully"})
 }
 
 // === Interaction (Asking Questions) ===
@@ -342,91 +342,91 @@ func (ctrl *AutoQAController) AskQuestion(c *gin.Context) {
 	idParam := c.Param("id")
 	sessionID, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 
 	var req dto.AskQuestionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.AskQuestion(uint(sessionID), &req)
 	if err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AutoQAController) AdminReply(c *gin.Context) {
 	idParam := c.Param("id")
 	sessionID, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 
 	var req dto.AdminReplyReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.AdminReply(uint(sessionID), &req)
 	if err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // EditMessage — ลูกค้าแก้ไขข้อความของตัวเองในห้องแชท
 func (ctrl *AutoQAController) EditMessage(c *gin.Context) {
 	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
 		return
 	}
 
 	var req dto.EditMessageReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.EditUserMessage(uint(sessionID), uint(msgID), &req)
 	if err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // DeleteMessage — ลูกค้าลบข้อความของตัวเองในห้องแชท
 func (ctrl *AutoQAController) DeleteMessage(c *gin.Context) {
 	sessionID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
 		return
 	}
 	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
 		return
 	}
 
 	if err := ctrl.service.DeleteUserMessage(uint(sessionID), uint(msgID)); err != nil {
-		c.JSON(autoQAErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, autoQAErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ลบข้อความสำเร็จ"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ลบข้อความสำเร็จ"})
 }

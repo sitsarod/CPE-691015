@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Users,
   Check,
@@ -14,6 +14,7 @@ import {
   ChevronDown,
   X,
   Star,
+  Crosshair,
 } from 'lucide-react';
 import { StatItem, FacilityTile, FaqItem, HeroSlide, PublicCoach } from '@/types/homeContent';
 import { homeContentAPI } from '@/services/homeContentAPI';
@@ -257,6 +258,111 @@ export function FaqListEditor({
   );
 }
 
+// ---------- ตัวเลือกจุดโฟกัสของสไลด์ (ลากหมุด + ปุ่ม snap 9 จุด) ----------
+// preview เป็น object-cover + object-position ตามหมุด = เห็นภาพครอปจริงระหว่างลาก
+// ค่าที่ได้ (x,y เป็น %) เอาไปใช้เป็น object-position บนหน้าแรกตรง ๆ
+const SNAP = [0, 50, 100];
+function FocalPointPicker({
+  slide,
+  index,
+  onSetFocal,
+}: {
+  slide: HeroSlide;
+  index: number;
+  onSetFocal: (id: number, x: number, y: number) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  // ระหว่างลากเก็บค่าชั่วคราวใน state เพื่อให้ preview ลื่น ปล่อยเมาส์ค่อย commit
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const x = drag ? drag.x : slide.focal_x;
+  const y = drag ? drag.y : slide.focal_y;
+
+  const posFromEvent = (e: React.PointerEvent) => {
+    const box = boxRef.current;
+    if (!box) return { x, y };
+    const r = box.getBoundingClientRect();
+    return {
+      x: Math.min(100, Math.max(0, Math.round(((e.clientX - r.left) / r.width) * 100))),
+      y: Math.min(100, Math.max(0, Math.round(((e.clientY - r.top) / r.height) * 100))),
+    };
+  };
+
+  return (
+    <div className="space-y-2">
+      <div
+        ref={boxRef}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setDrag(posFromEvent(e));
+        }}
+        onPointerMove={(e) => {
+          if (drag !== null) setDrag(posFromEvent(e));
+        }}
+        onPointerUp={(e) => {
+          if (drag === null) return;
+          const p = posFromEvent(e);
+          setDrag(null);
+          if (p.x !== slide.focal_x || p.y !== slide.focal_y) onSetFocal(slide.id, p.x, p.y);
+        }}
+        className="relative aspect-video cursor-crosshair touch-none select-none overflow-hidden rounded-lg bg-gray-100"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={slide.image_url}
+          alt={`สไลด์ ${index + 1}`}
+          loading="lazy"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: `${x}% ${y}%` }}
+        />
+        {/* เส้นเล็ง + หมุดโฟกัส */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute top-0 h-full w-px bg-white/60" style={{ left: `${x}%` }} />
+          <div className="absolute left-0 h-px w-full bg-white/60" style={{ top: `${y}%` }} />
+          <div
+            className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#CC0000]/85 shadow-md"
+            style={{ left: `${x}%`, top: `${y}%` }}
+          >
+            <Crosshair size={13} className="text-white" />
+          </div>
+        </div>
+        <span className="absolute left-0 top-0 bg-[#CC0000] px-2 py-0.5 text-xs font-medium text-white">
+          #{index + 1}
+          {!slide.is_active && ' · ซ่อน'}
+        </span>
+      </div>
+
+      {/* แถวปุ่ม snap 9 จุด + ค่าปัจจุบัน */}
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="grid grid-cols-3 gap-0.5" title="เลือกจุดโฟกัสด่วน">
+          {SNAP.map((py) =>
+            SNAP.map((px) => {
+              const active = slide.focal_x === px && slide.focal_y === py;
+              return (
+                <button
+                  key={`${px}-${py}`}
+                  type="button"
+                  aria-label={`โฟกัส ${px}% ${py}%`}
+                  onClick={() => onSetFocal(slide.id, px, py)}
+                  className={`h-3.5 w-3.5 rounded-[3px] border transition-colors ${
+                    active
+                      ? 'border-[#CC0000] bg-[#CC0000]'
+                      : 'border-gray-300 bg-white hover:border-[#CC0000] hover:bg-[#FFECEC]'
+                  }`}
+                />
+              );
+            })
+          )}
+        </div>
+        <span className="text-[11px] tabular-nums text-gray-400">
+          โฟกัส {x}% · {y}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ---------- สไลด์ Hero (บันทึกทันที) ----------
 export function SlideGrid({
   slides,
@@ -265,6 +371,7 @@ export function SlideGrid({
   onToggle,
   onDelete,
   onMove,
+  onSetFocal,
 }: {
   slides: HeroSlide[];
   uploading: boolean;
@@ -272,6 +379,7 @@ export function SlideGrid({
   onToggle: (slide: HeroSlide) => void;
   onDelete: (slide: HeroSlide) => void;
   onMove: (index: number, dir: -1 | 1) => void;
+  onSetFocal: (id: number, x: number, y: number) => void;
 }) {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,18 +396,8 @@ export function SlideGrid({
             slide.is_active ? '' : 'opacity-50'
           }`}
         >
-          <div className="relative aspect-video bg-gray-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={slide.image_url}
-              alt={`สไลด์ ${i + 1}`}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-            <span className="absolute left-0 top-0 bg-[#CC0000] px-2 py-0.5 text-xs font-medium text-white">
-              #{i + 1}
-              {!slide.is_active && ' · ซ่อน'}
-            </span>
+          <div className="p-2">
+            <FocalPointPicker slide={slide} index={i} onSetFocal={onSetFocal} />
           </div>
           <div className="flex items-center justify-between gap-1 border-t border-gray-100 bg-white px-2 py-2">
             <div className="flex items-center gap-1">
