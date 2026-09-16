@@ -101,7 +101,15 @@ export default function NotificationBell({
         es?.close();
         if (closed) return;
         if (retry) clearTimeout(retry);
-        retry = setTimeout(connect, 5000); // เชื่อมใหม่ด้วย token ล่าสุด
+        // 401 ส่วนใหญ่มาจาก access token หมดอายุ แต่ EventSource ไม่วิ่งผ่าน window.fetch
+        // จึงไม่โดน SessionGuard ต่ออายุ token ให้ — ถ้า reconnect ด้วย token เดิมจะ 401 วนไม่จบ
+        // เลยยิง refresh() (fetch ปกติ → ผ่าน SessionGuard) ให้ต่ออายุ token / เด้ง login ก่อน
+        // แล้วค่อย connect ใหม่ ตอนนั้น connect() จะอ่าน token ที่เพิ่งต่ออายุจาก localStorage
+        retry = setTimeout(async () => {
+          if (closed) return;
+          await refresh();
+          if (!closed) connect();
+        }, 5000);
       };
     };
     connect();

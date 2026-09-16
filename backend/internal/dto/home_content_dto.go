@@ -12,6 +12,7 @@ type HeroSlideDTO struct {
 	IsActive  bool   `json:"is_active"`
 	FocalX    int    `json:"focal_x"` // จุดโฟกัสภาพเป็น % (0-100) สำหรับครอปหน้าแรก
 	FocalY    int    `json:"focal_y"`
+	Zoom      int    `json:"zoom"` // ระดับซูมเป็น % (100 = ปกติ, 300 = ซูม 3 เท่า)
 }
 
 // PublicCoachDTO ข้อมูลโค้ชแบบ public สำหรับแสดงส่วนบุคลากรบนหน้าแรก
@@ -156,6 +157,7 @@ type CreateHeroSlideReq struct {
 	IsActive  *bool  `json:"is_active"`
 	FocalX    *int   `json:"focal_x"`
 	FocalY    *int   `json:"focal_y"`
+	Zoom      *int   `json:"zoom"`
 }
 
 // UpdateHeroSlideReq แก้ไขรูปสไลด์
@@ -167,6 +169,7 @@ type UpdateHeroSlideReq struct {
 	IsActive  *bool   `json:"is_active"`
 	FocalX    *int    `json:"focal_x"`
 	FocalY    *int    `json:"focal_y"`
+	Zoom      *int    `json:"zoom"`
 }
 
 // ReorderHeroSlidesReq จัดลำดับรูปสไลด์ตามลำดับ id ที่ส่งมา

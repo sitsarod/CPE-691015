@@ -178,6 +178,7 @@ export default function Home() {
     image_url: s.image_url,
     focal_x: s.focal_x,
     focal_y: s.focal_y,
+    zoom: s.zoom,
   }));
   const coaches = home?.featured_coaches ?? [];
 

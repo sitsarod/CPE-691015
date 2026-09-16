@@ -78,7 +78,14 @@ export default function NotificationsHistory() {
         es?.close();
         if (closed) return;
         if (retry) clearTimeout(retry);
-        retry = setTimeout(connect, 5000);
+        // 401 ส่วนใหญ่มาจาก access token หมดอายุ แต่ EventSource ไม่วิ่งผ่าน window.fetch
+        // จึงไม่โดน SessionGuard ต่ออายุ token ให้ — ถ้า reconnect ด้วย token เดิมจะ 401 วนไม่จบ
+        // เลยยิง load() (fetch ปกติ → ผ่าน SessionGuard) ให้ต่ออายุ token / เด้ง login ก่อน reconnect
+        retry = setTimeout(async () => {
+          if (closed) return;
+          await load();
+          if (!closed) connect();
+        }, 5000);
       };
     };
     connect();

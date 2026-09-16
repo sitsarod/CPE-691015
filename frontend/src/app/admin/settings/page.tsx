@@ -120,6 +120,7 @@ export default function AdminSettingsPage() {
       deleteSlide: c.deleteSlide,
       moveSlide: c.moveSlide,
       setSlideFocal: c.setSlideFocal,
+      setSlideZoom: c.setSlideZoom,
       coaches: c.coaches,
       toggleCoach: c.toggleCoach,
       setHeadCoach: c.setHeadCoach,

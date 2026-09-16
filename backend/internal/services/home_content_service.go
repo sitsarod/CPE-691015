@@ -243,6 +243,7 @@ func (s *homeContentService) CreateSlide(req *dto.CreateHeroSlideReq) (*dto.Hero
 		IsActive:  true,
 		FocalX:    50,
 		FocalY:    50,
+		Zoom:      100,
 	}
 	if req.IsActive != nil {
 		slide.IsActive = *req.IsActive
@@ -252,6 +253,9 @@ func (s *homeContentService) CreateSlide(req *dto.CreateHeroSlideReq) (*dto.Hero
 	}
 	if req.FocalY != nil {
 		slide.FocalY = clampPercent(*req.FocalY)
+	}
+	if req.Zoom != nil {
+		slide.Zoom = clampZoom(*req.Zoom)
 	}
 	if err := s.db.Create(&slide).Error; err != nil {
 		return nil, err
@@ -286,6 +290,9 @@ func (s *homeContentService) UpdateSlide(id uint, req *dto.UpdateHeroSlideReq) (
 	if req.FocalY != nil {
 		slide.FocalY = clampPercent(*req.FocalY)
 	}
+	if req.Zoom != nil {
+		slide.Zoom = clampZoom(*req.Zoom)
+	}
 	if err := s.db.Save(&slide).Error; err != nil {
 		return nil, err
 	}
@@ -302,6 +309,25 @@ func clampPercent(v int) int {
 		return 100
 	}
 	return v
+}
+
+// clampZoom จำกัดระดับซูมให้อยู่ในช่วง 100-300 (%) — ต่ำกว่า 100 ภาพจะเล็กกว่ากรอบจนเห็นขอบ
+func clampZoom(v int) int {
+	if v < 100 {
+		return 100
+	}
+	if v > 300 {
+		return 300
+	}
+	return v
+}
+
+// normalizeZoom แปลงค่าซูมของแถวเก่า (ก่อนมีคอลัมน์ = 0) ให้เป็น 100 = ขนาดปกติ
+func normalizeZoom(v int) int {
+	if v == 0 {
+		return 100
+	}
+	return clampZoom(v)
 }
 
 func (s *homeContentService) DeleteSlide(id uint) error {
@@ -489,6 +515,7 @@ func mapToHeroSlideDTO(m *models.HeroSlide) dto.HeroSlideDTO {
 		IsActive:  m.IsActive,
 		FocalX:    m.FocalX,
 		FocalY:    m.FocalY,
+		Zoom:      normalizeZoom(m.Zoom),
 	}
 }
 
