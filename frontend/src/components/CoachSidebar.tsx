@@ -89,7 +89,7 @@ export default function CoachSidebar() {
       </aside>
 
       {/* Mobile (< md): icon-only horizontal bottom bar */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-[60] items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
+      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-40 items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
         {primaryItems.map((item) => (
           <BottomBarItem
             key={item.href}
