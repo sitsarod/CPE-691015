@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Wallet,
@@ -143,6 +144,7 @@ type AlertItem = {
 /* ------------------------------- component ------------------------------ */
 
 export default function StudentOverview() {
+  const router = useRouter();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [billings, setBillings] = useState<BillingDTO[]>([]);
   const [consent, setConsent] = useState<FaceConsentStatus | null>(null);
@@ -194,6 +196,10 @@ export default function StudentOverview() {
       const updated = await recordFaceConsent(action);
       setConsent(updated);
       setIsConsentOpen(false);
+      if (action === "granted") {
+        // ยินยอมแล้วพาไปหน้าลงทะเบียนใบหน้าต่อเลย
+        router.push("/customer/settings/face");
+      }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
     } finally {
