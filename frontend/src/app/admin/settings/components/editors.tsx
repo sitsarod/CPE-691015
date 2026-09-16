@@ -25,6 +25,7 @@ import {
   DragHandle,
 } from './primitives';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 // input พื้นฐานของแถว (ไม่กำหนดความกว้างเอง เพื่อคุมความกว้างด้วย flex ภายนอก)
 const rowInput =
   'rounded-lg border border-gray-200 px-3 py-2 outline-none transition-colors focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20';
@@ -79,6 +80,7 @@ export function TileListEditor({
   items: FacilityTile[] | null | undefined;
   onChange: (v: FacilityTile[]) => void;
 }) {
+  const showToast = useGlobalToast();
   const list = items ?? [];
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const update = (i: number, patch: Partial<FacilityTile>) =>
@@ -90,7 +92,7 @@ export function TileListEditor({
       const url = await homeContentAPI.uploadImage(file);
       update(i, { image_url: url });
     } catch (error) {
-      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setUploadingIdx(null);
     }

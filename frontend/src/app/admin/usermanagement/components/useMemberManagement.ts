@@ -16,6 +16,7 @@ import { normalizeRole, isActive, type RoleKey } from "@/components/admin/Manage
 import { emptyCustomer, emptyCoach } from "@/components/admin/modals/CreateMemberModal";
 import { useAdminResource, errorMessage, getId } from "@/components/admin/shared/useAdminResource";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 /** เผื่อไฟล์อื่นในโฟลเดอร์นี้ยัง import getId จากที่นี่ตามเดิม */
 export { getId };
 
@@ -99,6 +100,7 @@ function validateCreateForm(form: AdminCreateUserInput): string | null {
 }
 
 export function useMemberManagement() {
+  const showToast = useGlobalToast();
   const base = useAdminResource<UserProfileResponseDTO, AdminUserDetail>({
     fetchList: getAllUsersAPI,
     fetchDetail: (item) => adminGetUserDetailAPI(getId(item)),
@@ -203,13 +205,13 @@ export function useMemberManagement() {
     // เพราะยิง API ตรงข้ามหน้าเว็บได้เสมอ
     const currentUserId = Number(localStorage.getItem("user_id"));
     if (getId(item) === currentUserId) {
-      alert("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ");
+      showToast("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ", "error");
       return;
     }
 
     const adminCount = base.items.filter((m) => normalizeRole(m.role) === "admin").length;
     if (normalizeRole(item.role) === "admin" && adminCount <= 1) {
-      alert("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก");
+      showToast("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก", "error");
       return;
     }
 

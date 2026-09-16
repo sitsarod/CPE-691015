@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, History, Loader2, XCircle } from "lucide-rea
 import { fetchMyAttendance } from "@/services/attendanceAPI";
 import type { MyAttendanceItem } from "@/types/attendance";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 const PAGE_SIZE = 30;
 
 const METHOD_LABEL: Record<string, string> = {
@@ -29,6 +30,7 @@ function formatClock(iso: string) {
 }
 
 export default function CustomerAttendancePage() {
+  const showToast = useGlobalToast();
   const [items, setItems] = useState<MyAttendanceItem[]>([]);
   const [total, setTotal] = useState(0);
   const [presentCount, setPresentCount] = useState(0);
@@ -67,7 +69,7 @@ export default function CustomerAttendancePage() {
       setItems((prev) => [...prev, ...res.items]);
       setTotal(res.total);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถโหลดประวัติเพิ่มได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถโหลดประวัติเพิ่มได้", "error");
     } finally {
       setIsLoadingMore(false);
     }

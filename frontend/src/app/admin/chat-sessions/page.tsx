@@ -12,6 +12,8 @@ import {
   Paperclip, FileText, Loader2, Download, Clock,
 } from 'lucide-react';
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 // สถานะ "ใครทักมา / รอนานแค่ไหน" ของแต่ละห้องแชท สำหรับแสดงในรายการฝั่งซ้าย
 function sessionRowMeta(s: ChatSession): { isUnread: boolean; isUrgent: boolean; waitingMs: number } {
   const qas = s.auto_qas || [];
@@ -41,6 +43,8 @@ const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
 
 export default function ChatSessionsManagement() {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
@@ -131,12 +135,15 @@ export default function ChatSessionsManagement() {
       }
     } catch (err) {
       console.error('Failed to update status', err);
-      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+      showToast('เกิดข้อผิดพลาดในการอัปเดตสถานะ', "error");
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('คุณแน่ใจหรือไม่ที่จะลบการสนทนานี้? ประวัติการสนทนาทั้งหมดจะหายไป')) return;
+    if (!(await confirmAction({
+      message: 'คุณแน่ใจหรือไม่ที่จะลบการสนทนานี้? ประวัติการสนทนาทั้งหมดจะหายไป',
+      tone: 'danger',
+    }))) return;
     try {
       await autoQaAPI.deleteChatSession(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -145,7 +152,7 @@ export default function ChatSessionsManagement() {
       }
     } catch (err) {
       console.error('Failed to delete session', err);
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+      showToast('เกิดข้อผิดพลาดในการลบข้อมูล', "error");
     }
   };
 
@@ -193,7 +200,7 @@ export default function ChatSessionsManagement() {
       const res = await autoQaAPI.uploadChatAttachment(file);
       setPendingAttachment({ url: res.url, type: res.type, name: res.name });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'อัปโหลดไฟล์ไม่สำเร็จ');
+      showToast(err instanceof Error ? err.message : 'อัปโหลดไฟล์ไม่สำเร็จ', "error");
     } finally {
       setUploading(false);
     }
@@ -218,7 +225,7 @@ export default function ChatSessionsManagement() {
       setPendingAttachment(null);
     } catch (err) {
       console.error('Failed to send reply', err);
-      alert('เกิดข้อผิดพลาดในการส่งข้อความ');
+      showToast('เกิดข้อผิดพลาดในการส่งข้อความ', "error");
     } finally {
       setIsReplying(false);
     }

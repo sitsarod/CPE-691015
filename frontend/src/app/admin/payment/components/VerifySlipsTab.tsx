@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { BillingDTO } from './types';
 import { confirmSlip, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 export interface VerifySlipsTabProps {
   billings: BillingDTO[];
   onFetchData: () => void;
@@ -42,6 +43,7 @@ export default function VerifySlipsTab({
   onTriggerToast,
   initialFilter
 }: VerifySlipsTabProps) {
+  const confirmAction = useConfirm();
   const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid'>(initialFilter ?? 'pending');
   const [slipSearchTerm, setSlipSearchTerm] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -221,9 +223,9 @@ export default function VerifySlipsTab({
 
   // ลูกค้าจ่ายเงินสด (logic เดิม)
   const handleCashPayment = async (group: InvoiceGroup) => {
-    if (!window.confirm(
+    if (!(await confirmAction(
       `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ${fmtBaht(group.totalAmount)} ใช่หรือไม่?`
-    )) return;
+    ))) return;
 
     setSubmitting('cash');
     try {

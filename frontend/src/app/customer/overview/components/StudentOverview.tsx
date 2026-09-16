@@ -37,6 +37,7 @@ import {
   type NotifTone,
 } from "./parts";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 /* ------------------------------- helpers -------------------------------- */
 
 const fmtBaht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
@@ -144,6 +145,7 @@ type AlertItem = {
 /* ------------------------------- component ------------------------------ */
 
 export default function StudentOverview() {
+  const showToast = useGlobalToast();
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [billings, setBillings] = useState<BillingDTO[]>([]);
@@ -201,7 +203,7 @@ export default function StudentOverview() {
         router.push("/customer/settings/face");
       }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้", "error");
     } finally {
       setIsSavingConsent(false);
     }

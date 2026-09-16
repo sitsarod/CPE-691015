@@ -6,7 +6,9 @@ import { createCourse, createPackage } from "@/services/courseAPI";
 import CourseImageField from "./CourseImageField";
 import { ScheduleFormInput, PackageFormInput } from "@/types/course";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void }) {
+  const showToast = useGlobalToast();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,7 +91,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         }
       }
       
-      alert("สร้างคอร์สและแพ็กเกจสำเร็จ!");
+      showToast("สร้างคอร์สและแพ็กเกจสำเร็จ!", "success");
       onSuccess(); // กลับไปหน้า List
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ไม่สามารถสร้างคอร์สได้ โปรดลองอีกครั้ง");
