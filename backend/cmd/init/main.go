@@ -137,15 +137,8 @@ func main() {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
 	}
 
-	seedBillingTypes(db)
-	seedAdmins(db)
-	seedCoaches(db)
-	seedCustomers(db)
-	seedCoursesAndPackages(db)
-	seedBankAccounts(db)
-	seedHomeContent(db)
-	seedHeroSlides(db)
-	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
+	seedAdmins(db)              // ต้องมี admin เป็นเจ้าของคอร์ส (และไว้ login)
+	seedCoursesAndPackages(db) // คอร์ส + แพ็กเกจ
 
 	// บัญชีที่ seed ไว้ข้างบนสร้างตรงด้วย tx.Create ไม่ได้ผ่าน UserService.CreateUser
 	// จึงไม่มี email_verified_at ติดมา — ปักให้ครบตรงนี้ที่เดียว ไม่งั้น login ไม่ได้เลย

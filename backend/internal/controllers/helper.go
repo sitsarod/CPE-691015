@@ -5,11 +5,21 @@ import (
 	"net/http"
 
 	"CPE-691015/internal/models"
+	"CPE-691015/internal/response"
 	"CPE-691015/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
+
+// respondJSON ตอบ JSON โดยแปลง nil slice ทุกจุดใน payload ให้เป็น [] ก่อนเสมอ
+//
+// ทุก handler ในแพ็กเกจ controllers ตอบผ่านฟังก์ชันนี้แทน c.JSON ตรง ๆ
+// เพื่อกันบั๊ก "null แทน []" ที่ทำให้ frontend เรียก .map/.filter พัง — ครบทุก endpoint
+// ที่เดียว ไม่ต้องไล่ default ทีละ DTO (ดู response.Normalize)
+func respondJSON(c *gin.Context, code int, obj any) {
+	c.JSON(code, response.Normalize(obj))
+}
 
 // respondServiceError แปลง error จากชั้น service เป็น HTTP status ให้ถูกประเภท
 //

@@ -52,25 +52,25 @@ func NewPhotoPostController(
 func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดรูปได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถอัปโหลดรูปได้"})
 		return
 	}
 
 	fh, err := c.FormFile("photo")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพ (ฟิลด์ 'photo')"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพ (ฟิลด์ 'photo')"})
 		return
 	}
 
 	ext, err := ValidateImageUpload(fh)
 	if err != nil {
-		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	file, err := fh.Open()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
 	defer file.Close()
@@ -79,13 +79,13 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	// ปลอดภัยเพราะ ValidateImageUpload คุมขนาดไว้ที่ MaxImageUploadBytes มาแล้ว
 	raw, err := io.ReadAll(io.LimitReader(file, MaxImageUploadBytes))
 	if err != nil || len(raw) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
 
 	storageKey, err := ctrl.mediaStorage.Save(c.Request.Context(), services.MediaKindPhotoPost, bytes.NewReader(raw), ext)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์รูปล้มเหลว"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์รูปล้มเหลว"})
 		return
 	}
 
@@ -102,7 +102,7 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	if err != nil {
 		// เขียนแถวไม่สำเร็จ = ไฟล์ที่เพิ่งอัปไม่มีใครชี้ถึงอีกเลย ต้องลบทันที (เหมือน FaceImageService.Upload)
 		_ = ctrl.mediaStorage.Delete(c.Request.Context(), services.MediaKindPhotoPost, storageKey)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -130,7 +130,7 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "อัปโหลดรูปสำเร็จ", "data": resp})
+	respondJSON(c, http.StatusOK, gin.H{"message": "อัปโหลดรูปสำเร็จ", "data": resp})
 }
 
 // GetPhotoPostRaw handles GET /api/photo-posts/:raw_photo_id/raw — เนื้อไฟล์รูปจริง
@@ -141,7 +141,7 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 func (ctrl *PhotoPostController) GetPhotoPostRaw(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -152,22 +152,22 @@ func (ctrl *PhotoPostController) GetPhotoPostRaw(c *gin.Context) {
 
 	var rawPhoto models.RawPhoto
 	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
 		return
 	}
 
 	if err := services.VerifyCanViewRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
 	body, contentType, err := ctrl.mediaStorage.Open(c.Request.Context(), services.MediaKindPhotoPost, rawPhoto.StorageKey)
 	if err != nil {
 		if errors.Is(err, services.ErrMediaNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์รูปนี้แล้ว"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบไฟล์รูปนี้แล้ว"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์รูปได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถเปิดไฟล์รูปได้"})
 		return
 	}
 	defer body.Close()
@@ -183,25 +183,25 @@ func (ctrl *PhotoPostController) GetPhotoPostRaw(c *gin.Context) {
 func (ctrl *PhotoPostController) AssignStudentsToPhoto(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลรูปนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่สามารถแก้ไขข้อมูลรูปนี้ได้"})
 		return
 	}
 
 	rawPhotoIDParam, err := strconv.ParseUint(c.Param("raw_photo_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
 		return
 	}
 	rawPhotoID := uint(rawPhotoIDParam)
 
 	var rawPhoto models.RawPhoto
 	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
 		return
 	}
 
 	if err := services.VerifyCoachOwnsRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -209,13 +209,13 @@ func (ctrl *PhotoPostController) AssignStudentsToPhoto(c *gin.Context) {
 		StudentIDs []uint `json:"student_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรายการ ID นักเรียนไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รูปแบบรายการ ID นักเรียนไม่ถูกต้อง"})
 		return
 	}
 
 	results, skipped, err := ctrl.photoPostService.AssignStudentsToPhoto(rawPhotoID, rawPhoto.PhotoURL, req.StudentIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -224,7 +224,7 @@ func (ctrl *PhotoPostController) AssignStudentsToPhoto(c *gin.Context) {
 		studentIDs = append(studentIDs, r.CustomerID)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message":            "อัปเดตรายชื่อนักเรียนในรูปนี้สำเร็จแล้ว",
 		"student_ids":        studentIDs,
 		"skipped_no_consent": skipped, // นักเรียนที่ถูกข้ามเพราะยังไม่ยินยอมให้เก็บข้อมูลใบหน้า
@@ -236,30 +236,30 @@ func (ctrl *PhotoPostController) AssignStudentsToPhoto(c *gin.Context) {
 func (ctrl *PhotoPostController) GetPhotoDetectedStudents(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูข้อมูลนี้ได้"})
 		return
 	}
 
 	rawPhotoIDParam, err := strconv.ParseUint(c.Param("raw_photo_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสรูปไม่ถูกต้อง"})
 		return
 	}
 	rawPhotoID := uint(rawPhotoIDParam)
 
 	var rawPhoto models.RawPhoto
 	if err := ctrl.db.First(&rawPhoto, rawPhotoID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลรูปต้นฉบับ"})
 		return
 	}
 	if err := services.VerifyCoachOwnsRawPhoto(ctrl.db, &rawPhoto, userID, role); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
 	list, err := ctrl.photoPostService.GetDetectedPhotosByRawPhotoID(rawPhotoID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -282,7 +282,7 @@ func (ctrl *PhotoPostController) GetPhotoDetectedStudents(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	respondJSON(c, http.StatusOK, gin.H{"data": response})
 }
 
 // DeleteMyPost handles DELETE /api/students/posts/:type/:raw_id
@@ -295,13 +295,13 @@ func (ctrl *PhotoPostController) GetPhotoDetectedStudents(c *gin.Context) {
 func (ctrl *PhotoPostController) DeleteMyPost(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
 	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
 		return
 	}
 
@@ -316,20 +316,20 @@ func (ctrl *PhotoPostController) DeleteMyPost(c *gin.Context) {
 	case "video":
 		err = ctrl.videoService.DeleteMyVideoTag(customerID, rawID)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ประเภทโพสต์ไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ประเภทโพสต์ไม่ถูกต้อง"})
 		return
 	}
 
 	if err != nil {
 		if errors.Is(err, services.ErrPostNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ลบโพสต์นี้แล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ลบโพสต์นี้แล้ว"})
 }
 
 // GetMyPosts handles GET /api/students/posts/me
@@ -337,23 +337,23 @@ func (ctrl *PhotoPostController) DeleteMyPost(c *gin.Context) {
 func (ctrl *PhotoPostController) GetMyPosts(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
 	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์นักเรียนสำหรับบัญชีนี้"})
 		return
 	}
 
 	posts, err := ctrl.buildPostItems(customerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": posts})
+	respondJSON(c, http.StatusOK, gin.H{"data": posts})
 }
 
 // AdminGetStudentPosts handles GET /api/admin/students/:customer_id/posts
@@ -369,11 +369,11 @@ func (ctrl *PhotoPostController) AdminGetStudentPosts(c *gin.Context) {
 
 	posts, err := ctrl.buildPostItems(customerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": posts})
+	respondJSON(c, http.StatusOK, gin.H{"data": posts})
 }
 
 // buildPostItems รวมรูป+วิดีโอที่นักเรียนคนนี้ถูกแท็กไว้เป็นลิสต์เดียว เรียงล่าสุดก่อน — ใช้ร่วมกัน

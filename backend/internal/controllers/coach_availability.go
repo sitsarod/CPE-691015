@@ -27,10 +27,10 @@ func (ctrl *CoachAvailabilityController) GetAllAvailabilities(c *gin.Context) {
 	all, err := ctrl.service.GetAll()
 	if err != nil {
 		log.Printf("[api] ดึงเวลาว่างทั้งหมด ไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
 		return
 	}
-	c.JSON(http.StatusOK, all)
+	respondJSON(c, http.StatusOK, all)
 }
 
 // GetAvailability handles GET /api/coaches/:id/availability
@@ -38,29 +38,29 @@ func (ctrl *CoachAvailabilityController) GetAllAvailabilities(c *gin.Context) {
 func (ctrl *CoachAvailabilityController) GetAvailability(c *gin.Context) {
 	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	// ตรวจสิทธิ์: coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	availabilities, err := ctrl.service.GetByCoachID(uint(coachID), userID, role)
 	if err != nil {
 		if errors.Is(err, services.ErrCoachForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		log.Printf("[api] ดึงเวลาว่าง ไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงเวลาว่างของโค้ชได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, availabilities)
+	respondJSON(c, http.StatusOK, availabilities)
 }
 
 // UpdateAvailability handles PUT /api/coaches/:id/availability
@@ -68,13 +68,13 @@ func (ctrl *CoachAvailabilityController) GetAvailability(c *gin.Context) {
 func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	var req dto.UpdateCoachAvailabilityRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -90,7 +90,7 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 	// ดึงตัวตนผู้เรียกจาก JWT เพื่อตรวจสิทธิ์ความเป็นเจ้าของ (กัน IDOR)
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -98,23 +98,23 @@ func (ctrl *CoachAvailabilityController) UpdateAvailability(c *gin.Context) {
 	if err != nil {
 		// ErrCoachForbidden = coach คนอื่น, ErrCoachSelfOnly = admin (ห้ามแก้เวลาว่างของโค้ช) — ทั้งคู่ตอบ 403
 		if errors.Is(err, services.ErrCoachForbidden) || errors.Is(err, services.ErrCoachSelfOnly) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		// ErrInvalidAvailability = client ส่งเวลา/วันไม่ถูกต้อง — ตอบ 400
 		if errors.Is(err, services.ErrInvalidAvailability) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		// ErrAvailabilityConflictsSchedule = เวลาว่างใหม่ชนกับคาบที่ assign ไว้แล้ว — ตอบ 409
 		if errors.Is(err, services.ErrAvailabilityConflictsSchedule) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
 		log.Printf("[api] บันทึกเวลาว่าง ไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกเวลาว่างได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกเวลาว่างได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, availabilities)
+	respondJSON(c, http.StatusOK, availabilities)
 }

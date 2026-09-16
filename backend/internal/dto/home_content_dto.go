@@ -10,6 +10,8 @@ type HeroSlideDTO struct {
 	LinkURL   string `json:"link_url"`
 	SortOrder int    `json:"sort_order"`
 	IsActive  bool   `json:"is_active"`
+	FocalX    int    `json:"focal_x"` // จุดโฟกัสภาพเป็น % (0-100) สำหรับครอปหน้าแรก
+	FocalY    int    `json:"focal_y"`
 }
 
 // PublicCoachDTO ข้อมูลโค้ชแบบ public สำหรับแสดงส่วนบุคลากรบนหน้าแรก
@@ -152,6 +154,8 @@ type CreateHeroSlideReq struct {
 	LinkURL   string `json:"link_url"`
 	SortOrder int    `json:"sort_order"`
 	IsActive  *bool  `json:"is_active"`
+	FocalX    *int   `json:"focal_x"`
+	FocalY    *int   `json:"focal_y"`
 }
 
 // UpdateHeroSlideReq แก้ไขรูปสไลด์
@@ -161,6 +165,8 @@ type UpdateHeroSlideReq struct {
 	LinkURL   *string `json:"link_url"`
 	SortOrder *int    `json:"sort_order"`
 	IsActive  *bool   `json:"is_active"`
+	FocalX    *int    `json:"focal_x"`
+	FocalY    *int    `json:"focal_y"`
 }
 
 // ReorderHeroSlidesReq จัดลำดับรูปสไลด์ตามลำดับ id ที่ส่งมา

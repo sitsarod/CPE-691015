@@ -14,7 +14,7 @@ import { priceRange } from "@/components/course/courseUtils";
 import { PublicHome, PublicCoach, FacilityTile } from "@/types/homeContent";
 import { Review } from "@/types/review";
 import { Announcement } from "@/types/announcement";
-import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images } from "lucide-react";
+import { Loader2, Star, UserRound, MapPin, Phone, Mail, Clock, X, ArrowRight, ArrowUpRight, Plus, Minus, Images, ChevronLeft, ChevronRight } from "lucide-react";
 
 // โทนสี/ฟอนต์ของดีไซน์ 2b แต่คงโทนสีเดิมของเว็บ (ขาว + แดง #CC0000) และใช้ฟอนต์ Kanit
 const ACCENT = "#CC0000";
@@ -108,7 +108,8 @@ export default function Home() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   // แกลเลอรีภาพบรรยากาศ (facility) + lightbox รูปเดียวเต็มจอ
   const [isFacilityOpen, setIsFacilityOpen] = useState(false);
-  const [facilityLightbox, setFacilityLightbox] = useState<string | null>(null);
+  // index ของรูปที่กำลังดูใน facilityPhotos (null = ปิด) — เก็บเป็น index เพื่อเลื่อนซ้าย-ขวาได้
+  const [facilityLightbox, setFacilityLightbox] = useState<number | null>(null);
   const [galleryItems, setGalleryItems] = useState<Announcement[]>([]);
   const [isGalleryLoading, setIsGalleryLoading] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false); // โหลดครั้งแรกตอนกดปุ่มเท่านั้น
@@ -122,7 +123,7 @@ export default function Home() {
   // ⚠️ ต้องชดเชยความกว้าง scrollbar ด้วย ไม่งั้นตอนซ่อน scrollbar เนื้อหาทั้งหน้า
   // จะกระตุกไปทางขวา 8px (เว็บนี้ตั้ง ::-webkit-scrollbar ไว้ 8px ใน globals.css)
   const isOverlayOpen = Boolean(
-    selectedCoach || selectedNews || facilityLightbox || isGalleryOpen || isFacilityOpen
+    selectedCoach || selectedNews || facilityLightbox !== null || isGalleryOpen || isFacilityOpen
   );
   useEffect(() => {
     if (!isOverlayOpen) return;
@@ -172,7 +173,12 @@ export default function Home() {
   }, []);
 
   const content = home?.content;
-  const slideImages = (home?.slides ?? []).map((s) => s.image_url);
+  // ส่งจุดโฟกัสไปด้วย ให้ HeroSlider ครอปตรงส่วนที่แอดมินเลือก (object-position)
+  const heroSlides = (home?.slides ?? []).map((s) => ({
+    image_url: s.image_url,
+    focal_x: s.focal_x,
+    focal_y: s.focal_y,
+  }));
   const coaches = home?.featured_coaches ?? [];
 
   // โหลดแกลเลอรีรูปประกาศทั้งหมด (รวมที่หมดอายุแล้ว) แบบ lazy — เรียกครั้งแรกตอนกดปุ่มเท่านั้น
@@ -219,6 +225,24 @@ export default function Home() {
   const facilityTiles = content?.facility_tiles && content.facility_tiles.length > 0
     ? content.facility_tiles
     : FACILITY_TILES;
+  // หน้าแรกโชว์แค่ 5 ช่องแรก (พอดี mosaic 2fr+2x2) ที่เหลือไปดูใน "ดูรูปทั้งหมด"
+  const facilityPreview = facilityTiles.slice(0, 5);
+  const facilityHiddenCount = facilityTiles.length - facilityPreview.length;
+  // เฉพาะช่องที่มีรูปจริง — ใช้เป็นชุดรูปของ lightbox (เลื่อนซ้าย-ขวาได้)
+  const facilityPhotos = facilityTiles.filter((t) => t.image_url);
+
+  // คีย์บอร์ดใน lightbox: ← → เลื่อนรูป (วนรอบ) · Esc ปิด
+  useEffect(() => {
+    if (facilityLightbox === null) return;
+    const n = facilityPhotos.length;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFacilityLightbox(null);
+      else if (e.key === "ArrowRight") setFacilityLightbox((c) => (c === null ? c : (c + 1) % n));
+      else if (e.key === "ArrowLeft") setFacilityLightbox((c) => (c === null ? c : (c - 1 + n) % n));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [facilityLightbox, facilityPhotos.length]);
 
   // คำถามที่พบบ่อย — CMS ถ้ามี (map เป็น {q,a}) ไม่งั้น fallback ค่าคงที่
   const faqItems =
@@ -340,7 +364,7 @@ export default function Home() {
       {/* ===== HERO ===== สไลด์ CMS + headline ทับบนสไลด์ตรงๆ (สไตล์ 2b) */}
       <section className="w-full">
         <div className="relative">
-          <HeroSlider slides={slideImages.map((image_url) => ({ image_url }))} fit="cover" />
+          <HeroSlider slides={heroSlides} fit="cover" />
 
           {/* ไล่เฉดจากซ้ายให้ headline อ่านออกไม่ว่าภาพจะสีอะไร (2b ใช้ไล่ 90deg เข้ม→ใส) */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent" />
@@ -361,7 +385,7 @@ export default function Home() {
               </p>
               <div className="pointer-events-auto flex flex-wrap items-center gap-5 pt-1">
                 <Link
-                  href="/login"
+                  href="/customer/enrollment"
                   className="px-8 py-4 text-[15px] font-medium text-white shadow-lg transition-colors hover:brightness-110"
                   style={{ backgroundColor: ACCENT }}
                 >
@@ -539,7 +563,7 @@ export default function Home() {
               <>
                 {/* แถวหัว: หัวข้อ + คำโปรย */}
                 <div className="mb-11 flex max-w-[520px] flex-col gap-3.5">
-                  <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-gray-900 md:text-[52px]">
+                  <h2 className="text-3xl font-medium tracking-tight text-gray-900 md:text-4xl">
                     {content?.coaches_title || "ทีมโค้ชของเรา"}
                   </h2>
                   <p className="text-sm font-light leading-relaxed text-gray-500">
@@ -675,22 +699,50 @@ export default function Home() {
           <SectionHeading
             title={content?.facility_title || "ภาพบรรยากาศ"}
             right={
-              <button
-                type="button"
-                onClick={() => setIsFacilityOpen(true)}
-                className="whitespace-nowrap border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-              >
-                ดูรูปทั้งหมด
-              </button>
+              // โชว์ปุ่มเฉพาะตอนมีรูปมากกว่าที่แสดงบนหน้าแรก
+              facilityTiles.length > facilityPreview.length ? (
+                <button
+                  type="button"
+                  onClick={() => setIsFacilityOpen(true)}
+                  className="whitespace-nowrap border-b border-gray-300 pb-1 text-sm font-light text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
+                >
+                  ดูรูปทั้งหมด
+                </button>
+              ) : undefined
             }
           />
           {/* มือถือ: รูปใหญ่เต็ม ปัดซ้าย-ขวา (snap carousel) · md ขึ้นไป: mosaic 2fr 1fr 1fr สองแถว
               gutter 1px ใช้ gap-px บนพื้น bg-gray-200 (เฉพาะ md+) */}
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:auto-rows-[170px] md:grid-cols-[2fr_1fr_1fr] md:gap-px md:overflow-x-visible md:bg-gray-200 md:pb-0">
-            {facilityTiles.map((tile, i) => (
+            {facilityPreview.map((tile, i) => {
+              // ช่องที่ 5 (ช่องสุดท้ายที่โชว์) ถ้ายังมีรูปที่ถูกซ่อน → กดแล้วเปิดแกลเลอรีทั้งหมด + ป้าย +N
+              const isMoreTile = i === facilityPreview.length - 1 && facilityHiddenCount > 0;
+              const clickable = isMoreTile || !!tile.image_url;
+              const activate = isMoreTile
+                ? () => setIsFacilityOpen(true)
+                : tile.image_url
+                  ? () => setFacilityLightbox(facilityPhotos.indexOf(tile))
+                  : undefined;
+              return (
               <div
                 key={i}
+                // มีรูปแล้วกดดูภาพเต็มได้เลย ไม่ต้องเปิด "ดูรูปทั้งหมด" ก่อน
+                onClick={activate}
+                role={clickable ? "button" : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={
+                  clickable
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          activate?.();
+                        }
+                      }
+                    : undefined
+                }
                 className={`relative flex h-[280px] w-[80%] shrink-0 snap-start items-end overflow-hidden md:h-auto md:w-auto ${
+                  clickable ? "cursor-pointer" : ""
+                } ${
                   tile.wide ? "col-span-2 row-span-1 md:col-span-1 md:row-span-2" : ""
                 }`}
                 style={
@@ -708,14 +760,25 @@ export default function Home() {
                       loading="lazy"
                       className="absolute inset-0 h-full w-full object-cover"
                     />
-                    {tile.label && (
+                    {tile.label && !isMoreTile && (
                       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/55 to-transparent" />
                     )}
                   </>
                 ) : (
                   <Images className="absolute right-3 top-3 h-5 w-5 text-gray-300" />
                 )}
-                {tile.label && (
+
+                {/* ป้ายบอกว่ายังมีรูปอีก — ทับทั้งช่องที่ 5 */}
+                {isMoreTile && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 text-white transition-colors hover:bg-black/65">
+                    <span className="text-2xl font-medium leading-none md:text-3xl">
+                      +{facilityHiddenCount}
+                    </span>
+                    <span className="text-[11px] font-light tracking-wide">ดูรูปทั้งหมด</span>
+                  </div>
+                )}
+
+                {tile.label && !isMoreTile && (
                   <span
                     className={`relative p-3.5 text-xs font-light ${
                       tile.image_url ? "text-white" : "text-gray-500"
@@ -725,7 +788,8 @@ export default function Home() {
                   </span>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -845,8 +909,7 @@ export default function Home() {
               </h2>
             </div>
             <p className="text-sm font-light leading-relaxed text-gray-500">
-              ยังไม่พบคำตอบ?{" "}
-              {content?.contact_phone ? `โทร ${content.contact_phone}` : "โทร 02-123-4567"} ทุกวัน 09:00–20:00
+              ยังไม่พบคำตอบ? สามารถสอบถามผ่านปุ่มแชตขวามือ
             </p>
           </div>
           <div className="flex flex-col">
@@ -936,15 +999,8 @@ export default function Home() {
 
             {content && <SocialLinks content={content} variant="light" className="pt-1" />}
 
-            <div className="flex flex-wrap gap-3 pt-2">
-              <Link
-                href="/login"
-                className="px-6 py-3.5 text-sm font-medium text-white transition-colors"
-                style={{ backgroundColor: ACCENT }}
-              >
-                นัดเข้าชมสถานที่
-              </Link>
-              {content?.line_url && (
+            {content?.line_url && (
+              <div className="flex flex-wrap gap-3 pt-2">
                 <a
                   href={content.line_url}
                   target="_blank"
@@ -953,8 +1009,8 @@ export default function Home() {
                 >
                   แชท LINE
                 </a>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* แผนที่ */}
@@ -989,7 +1045,7 @@ export default function Home() {
               </span>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/login"
+                  href="/customer/enrollment"
                   className="inline-flex items-center px-7 py-4 text-[15px] font-medium text-white shadow-lg transition-colors hover:brightness-110"
                   style={{ backgroundColor: ACCENT }}
                 >
@@ -1180,18 +1236,6 @@ export default function Home() {
                 ) : (
                   <p className="text-[13.5px] font-light text-gray-400">ยังไม่มีรายละเอียดเพิ่มเติม</p>
                 )}
-
-                {/* ⚠️ ห้ามเขียนว่า "จองคลาสกับโค้ชคนนี้" — ระบบสมัครเรียนเลือกเป็นคอร์ส
-                    ไม่มีทางเลือกโค้ชรายคน ปุ่มแบบนั้นสัญญาสิ่งที่กดแล้วทำไม่ได้จริง
-                    พาไปหน้าคอร์สแทน ซึ่งเป็นก้าวถัดไปที่มีอยู่จริง */}
-                <Link
-                  href="/courses"
-                  className="group mt-auto inline-flex w-fit items-center gap-2 px-5 py-3 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  ดูคอร์สเรียนทั้งหมด
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </Link>
               </div>
             </div>
           </div>
@@ -1286,7 +1330,7 @@ export default function Home() {
                         <button
                           key={i}
                           type="button"
-                          onClick={() => setFacilityLightbox(tile.image_url!)}
+                          onClick={() => setFacilityLightbox(i)}
                           className="group relative flex aspect-[4/3] overflow-hidden border border-gray-100 bg-gray-100"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1311,29 +1355,76 @@ export default function Home() {
           );
         })()}
 
-      {/* lightbox รูปเดียวเต็มจอ */}
-      {facilityLightbox && (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-          onClick={() => setFacilityLightbox(null)}
-        >
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
-          <button
+      {/* lightbox รูปเดียวเต็มจอ — เลื่อนซ้าย-ขวาได้ (วนรอบ) */}
+      {facilityLightbox !== null && facilityPhotos[facilityLightbox] && (() => {
+        const total = facilityPhotos.length;
+        const cur = facilityPhotos[facilityLightbox];
+        const go = (dir: 1 | -1) =>
+          setFacilityLightbox((n) => (n === null ? n : (n + dir + total) % total));
+        return (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
             onClick={() => setFacilityLightbox(null)}
-            className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
-            aria-label="ปิด"
           >
-            <X className="h-6 w-6" />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={facilityLightbox}
-            alt=""
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-h-[90vh] max-w-[90vw] object-contain"
-          />
-        </div>
-      )}
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+            <button
+              onClick={() => setFacilityLightbox(null)}
+              className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+              aria-label="ปิด"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            {/* ปุ่มเลื่อน — โผล่เมื่อมีรูปมากกว่า 1 */}
+            {total > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    go(-1);
+                  }}
+                  className="absolute left-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 md:left-6"
+                  aria-label="รูปก่อนหน้า"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    go(1);
+                  }}
+                  className="absolute right-3 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 md:right-6"
+                  aria-label="รูปถัดไป"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </>
+            )}
+
+            <div
+              className="relative flex max-h-[90vh] max-w-[92vw] flex-col items-center gap-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cur.image_url}
+                alt={cur.label}
+                className="max-h-[82vh] max-w-full object-contain"
+              />
+              {(cur.label || total > 1) && (
+                <div className="flex items-center gap-3 text-sm font-light text-white/80">
+                  {cur.label && <span>{cur.label}</span>}
+                  {total > 1 && (
+                    <span className="tabular-nums text-white/60">
+                      {facilityLightbox + 1} / {total}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== หน้าต่างอ่านข่าว ===== */}
       {selectedNews && <AnnouncementDetailModal announcement={selectedNews} onClose={() => setSelectedNews(null)} />}
@@ -1341,7 +1432,7 @@ export default function Home() {
       {/* ===== แถบปุ่มติดด้านล่าง (เฉพาะมือถือ) ===== ทดลองเรียนฟรี + LINE */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2.5 border-t border-gray-200 bg-white px-4 py-3 lg:hidden">
         <Link
-          href="/login"
+          href="/customer/enrollment"
           className="flex min-h-[44px] flex-1 items-center justify-center text-[15px] font-medium text-white transition-colors hover:brightness-110"
           style={{ backgroundColor: ACCENT }}
         >

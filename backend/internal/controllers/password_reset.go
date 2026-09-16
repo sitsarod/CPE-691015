@@ -29,16 +29,16 @@ func NewPasswordResetController(service *services.PasswordResetService) *Passwor
 func (ctrl *PasswordResetController) RequestOTP(c *gin.Context) {
 	var req dto.RequestOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุอีเมลหรือเบอร์โทรศัพท์"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุอีเมลหรือเบอร์โทรศัพท์"})
 		return
 	}
 
 	if err := ctrl.service.RequestOTP(req.Identifier, c.ClientIP()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "หากมีบัญชีที่ตรงกับข้อมูลนี้ ระบบได้ส่งรหัสยืนยันไปทางอีเมลแล้ว",
 	})
 }
@@ -49,7 +49,7 @@ func (ctrl *PasswordResetController) RequestOTP(c *gin.Context) {
 func (ctrl *PasswordResetController) VerifyOTP(c *gin.Context) {
 	var req dto.VerifyOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกรหัสยืนยัน 6 หลัก"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณากรอกรหัสยืนยัน 6 หลัก"})
 		return
 	}
 
@@ -59,14 +59,14 @@ func (ctrl *PasswordResetController) VerifyOTP(c *gin.Context) {
 		// SessionGuard ฝั่งหน้าเว็บเด้งผู้ใช้ออกทุกครั้งที่เจอ 401
 		// และหน้านี้เข้าถึงได้โดยไม่ต้องล็อกอินอยู่แล้ว
 		if errors.Is(err, services.ErrOTPInvalid) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.VerifyOTPResponse{ResetToken: resetToken}})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.VerifyOTPResponse{ResetToken: resetToken}})
 }
 
 // ResetPassword ตั้งรหัสผ่านใหม่ด้วย token ที่ได้จากขั้นตอนยืนยัน OTP
@@ -75,16 +75,16 @@ func (ctrl *PasswordResetController) VerifyOTP(c *gin.Context) {
 func (ctrl *PasswordResetController) ResetPassword(c *gin.Context) {
 	var req dto.ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
 	if err := ctrl.service.ResetPassword(req.ResetToken, req.NewPassword); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่",
 	})
 }
@@ -95,13 +95,13 @@ func (ctrl *PasswordResetController) ResetPassword(c *gin.Context) {
 func (ctrl *PasswordResetController) ChangePassword(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var req dto.ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
@@ -110,12 +110,12 @@ func (ctrl *PasswordResetController) ChangePassword(c *gin.Context) {
 		// เพราะ 401 จะทำให้ SessionGuard เด้งผู้ใช้ออกจากระบบ
 		// ทั้งที่ token ยังดีอยู่ (เคยเกิดมาแล้วกับ PATCH /coaches/:id/bank)
 		if errors.Is(err, services.ErrWrongPassword) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"})
 }

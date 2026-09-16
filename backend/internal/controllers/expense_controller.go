@@ -27,7 +27,7 @@ func NewExpenseController(service *services.ExpenseService, cloudinary *services
 func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 	var req dto.CreateExpenseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
 		return
 	}
 
@@ -39,7 +39,7 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "บันทึกค่าใช้จ่ายสำเร็จ",
 		"data":    dto.ToExpenseDTO(expense),
 	})
@@ -48,13 +48,13 @@ func (ctrl *ExpenseController) CreateExpense(c *gin.Context) {
 func (ctrl *ExpenseController) UpdateExpense(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	var req dto.UpdateExpenseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
@@ -65,16 +65,16 @@ func (ctrl *ExpenseController) UpdateExpense(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrPayrollExceeds),
 			errors.Is(err, services.ErrPayrollNoUnpaid):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrPayrollNeedsCoach):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "แก้ไขค่าใช้จ่ายสำเร็จ",
 		"data":    dto.ToExpenseDTO(expense),
 	})
@@ -84,11 +84,11 @@ func (ctrl *ExpenseController) GetAllExpenses(c *gin.Context) {
 	expenses, err := ctrl.service.GetAllExpenses()
 	if err != nil {
 		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"data": dto.ToExpenseDTOs(expenses),
 	})
 }
@@ -100,13 +100,13 @@ func (ctrl *ExpenseController) GetAllExpenses(c *gin.Context) {
 func (ctrl *ExpenseController) GetCoachPayroll(c *gin.Context) {
 	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -114,15 +114,15 @@ func (ctrl *ExpenseController) GetCoachPayroll(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrCoachForbidden):
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrCoachNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถคำนวณค่าจ้างของโค้ชได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถคำนวณค่าจ้างของโค้ชได้"})
 		}
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": payroll})
+	respondJSON(c, http.StatusOK, gin.H{"data": payroll})
 }
 
 // GetExpensesByCoach handles GET /api/coaches/:id/expenses
@@ -130,34 +130,34 @@ func (ctrl *ExpenseController) GetCoachPayroll(c *gin.Context) {
 func (ctrl *ExpenseController) GetExpensesByCoach(c *gin.Context) {
 	coachID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	expenses, err := ctrl.service.GetByCoachID(uint(coachID), userID, role)
 	if err != nil {
 		if errors.Is(err, services.ErrCoachForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.ToExpenseDTOs(expenses)})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.ToExpenseDTOs(expenses)})
 }
 
 func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
@@ -165,17 +165,17 @@ func (ctrl *ExpenseController) DeleteExpense(c *gin.Context) {
 	// ต้องตอบได้ย้อนหลังว่าใครสั่ง (หลักเดียวกับ closed_by_user_id ของรอบเช็คชื่อ)
 	actorUserID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	if err := ctrl.service.DeleteExpense(uint(id), actorUserID); err != nil {
 		log.Printf("[api] จัดการค่าใช้จ่ายไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดำเนินการกับค่าใช้จ่ายได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ลบค่าใช้จ่ายสำเร็จ",
 	})
 }
@@ -190,13 +190,13 @@ func (ctrl *ExpenseController) CreateExpensesBatch(c *gin.Context) {
 	// ต้องรู้ว่าใครทำรายการ — เงินก้อนนี้ต้องตอบได้ย้อนหลังว่าใครสั่งจ่าย
 	actorID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.CreateExpenseBatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือกรอกไม่ครบถ้วน"})
 		return
 	}
 
@@ -206,7 +206,7 @@ func (ctrl *ExpenseController) CreateExpensesBatch(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "บันทึกค่าใช้จ่ายสำเร็จ",
 		"data":    dto.ToExpenseDTOs(created),
 	})
@@ -219,16 +219,16 @@ func mapExpenseError(c *gin.Context, err error) {
 	// ยอดไม่ผ่านด่านตรวจค่าจ้าง = คำขอผิดกฎธุรกิจ ไม่ใช่ระบบพัง
 	case errors.Is(err, services.ErrPayrollExceeds),
 		errors.Is(err, services.ErrPayrollNoUnpaid):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrPayrollNeedsCoach):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrCoachNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 	default:
 		// ข้อความจาก service ชั้นนี้เขียนไว้ให้ผู้ใช้อ่านแล้ว (ไม่ใช่ err ดิบของ GORM)
 		// แต่ log ไว้ฝั่งเซิร์ฟเวอร์ด้วยเพื่อสืบย้อนได้
 		log.Printf("[api] บันทึกค่าใช้จ่ายไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกค่าใช้จ่ายได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกค่าใช้จ่ายได้"})
 	}
 }
 
@@ -237,7 +237,7 @@ func mapExpenseError(c *gin.Context, err error) {
 func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการอัปโหลด"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์ที่ต้องการอัปโหลด"})
 		return
 	}
 
@@ -247,7 +247,7 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 	// จึงตรวจด้วยกติกาของรูป และตั้งนามสกุลเองจากเนื้อไฟล์ที่ตรวจได้ (ดู upload.go)
 	ext, err := ValidateImageUpload(file)
 	if err != nil {
-		c.JSON(UploadErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, UploadErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -258,7 +258,7 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 	if ctrl.cloudinary != nil {
 		src, err := file.Open()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "เปิดไฟล์ที่อัปโหลดไม่สำเร็จ"})
 			return
 		}
 		defer src.Close()
@@ -266,11 +266,11 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		url, err := ctrl.cloudinary.UploadFileToFolder(c.Request.Context(), src, subfolder)
 		if err != nil {
 			log.Printf("[api] อัปโหลดไฟล์ ไม่สำเร็จ: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "อัปโหลดไฟล์ไม่สำเร็จ"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"url": url})
+		respondJSON(c, http.StatusOK, gin.H{"url": url})
 		return
 	}
 
@@ -282,7 +282,7 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 		urlPath = "/uploads/" + subfolder + "/"
 	}
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างโฟลเดอร์สำหรับอัปโหลดได้"})
 		return
 	}
 
@@ -295,12 +295,12 @@ func (ctrl *ExpenseController) UploadFileHandler(c *gin.Context) {
 	filePath := filepath.Join(uploadDir, filename)
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์อัปโหลดไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "บันทึกไฟล์อัปโหลดไม่สำเร็จ"})
 		return
 	}
 
 	// Return the local URL
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"url": "http://localhost:8000" + urlPath + filename,
 	})
 }

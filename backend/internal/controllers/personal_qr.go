@@ -36,7 +36,7 @@ func NewPersonalQRController(db *gorm.DB) *PersonalQRController {
 func (ctrl *PersonalQRController) GetMyQR(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้ในโทเค็น"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้ในโทเค็น"})
 		return
 	}
 
@@ -73,20 +73,20 @@ func (ctrl *PersonalQRController) GetMyQR(c *gin.Context) {
 
 	default:
 		// แอดมินไม่ต้องเช็คชื่อ จึงไม่มี QR ประจำตัว
-		c.JSON(http.StatusNotFound, gin.H{"error": "บัญชีนี้ไม่มี QR ประจำตัว"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "บัญชีนี้ไม่มี QR ประจำตัว"})
 		return
 	}
 
 	// แถวที่สร้างไว้ก่อนระบบ QR จะมีค่าว่าง ต้องบอกให้ชัดว่าให้ไปรัน cmd/reissueqr
 	// ไม่ใช่ปล่อยให้หน้าบ้านแสดงรูปเปล่า ๆ แล้วงงว่าทำไมสแกนไม่ได้
 	if code == "" {
-		c.JSON(http.StatusNotFound, gin.H{
+		respondJSON(c, http.StatusNotFound, gin.H{
 			"error": "บัญชีนี้ยังไม่มี QR ประจำตัว กรุณาติดต่อผู้ดูแลระบบ",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.PersonalQRResponse{
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.PersonalQRResponse{
 		Code:        code,
 		QRImage:     encodeQRImage(code),
 		DisplayName: displayName,
@@ -97,8 +97,8 @@ func (ctrl *PersonalQRController) GetMyQR(c *gin.Context) {
 
 func (ctrl *PersonalQRController) respondProfileError(c *gin.Context, err error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์ของผู้ใช้นี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบโปรไฟล์ของผู้ใช้นี้"})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูล QR ได้"})
+	respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูล QR ได้"})
 }

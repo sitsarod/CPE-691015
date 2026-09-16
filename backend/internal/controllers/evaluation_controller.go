@@ -29,13 +29,13 @@ func NewEvaluationController(evalService *services.EvaluationService, db *gorm.D
 func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || role != "coach" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่สามารถสร้างการประเมินได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่สามารถสร้างการประเมินได้"})
 		return
 	}
 
 	var req dto.CreateEvaluationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลการประเมินไม่ถูกต้อง กรุณาตรวจสอบคะแนนและรายละเอียด"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลการประเมินไม่ถูกต้อง กรุณาตรวจสอบคะแนนและรายละเอียด"})
 		return
 	}
 
@@ -43,9 +43,9 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrCustomerNotEnrolledWithCoach):
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 		return
 	}
@@ -61,7 +61,7 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 		CreatedAt:  evaluation.CreatedAt,
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "บันทึกการประเมินผู้เรียนสำเร็จแล้ว",
 		"data":    resp,
 	})
@@ -74,7 +74,7 @@ func (ctrl *EvaluationController) CreateEvaluation(c *gin.Context) {
 func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || role != "coach" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อนักเรียนของตัวเองได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อนักเรียนของตัวเองได้"})
 		return
 	}
 
@@ -82,7 +82,7 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 	if raw := c.Query("course_id"); raw != "" {
 		id, err := strconv.ParseUint(raw, 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสคอร์สไม่ถูกต้อง"})
 			return
 		}
 		cid := uint(id)
@@ -91,7 +91,7 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 
 	students, err := ctrl.evalService.GetMyStudents(userID, courseID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -104,7 +104,7 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetAllActiveStudents handles GET /api/evaluations/students/all
@@ -115,13 +115,13 @@ func (ctrl *EvaluationController) GetMyStudents(c *gin.Context) {
 func (ctrl *EvaluationController) GetAllActiveStudents(c *gin.Context) {
 	_, role, ok := GetAuthContext(c)
 	if !ok || (role != "coach" && role != "admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูรายชื่อนักเรียนทั้งหมดได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชหรือผู้ดูแลระบบเท่านั้นที่ดูรายชื่อนักเรียนทั้งหมดได้"})
 		return
 	}
 
 	students, err := ctrl.evalService.GetAllActiveStudents()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -134,7 +134,7 @@ func (ctrl *EvaluationController) GetAllActiveStudents(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetActiveStudentsMediaSummary handles GET /api/admin/students/media-summary
@@ -145,13 +145,13 @@ func (ctrl *EvaluationController) GetAllActiveStudents(c *gin.Context) {
 func (ctrl *EvaluationController) GetActiveStudentsMediaSummary(c *gin.Context) {
 	_, role, ok := GetAuthContext(c)
 	if !ok || role != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะผู้ดูแลระบบเท่านั้นที่ดูสรุปนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะผู้ดูแลระบบเท่านั้นที่ดูสรุปนี้ได้"})
 		return
 	}
 
 	students, err := ctrl.evalService.GetAllActiveStudents()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -165,14 +165,14 @@ func (ctrl *EvaluationController) GetActiveStudentsMediaSummary(c *gin.Context) 
 		Select("customer_id, COUNT(*) AS count").
 		Group("customer_id").
 		Scan(&photoCounts).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนรูปได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนรูปได้"})
 		return
 	}
 	if err := ctrl.db.Model(&models.DetectedVideo{}).
 		Select("customer_id, COUNT(*) AS count").
 		Group("customer_id").
 		Scan(&videoCounts).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนวิดีโอได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถนับจำนวนวิดีโอได้"})
 		return
 	}
 
@@ -196,7 +196,7 @@ func (ctrl *EvaluationController) GetActiveStudentsMediaSummary(c *gin.Context) 
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetMyCourses handles GET /api/evaluations/courses
@@ -204,13 +204,13 @@ func (ctrl *EvaluationController) GetActiveStudentsMediaSummary(c *gin.Context) 
 func (ctrl *EvaluationController) GetMyCourses(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || role != "coach" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อคอร์สของตัวเองได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูรายชื่อคอร์สของตัวเองได้"})
 		return
 	}
 
 	courses, err := ctrl.evalService.GetMyCourses(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -222,7 +222,7 @@ func (ctrl *EvaluationController) GetMyCourses(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetMyGivenEvaluations handles GET /api/evaluations/me/given
@@ -230,13 +230,13 @@ func (ctrl *EvaluationController) GetMyCourses(c *gin.Context) {
 func (ctrl *EvaluationController) GetMyGivenEvaluations(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok || role != "coach" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูข้อมูลนี้ได้"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "เฉพาะโค้ชเท่านั้นที่ดูข้อมูลนี้ได้"})
 		return
 	}
 
 	evaluations, err := ctrl.evalService.GetEvaluationsByCoachUserID(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -252,7 +252,7 @@ func (ctrl *EvaluationController) GetMyGivenEvaluations(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetMyEvaluations handles GET /api/evaluations/me
@@ -260,20 +260,20 @@ func (ctrl *EvaluationController) GetMyGivenEvaluations(c *gin.Context) {
 func (ctrl *EvaluationController) GetMyEvaluations(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
 	// แปลง userID -> customerID
 	customerID, err := services.ResolveCustomerID(ctrl.db, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบประวัตินักเรียนของผู้ใช้งานนี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบประวัตินักเรียนของผู้ใช้งานนี้"})
 		return
 	}
 
 	evaluations, err := ctrl.evalService.GetEvaluationsByStudentID(customerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -290,7 +290,7 @@ func (ctrl *EvaluationController) GetMyEvaluations(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetStudentEvaluations handles GET /api/evaluations/student/:customer_id
@@ -299,14 +299,14 @@ func (ctrl *EvaluationController) GetMyEvaluations(c *gin.Context) {
 func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 	customerIDParam, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสนักเรียนไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสนักเรียนไม่ถูกต้อง"})
 		return
 	}
 	customerID := uint(customerIDParam)
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -314,24 +314,24 @@ func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 	// โค้ชดูได้เฉพาะนักเรียนที่ลงทะเบียนเรียนกับตัวเองจริง ส่วนนักเรียนดูได้เฉพาะของตัวเอง
 	switch role {
 	case "admin":
-		c.JSON(http.StatusForbidden, gin.H{"error": "ผู้ดูแลระบบไม่มีสิทธิ์ดูข้อมูลการประเมินของนักเรียน"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ผู้ดูแลระบบไม่มีสิทธิ์ดูข้อมูลการประเมินของนักเรียน"})
 		return
 	case "coach":
 		if err := ctrl.evalService.VerifyCoachCanAccessStudent(userID, customerID); err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินของนักเรียนคนนี้"})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินของนักเรียนคนนี้"})
 			return
 		}
 	default:
 		myCustomerID, err := services.ResolveCustomerID(ctrl.db, userID)
 		if err != nil || myCustomerID != customerID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินนี้"})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลการประเมินนี้"})
 			return
 		}
 	}
 
 	evaluations, err := ctrl.evalService.GetEvaluationsByStudentID(customerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -348,5 +348,5 @@ func (ctrl *EvaluationController) GetStudentEvaluations(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }

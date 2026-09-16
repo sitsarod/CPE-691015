@@ -28,22 +28,22 @@ func NewNotificationController(service *services.NotificationService) *Notificat
 func (ctrl *NotificationController) List(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	list, err := ctrl.service.List(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงการแจ้งเตือนไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ดึงการแจ้งเตือนไม่สำเร็จ"})
 		return
 	}
 	unread, err := ctrl.service.UnreadCount(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "นับการแจ้งเตือนไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "นับการแจ้งเตือนไม่สำเร็จ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"data":   dto.ToNotificationDTOs(list),
 		"unread": unread,
 	})
@@ -59,22 +59,22 @@ func (ctrl *NotificationController) List(c *gin.Context) {
 func (ctrl *NotificationController) Sync(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var req dto.SyncNotificationsReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รูปแบบข้อมูลไม่ถูกต้อง"})
 		return
 	}
 
 	if err := ctrl.service.Sync(userID, req.Items); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "บันทึกการแจ้งเตือนไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "บันทึกการแจ้งเตือนไม่สำเร็จ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "sync สำเร็จ"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "sync สำเร็จ"})
 }
 
 // MarkRead ทำเครื่องหมายว่าอ่านแล้วรายการเดียว
@@ -83,22 +83,22 @@ func (ctrl *NotificationController) Sync(c *gin.Context) {
 func (ctrl *NotificationController) MarkRead(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสการแจ้งเตือนไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสการแจ้งเตือนไม่ถูกต้อง"})
 		return
 	}
 
 	if err := ctrl.service.MarkRead(userID, uint(id)); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "อ่านแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "อ่านแล้ว"})
 }
 
 // MarkAllRead ทำเครื่องหมายว่าอ่านทั้งหมด
@@ -107,16 +107,16 @@ func (ctrl *NotificationController) MarkRead(c *gin.Context) {
 func (ctrl *NotificationController) MarkAllRead(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	if err := ctrl.service.MarkAllRead(userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "อัปเดตสถานะอ่านไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "อัปเดตสถานะอ่านไม่สำเร็จ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "อ่านทั้งหมดแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "อ่านทั้งหมดแล้ว"})
 }
 
 // streamUserID อ่าน token จาก query (?token=) หรือ Authorization header แล้วคืน users.id
@@ -154,13 +154,13 @@ func streamUserID(c *gin.Context) (uint, bool) {
 func (ctrl *NotificationController) Stream(c *gin.Context) {
 	userID, ok := streamUserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "เซิร์ฟเวอร์ไม่รองรับ streaming"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "เซิร์ฟเวอร์ไม่รองรับ streaming"})
 		return
 	}
 
@@ -201,14 +201,14 @@ func (ctrl *NotificationController) Stream(c *gin.Context) {
 func (ctrl *NotificationController) Clear(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	if err := ctrl.service.Clear(userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ล้างประวัติไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ล้างประวัติไม่สำเร็จ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ล้างประวัติแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ล้างประวัติแล้ว"})
 }

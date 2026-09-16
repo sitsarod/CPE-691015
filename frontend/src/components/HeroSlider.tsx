@@ -13,6 +13,9 @@ const DEFAULT_SLIDES: HeroSlideItem[] = [
 export interface HeroSlideItem {
   image_url: string;
   title?: string;
+  // จุดโฟกัสภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปโหมด cover (ไม่ส่ง = กึ่งกลาง)
+  focal_x?: number;
+  focal_y?: number;
 }
 
 interface HeroSliderProps {
@@ -160,12 +163,18 @@ export default function HeroSlider({ slides: slidesProp, onGalleryClick, fit = "
                 draggable={false}
               />
             )}
-            {/* รูปจริง — contain: โชว์เต็มใบไม่ตัดขอบ · cover: เต็มกรอบยอมตัดขอบ */}
+            {/* รูปจริง — contain: โชว์เต็มใบไม่ตัดขอบ · cover: เต็มกรอบยอมตัดขอบ
+                โหมด cover ใช้จุดโฟกัสที่แอดมินตั้ง (object-position) เพื่อคุมว่าจะเก็บส่วนไหนไว้ */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={slide.image_url}
               alt={slide.title || `Slide ${index + 1}`}
               className={`relative w-full h-full select-none pointer-events-none ${isCover ? "object-cover" : "object-contain"}`}
+              style={
+                isCover
+                  ? { objectPosition: `${slide.focal_x ?? 50}% ${slide.focal_y ?? 50}%` }
+                  : undefined
+              }
               draggable={false}
             />
             {/* ไล่สีเข้มเฉพาะโซนล่างให้พาดหัวอ่านออก แทนการปิดทับทั้งรูปแบบเดิม (ทำให้รูปดูมืด) */}

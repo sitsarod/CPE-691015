@@ -27,17 +27,17 @@ func mapFaceImageError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrFaceImageNotFound),
 		errors.Is(err, services.ErrCustomerProfileNotFound),
 		errors.Is(err, services.ErrCustomerNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrFaceConsentRequired),
 		errors.Is(err, services.ErrFaceImageForbidden):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrInvalidFacePose),
 		errors.Is(err, services.ErrInvalidFaceStatus),
 		errors.Is(err, services.ErrInvalidReviewAction),
 		errors.Is(err, services.ErrRejectReasonRequired):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrFacePoseAlreadyExists),
 		errors.Is(err, services.ErrFaceImageLimitReached),
@@ -45,14 +45,14 @@ func mapFaceImageError(c *gin.Context, err error) {
 		// ไม่ใช่ข้อมูลที่ส่งมาผิด และรออีกสักครู่ก็ทำได้
 		errors.Is(err, services.ErrFaceImageFileGone),
 		errors.Is(err, services.ErrFaceImageNotProcessed):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 
 	// ยังไม่ได้ตั้งค่าที่เก็บไฟล์ = ระบบยังไม่พร้อม ไม่ใช่ผู้ใช้ทำผิด
 	case errors.Is(err, services.ErrFaceStorageUnavailable):
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 }
 
@@ -60,7 +60,7 @@ func mapFaceImageError(c *gin.Context, err error) {
 func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -74,24 +74,24 @@ func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 	if err := c.Request.ParseMultipartForm(MaxImageUploadBytes + (1 << 20)); err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			respondJSON(c, http.StatusRequestEntityTooLarge, gin.H{
 				"error": fmt.Sprintf("%v (สูงสุด %d MB)", ErrUploadTooLarge, MaxImageUploadBytes>>20),
 			})
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "อ่านข้อมูลที่ส่งมาไม่ได้ กรุณาลองใหม่อีกครั้ง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "อ่านข้อมูลที่ส่งมาไม่ได้ กรุณาลองใหม่อีกครั้ง"})
 		return
 	}
 
 	pose := models.FacePose(c.PostForm("pose"))
 	if !models.IsValidFacePose(pose) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrInvalidFacePose.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": services.ErrInvalidFacePose.Error()})
 		return
 	}
 
 	fh, err := c.FormFile("photo")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพใบหน้า (ฟิลด์ 'photo')"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบไฟล์รูปภาพใบหน้า (ฟิลด์ 'photo')"})
 		return
 	}
 
@@ -102,13 +102,13 @@ func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 			// 415 บอกตรงว่าชนิดไฟล์ไม่รับ ซึ่งหน้าเว็บขึ้นข้อความได้ตรงกว่า 400
 			status = http.StatusUnsupportedMediaType
 		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		respondJSON(c, status, gin.H{"error": err.Error()})
 		return
 	}
 
 	file, err := fh.Open()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return
 	}
 	defer file.Close()
@@ -119,7 +119,7 @@ func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "อัปโหลดสำเร็จ กำลังประมวลผลภาพ",
 		"data":    image,
 	})
@@ -129,7 +129,7 @@ func (ctrl *FaceImageController) UploadFaceImage(c *gin.Context) {
 func (ctrl *FaceImageController) GetMyFaceImages(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -139,7 +139,7 @@ func (ctrl *FaceImageController) GetMyFaceImages(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"data":     images,
 		"required": models.AllFacePoses,
 	})
@@ -152,7 +152,7 @@ func (ctrl *FaceImageController) GetMyFaceImages(c *gin.Context) {
 func (ctrl *FaceImageController) GetFaceImageRaw(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -178,7 +178,7 @@ func (ctrl *FaceImageController) GetFaceImageRaw(c *gin.Context) {
 func (ctrl *FaceImageController) DeleteFaceImage(c *gin.Context) {
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -192,7 +192,7 @@ func (ctrl *FaceImageController) DeleteFaceImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ลบรูปภาพใบหน้าเรียบร้อยแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ลบรูปภาพใบหน้าเรียบร้อยแล้ว"})
 }
 
 // ─── ฝั่งแอดมิน ───
@@ -207,7 +207,7 @@ func (ctrl *FaceImageController) ListFaceImagesForAdmin(c *gin.Context) {
 		mapFaceImageError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": images})
+	respondJSON(c, http.StatusOK, gin.H{"data": images})
 }
 
 // ReviewFaceImage [PATCH] /api/admin/face-images/:id/review
@@ -215,7 +215,7 @@ func (ctrl *FaceImageController) ListFaceImagesForAdmin(c *gin.Context) {
 func (ctrl *FaceImageController) ReviewFaceImage(c *gin.Context) {
 	adminUserID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 
@@ -226,7 +226,7 @@ func (ctrl *FaceImageController) ReviewFaceImage(c *gin.Context) {
 
 	var req dto.FaceImageReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrInvalidReviewAction.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": services.ErrInvalidReviewAction.Error()})
 		return
 	}
 
@@ -240,5 +240,5 @@ func (ctrl *FaceImageController) ReviewFaceImage(c *gin.Context) {
 	if req.Action == "reject" {
 		msg = "ปฏิเสธรูปใบหน้าและลบไฟล์ออกจากระบบแล้ว"
 	}
-	c.JSON(http.StatusOK, gin.H{"message": msg, "data": image})
+	respondJSON(c, http.StatusOK, gin.H{"message": msg, "data": image})
 }

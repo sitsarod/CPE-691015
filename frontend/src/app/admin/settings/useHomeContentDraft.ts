@@ -32,7 +32,6 @@ export const SECTION_FIELDS: Record<SectionId, (keyof HomeContent)[]> = {
     'courses_footnote',
     'coaches_title',
     'coaches_subtitle',
-    'coaches_note',
     'coach_stats',
   ],
   coaches: [], // จัดการแยก (บันทึกทันที)
@@ -86,7 +85,6 @@ const toUpdateReq = (c: HomeContent): UpdateHomeContentReq => ({
   hero_headline: c.hero_headline,
   hero_subtext: c.hero_subtext,
   courses_footnote: c.courses_footnote,
-  coaches_note: c.coaches_note,
   facility_title: c.facility_title,
   facility_subtitle: c.facility_subtitle,
   footer_cta_title: c.footer_cta_title,
@@ -115,6 +113,7 @@ export interface UseHomeContentDraft {
   toggleSlide: (slide: HeroSlide) => Promise<void>;
   deleteSlide: (slide: HeroSlide) => Promise<void>;
   moveSlide: (index: number, dir: -1 | 1) => Promise<void>;
+  setSlideFocal: (id: number, x: number, y: number) => Promise<void>;
   // โค้ช (บันทึกทันที)
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => Promise<void>;
@@ -222,6 +221,31 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     }
   }, [showToast]);
 
+  // ตั้งจุดโฟกัสของสไลด์ (0-100) — อัปเดต local ทันทีให้ preview ลื่น แล้วค่อยยิง API
+  // เรียกตอน "ปล่อยเมาส์" ครั้งเดียว ไม่ใช่ทุก pixel ระหว่างลาก จึงไม่ถล่ม API
+  const setSlideFocal = useCallback(
+    async (id: number, x: number, y: number) => {
+      const fx = Math.round(Math.min(100, Math.max(0, x)));
+      const fy = Math.round(Math.min(100, Math.max(0, y)));
+      let prev: HeroSlide | undefined;
+      setSlides((list) =>
+        list.map((s) => {
+          if (s.id === id) prev = s;
+          return s.id === id ? { ...s, focal_x: fx, focal_y: fy } : s;
+        })
+      );
+      try {
+        const updated = await homeContentAPI.updateSlide(id, { focal_x: fx, focal_y: fy });
+        setSlides((list) => list.map((s) => (s.id === id ? updated : s)));
+      } catch (error) {
+        // ย้อนค่ากลับถ้าบันทึกไม่สำเร็จ
+        if (prev) setSlides((list) => list.map((s) => (s.id === id ? prev! : s)));
+        alert(`บันทึกจุดโฟกัสไม่สำเร็จ: ${(error as Error).message}`);
+      }
+    },
+    []
+  );
+
   const deleteSlide = useCallback(async (slide: HeroSlide) => {
     if (!(await confirmAction({ message: 'ลบรูปสไลด์นี้?', tone: 'danger' }))) return;
     try {
@@ -291,6 +315,7 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     toggleSlide,
     deleteSlide,
     moveSlide,
+    setSlideFocal,
     coaches,
     toggleCoach,
     setHeadCoach,

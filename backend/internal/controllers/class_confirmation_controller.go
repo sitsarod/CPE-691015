@@ -28,24 +28,24 @@ func mapConfirmError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrCustomerProfileNotFound),
 		errors.Is(err, services.ErrClassNotFound),
 		errors.Is(err, services.ErrPackageNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrClassConfirmForbidden):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrClassConfirmBadDate),
 		errors.Is(err, services.ErrClassConfirmBadStatus):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	// สถานะไม่เอื้อให้ทำตอนนี้ — ยิงซ้ำก็ไม่ช่วย
 	case errors.Is(err, services.ErrClassConfirmClosed),
 		errors.Is(err, services.ErrClassOutOfRange),
 		errors.Is(err, services.ErrEnrollmentNotActive),
 		errors.Is(err, services.ErrNoSessionsToConfirm):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 }
 
@@ -55,7 +55,7 @@ func mapConfirmError(c *gin.Context, err error) {
 func (ctrl *ClassConfirmationController) GetMyUpcoming(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -65,7 +65,7 @@ func (ctrl *ClassConfirmationController) GetMyUpcoming(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // Confirm ยืนยันว่าจะมาเรียนคาบนั้น
@@ -74,13 +74,13 @@ func (ctrl *ClassConfirmationController) GetMyUpcoming(c *gin.Context) {
 func (ctrl *ClassConfirmationController) Confirm(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var req dto.ConfirmClassReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน — ต้องระบุคาบเรียนและคำตอบ (มา/ไม่มา)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน — ต้องระบุคาบเรียนและคำตอบ (มา/ไม่มา)"})
 		return
 	}
 
@@ -90,7 +90,7 @@ func (ctrl *ClassConfirmationController) Confirm(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "บันทึกคำตอบเรียบร้อยแล้ว", "data": item})
+	respondJSON(c, http.StatusOK, gin.H{"message": "บันทึกคำตอบเรียบร้อยแล้ว", "data": item})
 }
 
 // Cancel ยกเลิกการยืนยัน — กลับไปเป็น "ยังไม่ตอบ"
@@ -99,13 +99,13 @@ func (ctrl *ClassConfirmationController) Confirm(c *gin.Context) {
 func (ctrl *ClassConfirmationController) Cancel(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	var req dto.CancelClassReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน — ต้องระบุคาบเรียนที่จะยกเลิก"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน — ต้องระบุคาบเรียนที่จะยกเลิก"})
 		return
 	}
 
@@ -115,7 +115,7 @@ func (ctrl *ClassConfirmationController) Cancel(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการยืนยันเรียบร้อยแล้ว", "data": item})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ยกเลิกการยืนยันเรียบร้อยแล้ว", "data": item})
 }
 
 // GetHeadcounts คืนยอดสรุปรายคาบของวันนี้
@@ -124,11 +124,11 @@ func (ctrl *ClassConfirmationController) Cancel(c *gin.Context) {
 func (ctrl *ClassConfirmationController) GetHeadcounts(c *gin.Context) {
 	items, err := ctrl.service.GetHeadcounts()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // GetClassRoster คืนรายชื่อนักเรียนของคาบหนึ่ง แบ่งเป็น มา / ยังไม่ตอบ
@@ -138,19 +138,19 @@ func (ctrl *ClassConfirmationController) GetHeadcounts(c *gin.Context) {
 func (ctrl *ClassConfirmationController) GetClassRoster(c *gin.Context) {
 	packageID, err := strconv.ParseUint(c.Query("package_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "package_id ต้องเป็นตัวเลข"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "package_id ต้องเป็นตัวเลข"})
 		return
 	}
 
 	date := c.Query("date")
 	if date == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุวันที่ (date=YYYY-MM-DD)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุวันที่ (date=YYYY-MM-DD)"})
 		return
 	}
 
 	startTime := c.Query("start_time")
 	if startTime == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเวลาเริ่มคาบ (start_time=HH:MM)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุเวลาเริ่มคาบ (start_time=HH:MM)"})
 		return
 	}
 
@@ -160,5 +160,5 @@ func (ctrl *ClassConfirmationController) GetClassRoster(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": roster})
+	respondJSON(c, http.StatusOK, gin.H{"data": roster})
 }

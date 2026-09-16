@@ -42,52 +42,52 @@ func announcementErrorStatus(err error) int {
 func (ctrl *AnnouncementController) CreateAnnouncement(c *gin.Context) {
 	var req dto.CreateAnnouncementReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// เจ้าของประกาศมาจาก JWT ของแอดมินที่ล็อกอินอยู่ ไม่รับจาก body
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
 		return
 	}
 
 	res, err := ctrl.service.CreateAnnouncement(userID, &req)
 	if err != nil {
-		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": res})
+	respondJSON(c, http.StatusCreated, gin.H{"data": res})
 }
 
 func (ctrl *AnnouncementController) GetAnnouncementByID(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
 		return
 	}
 
 	res, err := ctrl.service.GetAnnouncementByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Announcement not found"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "Announcement not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // GetAllAnnouncements คืนประกาศทั้งหมด (รวมที่หมดอายุ/ยังไม่เริ่ม) — สำหรับแอดมิน
 func (ctrl *AnnouncementController) GetAllAnnouncements(c *gin.Context) {
 	res, err := ctrl.service.GetAllAnnouncements()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // GetActiveAnnouncements คืนเฉพาะประกาศที่กำลังแสดงผล — สำหรับหน้าเว็บสาธารณะ
@@ -98,11 +98,11 @@ func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
 	audience := c.Query("audience")
 	res, err := ctrl.service.GetActiveAnnouncements(audience)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 // GetGuestGallery คืนประกาศที่ visibility เป็น all/guest ทั้งหมด (รวมที่หมดอายุแล้ว)
@@ -110,133 +110,133 @@ func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
 func (ctrl *AnnouncementController) GetGuestGallery(c *gin.Context) {
 	res, err := ctrl.service.GetGuestGalleryAnnouncements()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AnnouncementController) UpdateAnnouncement(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
 		return
 	}
 
 	var req dto.UpdateAnnouncementReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.UpdateAnnouncement(uint(id), &req)
 	if err != nil {
-		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AnnouncementController) DeleteAnnouncement(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
 		return
 	}
 
 	err = ctrl.service.DeleteAnnouncement(uint(id))
 	if err != nil {
-		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Announcement deleted successfully"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "Announcement deleted successfully"})
 }
 
 func (ctrl *AnnouncementController) IncrementViewCount(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
 		return
 	}
 
 	err = ctrl.service.IncrementViewCount(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "View count incremented successfully"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "View count incremented successfully"})
 }
 
 func (ctrl *AnnouncementController) CreateCategory(c *gin.Context) {
 	var req dto.CreateCategoryReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.CreateCategory(&req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": res})
+	respondJSON(c, http.StatusCreated, gin.H{"data": res})
 }
 
 func (ctrl *AnnouncementController) UpdateCategory(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
 		return
 	}
 
 	var req dto.UpdateCategoryReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	res, err := ctrl.service.UpdateCategory(uint(id), &req)
 	if err != nil {
-		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 }
 
 func (ctrl *AnnouncementController) DeleteCategory(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
 		return
 	}
 
 	err = ctrl.service.DeleteCategory(uint(id))
 	if err != nil {
-		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		respondJSON(c, announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "Category deleted successfully"})
 }
 
 func (ctrl *AnnouncementController) GetAllCategories(c *gin.Context) {
 	res, err := ctrl.service.GetAllCategories()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	respondJSON(c, http.StatusOK, gin.H{"data": res})
 
 }

@@ -24,12 +24,12 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 	var input dto.CreateInvoiceRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้องหรือไม่ครบถ้วน"})
 		return
 	}
 
 	if !CheckIDOR(c, input.CustomerID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์สร้างใบแจ้งหนี้ให้ผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์สร้างใบแจ้งหนี้ให้ผู้อื่น"})
 		return
 	}
 
@@ -39,7 +39,7 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "สร้างใบแจ้งหนี้สำเร็จ",
 		"data":    dto.ToInvoiceDTO(invoice),
 	})
@@ -49,20 +49,20 @@ func (ctrl *PaymentController) CreateInvoice(c *gin.Context) {
 func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	var input dto.UploadSlipRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุ URL ของสลิป"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุ URL ของสลิป"})
 		return
 	}
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -72,7 +72,7 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "แจ้งชำระเงินสำเร็จ กำลังรอตรวจสอบ",
 		"data":    dto.ToInvoiceDTO(invoice),
 	})
@@ -82,14 +82,14 @@ func (ctrl *PaymentController) UploadSlip(c *gin.Context) {
 func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	// เก็บว่าแอดมินคนไหนเป็นผู้กดอนุมัติ (users.id จาก JWT)
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -99,7 +99,7 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ยืนยันยอดชำระเงินสำเร็จแล้ว",
 		"data":    dto.ToInvoiceDTO(invoice),
 	})
@@ -109,22 +109,22 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	if !CheckIDOR(c, uint(id)) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 
 	invoices, err := ctrl.service.GetCustomerInvoices(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลประวัติใบแจ้งหนี้ไม่สำเร็จ"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลประวัติใบแจ้งหนี้ไม่สำเร็จ"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"data": dto.ToInvoiceDTOs(invoices),
 	})
 }
@@ -133,14 +133,14 @@ func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	// บังคับกรอกเหตุผล เพราะข้อความนี้ถูกส่งไปหาลูกค้าตรง ๆ และแสดงในประวัติใบแจ้งหนี้
 	var req dto.RejectPaymentReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
 		return
 	}
 
@@ -150,7 +150,7 @@ func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ปฏิเสธยอดชำระเงินสำเร็จแล้ว",
 		"data":    dto.ToInvoiceDTO(invoice),
 	})
@@ -160,13 +160,13 @@ func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 func (ctrl *PaymentController) CancelInvoice(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -176,7 +176,7 @@ func (ctrl *PaymentController) CancelInvoice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "ยกเลิกใบแจ้งหนี้สำเร็จแล้ว",
 		"data":    dto.ToInvoiceDTO(invoice),
 	})

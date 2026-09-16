@@ -11,4 +11,9 @@ type HeroSlide struct {
 	LinkURL   string `json:"link_url" gorm:"type:text"`
 	SortOrder int    `json:"sort_order" gorm:"default:0"`
 	IsActive  bool   `json:"is_active" gorm:"default:true"`
+
+	// จุดโฟกัสของภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปแสดงบนหน้าแรก
+	// ค่าเริ่มต้น 50/50 = กึ่งกลางภาพ (เท่าพฤติกรรมเดิมก่อนมีฟีเจอร์นี้)
+	FocalX int `json:"focal_x" gorm:"default:50"`
+	FocalY int `json:"focal_y" gorm:"default:50"`
 }

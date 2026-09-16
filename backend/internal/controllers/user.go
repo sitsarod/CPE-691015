@@ -70,7 +70,7 @@ func (ctrl *UserController) GetUserByRoleController(c *gin.Context) {
 	role := c.Query("role")
 	users, err := ctrl.userService.GetUserByRole(models.UserRole(role))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
 		return
 	}
 
@@ -83,7 +83,7 @@ func (ctrl *UserController) GetUserByRoleController(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	respondJSON(c, http.StatusOK, gin.H{"data": response})
 }
 
 // AdminCreateUserController สร้างบัญชีผู้ใช้พร้อมโปรไฟล์ตามบทบาท
@@ -95,7 +95,7 @@ func (ctrl *UserController) GetUserByRoleController(c *gin.Context) {
 func (ctrl *UserController) AdminCreateUserController(c *gin.Context) {
 	var req dto.AdminCreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
@@ -103,14 +103,14 @@ func (ctrl *UserController) AdminCreateUserController(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrEmailTaken), errors.Is(err, services.ErrCoachDuplicateUID):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "สร้างสมาชิกสำเร็จ",
 		"data":    toUserProfileResponse(user),
 	})
@@ -126,21 +126,21 @@ func (ctrl *UserController) AdminCreateUserController(c *gin.Context) {
 func (ctrl *UserController) AdminGetUserDetailController(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	user, err := ctrl.userService.GetUserProfile(uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dto.ToAdminUserDetail(user)})
+	respondJSON(c, http.StatusOK, gin.H{"data": dto.ToAdminUserDetail(user)})
 }
 
 // AdminUpdateUserController ให้แอดมินแก้ข้อมูลสมาชิก
@@ -153,13 +153,13 @@ func (ctrl *UserController) AdminGetUserDetailController(c *gin.Context) {
 func (ctrl *UserController) AdminUpdateUserController(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	var req dto.AdminUpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
@@ -167,22 +167,22 @@ func (ctrl *UserController) AdminUpdateUserController(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
 		case errors.Is(err, services.ErrEmailTaken), errors.Is(err, services.ErrCoachDuplicateUID):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrProfileNotFound),
 			errors.Is(err, services.ErrAdminEmailDomain),
 			errors.Is(err, services.ErrEmailInvalid):
 			// ต้องส่งข้อความจริงกลับไป ไม่งั้นแอดมินเห็นแค่ "อัปเดตไม่ได้"
 			// แล้วไม่มีทางรู้ว่าติดที่กติกาโดเมนอีเมล
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตข้อมูลได้"})
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"message": "อัปเดตข้อมูลสมาชิกสำเร็จ",
 		"data":    dto.ToAdminUserDetail(user),
 	})
@@ -194,17 +194,17 @@ func (ctrl *UserController) CreateUserController(c *gin.Context) {
 	// (รายละเอียดเหตุผลอยู่ที่คอมเมนต์ของ dto.CreateUserRequest)
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": bindErrorMessage(err)})
 		return
 	}
 
 	user := req.ToUser()
 	if err := ctrl.userService.CreateUser(user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	respondJSON(c, http.StatusCreated, gin.H{
 		"message": "สร้างผู้ใช้สำเร็จ",
 		"data":    toUserProfileResponse(user),
 	})
@@ -215,31 +215,31 @@ func (c *UserController) UpdateUserController(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(ctx, http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	if !CheckIDOR(ctx, uint(id)) {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(ctx, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 
 	var input dto.UpdateProfileInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
+		respondJSON(ctx, http.StatusBadRequest, gin.H{"error": "ข้อมูลที่ส่งมาไม่ถูกต้อง"})
 		return
 	}
 
 	updatedUser, err := c.userService.UpdateUser(uint(id), input)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+			respondJSON(ctx, http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
 		} else {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตผู้ใช้งานได้"})
+			respondJSON(ctx, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถอัปเดตผู้ใช้งานได้"})
 		}
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{
+	respondJSON(ctx, http.StatusOK, gin.H{
 		"message": "อัปเดตข้อมูลสำเร็จแล้ว",
 		"data":    toUserProfileResponse(updatedUser),
 	})
@@ -250,53 +250,53 @@ func (c *UserController) DeleteUserController(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(ctx, http.StatusBadRequest, gin.H{"error": "ID ผู้ใช้งานไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 	// ต้องรู้ว่าใครเป็นคนกดลบ เพื่อกันแอดมินลบบัญชีตัวเอง
 	actorUserID, _, ok := GetAuthContext(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(ctx, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	if err := c.userService.DeleteUser(uint(id), actorUserID); err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+			respondJSON(ctx, http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
 		// 409 Conflict — คำขอถูกต้องทุกอย่าง แต่ขัดกับสถานะปัจจุบันของระบบ
 		// (เหลือแอดมินคนเดียว / กำลังลบตัวเองอยู่) ไม่ใช่ 400 ที่แปลว่าส่งข้อมูลมาผิด
 		case errors.Is(err, services.ErrLastAdmin), errors.Is(err, services.ErrDeleteSelf):
-			ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(ctx, http.StatusConflict, gin.H{"error": err.Error()})
 		default:
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบผู้ใช้งานได้"})
+			respondJSON(ctx, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบผู้ใช้งานได้"})
 		}
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"message": "ลบผู้ใช้งานสำเร็จแล้ว"})
+	respondJSON(ctx, http.StatusOK, gin.H{"message": "ลบผู้ใช้งานสำเร็จแล้ว"})
 }
 
 func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
     idParam := c.Param("id")
     userID, err := strconv.ParseUint(idParam, 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผู้ใช้งานไม่ถูกต้อง"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "รูปแบบรหัสผู้ใช้งานไม่ถูกต้อง"})
         return
     }
 
 	if !CheckIDOR(c, uint(userID)) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
     
     user, err := ctrl.userService.GetUserProfile(uint(userID))
     if err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
+            respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบผู้ใช้งาน"})
             return 
         }
 
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้งานได้"})
         return
     }
     
@@ -307,13 +307,13 @@ func (ctrl *UserController) GetUserProfileController(c *gin.Context) {
     response := toUserProfileResponse(user)
     response.IsStudent = isStudent
 
-    c.JSON(http.StatusOK, gin.H{"data": response})
+    respondJSON(c, http.StatusOK, gin.H{"data": response})
 }
 
 func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
 	users, err := ctrl.userService.GetAllUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้ใช้ได้"})
 		return
 	}
 
@@ -324,7 +324,7 @@ func (ctrl *UserController) GetAllUsersController(c *gin.Context) {
 		response = append(response, toUserProfileResponse(&users[i]))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	respondJSON(c, http.StatusOK, gin.H{"data": response})
 }
 
 // GetActiveStudentsController ดึงรายชื่อผู้ใช้งานที่เป็นนักเรียนทั้งหมดส่งให้หน้าบ้าน
@@ -332,7 +332,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 
 	studentUsers, err := ctrl.userService.GetActiveStudents()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลนักเรียนได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลนักเรียนได้"})
 		return
 	}
 
@@ -374,7 +374,7 @@ func (ctrl *UserController) GetActiveStudentsController(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": response})
+	respondJSON(c, http.StatusOK, gin.H{"data": response})
 }
 
 func (h *UserController) FindAccount(c *gin.Context) {
@@ -383,14 +383,14 @@ func (h *UserController) FindAccount(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุอีเมลหรือหมายเลขโทรศัพท์"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุอีเมลหรือหมายเลขโทรศัพท์"})
 		return
 	}
 
 	// ค้นหา User จาก DB
 	user, err := h.userService.FindAccountByIdentifier(input.Identifier)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"message": err.Error()})
 		return
 	}
 
@@ -403,7 +403,7 @@ func (h *UserController) FindAccount(c *gin.Context) {
 		phoneNumber = user.Customer.PhoneNumber
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"status": "success",
 		"user": dto.FindAccountResponse{
 			MaskedEmail: dto.MaskEmail(user.Email),

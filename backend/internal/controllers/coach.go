@@ -92,7 +92,7 @@ func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 	coaches, err := ctrl.service.GetAll()
 	if err != nil {
 		log.Printf("[api] ดึงรายชื่อโค้ช ไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายชื่อโค้ชได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายชื่อโค้ชได้"})
 		return
 	}
 
@@ -101,7 +101,7 @@ func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 		responses = append(responses, toCoachResponse(&coaches[i]))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	respondJSON(c, http.StatusOK, gin.H{"data": responses})
 }
 
 // GetMyCoach handles GET /api/coaches/me
@@ -109,16 +109,16 @@ func (ctrl *CoachController) GetCoaches(c *gin.Context) {
 func (ctrl *CoachController) GetMyCoach(c *gin.Context) {
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	coach, err := ctrl.service.GetMe(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชสำหรับผู้ใช้งานนี้"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชสำหรับผู้ใช้งานนี้"})
 		return
 	}
-	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
+	respondJSON(c, http.StatusOK, toCoachDetailResponse(coach))
 }
 
 // GetCoachByID handles GET /api/coaches/:id
@@ -126,27 +126,27 @@ func (ctrl *CoachController) GetMyCoach(c *gin.Context) {
 func (ctrl *CoachController) GetCoachByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	// ตรวจสิทธิ์: coach ดูได้เฉพาะของตัวเอง, admin ดูได้ทุกคน
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	coach, err := ctrl.service.GetByID(uint(id), userID, role)
 	if err != nil {
 		if errors.Is(err, services.ErrCoachForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "coach not found"})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": "coach not found"})
 		return
 	}
-	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
+	respondJSON(c, http.StatusOK, toCoachDetailResponse(coach))
 }
 
 // CreateCoach handles POST /api/coaches
@@ -154,12 +154,12 @@ func (ctrl *CoachController) GetCoachByID(c *gin.Context) {
 func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 	var req dto.CreateCoachRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if _, err := govalidator.ValidateStruct(req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -167,17 +167,17 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrCoachUserNotFound), errors.Is(err, services.ErrCoachUserNotCoach), errors.Is(err, services.ErrCoachInvalidPaymentType):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrCoachDuplicateUser), errors.Is(err, services.ErrCoachDuplicateUID):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		default:
 			log.Printf("[api] สร้างโค้ช ไม่สำเร็จ: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างข้อมูลโค้ชได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถสร้างข้อมูลโค้ชได้"})
 		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, toCoachResponse(coach))
+	respondJSON(c, http.StatusCreated, toCoachResponse(coach))
 }
 
 // UpdateCoach handles PATCH /api/coaches/:id
@@ -185,35 +185,35 @@ func (ctrl *CoachController) CreateCoach(c *gin.Context) {
 func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	var req dto.UpdateCoachRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// ดึงตัวตนผู้เรียกจาก JWT เพื่อตรวจสิทธิ์ความเป็นเจ้าของ (กัน IDOR)
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	coach, err := ctrl.service.Update(uint(id), userID, role, req)
 	if err != nil {
 		if errors.Is(err, services.ErrCoachForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		log.Printf("[api] แก้ไขโค้ช ไม่สำเร็จ: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
 		return
 	}
 
-	c.JSON(http.StatusOK, toCoachResponse(coach))
+	respondJSON(c, http.StatusOK, toCoachResponse(coach))
 }
 
 // UpdateCoachBankAccount handles PATCH /api/coaches/:id/bank
@@ -224,19 +224,19 @@ func (ctrl *CoachController) UpdateCoach(c *gin.Context) {
 func (ctrl *CoachController) UpdateCoachBankAccount(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	var req dto.UpdateCoachBankRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณากรอกเลขบัญชี ข้อมูลการจ่ายเงิน และรหัสผ่านให้ครบ"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณากรอกเลขบัญชี ข้อมูลการจ่ายเงิน และรหัสผ่านให้ครบ"})
 		return
 	}
 
 	userID, role, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
@@ -255,16 +255,16 @@ func (ctrl *CoachController) UpdateCoachBankAccount(c *gin.Context) {
 		case errors.Is(err, services.ErrWrongPassword),
 			errors.Is(err, services.ErrCoachForbidden),
 			errors.Is(err, services.ErrCoachSelfOnly):
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกข้อมูลบัญชีธนาคารได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถบันทึกข้อมูลบัญชีธนาคารได้"})
 		}
 		return
 	}
 
 	// คืน detail (มีเลขบัญชีติดมาด้วย) ให้หน้าเว็บยืนยันกับตาได้ว่าบันทึกค่าอะไรลงไป
 	// ปลอดภัยเพราะเป็นข้อมูลของเจ้าตัวเอง และเพิ่งยืนยันรหัสผ่านผ่านมาหมาด ๆ
-	c.JSON(http.StatusOK, toCoachDetailResponse(coach))
+	respondJSON(c, http.StatusOK, toCoachDetailResponse(coach))
 }
 
 // AdminUpdateCoach handles PATCH /api/coaches/:id/level
@@ -273,13 +273,13 @@ func (ctrl *CoachController) UpdateCoachBankAccount(c *gin.Context) {
 func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coach id"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "invalid coach id"})
 		return
 	}
 
 	var req dto.AdminUpdateCoachRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -287,21 +287,21 @@ func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound), errors.Is(err, services.ErrCoachNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ระบุ"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ระบุ"})
 		// ผิดกฎธุรกิจ (ยังค้างจ่ายอยู่จึงสลับวิธีจ่ายไม่ได้) ไม่ใช่ข้อมูลผิดรูปแบบ
 		case errors.Is(err, services.ErrCoachPaySwitchUnpaid):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrCoachPayRateNegative),
 			errors.Is(err, services.ErrCoachInvalidPaymentType):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			log.Printf("[api] แก้ไขข้อมูลโค้ช ไม่สำเร็จ: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถแก้ไขข้อมูลโค้ชได้"})
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, toCoachResponse(coach))
+	respondJSON(c, http.StatusOK, toCoachResponse(coach))
 }
 
 // DeleteCoach handles DELETE /api/coaches/:id (admin เท่านั้น — คุมที่ชั้น route)
@@ -312,33 +312,33 @@ func (ctrl *CoachController) AdminUpdateCoach(c *gin.Context) {
 func (ctrl *CoachController) DeleteCoach(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสโค้ชไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสโค้ชไม่ถูกต้อง ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	// ต้องรู้ว่าใครกดลบ เพื่อส่งต่อให้ด่านกันลบบัญชีตัวเองใน DeleteUserAccount
 	actorUserID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
 		return
 	}
 
 	if err := ctrl.service.Delete(uint(id), actorUserID); err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ต้องการลบ"})
+			respondJSON(c, http.StatusNotFound, gin.H{"error": "ไม่พบข้อมูลโค้ชที่ต้องการลบ"})
 		// 409 Conflict — คำขอถูกต้อง แต่ขัดกับสถานะปัจจุบันของระบบ ไม่ใช่ 400 ที่แปลว่าส่งข้อมูลมาผิด
 		case errors.Is(err, services.ErrDeleteSelf),
 			errors.Is(err, services.ErrLastAdmin),
 			errors.Is(err, services.ErrCoachNoAccount):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 		default:
 			// ไม่ส่ง err.Error() กลับไป — error ของ GORM มักติดชื่อตาราง ชื่อคอลัมน์
 			// และบางครั้งมีเศษ SQL ไปด้วย ซึ่งช่วยคนที่กำลังสำรวจระบบมากกว่าช่วยผู้ใช้
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลโค้ชได้"})
+			respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถลบข้อมูลโค้ชได้"})
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ลบข้อมูลโค้ชสำเร็จแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ลบข้อมูลโค้ชสำเร็จแล้ว"})
 }
