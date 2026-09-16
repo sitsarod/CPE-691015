@@ -430,7 +430,7 @@ export default function VerifySlipsTab({
               </p>
             </div>
           ) : (
-            <div className="mx-auto flex min-h-full w-full max-w-xl flex-1 flex-col gap-5 p-6 lg:max-w-none">
+            <div className="mx-auto flex min-h-full w-full max-w-xl flex-1 flex-col gap-5 p-6 pb-[calc(24px+env(safe-area-inset-bottom))] lg:max-w-none lg:pb-6">
               {/* 1) หัวแผง */}
               <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
                 <h2 className="text-xl font-semibold tracking-tight text-slate-900">รายละเอียดและผลตรวจสอบ</h2>
