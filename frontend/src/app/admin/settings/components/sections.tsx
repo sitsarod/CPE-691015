@@ -18,6 +18,7 @@ import {
 import { HeroPreview } from './HeroPreview';
 import { LegalConsentEditors } from './LegalConsentEditors';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export interface SectionCtx {
   draft: HomeContent;
   setField: <K extends keyof HomeContent>(key: K, value: HomeContent[K]) => void;
@@ -47,6 +48,7 @@ function ImageUploadField({
   value: string;
   onChange: (url: string) => void;
 }) {
+  const showToast = useGlobalToast();
   const [uploading, setUploading] = useState(false);
 
   const handleImage = async (file: File) => {
@@ -55,7 +57,7 @@ function ImageUploadField({
       const url = await homeContentAPI.uploadImage(file);
       onChange(url);
     } catch (error) {
-      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setUploading(false);
     }

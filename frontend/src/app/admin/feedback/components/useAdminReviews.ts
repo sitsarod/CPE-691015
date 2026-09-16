@@ -6,6 +6,7 @@ import { Review, ReviewCategory } from "@/types/review";
 import { useToast } from "@/hooks/useToast";
 import { customerName } from "@/components/review/reviewFormat";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 /**
  * สมองของหน้ารีวิวฝั่งแอดมิน
  *
@@ -15,6 +16,7 @@ import { customerName } from "@/components/review/reviewFormat";
 export type FilterTab = "all" | "featured" | ReviewCategory;
 
 export function useAdminReviews() {
+  const confirmAction = useConfirm();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FilterTab>("all");
@@ -97,7 +99,10 @@ export function useAdminReviews() {
   };
 
   const deleteReview = async (id: number) => {
-    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้? การกระทำนี้ไม่สามารถยกเลิกได้")) return;
+    if (!(await confirmAction({
+      message: "คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้?\n\nการกระทำนี้ไม่สามารถยกเลิกได้",
+      tone: "danger",
+    }))) return;
 
     try {
       await reviewAPI.deleteReview(id);

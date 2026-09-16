@@ -8,6 +8,7 @@ import { Enrollment } from '@/types/enrollment';
 import { ReviewStatCard } from '@/components/review/ReviewUI';
 import { Star, Send, Loader2, BookOpen, UserRound, Sparkles, MessageSquareText, MapPin, Wrench, MoreHorizontal } from 'lucide-react';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 // ตัวเลือกหัวข้อรีวิว/ข้อเสนอแนะที่ลูกค้าเลือกได้
 const CATEGORY_OPTIONS: { key: ReviewCategory; label: string; icon: React.ElementType }[] = [
   { key: 'course', label: 'คอร์ส', icon: BookOpen },
@@ -62,6 +63,7 @@ function StarRating({
 }
 
 export default function CustomerFeedbackPage() {
+  const showToast = useGlobalToast();
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [myReviews, setMyReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +162,7 @@ export default function CustomerFeedbackPage() {
       setRating(0);
       setComment('');
     } catch (error: any) {
-      alert(`ไม่สามารถส่งรีวิวได้: ${error.message}`);
+      showToast(`ไม่สามารถส่งรีวิวได้: ${error.message}`, "error");
     } finally {
       setSubmitting(false);
     }

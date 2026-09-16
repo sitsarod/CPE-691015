@@ -11,6 +11,7 @@ import {
   type NotificationDTO,
 } from "@/services/notificationAPI";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 const TONE_DOT: Record<string, string> = {
   danger: "bg-rose-500",
   warning: "bg-amber-500",
@@ -32,6 +33,7 @@ const fmtFull = (iso: string): string => {
 
 // หน้าประวัติการแจ้งเตือนเต็ม — ใช้ร่วมกันทุก role (ตัวตนมาจาก JWT)
 export default function NotificationsHistory() {
+  const confirmAction = useConfirm();
   const router = useRouter();
   const [notifs, setNotifs] = useState<NotificationDTO[]>([]);
   const [unread, setUnread] = useState(0);
@@ -113,7 +115,7 @@ export default function NotificationsHistory() {
 
   const handleClear = async () => {
     if (notifs.length === 0) return;
-    if (!window.confirm("ล้างประวัติการแจ้งเตือนทั้งหมด?")) return;
+    if (!(await confirmAction({ message: "ล้างประวัติการแจ้งเตือนทั้งหมด?", tone: "danger" }))) return;
     setBusy(true);
     const token = localStorage.getItem("token");
     try {

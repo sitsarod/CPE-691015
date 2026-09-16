@@ -6,7 +6,11 @@ import { fetchCourseByIDAdmin, updateCourse, createPackage, updatePackage, delet
 import CourseImageField from "./CourseImageField";
 import { ScheduleFormInput, PackageFormInput, CoursePackageDTO, PackageScheduleInfoDTO } from "@/types/course";
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 export default function EditCourseForm({ courseId, onSuccess, onCancel }: { courseId: number, onSuccess: () => void, onCancel: () => void }) {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [isFetching, setIsFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,25 +67,23 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
   
   // แพ็กเกจที่มีคนเรียนอยู่ลบไม่ได้ — backend ปฏิเสธด้วย 409 อยู่แล้ว แต่ต้องกันตั้งแต่
   // ตรงนี้ ไม่งั้นแอดมินจะรู้ตอนกดบันทึก ซึ่งตอนนั้นคอร์สถูกแก้ไปแล้วครึ่งทาง
-  const removePackage = (pkgId: string) => {
+  const removePackage = async (pkgId: string) => {
     const target = packages.find((pkg) => pkg.id === pkgId);
 
     if (target && !target.isNew) {
       const enrolled = target.current_enrollments ?? 0;
       if (enrolled > 0) {
-        alert(
+        showToast(
           `ลบแพ็กเกจนี้ไม่ได้ — ยังมีนักเรียนลงทะเบียนอยู่ ${enrolled} คน\n\n` +
             `ต้องยกเลิกการลงทะเบียนของทุกคนก่อน จึงจะลบแพ็กเกจได้`
-        );
+        , "error");
         return;
       }
-      if (
-        !window.confirm(
-          "ลบแพ็กเกจนี้ใช่หรือไม่?\n\nตารางเรียนของแพ็กเกจจะถูกลบถาวร กู้คืนไม่ได้"
-        )
-      ) {
-        return;
-      }
+      const confirmed = await confirmAction({
+        message: "ลบแพ็กเกจนี้ใช่หรือไม่?\n\nตารางเรียนของแพ็กเกจจะถูกลบถาวร กู้คืนไม่ได้",
+        tone: "danger",
+      });
+      if (!confirmed) return;
     }
 
     setPackages(packages.filter((pkg) => pkg.id !== pkgId));
@@ -177,7 +179,7 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
         }
       }
       
-      alert("บันทึกการแก้ไขคอร์สสำเร็จ!");
+      showToast("บันทึกการแก้ไขคอร์สสำเร็จ!", "success");
       onSuccess();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ไม่สามารถอัปเดตข้อมูลคอร์สได้ โปรดลองอีกครั้ง");

@@ -6,7 +6,11 @@ import { fetchAllCoursesAdmin, deleteCourse } from "@/services/courseAPI";
 import { CourseDTO ,CoursePackageDTO , PackageScheduleInfoDTO} from "@/types/course";
 import CourseCover from "@/components/course/CourseCover";
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [courses, setCourses] = useState<CourseDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +36,7 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
   }, []);
 
   const handleDelete = async (id: number) => {
-    if (confirm("คุณต้องการลบคอร์สนี้ใช่หรือไม่?")) {
+    if (await confirmAction({ message: "คุณต้องการลบคอร์สนี้ใช่หรือไม่?", tone: "danger" })) {
       const token = localStorage.getItem("token");
       if (!token) return;
       try {
@@ -40,7 +44,7 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
         loadCourses();
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "ไม่สามารถลบคอร์สได้";
-        alert(message);
+        showToast(message, "error");
       }
     }
   };

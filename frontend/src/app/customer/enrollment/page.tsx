@@ -45,6 +45,8 @@ import {
   formatThaiDate,
 } from "@/components/course/expiryUtils";
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 /** แพ็กเกจที่ผู้ใช้เลือก พร้อมชื่อคอร์สที่ผูกอยู่ (DTO ของแพ็กเกจไม่มีชื่อคอร์สในตัว) */
 interface SelectedPackage {
   pkg: CoursePackageDTO;
@@ -52,6 +54,8 @@ interface SelectedPackage {
 }
 
 export default function EnrollmentPage() {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [courses, setCourses] = useState<CourseDTO[]>([]);
@@ -181,7 +185,7 @@ export default function EnrollmentPage() {
       const token = localStorage.getItem("token");
       const customerId = localStorage.getItem("user_id");
       if (!token || !customerId) {
-        alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
+        showToast("กรุณาเข้าสู่ระบบก่อนทำรายการ", "error");
         return;
       }
 
@@ -199,7 +203,7 @@ export default function EnrollmentPage() {
       setAcceptedTerms(false);
       loadData(); // รีเฟรชข้อมูลคอร์สใหม่
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครเรียน");
+      showToast(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการสมัครเรียน", "error");
 
       // ข้อตกลงอาจถูกปรับระหว่างที่เปิดหน้าค้างไว้ — ต้องให้อ่านฉบับใหม่แล้วติ๊กใหม่
       fetchEnrollmentTerms()
@@ -218,19 +222,17 @@ export default function EnrollmentPage() {
   // ถอนใบสมัครที่ยังรออนุมัติ — ถามยืนยันก่อนเพราะถอนแล้วใบหายเลย ไม่มีปุ่มเรียกคืน
   const handleCancel = async (item: Enrollment) => {
     const courseName = item.package?.course?.course_name ?? "คอร์สนี้";
-    if (
-      !window.confirm(
-        `ยกเลิกใบสมัคร "${courseName}" ใช่หรือไม่?\n\nใบสมัครจะถูกถอนออกจากคิวอนุมัติ ถ้าเปลี่ยนใจต้องสมัครใหม่และรออนุมัติอีกครั้ง`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      message: `ยกเลิกใบสมัคร "${courseName}" ใช่หรือไม่?\n\nใบสมัครจะถูกถอนออกจากคิวอนุมัติ ถ้าเปลี่ยนใจต้องสมัครใหม่และรออนุมัติอีกครั้ง`,
+      tone: "danger",
+    });
+    if (!confirmed) return;
 
     setCancellingId(item.id);
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        alert("กรุณาเข้าสู่ระบบก่อนทำรายการ");
+        showToast("กรุณาเข้าสู่ระบบก่อนทำรายการ", "error");
         return;
       }
 
@@ -238,7 +240,7 @@ export default function EnrollmentPage() {
       setSuccessMessage("ยกเลิกใบสมัครเรียบร้อยแล้ว");
       loadData(); // รีเฟรชทั้งรายการของฉันและที่นั่งคงเหลือของคอร์ส
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถยกเลิกใบสมัครได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถยกเลิกใบสมัครได้", "error");
     } finally {
       setCancellingId(null);
     }
@@ -253,7 +255,7 @@ export default function EnrollmentPage() {
       setIsConsentOpen(false);
       await doEnroll();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้", "error");
     } finally {
       setIsSavingConsent(false);
     }

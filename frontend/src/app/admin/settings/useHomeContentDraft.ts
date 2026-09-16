@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { homeContentAPI } from '@/services/homeContentAPI';
 import { HomeContent, PublicCoach, HeroSlide, UpdateHomeContentReq } from '@/types/homeContent';
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 // ---- คีย์ของแต่ละหมวด (ใช้ diff draft vs saved เพื่อหา "จุดที่แก้ยังไม่บันทึก") ----
 // เฉพาะ field ที่อยู่ใน content blob (สไลด์/โค้ชบันทึกทันที ไม่นับรวม)
 export type SectionId =
@@ -120,6 +122,8 @@ export interface UseHomeContentDraft {
 }
 
 export function useHomeContentDraft(): UseHomeContentDraft {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -146,11 +150,11 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       setSlides(sl ?? []);
     } catch (error) {
       console.error('โหลดข้อมูลหน้าแรกไม่สำเร็จ:', error);
-      alert('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ');
+      showToast('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ', "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     loadAll();
@@ -186,11 +190,11 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (error) {
-      alert(`บันทึกไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`บันทึกไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setSaving(false);
     }
-  }, [draft]);
+  }, [draft, showToast]);
 
   // ---------- สไลด์ (บันทึกทันที) ----------
   const uploadSlide = useCallback(
@@ -201,12 +205,12 @@ export function useHomeContentDraft(): UseHomeContentDraft {
         const created = await homeContentAPI.createSlide({ image_url, sort_order: slides.length });
         setSlides((prev) => [...prev, created]);
       } catch (error) {
-        alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+        showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
       } finally {
         setUploadingSlide(false);
       }
     },
-    [slides.length]
+    [slides.length, showToast]
   );
 
   const toggleSlide = useCallback(async (slide: HeroSlide) => {
@@ -214,19 +218,19 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       const updated = await homeContentAPI.updateSlide(slide.id, { is_active: !slide.is_active });
       setSlides((prev) => prev.map((s) => (s.id === slide.id ? updated : s)));
     } catch (error) {
-      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [showToast]);
 
   const deleteSlide = useCallback(async (slide: HeroSlide) => {
-    if (!confirm('ลบรูปสไลด์นี้?')) return;
+    if (!(await confirmAction({ message: 'ลบรูปสไลด์นี้?', tone: 'danger' }))) return;
     try {
       await homeContentAPI.deleteSlide(slide.id);
       setSlides((prev) => prev.filter((s) => s.id !== slide.id));
     } catch (error) {
-      alert(`ลบไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`ลบไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [confirmAction, showToast]);
 
   const moveSlide = useCallback(
     async (index: number, dir: -1 | 1) => {
@@ -238,11 +242,11 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       try {
         await homeContentAPI.reorderSlides(reordered.map((s) => s.id));
       } catch (error) {
-        alert(`จัดลำดับไม่สำเร็จ: ${(error as Error).message}`);
+        showToast(`จัดลำดับไม่สำเร็จ: ${(error as Error).message}`, "error");
         loadAll();
       }
     },
-    [slides, loadAll]
+    [slides, loadAll, showToast]
   );
 
   // ---------- โค้ช (บันทึกทันที) ----------
@@ -251,9 +255,9 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       const updated = await homeContentAPI.setCoachFeature(coach.id, !coach.feature_on_home);
       setCoaches((prev) => prev.map((c) => (c.id === coach.id ? updated : c)));
     } catch (error) {
-      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [showToast]);
 
   // ⚠️ ตั้งหัวหน้าคนใหม่ = backend ปลดคนเดิมให้เอง จึงต้องล้างธงของทุกคนในฝั่ง UI ด้วย
   // ถ้าอัปเดตเฉพาะแถวที่กด หน้าจอจะโชว์หัวหน้าโค้ชสองคนจนกว่าจะรีโหลด
@@ -267,9 +271,9 @@ export function useHomeContentDraft(): UseHomeContentDraft {
         )
       );
     } catch (error) {
-      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [showToast]);
 
   return {
     loading,

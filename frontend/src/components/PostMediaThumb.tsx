@@ -5,6 +5,8 @@ import { Download, ImageOff, Loader2, PlayCircle, Trash2 } from "lucide-react";
 import { deletePost, downloadPost, fetchPostObjectURL } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 /**
  * สื่อหนึ่งชิ้นในแท็บ Posts — โหลดเป็น blob เองเพราะ /raw ต้องแนบ token ที่ img/video src ทำไม่ได้
  *
@@ -25,6 +27,8 @@ export default function PostMediaThumb({
   onOpen: () => void;
   onDeleted: () => void;
 }) {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -71,13 +75,16 @@ export default function PostMediaThumb({
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (deleting) return;
-    if (!window.confirm("ลบโพสต์นี้ออกจากโปรไฟล์ของคุณ? (ดาวน์โหลดเก็บไว้ก่อนถ้ายังไม่ได้เก็บ)")) return;
+    if (!(await confirmAction({
+      message: "ลบโพสต์นี้ออกจากโปรไฟล์ของคุณ?\n\n(ดาวน์โหลดเก็บไว้ก่อนถ้ายังไม่ได้เก็บ)",
+      tone: "danger",
+    }))) return;
     setDeleting(true);
     try {
       await deletePost(post.type, post.raw_id);
       onDeleted();
     } catch {
-      alert("ลบโพสต์นี้ไม่สำเร็จ กรุณาลองใหม่");
+      showToast("ลบโพสต์นี้ไม่สำเร็จ กรุณาลองใหม่", "error");
       setDeleting(false);
     }
   };

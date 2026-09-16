@@ -6,6 +6,7 @@ import { uploadCourseImage } from "@/services/courseAPI";
 import { IMAGE_ACCEPT, validateImageFile } from "@/utils/imageUpload";
 import CourseCover from "@/components/course/CourseCover";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 interface Props {
   value: string;
   onChange: (url: string) => void;
@@ -15,6 +16,7 @@ interface Props {
 //
 // อัปโหลดทันทีที่เลือกไฟล์ ไม่รอตอนกดบันทึก — ไม่งั้นผู้ใช้ไม่เห็นว่ารูปขึ้นจริงไหม
 export default function CourseImageField({ value, onChange }: Props) {
+  const showToast = useGlobalToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -22,7 +24,7 @@ export default function CourseImageField({ value, onChange }: Props) {
     // ด่านแรกเท่านั้น — backend ตรวจซ้ำจากเนื้อไฟล์จริงอีกชั้น
     const problem = validateImageFile(file);
     if (problem) {
-      alert(problem);
+      showToast(problem, "error");
       return;
     }
 
@@ -30,7 +32,7 @@ export default function CourseImageField({ value, onChange }: Props) {
     try {
       onChange(await uploadCourseImage(file));
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ");
+      showToast(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ", "error");
     } finally {
       setIsUploading(false);
       // ล้างค่า input ไม่งั้นเลือกไฟล์เดิมซ้ำจะไม่เกิด onChange

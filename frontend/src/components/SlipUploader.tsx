@@ -3,6 +3,7 @@ import { Receipt } from 'lucide-react';
 import { MAX_UPLOAD_MB, IMAGE_ACCEPT, validateImageFile } from '@/utils/imageUpload';
 import ImageLightbox from '@/components/ImageLightbox';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export interface SlipUploaderProps {
   onUploadSuccess: (url: string) => void;
   currentUrl?: string;
@@ -16,6 +17,7 @@ export default function SlipUploader({
   label = 'แนบหลักฐานชำระเงิน (ควรมี)',
   onError
 }: SlipUploaderProps) {
+  const showToast = useGlobalToast();
   const [uploading, setUploading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -26,7 +28,7 @@ export default function SlipUploader({
     const fileError = validateImageFile(file);
     if (fileError) {
       if (onError) onError(fileError);
-      else alert(fileError);
+      else showToast(fileError, "error");
       e.target.value = '';
       return;
     }

@@ -61,6 +61,8 @@ import EditStatusModal from "./components/EditStatusModal";
 import FaceConfirmCard from "./components/FaceConfirmCard";
 import CourtFeeDialog from "./components/CourtFeeDialog";
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 const SCAN_COOLDOWN_SECONDS = 5;
 
 const REPEAT_NOTICE_SILENCE_MS = 30_000;
@@ -103,6 +105,8 @@ function formatSessionDate(iso: string) {
   return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 }
 export default function AdminAttendancePage() {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [openable, setOpenable] = useState<OpenablePackage[]>([]);
   const [openSessions, setOpenSessions] = useState<OpenSessionSummary[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(true);
@@ -284,7 +288,7 @@ export default function AdminAttendancePage() {
         : await openSession(pkg.package_id);
       setSession(data);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถเปิดรอบเช็คชื่อได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถเปิดรอบเช็คชื่อได้", "error");
       loadOpenable();
     } finally {
       setBusyPackageId(null);
@@ -296,7 +300,7 @@ export default function AdminAttendancePage() {
     try {
       setSession(await fetchSession(sessionId));
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถเข้าสู่รอบเช็คชื่อได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถเข้าสู่รอบเช็คชื่อได้", "error");
       loadOpenable();
     } finally {
       setEnteringSessionId(null);
@@ -539,7 +543,7 @@ export default function AdminAttendancePage() {
       setEditing(null);
       await refreshSession();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้", "error");
     } finally {
       setIsSavingStatus(false);
     }
@@ -555,7 +559,7 @@ export default function AdminAttendancePage() {
       setEditingCoach(null);
       await refreshSession();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้", "error");
     } finally {
       setIsSavingCoachStatus(false);
     }
@@ -577,7 +581,7 @@ export default function AdminAttendancePage() {
       setUseCamera(false);
       setCourtFeeMode(null);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถปิดรอบได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถปิดรอบได้", "error");
       await refreshSession();
     } finally {
       setIsClosing(false);
@@ -592,7 +596,7 @@ export default function AdminAttendancePage() {
       setSession(await billCourtFee(session.id, courtFeeTotal));
       setCourtFeeMode(null);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถออกบิลค่าสนามได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถออกบิลค่าสนามได้", "error");
       await refreshSession();
     } finally {
       setIsBillingCourtFee(false);
@@ -602,16 +606,17 @@ export default function AdminAttendancePage() {
   // ใช้ตอนแก้สถานะเช็คชื่อหลังออกบิลไปแล้ว — ยกเลิกทั้งรอบแล้วหารใหม่
   const handleCancelCourtFee = async () => {
     if (!session) return;
-    const confirmed = window.confirm(
-      "ยกเลิกบิลค่าสนามของรอบนี้ทั้งหมดเพื่อออกใหม่?\n\nทำได้เฉพาะตอนที่ยังไม่มีใครจ่ายหรือแนบสลิป"
-    );
+    const confirmed = await confirmAction({
+      message: "ยกเลิกบิลค่าสนามของรอบนี้ทั้งหมดเพื่อออกใหม่?\n\nทำได้เฉพาะตอนที่ยังไม่มีใครจ่ายหรือแนบสลิป",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setIsCancellingCourtFee(true);
     try {
       setSession(await cancelCourtFee(session.id));
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถยกเลิกบิลค่าสนามได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถยกเลิกบิลค่าสนามได้", "error");
       await refreshSession();
     } finally {
       setIsCancellingCourtFee(false);

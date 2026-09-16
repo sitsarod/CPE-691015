@@ -11,6 +11,7 @@ import type { CoachPayrollLine } from "@/services/coachAPI";
 import { CreateExpenseReq, UpdateExpenseReq } from "@/types/payment";
 import DateField from '@/components/DateField';
 
+import { useConfirm } from "@/components/ConfirmProvider";
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
 interface CoachWageInfo {
   loading: boolean;
@@ -58,6 +59,7 @@ export default function ExpensesTab({
   onFetchData,
   onTriggerToast
 }: ExpensesTabProps) {
+  const confirmAction = useConfirm();
   const [expenseForm, setExpenseForm] = useState({
     expenseamount: '',
     expensetype: 'court_rental',
@@ -296,7 +298,7 @@ export default function ExpensesTab({
   };
 
   const handleDeleteExpense = async (id: number) => {
-    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?")) {
+    if (!(await confirmAction({ message: "คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?", tone: "danger" }))) {
       throw new Error('cancelled'); // ผู้ใช้ยกเลิก — ไม่ปิด modal
     }
 

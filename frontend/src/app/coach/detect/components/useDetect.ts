@@ -7,6 +7,7 @@ import {
   uploadDetectVideo,
 } from '@/services/detectAPI';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export type DetectionStatus = 'pending' | 'confirmed' | 'edited';
 
 export interface DetectStudent {
@@ -78,6 +79,7 @@ function newBatchItem(file: File): BatchItem {
 }
 
 export function useDetect() {
+  const showToast = useGlobalToast();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [students, setStudents] = useState<DetectStudent[]>([]);
@@ -123,7 +125,7 @@ export function useDetect() {
     const valid = incoming.filter((f) => f.type.startsWith('video/') || f.type.startsWith('image/'));
 
     if (rejected.length > 0) {
-      alert('มีไฟล์ที่ไม่ใช่รูปภาพหรือวิดีโอถูกข้ามไป กรุณาเลือกเฉพาะรูปภาพ/วิดีโอเท่านั้น');
+      showToast('มีไฟล์ที่ไม่ใช่รูปภาพหรือวิดีโอถูกข้ามไป กรุณาเลือกเฉพาะรูปภาพ/วิดีโอเท่านั้น', "error");
     }
 
     setItems((prev) => {

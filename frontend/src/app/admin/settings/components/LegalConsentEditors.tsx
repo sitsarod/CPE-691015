@@ -10,6 +10,7 @@ import type {
   EnrollmentTermsContent,
 } from '@/types/legalDocument';
 
+import { useConfirm } from "@/components/ConfirmProvider";
 // รายการแก้เป็นข้อความหลายบรรทัด หนึ่งบรรทัดต่อหนึ่งข้อ
 const toLines = (items: string[] | undefined) => (items ?? []).join('\n');
 const toItems = (text: string) =>
@@ -154,12 +155,13 @@ function SaveBar({
 }
 
 function useDocSave(doc: LegalDocument, onSaved: (doc: LegalDocument) => void, reconsentConfirm: string) {
+  const confirmAction = useConfirm();
   const [reconsent, setReconsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async (content: FaceConsentContent | EnrollmentTermsContent) => {
-    if (reconsent && !window.confirm(reconsentConfirm)) return;
+    if (reconsent && !(await confirmAction(reconsentConfirm))) return;
 
     setSaving(true);
     setError(null);

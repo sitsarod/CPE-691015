@@ -41,6 +41,7 @@ import type { CourseDTO } from "@/types/course";
 
 import EditStatusModal from "../components/EditStatusModal";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 function todayISO() {
   // ใช้เวลาของเครื่องแอดมินซึ่งอยู่ที่สนาม ตรงกับวันที่ backend บันทึกไว้
   const now = new Date();
@@ -120,6 +121,7 @@ function groupIntoRounds(items: AttendanceHistoryItem[], coaches: CoachHistoryIt
 const PAGE_SIZE = 100;
 
 export default function AttendanceHistoryPage() {
+  const showToast = useGlobalToast();
   // ค่าเริ่มต้นเป็นวันนี้ทั้งคู่ = พฤติกรรมเดิม แต่ตอนนี้ขยายเป็นช่วงได้
   const [from, setFrom] = useState(todayISO());
   const [to, setTo] = useState(todayISO());
@@ -271,11 +273,11 @@ export default function AttendanceHistoryPage() {
           : result.quota_delta === -1
             ? "หักโควตา 1 ครั้ง"
             : "โควตาไม่เปลี่ยน";
-      alert(`แก้สถานะเรียบร้อย — ${note} (เหลือ ${result.remaining_sessions} ครั้ง)`);
+      showToast(`แก้สถานะเรียบร้อย — ${note} (เหลือ ${result.remaining_sessions} ครั้ง)`, "success");
       setEditing(null);
       load();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะได้", "error");
     } finally {
       setIsSaving(false);
     }
@@ -288,15 +290,15 @@ export default function AttendanceHistoryPage() {
     setIsSavingCoach(true);
     try {
       await updateCoachAttendanceStatus(editingCoach.attendance_id, status, remarks);
-      alert(
+      showToast(
         status === "present"
           ? "แก้สถานะเรียบร้อย — นับคาบนี้เป็นคาบที่ได้ค่าจ้างแล้ว"
           : "แก้สถานะเรียบร้อย — คาบนี้จะไม่ถูกนับค่าจ้าง"
-      );
+      , "success");
       setEditingCoach(null);
       load();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะของโค้ชได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถแก้สถานะของโค้ชได้", "error");
     } finally {
       setIsSavingCoach(false);
     }

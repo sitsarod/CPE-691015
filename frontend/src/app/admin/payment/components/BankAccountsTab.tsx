@@ -9,6 +9,7 @@ import {
   updateBankAccount
 } from "@/services/paymentAPI";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 // โลโก้ธนาคาร: ตัวย่อ + สีประจำธนาคาร (fg ไว้ธนาคารพื้นอ่อนที่ต้องใช้ตัวหนังสือเข้ม)
 // match แบบ "contains" กับทั้งชื่อไทยและตัวย่ออังกฤษ เพื่อทนกับ bank_name หลายรูปแบบ
 // (เช่นเก็บเป็น "ธนาคารกรุงไทย", "KTB", หรือ "ธนาคารกรุงไทย (KTB)")
@@ -48,6 +49,7 @@ export default function BankAccountsTab({
   onFetchData,
   onTriggerToast
 }: BankAccountsTabProps) {
+  const confirmAction = useConfirm();
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
   const [bankForm, setBankForm] = useState({
@@ -80,7 +82,7 @@ export default function BankAccountsTab({
   // ตั้งบัญชีนี้เป็นบัญชีหลัก (บัญชีหลักมีได้ทีละบัญชี) — ต้องยืนยันก่อน
   const handleSetPrimary = async (account: BankAccount) => {
     if (account.is_active || primaryBusyId !== null) return;
-    if (!window.confirm(`ตั้ง "${account.bank_name}" เป็นบัญชีหลักรับเงินแทนบัญชีเดิมใช่หรือไม่?`)) return;
+    if (!(await confirmAction(`ตั้ง "${account.bank_name}" เป็นบัญชีหลักรับเงินแทนบัญชีเดิมใช่หรือไม่?`))) return;
 
     setPrimaryBusyId(account.ID);
     try {
@@ -102,7 +104,7 @@ export default function BankAccountsTab({
 
     // เตือนเฉพาะตอนกำลังจะเปิด (ปิดไม่ต้องยืนยัน)
     if (!account.auto_verify_enabled) {
-      const ok = window.confirm(
+      const ok = await confirmAction(
         `เปิดตรวจสลิปอัตโนมัติ (SlipOK) สำหรับ "${account.bank_name}"?\n\n` +
         `ใช้ได้เฉพาะบัญชีที่ลงทะเบียนไว้ในระบบ SlipOK แล้วเท่านั้น ` +
         `หากบัญชีนี้ยังไม่มีข้อมูลใน SlipOK ระบบจะตรวจสลิปให้ไม่ได้ และสลิปจะตกไปให้แอดมินตรวจเองตามปกติ`
@@ -132,7 +134,7 @@ export default function BankAccountsTab({
       onTriggerToast("ไม่สามารถลบบัญชีธนาคารที่ตั้งเป็นบัญชีหลักได้", "error");
       return;
     }
-    if (!window.confirm("คุณต้องการลบบัญชีธนาคารนี้อย่างถาวรใช่หรือไม่?")) return;
+    if (!(await confirmAction({ message: "คุณต้องการลบบัญชีธนาคารนี้อย่างถาวรใช่หรือไม่?", tone: "danger" }))) return;
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
