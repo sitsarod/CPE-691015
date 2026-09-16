@@ -999,7 +999,7 @@ export default function Home() {
               allowFullScreen
             />
           ) : (
-            <div className="flex min-h-[300px] items-center justify-center border border-gray-200 bg-white text-sm font-light text-gray-400">
+            <div className="flex min-h-[180px] items-center justify-center border border-gray-200 bg-white text-sm font-light text-gray-400 sm:min-h-[300px]">
               แผนที่ — ยังไม่ได้ตั้งค่า
             </div>
           )}

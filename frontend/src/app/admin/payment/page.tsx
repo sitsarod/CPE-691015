@@ -301,14 +301,14 @@ export default function FinancialPortal() {
 
       {/* Loading Skeleton (โหลดครั้งแรก) — ใช้โครงเดียวกับตอนสลับแท็บ ไม่ให้หน้ากระโดด */}
       {isLoading && (
-        <div className="min-h-[500px]">
+        <div className="min-h-[320px] sm:min-h-[500px]">
           <TabSkeleton tab={subTab} />
         </div>
       )}
 
       {/* Main Tabs Container */}
       {!isLoading && (
-        <div className="min-h-[500px]">
+        <div className="min-h-[320px] sm:min-h-[500px]">
           {tabLoading ? (
             <TabSkeleton tab={subTab} />
           ) : (

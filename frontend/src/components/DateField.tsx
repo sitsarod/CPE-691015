@@ -177,7 +177,7 @@ export default function DateField({
       {error && <span className="text-xs text-red-500 font-medium">{error}</span>}
 
       {open && (
-        <div className="absolute z-20 top-full left-0 mt-2 w-[300px] rounded-2xl border border-gray-100 bg-white p-4 shadow-xl">
+        <div className="absolute z-20 top-full left-0 mt-2 w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-gray-100 bg-white p-4 shadow-xl">
           <div className="flex items-center justify-between gap-2 mb-3">
             <button
               type="button"

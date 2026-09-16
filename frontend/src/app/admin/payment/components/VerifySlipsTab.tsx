@@ -456,7 +456,7 @@ export default function VerifySlipsTab({
                     type="button"
                     onClick={() => setLightboxOpen(true)}
                     title="กดเพื่อดูสลิปขนาดเต็ม"
-                    className="flex h-[460px] w-full cursor-zoom-in items-center justify-center border border-gray-200 p-2"
+                    className="flex h-[300px] w-full cursor-zoom-in items-center justify-center border border-gray-200 p-2 sm:h-[460px]"
                   >
                     <img
                       key={imgReloadToken}
@@ -468,7 +468,7 @@ export default function VerifySlipsTab({
                   </button>
                 ) : selectedGroup.slipurl && slipImgError ? (
                   // สลิปโหลดไม่ขึ้น
-                  <div className="flex h-[460px] w-full flex-col items-center justify-center gap-2 border border-rose-300 bg-rose-50/60 text-center">
+                  <div className="flex h-[200px] w-full flex-col items-center justify-center gap-2 border border-rose-300 bg-rose-50/60 text-center sm:h-[460px]">
                     <p className="text-sm font-semibold text-rose-600">โหลดรูปสลิปไม่สำเร็จ</p>
                     <button
                       type="button"
@@ -480,7 +480,7 @@ export default function VerifySlipsTab({
                   </div>
                 ) : (
                   // ไม่มีสลิปแนบ
-                  <div className="flex h-[460px] w-full items-center justify-center border border-dashed border-gray-300 text-center">
+                  <div className="flex h-[200px] w-full items-center justify-center border border-dashed border-gray-300 text-center sm:h-[460px]">
                     <p className="text-sm text-slate-500">ยังไม่มีการอัปโหลดสลิปสำหรับรายการนี้</p>
                   </div>
                 )}
