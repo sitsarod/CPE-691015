@@ -215,21 +215,6 @@ export default function Home() {
           { value: "7", label: "ปีที่เปิดสอน" },
         ];
 
-  const licensedPct =
-    coaches.length > 0
-      ? Math.round((coaches.filter((c) => c.coach_license?.trim()).length / coaches.length) * 100)
-      : 0;
-
-  // สถิติส่วนโค้ช — CMS ถ้ามี ไม่งั้น fallback (ช่องแรกใช้จำนวนโค้ชจริง)
-  const coachStats: { value: string; label: string }[] =
-    content?.coach_stats && content.coach_stats.length > 0
-      ? content.coach_stats
-      : [
-          { value: `${coaches.length}`, label: "โค้ชประจำ" },
-          // คิดจากข้อมูลจริง ไม่ใช่ 100% ตายตัว — ตัวเลขบนหน้าขายต้องตรวจย้อนได้
-          { value: `${licensedPct}%`, label: "มีใบรับรอง" },
-        ];
-
   // ช่องภาพบรรยากาศ — CMS ถ้ามี ไม่งั้น fallback ค่าคงที่
   const facilityTiles = content?.facility_tiles && content.facility_tiles.length > 0
     ? content.facility_tiles
@@ -522,10 +507,6 @@ export default function Home() {
         <div className="relative mx-auto max-w-6xl px-6 md:px-10">
           {coaches.length === 0 ? (
             <>
-              <span className="flex items-center gap-2.5 text-[11px] font-normal tracking-[0.22em]" style={{ color: ACCENT }}>
-                <span className="h-px w-6" style={{ backgroundColor: ACCENT }} />
-                02 · OUR COACHES
-              </span>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900 md:text-4xl">
                 {content?.coaches_title || "ทีมโค้ชของเรา"}
               </h2>
@@ -556,28 +537,15 @@ export default function Home() {
 
             return (
               <>
-                {/* แถวหัว: หัวข้อซ้าย / สถิติขวา */}
-                <div className="mb-11 flex flex-col gap-9 md:flex-row md:items-end md:justify-between">
-                  <div className="flex max-w-[520px] flex-col gap-3.5">
-                    <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-gray-900 md:text-[52px]">
-                      {content?.coaches_title || "ทีมโค้ชของเรา"}
-                    </h2>
-                    <p className="text-sm font-light leading-relaxed text-gray-500">
-                      {content?.coaches_subtitle ||
-                        "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็ก"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-none divide-x divide-gray-200">
-                    {coachStats.map((s, i) => (
-                      <div key={i} className="flex flex-col gap-1.5 pr-6 first:pl-0 [&:not(:first-child)]:pl-6">
-                        <span className="text-[28px] font-semibold leading-none md:text-[34px]" style={{ color: ACCENT }}>
-                          {s.value}
-                        </span>
-                        <span className="text-[11px] font-light text-gray-500">{s.label}</span>
-                      </div>
-                    ))}
-                  </div>
+                {/* แถวหัว: หัวข้อ + คำโปรย */}
+                <div className="mb-11 flex max-w-[520px] flex-col gap-3.5">
+                  <h2 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.025em] text-gray-900 md:text-[52px]">
+                    {content?.coaches_title || "ทีมโค้ชของเรา"}
+                  </h2>
+                  <p className="text-sm font-light leading-relaxed text-gray-500">
+                    {content?.coaches_subtitle ||
+                      "โค้ชคือเหตุผลหลักที่ผู้ปกครองเลือกเรา ทุกคนมีใบรับรองผู้ฝึกสอน ผ่านการตรวจประวัติ และดูแลนักเรียนกลุ่มเล็ก"}
+                  </p>
                 </div>
 
                 {/* การ์ดโค้ช — มือถือ: ปัดซ้าย-ขวา (snap carousel) · sm ขึ้นไป: เหลื่อมกันแบบ flex-wrap */}
