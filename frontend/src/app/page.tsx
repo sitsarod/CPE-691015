@@ -580,12 +580,13 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* การ์ดโค้ช — เหลื่อมกันบนจอกว้าง เรียงตรงบนจอเล็ก */}
-                {/* ⚠️ flex-wrap + justify-center ไม่ใช่ grid โดยตั้งใจ
+                {/* การ์ดโค้ช — มือถือ: ปัดซ้าย-ขวา (snap carousel) · sm ขึ้นไป: เหลื่อมกันแบบ flex-wrap */}
+                {/* ⚠️ มือถือใช้ overflow-x scroll ให้ปัดดูทีละใบแทนการเรียงลงยาว (การ์ดสูง เรียงลงล่างต้องเลื่อนไกล)
+                    sm+ กลับมาเป็น flex-wrap + justify-center (ไม่ใช่ grid โดยตั้งใจ)
                     grid จะดันการ์ดของแถวสุดท้ายไปชิดซ้ายแล้วเหลือช่องว่างข้างเดียว
                     เช่นมีโค้ช 4 คน = แถวสองมีใบเดียวลอยอยู่ซ้ายสุด ดูเหมือนโหลดไม่ครบ
                     flex จัดกลางให้แทน แถวไหนไม่เต็มก็ยังดูตั้งใจ */}
-                <div className="flex flex-wrap items-start justify-center gap-7">
+                <div className="-mx-6 flex snap-x snap-mandatory scroll-px-6 items-start gap-5 overflow-x-auto px-6 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:justify-center sm:gap-7 sm:scroll-px-0 sm:overflow-x-visible sm:px-0 sm:pb-0">
                   {display.map((coach, i) => {
                     const img = coach.home_image || coach.profile_picture;
                     const name =
@@ -603,7 +604,7 @@ export default function Home() {
                         key={coach.id}
                         type="button"
                         onClick={() => setSelectedCoach(coach)}
-                        className={`group flex basis-full flex-col text-left sm:basis-[calc(50%-14px)] ${BASIS} ${OFFSET[i % cols]}`}
+                        className={`group flex shrink-0 basis-[80%] snap-start flex-col text-left sm:shrink sm:basis-[calc(50%-14px)] ${BASIS} ${OFFSET[i % cols]}`}
                       >
                         <div className="relative aspect-[4/5] w-full overflow-hidden bg-gray-100">
                           {img ? (
@@ -715,13 +716,13 @@ export default function Home() {
               </button>
             }
           />
-          {/* มือถือ: ช่อง wide เต็มกว้าง ที่เหลือ 2 คอลัมน์ · md ขึ้นไป: 2fr 1fr 1fr สองแถว
-              gutter 1px ใช้ gap-px บนพื้น bg-gray-200 */}
-          <div className="grid auto-rows-[150px] grid-cols-2 gap-px bg-gray-200 md:auto-rows-[170px] md:grid-cols-[2fr_1fr_1fr]">
+          {/* มือถือ: รูปใหญ่เต็ม ปัดซ้าย-ขวา (snap carousel) · md ขึ้นไป: mosaic 2fr 1fr 1fr สองแถว
+              gutter 1px ใช้ gap-px บนพื้น bg-gray-200 (เฉพาะ md+) */}
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:auto-rows-[170px] md:grid-cols-[2fr_1fr_1fr] md:gap-px md:overflow-x-visible md:bg-gray-200 md:pb-0">
             {facilityTiles.map((tile, i) => (
               <div
                 key={i}
-                className={`relative flex items-end overflow-hidden ${
+                className={`relative flex h-[280px] w-[80%] shrink-0 snap-start items-end overflow-hidden md:h-auto md:w-auto ${
                   tile.wide ? "col-span-2 row-span-1 md:col-span-1 md:row-span-2" : ""
                 }`}
                 style={

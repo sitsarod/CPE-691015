@@ -167,14 +167,6 @@ export default function CoachDashboardPage() {
               {firstTodayNote ? ` · ${firstTodayNote}` : ""}
             </p>
           </div>
-          <div className="flex flex-none gap-3">
-            <Link
-              href="/coach/availability"
-              className="flex items-center rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#CC0000] hover:text-[#CC0000]"
-            >
-              แจ้งเวลาว่าง
-            </Link>
-          </div>
         </div>
 
         {/* ปุ่มลัด */}
