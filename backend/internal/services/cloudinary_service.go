@@ -210,6 +210,85 @@ func (s *CloudinaryService) DestroyPrivateImage(ctx context.Context, publicID st
 	return nil
 }
 
+// DestroyPublicAsset ลบไฟล์ "สาธารณะ" (type=upload) ออกจาก Cloudinary เช่นไฟล์แนบในแชท
+// ต่างจาก DestroyPrivateImage ตรงที่ไม่ได้ล็อก type=authenticated และรับ resourceType ได้
+// (image/video/raw) เพราะไฟล์แนบแชทมีได้หลายชนิด — resourceType ต้องตรงกับตอนอัปโหลด
+// ไม่งั้น Cloudinary หาไม่เจอแล้วคืน "not found" ทั้งที่ไฟล์ยังอยู่
+func (s *CloudinaryService) DestroyPublicAsset(ctx context.Context, publicID, resourceType string) error {
+	if strings.TrimSpace(publicID) == "" {
+		return nil
+	}
+	if resourceType == "" {
+		resourceType = "image"
+	}
+
+	invalidate := true // ล้าง cache ที่ CDN ด้วย ไม่งั้นสำเนาเดิมยังเปิดได้อีกพักใหญ่
+	res, err := s.cld.Upload.Destroy(ctx, uploader.DestroyParams{
+		PublicID:     publicID,
+		Type:         "upload",
+		ResourceType: resourceType,
+		Invalidate:   &invalidate,
+	})
+	if err != nil {
+		return err
+	}
+	if res.Error.Message != "" {
+		return errors.New("cloudinary: " + res.Error.Message)
+	}
+	if res.Result != "ok" && res.Result != "not found" {
+		return fmt.Errorf("cloudinary: ลบไฟล์ไม่สำเร็จ (result=%s)", res.Result)
+	}
+	return nil
+}
+
+// CloudinaryAssetFromURL แยก public_id และ resource_type ออกจาก URL สาธารณะของ Cloudinary
+// รูปแบบ: https://res.cloudinary.com/<cloud>/<resource_type>/upload/v<version>/<folder...>/<name>.<ext>
+// คืน ok=false ถ้าไม่ใช่ลิงก์ Cloudinary (เช่น ไฟล์เก็บในเครื่อง http://host/uploads/chat/..)
+//
+// อาศัยข้อเท็จจริงว่าเส้นทางอัปโหลดของเรา (UploadFileToFolder) ไม่ใส่ transformation
+// จึงมีแค่ segment เวอร์ชัน (vNNN) คั่นก่อน public_id เสมอ
+func CloudinaryAssetFromURL(u string) (publicID, resourceType string, ok bool) {
+	if !strings.Contains(u, "res.cloudinary.com") {
+		return "", "", false
+	}
+	marker := "/upload/"
+	i := strings.Index(u, marker)
+	if i < 0 {
+		return "", "", false
+	}
+
+	// resource_type = path segment สุดท้ายก่อน "/upload/"
+	prefix := u[:i]
+	slash := strings.LastIndex(prefix, "/")
+	if slash < 0 {
+		return "", "", false
+	}
+	resourceType = prefix[slash+1:]
+
+	rest := u[i+len(marker):]
+	if q := strings.IndexByte(rest, '?'); q >= 0 {
+		rest = rest[:q]
+	}
+
+	segs := strings.Split(rest, "/")
+	kept := make([]string, 0, len(segs))
+	for _, seg := range segs {
+		// ข้าม segment เวอร์ชัน "vNNN" ที่อยู่หน้าสุด
+		if len(kept) == 0 && len(seg) > 1 && seg[0] == 'v' && isAllDigits(seg[1:]) {
+			continue
+		}
+		kept = append(kept, seg)
+	}
+	joined := strings.Join(kept, "/")
+	if dot := strings.LastIndex(joined, "."); dot >= 0 {
+		joined = joined[:dot] // ตัดนามสกุลไฟล์ออกจาก public_id
+	}
+	if joined == "" || resourceType == "" {
+		return "", "", false
+	}
+	return joined, resourceType, true
+}
+
 // DownloadPrivateImage ดึงไฟล์มาให้ backend stream ต่อเอง — ผู้เรียกต้องปิด ReadCloser เสมอ
 //
 // ⚠️ ตั้งใจไม่คืน signed URL ให้ client เพราะเป็นลิงก์ที่ใครถือก็เปิดได้จนกว่าจะหมดอายุ

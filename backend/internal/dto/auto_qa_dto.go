@@ -31,11 +31,14 @@ type CreateAutoQAReq struct {
 	Answer          string `json:"answer" binding:"required"`
 }
 
+// UpdateAutoQAReq ใช้ pointer ทุกฟิลด์ เพื่อแยก "ไม่ได้ส่งฟิลด์นี้มา" (nil = ไม่แก้)
+// ออกจาก "ส่งค่าว่างมาเพื่อล้างค่า" (&"" = ตั้งเป็นค่าว่าง) — จำเป็นกับ similar_question
+// เพื่อให้แอดมินลบคีย์เวิร์ดทั้งหมดออกได้จริง (เดิมใช้ string ธรรมดาจึงล้างไม่ได้)
 type UpdateAutoQAReq struct {
-	Mode            string `json:"mode"`
-	Question        string `json:"question"`
-	SimilarQuestion string `json:"similar_question"`
-	Answer          string `json:"answer"`
+	Mode            *string `json:"mode"`
+	Question        *string `json:"question"`
+	SimilarQuestion *string `json:"similar_question"`
+	Answer          *string `json:"answer"`
 }
 
 type ChatSessionDTO struct {
@@ -44,6 +47,9 @@ type ChatSessionDTO struct {
 	GuestEmail string      `json:"guest_email"`
 	GuestPhone string      `json:"guest_phone"`
 	Status     string      `json:"status"`
+	// AccessToken ส่งกลับให้เจ้าของห้อง "เฉพาะตอนสร้างห้อง" เพื่อเก็บไว้ใช้ยืนยันสิทธิ์เข้าถึงภายหลัง
+	// (กัน IDOR) — ไม่แนบในรายการฝั่งแอดมินหรือตอนดึงห้องซ้ำ omitempty จึงไม่โผล่เมื่อว่าง
+	AccessToken string      `json:"access_token,omitempty"`
 	UserID     *uint       `json:"user_id,omitempty"`
 	User       *UserDTO    `json:"user,omitempty"`
 	AutoQAs    []AutoQADTO `json:"auto_qas,omitempty"`

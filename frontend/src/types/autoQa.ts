@@ -33,6 +33,9 @@ export interface ChatSession {
   guest_email: string;
   guest_phone: string;
   status: 'active' | 'closed';
+  // access_token: กุญแจลับของห้อง แนบมาเฉพาะตอนสร้างห้อง (createChatSession) เท่านั้น
+  // ต้องเก็บไว้ใช้ยืนยันสิทธิ์เข้าถึงห้องในคำขอถัดไป (กัน IDOR)
+  access_token?: string;
   user_id?: number | null;
   user?: User;
   auto_qas?: AutoQA[];

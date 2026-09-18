@@ -98,6 +98,36 @@ export const announcementAPI = {
     });
   },
 
+  // Admin: ปักหมุด/ยกเลิกปักหมุดประกาศ
+  setPinned: async (id: number, pinned: boolean): Promise<Announcement> => {
+    const res = await apiFetch<ApiResponse<Announcement>>(`/announcements/${id}/pin`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pinned }),
+    });
+    return res.data;
+  },
+
+  // ผู้ใช้ที่ล็อกอิน: บันทึก/ยกเลิกบันทึกประกาศไว้อ่านทีหลัง
+  addBookmark: async (id: number): Promise<void> => {
+    await apiFetch<{ message: string }>(`/announcements/${id}/bookmark`, { method: 'POST' });
+  },
+
+  removeBookmark: async (id: number): Promise<void> => {
+    await apiFetch<{ message: string }>(`/announcements/${id}/bookmark`, { method: 'DELETE' });
+  },
+
+  // ประกาศที่ผู้ใช้บันทึกไว้ (รวมที่หมดอายุแล้ว)
+  getMyBookmarks: async (): Promise<Announcement[]> => {
+    const res = await apiFetch<ApiResponse<Announcement[]>>('/me/announcement-bookmarks');
+    return res.data;
+  },
+
+  // เฉพาะ id ของประกาศที่บันทึกไว้ — ไว้ไฮไลต์ปุ่มหัวใจในฟีด
+  getMyBookmarkIds: async (): Promise<number[]> => {
+    const res = await apiFetch<ApiResponse<number[]>>('/me/announcement-bookmarks/ids');
+    return res.data ?? [];
+  },
+
   uploadImage: async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);

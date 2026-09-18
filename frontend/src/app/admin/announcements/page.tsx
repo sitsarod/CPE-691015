@@ -6,8 +6,9 @@ import { Announcement, AnnouncementVisibility, Category } from '@/types/announce
 import { MAX_UPLOAD_MB, IMAGE_ACCEPT, validateImageFile } from '@/utils/imageUpload';
 import AnnouncementCoverCropModal from '@/components/AnnouncementCoverCropModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import AnnouncementsSkeleton from './components/AnnouncementsSkeleton';
 import DateField from '@/components/DateField';
-import { Plus, Edit2, Trash2, Calendar, Tag, X, Image as ImageIcon, Loader2, Users, Eye, Crop, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Tag, X, Image as ImageIcon, Loader2, Users, Eye, Crop, Search, ChevronLeft, ChevronRight, Pin, PinOff } from 'lucide-react';
 
 // ป้ายกำกับ + สีของตัวเลือก "แสดงให้ใครเห็น" — ใช้ทั้งในฟอร์มและตารางแสดงผล
 const VISIBILITY_LABELS: Record<AnnouncementVisibility, string> = {
@@ -286,6 +287,16 @@ export default function AdminAnnouncementsPage() {
     );
   };
 
+  // ปักหมุด/ยกเลิกปักหมุดประกาศ — โหลดรายการใหม่เพื่อให้ลำดับ (ปักหมุดขึ้นบน) อัปเดต
+  const handleTogglePin = async (ann: Announcement) => {
+    try {
+      await announcementAPI.setPinned(ann.id, !ann.is_pinned);
+      fetchData();
+    } catch (error) {
+      showAlert(`ปักหมุดไม่สำเร็จ: ${error instanceof Error ? error.message : ''}`);
+    }
+  };
+
   // Handlers for Category
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,60 +408,58 @@ export default function AdminAnnouncementsPage() {
   }, [currentPage, totalPages]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#CC0000]"></div>
-      </div>
-    );
+    return <AnnouncementsSkeleton />;
   }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-500">
       
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">จัดการประกาศข่าวสาร</h1>
-          <p className="text-gray-500 text-sm mt-1">จัดการข่าวสารสาธารณะ การแจ้งเตือน และโปรโมชั่น</p>
-        </div>
-        <div className="flex flex-wrap gap-3 w-full md:w-auto">
-          <button
-            onClick={() => setIsCategoryModalOpen(true)}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg font-medium transition-colors"
-          >
-            <Tag size={18} />
-            จัดการหมวดหมู่
-          </button>
-          <button
-            onClick={() => handleOpenAnnouncementModal()}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-all hover:-translate-y-0.5"
-          >
-            <Plus size={18} />
-            สร้างประกาศ
-          </button>
-        </div>
-      </div>
-
-      {/* แถบค้นหาจากหัวข้อ */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ค้นหาจากหัวข้อประกาศ..."
-            className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-9 text-sm text-gray-700 focus:border-[#CC0000] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#CC0000]"
-          />
-          {searchQuery && (
+      {/* Header + ค้นหา รวมอยู่ในกรอบเดียว */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">จัดการประกาศข่าวสาร</h1>
+            <p className="text-gray-500 text-sm mt-1">จัดการข่าวสารสาธารณะ การแจ้งเตือน และโปรโมชั่น</p>
+          </div>
+          <div className="flex flex-wrap gap-3 w-full md:w-auto">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-              aria-label="ล้างคำค้น"
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg font-medium transition-colors"
             >
-              <X size={16} />
+              <Tag size={18} />
+              จัดการหมวดหมู่
             </button>
-          )}
+            <button
+              onClick={() => handleOpenAnnouncementModal()}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium shadow-md shadow-[#CC0000]/20 transition-all hover:-translate-y-0.5"
+            >
+              <Plus size={18} />
+              สร้างประกาศ
+            </button>
+          </div>
+        </div>
+
+        {/* แถบค้นหาจากหัวข้อ — คั่นด้วยเส้นบางในกรอบเดียวกัน */}
+        <div className="border-t border-gray-100 p-4">
+          <div className="relative max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ค้นหาจากหัวข้อประกาศ..."
+              className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-9 text-sm text-gray-700 focus:border-[#CC0000] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#CC0000]"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                aria-label="ล้างคำค้น"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -482,6 +491,11 @@ export default function AdminAnnouncementsPage() {
                     <span className={`absolute top-2 left-2 text-[11px] font-semibold px-2 py-0.5 rounded-full shadow-sm ${isExpired ? 'bg-red-100 text-red-600' : isFuture ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
                       {isExpired ? 'หมดอายุ' : isFuture ? 'รอดำเนินการ' : 'กำลังใช้งาน'}
                     </span>
+                    {ann.is_pinned && (
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#CC0000] px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                        <Pin size={11} className="fill-current" /> ปักหมุด
+                      </span>
+                    )}
                   </div>
                   <div className="p-4 flex flex-col gap-2 flex-1">
                     <div className="font-semibold text-gray-900 line-clamp-2">{ann.title}</div>
@@ -501,6 +515,13 @@ export default function AdminAnnouncementsPage() {
                       <Eye size={12} /> {visibility === 'guest' ? '-' : `${ann.view_count} ครั้ง`}
                     </div>
                     <div className="mt-auto pt-2 flex items-center gap-2 border-t border-gray-50">
+                      <button
+                        onClick={() => handleTogglePin(ann)}
+                        title={ann.is_pinned ? 'ยกเลิกปักหมุด' : 'ปักหมุด'}
+                        className={`flex items-center justify-center rounded-lg p-2.5 font-medium text-sm transition-colors ${ann.is_pinned ? 'bg-[#FFF0F0] text-[#CC0000] hover:bg-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      >
+                        {ann.is_pinned ? <PinOff size={16} /> : <Pin size={16} />}
+                      </button>
                       <button
                         onClick={() => handleOpenAnnouncementModal(ann)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg font-medium text-sm transition-colors"
@@ -553,7 +574,10 @@ export default function AdminAnnouncementsPage() {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900 line-clamp-1">{ann.title}</div>
+                          <div className="flex items-center gap-1.5">
+                            {ann.is_pinned && <Pin size={13} className="shrink-0 fill-[#CC0000] text-[#CC0000]" />}
+                            <span className="font-medium text-gray-900 line-clamp-1">{ann.title}</span>
+                          </div>
                           <div className="text-xs text-gray-500 line-clamp-1 mt-1">{ann.content.substring(0, 50)}...</div>
                         </td>
                         <td className="px-6 py-4">
@@ -582,6 +606,13 @@ export default function AdminAnnouncementsPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleTogglePin(ann)}
+                              className={`p-1.5 rounded-md transition-colors ${ann.is_pinned ? 'text-[#CC0000] bg-[#FFF0F0] hover:bg-red-100' : 'text-gray-400 hover:text-[#CC0000] hover:bg-[#FFF0F0]'}`}
+                              title={ann.is_pinned ? 'ยกเลิกปักหมุด' : 'ปักหมุด'}
+                            >
+                              {ann.is_pinned ? <PinOff size={16} /> : <Pin size={16} />}
+                            </button>
                             <button
                               onClick={() => handleOpenAnnouncementModal(ann)}
                               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -924,15 +955,6 @@ export default function AdminAnnouncementsPage() {
                   className="px-4 py-2 bg-[#CC0000] hover:bg-[#990000] text-white rounded-lg font-medium transition-colors whitespace-nowrap"
                 >
                   เพิ่ม
-                </button>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button
-                  type="button"
-                  onClick={() => { setIsCategoryModalOpen(false); handleCancelEditCategory(); }}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
-                >
-                  ปิด
                 </button>
               </div>
             </form>

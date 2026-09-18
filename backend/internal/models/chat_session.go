@@ -20,6 +20,11 @@ type ChatSession struct {
 	GuestEmail string `json:"guest_email" gorm:"type:varchar(255)" valid:"required~guest_email is required,email~Invalid email format"`
 	GuestPhone string `json:"guest_phone" gorm:"type:varchar(20)" valid:"required~guest_phone is required"`
 
+	// AccessToken เป็นกุญแจลับสุ่มประจำห้องแชท ใช้ยืนยันสิทธิ์เข้าถึงห้องแทนการเดา ID
+	// (กัน IDOR — ID เป็นเลขเรียงลำดับ เดาได้ง่าย) ทุก endpoint สาธารณะของแชทต้องแนบ token นี้
+	// json:"-" กันหลุดออกไปกับ response ตัวโมเดล — จะส่งให้เจ้าของห้องเฉพาะตอนสร้างผ่าน DTO เท่านั้น
+	AccessToken string `json:"-" gorm:"column:access_token;type:varchar(64);uniqueIndex"`
+
 	Status ChatSessionStatus `json:"status" gorm:"type:varchar(20);default:'active'" valid:"required~status is required,oneof(active closed)~Invalid status value"`
 
 	// Optional FK — allows NULL for guest users who are not logged in

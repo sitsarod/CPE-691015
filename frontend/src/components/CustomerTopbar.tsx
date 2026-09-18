@@ -8,7 +8,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MessageCircleMore, Settings, User, LogOut, ShieldCheck, ScanFace } from "lucide-react";
 import NotificationBell, { NOTIFICATION_STREAM_EVENT } from "@/components/NotificationBell";
-import { OPEN_CHAT_EVENT, chatOwner, chatSessionKey, chatLastViewedKey } from "@/components/ChatWidget";
+import { OPEN_CHAT_EVENT, chatOwner, chatSessionKey, chatTokenKey, chatLastViewedKey } from "@/components/ChatWidget";
 import { autoQaAPI } from "@/services/autoQaAPI";
 import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
@@ -37,14 +37,16 @@ export default function CustomerTopbar() {
     try {
       const owner = chatOwner();
       const sessionId = localStorage.getItem(chatSessionKey(owner));
-      if (!sessionId) {
+      const sessionToken = localStorage.getItem(chatTokenKey(owner));
+      // ต้องมีทั้ง id และ token (กุญแจเข้าถึงห้อง) ถึงจะเช็คข้อความใหม่ได้
+      if (!sessionId || !sessionToken) {
         setUnreadCount(0);
         return;
       }
       const lastViewedRaw = localStorage.getItem(chatLastViewedKey(owner));
       const lastViewed = lastViewedRaw ? new Date(lastViewedRaw).getTime() : 0;
 
-      const session = await autoQaAPI.getChatSessionById(Number(sessionId));
+      const session = await autoQaAPI.getChatSessionById(Number(sessionId), sessionToken);
       const count = (session.auto_qas || []).filter(
         (qa) => qa.mode === "admin_reply" && new Date(qa.created_at).getTime() > lastViewed
       ).length;

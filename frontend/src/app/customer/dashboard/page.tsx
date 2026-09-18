@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { announcementAPI } from '@/services/announcementAPI';
 import { reviewAPI } from '@/services/reviewAPI';
 import { Announcement, Category } from '@/types/announcement';
 import { Review } from '@/types/review';
-import { ChevronLeft, ChevronRight, Calendar, Star, Quote, BookOpen, UserRound, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Star, Quote, BookOpen, UserRound, CalendarClock, Bookmark } from 'lucide-react';
 import { fetchCustomerEnrollments } from '@/services/enrollmentAPI';
 import type { Enrollment } from '@/types/enrollment';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/components/course/expiryUtils';
 import WelcomeOnboardingModal from './components/WelcomeOnboardingModal';
 import { Poster } from '@/components/AnnouncementDetailModal';
+import DashboardSkeleton from './components/DashboardSkeleton';
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
@@ -144,11 +146,7 @@ export default function CustomerDashboardPage() {
     : announcements;
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-7xl min-h-screen bg-gray-50 flex items-center justify-center rounded-2xl">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CC0000]"></div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -193,12 +191,11 @@ export default function CustomerDashboardPage() {
                   <span className="px-3 py-1 bg-white text-gray-900 text-xs font-bold uppercase tracking-wider rounded-md mb-4 shadow-sm">
                     {ann.category?.name || 'Announcement'}
                   </span>
-                  <h1 className="text-4xl md:text-5xl font-extrabold mb-4 max-w-4xl leading-tight text-white drop-shadow-lg">
+                  {/* แบนเนอร์เลื่อนโชว์เฉพาะหัวข้อข่าว — ตัดรายละเอียด (content) ออกเพื่อไม่ให้ตัวหนังสือรก
+                      ผู้ใช้กด "อ่านเพิ่มเติม" เพื่อดูรายละเอียดเต็มได้ */}
+                  <h1 className="text-4xl md:text-5xl font-extrabold mb-8 max-w-4xl leading-tight text-white drop-shadow-lg">
                     {ann.title}
                   </h1>
-                  <p className="text-gray-200 text-lg md:text-xl max-w-2xl mb-8 line-clamp-2 drop-shadow-md">
-                    {ann.content}
-                  </p>
                   <button
                     onClick={() => openDetail(ann)}
                     className="flex items-center gap-2 px-8 py-3 bg-[#CC0000] hover:bg-[#990000] transition-all duration-300 text-white font-semibold rounded-full shadow-lg shadow-[#CC0000]/30 hover:scale-105"
@@ -272,6 +269,14 @@ export default function CustomerDashboardPage() {
               {cat.name}
             </button>
           ))}
+
+          {/* ทางเข้าประกาศที่บันทึกไว้ — แยกด้วยเส้นบาง ๆ ให้ดูต่างจากตัวกรองหมวด */}
+          <Link
+            href="/customer/announcements/saved"
+            className="ml-auto flex flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-[#CC0000] bg-white px-5 py-2 font-medium text-[#CC0000] transition-colors hover:bg-[#FFF0F0]"
+          >
+            <Bookmark size={16} className="fill-current" /> ที่บันทึกไว้
+          </Link>
         </div>
 
         {/* Announcements Grid */}
