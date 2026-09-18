@@ -90,6 +90,11 @@ func main() {
 	}
 
 	// === SEEDING DEFAULT DATA ===
+	// ไม่มีแถวพวกนี้ = อนุมัติคำขอสมัครเรียนและออกบิลค่าสนามไม่ได้เลย
+	if err := services.EnsureBillingTypes(db); err != nil {
+		log.Fatalf("เติมประเภทบิลมาตรฐานไม่สำเร็จ: %v", err)
+	}
+
 	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ ต้องสร้างก่อน seed
 	// ไม่งั้นข้อมูลตัวอย่างที่ยังไม่มีรหัสประจำตัวจะชนกันเอง
 	if err := services.EnsureMemberCodeIndexes(db); err != nil {

@@ -44,8 +44,6 @@ var (
 
 const defaultEnrollmentDurationDays = 30
 
-const billingTypeCourseFee = "ค่าคอร์สเรียน"
-
 func resolveDurationDays(pkg *models.Package, enrollmentID uint) uint {
 	if pkg == nil {
 		log.Printf("[enrollment] #%d: ไม่มีข้อมูลแพ็กเกจตอนเปิดใช้งาน ใช้ค่าเริ่มต้น %d วัน",
@@ -102,9 +100,9 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 }
 
 func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) error {
-	var billingType models.BillingType
-	if err := tx.Where("billing_type_name = ?", billingTypeCourseFee).First(&billingType).Error; err != nil {
-		return errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
+	billingTypeID, err := billingTypeIDByName(tx, billingTypeCourseFee)
+	if err != nil {
+		return err
 	}
 
 	billingUserID, err := ResolveUserID(tx, e.CustomerID)
@@ -132,7 +130,7 @@ func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) e
 		DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
 		Status:        models.StatusUnfunded,
 		CustomerID:    billingUserID,
-		BillingTypeID: billingType.ID,
+		BillingTypeID: billingTypeID,
 		AdminID:       adminID,
 	}
 

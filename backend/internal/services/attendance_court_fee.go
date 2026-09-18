@@ -12,8 +12,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const billingTypeCourtFee = "ค่าเช่าสนาม"
-
 const courtFeeDueDays = 7
 
 var (
@@ -175,9 +173,9 @@ func billCourtFeeTx(tx *gorm.DB, sessionID, adminUserID uint, total float64) ([]
 		return nil, ErrCourtFeeNoPayers
 	}
 
-	var billingType models.BillingType
-	if err := tx.Where("billing_type_name = ?", billingTypeCourtFee).First(&billingType).Error; err != nil {
-		return nil, fmt.Errorf("ไม่พบประเภทบิล '%s' ในระบบ", billingTypeCourtFee)
+	billingTypeID, err := billingTypeIDByName(tx, billingTypeCourtFee)
+	if err != nil {
+		return nil, err
 	}
 
 	perHead := splitPerHead(total, len(payers))
@@ -191,7 +189,7 @@ func billCourtFeeTx(tx *gorm.DB, sessionID, adminUserID uint, total float64) ([]
 			Amount:              perHead,
 			DueDate:             dueDate,
 			Status:              models.StatusUnfunded,
-			BillingTypeID:       billingType.ID,
+			BillingTypeID:       billingTypeID,
 			CustomerID:          userID,
 			AdminID:             &adminUserID,
 			AttendanceSessionID: &sessionID,
