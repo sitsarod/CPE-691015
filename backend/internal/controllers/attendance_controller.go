@@ -33,28 +33,36 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrCoachQRScanned),
 		errors.Is(err, services.ErrCoachNotFound),
 		errors.Is(err, services.ErrMissedClassNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrNotInPackage),
 		errors.Is(err, services.ErrCoachInactive):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrInvalidStatus),
 		errors.Is(err, services.ErrInvalidDateFormat),
 		errors.Is(err, services.ErrMissedClassCoachSet),
 		errors.Is(err, services.ErrMissedClassLegacy),
-		errors.Is(err, services.ErrScheduleInvalid):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errors.Is(err, services.ErrScheduleInvalid),
+		errors.Is(err, services.ErrCourtFeeTotalInvalid):
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrNoFaceInImage),
 		errors.Is(err, services.ErrMultipleFaces),
 		errors.Is(err, services.ErrFaceTooBlurry),
 		errors.Is(err, services.ErrFaceNotRecognized),
 		errors.Is(err, services.ErrFaceAmbiguous):
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrFaceEngineUnavailable):
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+
+	// ชนกับรอบที่มีอยู่ = ข้อมูลต้องมีคนไปแก้ ไม่ใช่ระบบพัง
+	//
+	// ⚠️ ต้องส่ง err.Error() ออกไปจริง ๆ เพราะข้อความบอกว่าไปชนกับรอบไหน
+	// (วัน/เวลาของรอบที่มีอยู่) แอดมินต้องเอาไปตามแก้ต่อได้ ไม่ใช่ข้อความลอย ๆ
+	case errors.Is(err, services.ErrMissedClassCollision):
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrSessionClosed),
 		errors.Is(err, services.ErrSessionExists),
@@ -65,18 +73,31 @@ func mapAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrAttendanceExpired),
 		errors.Is(err, services.ErrMissedClassResolved),
 		errors.Is(err, services.ErrMissedClassOpen),
-		errors.Is(err, services.ErrMissedClassNotDue):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		errors.Is(err, services.ErrMissedClassNotDue),
+		errors.Is(err, services.ErrCourtFeeBilled),
+		errors.Is(err, services.ErrCourtFeeNotClosed),
+		errors.Is(err, services.ErrCourtFeeNotBilled),
+		errors.Is(err, services.ErrCourtFeePaid),
+		errors.Is(err, services.ErrCourtFeeNoPayers):
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// ⚠️ ห้ามส่ง err.Error() ของ GORM/pgx ออกไป
+		//
+		// ผู้ใช้เคยเห็นข้อความเต็ม ๆ ว่า
+		//   duplicate key value violates unique constraint "idx_..." (SQLSTATE 23505)
+		// ซึ่งบอกชื่อ index และโครงสร้างตารางให้คนนอก และผู้ใช้เอาไปทำอะไรไม่ได้
+		//
+		// รายละเอียดไปอยู่ใน log ฝั่งเซิร์ฟเวอร์แทน
+		log.Printf("[api] จัดการการเช็คชื่อไม่สำเร็จ: %v", err)
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ระบบขัดข้อง กรุณาลองใหม่ หรือแจ้งผู้ดูแลระบบ"})
 	}
 }
 
 func uintParam(c *gin.Context, name, label string) (uint, bool) {
 	id, err := strconv.ParseUint(c.Param(name), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": label + "ไม่ถูกต้อง"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": label + "ไม่ถูกต้อง"})
 		return 0, false
 	}
 	return uint(id), true
@@ -86,23 +107,24 @@ func uintParam(c *gin.Context, name, label string) (uint, bool) {
 func (ctrl *AttendanceController) GetOpenablePackages(c *gin.Context) {
 	items, err := ctrl.service.GetOpenablePackages()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] ดึงรายการแพ็กเกจที่เปิดรอบได้ ไม่สำเร็จ: %v", err)
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายการแพ็กเกจได้"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // OpenSession [POST] /api/attendance/sessions
 func (ctrl *AttendanceController) OpenSession(c *gin.Context) {
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.OpenSessionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุแพ็กเกจที่ต้องการเปิดรอบเช็คชื่อ"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุแพ็กเกจที่ต้องการเปิดรอบเช็คชื่อ"})
 		return
 	}
 
@@ -111,17 +133,18 @@ func (ctrl *AttendanceController) OpenSession(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "เปิดรอบเช็คชื่อเรียบร้อยแล้ว", "data": session})
+	respondJSON(c, http.StatusCreated, gin.H{"message": "เปิดรอบเช็คชื่อเรียบร้อยแล้ว", "data": session})
 }
 
 // GetOpenSessions [GET] /api/attendance/sessions — รอบที่ยังเปิดค้างอยู่
 func (ctrl *AttendanceController) GetOpenSessions(c *gin.Context) {
 	items, err := ctrl.service.GetOpenSessions()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[api] ดึงรอบที่เปิดค้างอยู่ ไม่สำเร็จ: %v", err)
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงรายการรอบที่เปิดค้างอยู่ได้"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // GetSession [GET] /api/attendance/sessions/:id
@@ -136,7 +159,7 @@ func (ctrl *AttendanceController) GetSession(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": session})
+	respondJSON(c, http.StatusOK, gin.H{"data": session})
 }
 
 // Lookup [POST] /api/attendance/sessions/:id/lookup — จังหวะที่ 1 ยังไม่บันทึกอะไร
@@ -148,7 +171,7 @@ func (ctrl *AttendanceController) Lookup(c *gin.Context) {
 
 	var req dto.ScanReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาส่งรหัส QR"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาส่งรหัส QR"})
 		return
 	}
 
@@ -157,7 +180,7 @@ func (ctrl *AttendanceController) Lookup(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	respondJSON(c, http.StatusOK, gin.H{"data": result})
 }
 
 // CheckIn [POST] /api/attendance/sessions/:id/check-in — จังหวะที่ 2 บันทึกจริง
@@ -169,7 +192,7 @@ func (ctrl *AttendanceController) CheckIn(c *gin.Context) {
 
 	var req dto.ScanReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาส่งรหัส QR"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาส่งรหัส QR"})
 		return
 	}
 
@@ -183,7 +206,7 @@ func (ctrl *AttendanceController) CheckIn(c *gin.Context) {
 	if result.Kind == dto.ScanKindCoach {
 		message = "เช็คชื่อเข้าสอนสำเร็จ"
 	}
-	c.JSON(http.StatusOK, gin.H{"message": message, "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": message, "data": result})
 }
 
 // readFacePhoto อ่านรูปจาก multipart พร้อมตรวจขนาดและชนิดไฟล์
@@ -192,7 +215,7 @@ func readFacePhoto(c *gin.Context) ([]byte, bool) {
 
 	fh, err := c.FormFile("photo")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาแนบภาพจากกล้อง (ฟิลด์ 'photo')"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาแนบภาพจากกล้อง (ฟิลด์ 'photo')"})
 		return nil, false
 	}
 	if _, err := ValidateFaceImageUpload(fh); err != nil {
@@ -200,20 +223,20 @@ func readFacePhoto(c *gin.Context) ([]byte, bool) {
 		if errors.Is(err, ErrUploadBadType) {
 			status = http.StatusUnsupportedMediaType
 		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		respondJSON(c, status, gin.H{"error": err.Error()})
 		return nil, false
 	}
 
 	file, err := fh.Open()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return nil, false
 	}
 	defer file.Close()
 
 	raw, err := io.ReadAll(file)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": ErrUploadUnreadable.Error()})
 		return nil, false
 	}
 	return raw, true
@@ -235,7 +258,7 @@ func (ctrl *AttendanceController) FaceLookup(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	respondJSON(c, http.StatusOK, gin.H{"data": result})
 }
 
 // FaceCheckIn [POST] /api/attendance/sessions/:id/face-check-in — จังหวะ 2 บันทึกจริง
@@ -246,7 +269,7 @@ func (ctrl *AttendanceController) FaceCheckIn(c *gin.Context) {
 	}
 	adminUserID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "กรุณาเข้าสู่ระบบ"})
 		return
 	}
 	raw, ok := readFacePhoto(c)
@@ -264,7 +287,7 @@ func (ctrl *AttendanceController) FaceCheckIn(c *gin.Context) {
 	if result.Kind == dto.ScanKindCoach {
 		message = "เช็คชื่อเข้าสอนสำเร็จ"
 	}
-	c.JSON(http.StatusOK, gin.H{"message": message, "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": message, "data": result})
 }
 
 // ManualCheckIn [POST] /api/attendance/sessions/:id/manual
@@ -276,13 +299,13 @@ func (ctrl *AttendanceController) ManualCheckIn(c *gin.Context) {
 
 	adminID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.ManualCheckInReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาเลือกนักเรียนที่ต้องการเช็คชื่อให้"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาเลือกนักเรียนที่ต้องการเช็คชื่อให้"})
 		return
 	}
 
@@ -291,7 +314,7 @@ func (ctrl *AttendanceController) ManualCheckIn(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": "เช็คชื่อสำเร็จ", "data": result})
 }
 
 // ManualCoachCheckIn [POST] /api/attendance/sessions/:id/coach-manual
@@ -303,13 +326,13 @@ func (ctrl *AttendanceController) ManualCoachCheckIn(c *gin.Context) {
 
 	adminID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.ManualCoachCheckInReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาเลือกโค้ชที่ต้องการเช็คชื่อให้"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาเลือกโค้ชที่ต้องการเช็คชื่อให้"})
 		return
 	}
 
@@ -318,7 +341,7 @@ func (ctrl *AttendanceController) ManualCoachCheckIn(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "เช็คชื่อเข้าสอนสำเร็จ", "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": "เช็คชื่อเข้าสอนสำเร็จ", "data": result})
 }
 
 // UpdateCoachAttendanceStatus [PATCH] /api/attendance/coach-records/:id
@@ -330,13 +353,13 @@ func (ctrl *AttendanceController) UpdateCoachAttendanceStatus(c *gin.Context) {
 
 	adminID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.UpdateAttendanceStatusReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุสถานะที่ต้องการแก้เป็น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุสถานะที่ต้องการแก้เป็น"})
 		return
 	}
 
@@ -345,7 +368,7 @@ func (ctrl *AttendanceController) UpdateCoachAttendanceStatus(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "แก้สถานะเรียบร้อยแล้ว", "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": "แก้สถานะเรียบร้อยแล้ว", "data": result})
 }
 
 // CloseSession [PATCH] /api/attendance/sessions/:id/close
@@ -357,19 +380,94 @@ func (ctrl *AttendanceController) CloseSession(c *gin.Context) {
 
 	adminID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
-	session, err := ctrl.service.CloseSession(id, adminID)
+	var req dto.CloseSessionReq
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": services.ErrCourtFeeTotalInvalid.Error()})
+		return
+	}
+
+	session, err := ctrl.service.CloseSession(id, adminID, req.CourtFeeTotal)
 	if err != nil {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"message": "ปิดรอบเรียบร้อย — คนที่ยืนยันว่าจะมาแล้วไม่มา ถูกบันทึกเป็นขาดเรียน",
+
+	message := "ปิดรอบเรียบร้อย — คนที่ยืนยันว่าจะมาแล้วไม่มา ถูกบันทึกเป็นขาดเรียน"
+	if req.CourtFeeTotal != nil {
+		message = "ปิดรอบและออกบิลค่าสนามเรียบร้อย"
+	}
+	respondJSON(c, http.StatusOK, gin.H{
+		"message": message,
 		"data":    session,
 	})
+}
+
+// BillCourtFee [POST] /api/attendance/sessions/:id/court-fee
+func (ctrl *AttendanceController) BillCourtFee(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	var req dto.BillCourtFeeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": services.ErrCourtFeeTotalInvalid.Error()})
+		return
+	}
+
+	session, err := ctrl.service.BillCourtFee(id, adminID, req.CourtFeeTotal)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	respondJSON(c, http.StatusOK, gin.H{
+		"message": "ออกบิลค่าสนามเรียบร้อย",
+		"data":    session,
+	})
+}
+
+// CancelCourtFee [DELETE] /api/attendance/sessions/:id/court-fee
+func (ctrl *AttendanceController) CancelCourtFee(c *gin.Context) {
+	id, ok := uintParam(c, "id", "รหัสรอบเช็คชื่อ")
+	if !ok {
+		return
+	}
+
+	adminID, _, authOK := GetAuthContext(c)
+	if !authOK {
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		return
+	}
+
+	session, err := ctrl.service.CancelCourtFee(id, adminID)
+	if err != nil {
+		mapAttendanceError(c, err)
+		return
+	}
+	respondJSON(c, http.StatusOK, gin.H{
+		"message": "ยกเลิกบิลค่าสนามของรอบนี้แล้ว — ออกบิลใหม่ได้",
+		"data":    session,
+	})
+}
+
+// GetUnbilledCourtSessions [GET] /api/attendance/court-fee/pending
+func (ctrl *AttendanceController) GetUnbilledCourtSessions(c *gin.Context) {
+	items, err := ctrl.service.GetUnbilledCourtSessions()
+	if err != nil {
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // UpdateStatus [PATCH] /api/attendance/records/:id
@@ -381,13 +479,13 @@ func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 
 	adminID, _, authOK := GetAuthContext(c)
 	if !authOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.UpdateAttendanceStatusReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "สถานะต้องเป็น present หรือ absent"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "สถานะต้องเป็น present หรือ absent"})
 		return
 	}
 
@@ -396,7 +494,7 @@ func (ctrl *AttendanceController) UpdateStatus(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "แก้ไขสถานะเรียบร้อยแล้ว", "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": "แก้ไขสถานะเรียบร้อยแล้ว", "data": result})
 }
 
 // historyFilter อ่านตัวกรองของหน้าประวัติจาก query string
@@ -446,7 +544,7 @@ func historyFilter(c *gin.Context) (services.HistoryFilter, error) {
 func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 	filter, err := historyFilter(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -455,7 +553,7 @@ func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	respondJSON(c, http.StatusOK, gin.H{
 		"data":   items,
 		"total":  total,
 		"limit":  filter.Limit,
@@ -463,11 +561,37 @@ func (ctrl *AttendanceController) GetHistory(c *gin.Context) {
 	})
 }
 
+// GetMyHistory [GET] /api/attendance/me — ประวัติเข้าเรียนของตัวเอง อ้างตัวตนจาก JWT ไม่มี path param
+func (ctrl *AttendanceController) GetMyHistory(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	filter, err := historyFilter(c)
+	if err != nil {
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := ctrl.service.GetMyHistory(userID, filter.Limit, filter.Offset)
+	if err != nil {
+		if errors.Is(err, services.ErrCustomerProfileNotFound) {
+			respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		mapAttendanceError(c, err)
+		return
+	}
+	respondJSON(c, http.StatusOK, gin.H{"data": result})
+}
+
 // ExportHistory [GET] /api/attendance/history/export — CSV ของทั้งช่วง ไม่มีเพดานแถว
 func (ctrl *AttendanceController) ExportHistory(c *gin.Context) {
 	filter, err := historyFilter(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	filter.Limit = 0 // export = ทั้งช่วงตามตัวกรอง
@@ -533,7 +657,7 @@ func boolText(v bool) string {
 func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
 	filter, err := historyFilter(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -543,7 +667,7 @@ func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
 		}
 		parsed, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 32)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "รหัสรอบเช็คชื่อไม่ถูกต้อง"})
+			respondJSON(c, http.StatusBadRequest, gin.H{"error": "รหัสรอบเช็คชื่อไม่ถูกต้อง"})
 			return
 		}
 		filter.SessionIDs = append(filter.SessionIDs, uint(parsed))
@@ -554,7 +678,7 @@ func (ctrl *AttendanceController) GetCoachHistory(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // GetMissedClasses [GET] /api/attendance/missed-classes
@@ -564,20 +688,20 @@ func (ctrl *AttendanceController) GetMissedClasses(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // ResolveMissedClass [POST] /api/attendance/missed-classes/resolve
 func (ctrl *AttendanceController) ResolveMissedClass(c *gin.Context) {
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
 	var req dto.ResolveMissedClassRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		respondJSON(c, http.StatusBadRequest, gin.H{
 			"error": "กรุณาระบุคาบที่ต้องการเคลียร์ และสถานะของโค้ชทุกคนในคาบนั้น (present หรือ absent)"})
 		return
 	}
@@ -587,5 +711,5 @@ func (ctrl *AttendanceController) ResolveMissedClass(c *gin.Context) {
 		mapAttendanceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "บันทึกการสอนย้อนหลังเรียบร้อยแล้ว", "data": result})
+	respondJSON(c, http.StatusOK, gin.H{"message": "บันทึกการสอนย้อนหลังเรียบร้อยแล้ว", "data": result})
 }

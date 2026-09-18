@@ -5,11 +5,13 @@ import SlipUploader from '@/components/SlipUploader';
 import ImageLightbox from '@/components/ImageLightbox';
 import ExpenseEditModal from './ExpenseEditModal';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
-import { createExpense, updateExpense, deleteExpense } from "@/services/paymentAPI";
+import { createExpensesBatch, updateExpense, deleteExpense } from "@/services/paymentAPI";
 import { fetchCoachById, fetchCoachPayroll } from "@/services/coachAPI";
 import type { CoachPayrollLine } from "@/services/coachAPI";
 import { CreateExpenseReq, UpdateExpenseReq } from "@/types/payment";
+import DateField from '@/components/DateField';
 
+import { useConfirm } from "@/components/ConfirmProvider";
 // รายละเอียดการคำนวณค่าจ้างค้างจ่ายของโค้ชที่ถูกเลือก
 interface CoachWageInfo {
   loading: boolean;
@@ -28,6 +30,12 @@ interface CoachWageInfo {
   // เคลียร์ได้ที่ /admin/attendance/missed
   unresolvedSessions?: number;
   unresolvedAmount?: number;
+
+  // จ่ายเกินไปเท่าไร (0 ถ้าไม่เกิน)
+  //
+  // ⚠️ "ค่าจ้างค้างจ่าย" ถูก clamp ที่ 0 ฝั่ง backend เพราะเป็นเพดานของยอดที่จ่ายได้
+  // ถ้าไม่มีตัวนี้ "จ่ายครบพอดี" กับ "จ่ายเกินเก้าพัน" จะแสดงเป็น ฿0 เหมือนกัน
+  overpaid?: number;
 
   // "8 คาบ × ฿300" + "4 คาบ × ฿400" — ทำให้แอดมินตรวจได้ว่ายอดรวมมาจากไหน
   rateBreakdown?: CoachPayrollLine[];
@@ -51,6 +59,7 @@ export default function ExpensesTab({
   onFetchData,
   onTriggerToast
 }: ExpensesTabProps) {
+  const confirmAction = useConfirm();
   const [expenseForm, setExpenseForm] = useState({
     expenseamount: '',
     expensetype: 'court_rental',
@@ -139,6 +148,7 @@ export default function ExpensesTab({
         unpaid: payroll.unpaid,
         unresolvedSessions: payroll.unresolved_sessions,
         unresolvedAmount: payroll.unresolved_amount,
+        overpaid: payroll.overpaid,
         rateBreakdown: payroll.rate_breakdown,
         periodNote: payroll.period_note,
         promptPay: coach.prompt_pay || '',
@@ -246,9 +256,12 @@ export default function ExpensesTab({
     setIsSubmitting(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
-      for (const body of reqBodies) {
-        await createExpense(body, token || "");
-      }
+      // ⚠️ ส่งเป็นก้อนเดียว ห้ามวนลูปยิงทีละรายการ
+      //
+      // หน้านี้บันทึก "ค่าจ้าง + โบนัสหลายรายการ" พร้อมกัน ถ้าวนลูปแล้วพังกลางทาง
+      // จะเหลือผลลัพธ์ครึ่ง ๆ ที่แอดมินไม่รู้ว่าอันไหนลงไปแล้ว จะกดซ้ำก็ไม่กล้า
+      // backend คุมทั้งก้อนเป็นทรานแซกชันเดียว สำเร็จหมดหรือไม่สำเร็จเลย
+      await createExpensesBatch(reqBodies, token || "");
 
       onTriggerToast(reqBodies.length > 1 ? "บันทึกค่าจ้างและรายได้ส่วนอื่นสำเร็จเรียบร้อย" : "บันทึกค่าใช้จ่ายสำเร็จเรียบร้อย");
       setOtherIncomes([]);
@@ -285,7 +298,7 @@ export default function ExpensesTab({
   };
 
   const handleDeleteExpense = async (id: number) => {
-    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?")) {
+    if (!(await confirmAction({ message: "คุณแน่ใจหรือไม่ว่าต้องการลบรายการค่าใช้จ่ายนี้อย่างถาวร?", tone: "danger" }))) {
       throw new Error('cancelled'); // ผู้ใช้ยกเลิก — ไม่ปิด modal
     }
 
@@ -397,7 +410,22 @@ export default function ExpensesTab({
             </div>
           )}
 
-          {/* 3) คำเตือนคาบที่ยังไม่ปิดรอบ */}
+          {/* 3) คำเตือนจ่ายเกิน — ยอด "ค่าจ้างค้างจ่าย" ถูก clamp ที่ 0
+              จึงบอกไม่ได้ว่า "จ่ายครบพอดี" หรือ "จ่ายเกิน" ถ้าไม่บอกตรงนี้
+              เงินที่จ่ายเกินจะหายไปจากสายตาทุกฝ่าย */}
+          {isCoachWages && expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (wageInfo.overpaid ?? 0) > 0 && (
+            <div className="border border-rose-300 bg-rose-50 px-4 py-3">
+              <p className="text-[12.5px] font-bold text-rose-700">
+                จ่ายเกินไป ฿{wageInfo.overpaid!.toLocaleString()}
+              </p>
+              <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-600">
+                จ่ายไปแล้วมากกว่าค่าจ้างที่ควรได้ — ตรวจประวัติการจ่าย
+                หรือเคลียร์คาบที่ยังไม่มีรอบเช็คชื่อก่อน
+              </p>
+            </div>
+          )}
+
+          {/* 4) คำเตือนคาบที่ยังไม่ปิดรอบ */}
           {isCoachWages && expenseForm.coach_id && wageInfo && !wageInfo.loading && !wageInfo.error && (wageInfo.unresolvedSessions ?? 0) > 0 && (
             <div className="border border-amber-300 bg-amber-50 px-4 py-3">
               <p className="text-[12.5px] font-medium text-amber-800">
@@ -541,11 +569,10 @@ export default function ExpensesTab({
           <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2">
             <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">วันที่ทำรายการ</label>
-              <input
-                type="date"
+              <DateField
                 value={expenseForm.expensedate}
-                onChange={(e) => setExpenseForm(prev => ({ ...prev, expensedate: e.target.value }))}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
+                onChange={(val) => setExpenseForm(prev => ({ ...prev, expensedate: val }))}
+                buttonClassName="h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[#CD0D13]"
                 required
               />
             </div>

@@ -14,6 +14,7 @@ import type {
 } from "@/types/classConfirmation";
 import { dayLabel } from "@/components/course/courseUtils";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 /**
  * ยืนยันการมาเรียนล่วงหน้า 7 วัน — โรงเรียนใช้จำนวนคนไปตัดสินใจจองสนาม
  *
@@ -46,6 +47,7 @@ function deadlineLabel(iso: string): string {
 }
 
 export default function ClassConfirmationSection() {
+  const showToast = useGlobalToast();
   const [classes, setClasses] = useState<UpcomingClass[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export default function ClassConfirmationSection() {
       );
     } catch (err: unknown) {
       // เส้นตายผ่านไประหว่างเปิดหน้าค้างไว้ก็มาที่นี่ — โหลดใหม่ให้เห็นสถานะจริง
-      alert(err instanceof Error ? err.message : "บันทึกคำตอบไม่สำเร็จ");
+      showToast(err instanceof Error ? err.message : "บันทึกคำตอบไม่สำเร็จ", "error");
       load();
     } finally {
       setSavingKey(null);

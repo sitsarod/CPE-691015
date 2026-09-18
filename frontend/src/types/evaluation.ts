@@ -7,6 +7,15 @@ export interface EvaluableStudent {
   profile_picture?: string;
 }
 
+/** นักเรียนหนึ่งคน พร้อมจำนวนรูป/วิดีโอที่ถูกแท็กไว้ — ใช้แสดงลิสต์ "โฟลเดอร์เสมือน" หน้าแอดมิน */
+export interface StudentMediaSummary {
+  customer_id: number;
+  nickname: string;
+  profile_picture?: string;
+  photo_count: number;
+  video_count: number;
+}
+
 /** คอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง */
 export interface EvaluableCourse {
   course_id: number;

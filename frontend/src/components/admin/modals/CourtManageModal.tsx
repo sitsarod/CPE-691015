@@ -5,6 +5,7 @@ import Button from "@/components/Button";
 import { FormError } from "@/components/admin/ManagementUI";
 import { Court, getCourts, createCourt, updateCourt, deleteCourt } from "@/services/courtAPI";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function CourtManageModal({ isOpen, onClose, onChanged }: Props) {
+  const confirmAction = useConfirm();
   const [courts, setCourts] = useState<Court[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [newName, setNewName] = useState("");
@@ -85,7 +87,7 @@ export function CourtManageModal({ isOpen, onClose, onChanged }: Props) {
   };
 
   const handleDelete = async (court: Court) => {
-    if (!confirm(`ลบสนาม "${court.name}" ใช่หรือไม่?`)) return;
+    if (!(await confirmAction({ message: `ลบสนาม "${court.name}" ใช่หรือไม่?`, tone: "danger" }))) return;
     try {
       setBusyId(court.ID);
       await deleteCourt(court.ID);

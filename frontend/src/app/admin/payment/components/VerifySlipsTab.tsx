@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { BillingDTO } from './types';
 import { confirmSlip, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 export interface VerifySlipsTabProps {
   billings: BillingDTO[];
   onFetchData: () => void;
@@ -42,6 +43,7 @@ export default function VerifySlipsTab({
   onTriggerToast,
   initialFilter
 }: VerifySlipsTabProps) {
+  const confirmAction = useConfirm();
   const [slipFilter, setSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid'>(initialFilter ?? 'pending');
   const [slipSearchTerm, setSlipSearchTerm] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -78,7 +80,9 @@ export default function VerifySlipsTab({
       } else if (slipFilter === 'rejected') {
         matchesStatus = b.billingstatus === 'unfunded' && !!b.slipurl;
       } else if (slipFilter === 'unpaid') {
-        matchesStatus = b.billingstatus === 'unfunded' || b.billingstatus === 'overdue';
+        // ค้างชำระ = ยังไม่เคยแนบสลิปเลย — กันบิลที่ถูก "ปฏิเสธ" (unfunded + มีสลิป) ปนเข้ามา
+        // เพราะบิลที่ถูกปฏิเสธก็ถูกคืนสถานะเป็น unfunded เหมือนกัน แต่ยังมี slipurl ติดอยู่
+        matchesStatus = (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') && !b.slipurl;
       }
 
       const studentName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.toLowerCase();
@@ -219,9 +223,9 @@ export default function VerifySlipsTab({
 
   // ลูกค้าจ่ายเงินสด (logic เดิม)
   const handleCashPayment = async (group: InvoiceGroup) => {
-    if (!window.confirm(
+    if (!(await confirmAction(
       `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ${fmtBaht(group.totalAmount)} ใช่หรือไม่?`
-    )) return;
+    ))) return;
 
     setSubmitting('cash');
     try {
@@ -428,7 +432,7 @@ export default function VerifySlipsTab({
               </p>
             </div>
           ) : (
-            <div className="mx-auto flex min-h-full w-full max-w-xl flex-1 flex-col gap-5 p-6 lg:max-w-none">
+            <div className="mx-auto flex min-h-full w-full max-w-xl flex-1 flex-col gap-5 p-6 pb-[calc(24px+env(safe-area-inset-bottom))] lg:max-w-none lg:pb-6">
               {/* 1) หัวแผง */}
               <div className="flex items-end justify-between gap-4 border-b border-gray-200 pb-4">
                 <h2 className="text-xl font-semibold tracking-tight text-slate-900">รายละเอียดและผลตรวจสอบ</h2>
@@ -454,7 +458,7 @@ export default function VerifySlipsTab({
                     type="button"
                     onClick={() => setLightboxOpen(true)}
                     title="กดเพื่อดูสลิปขนาดเต็ม"
-                    className="flex h-[460px] w-full cursor-zoom-in items-center justify-center border border-gray-200 p-2"
+                    className="flex h-[300px] w-full cursor-zoom-in items-center justify-center border border-gray-200 p-2 sm:h-[460px]"
                   >
                     <img
                       key={imgReloadToken}
@@ -466,7 +470,7 @@ export default function VerifySlipsTab({
                   </button>
                 ) : selectedGroup.slipurl && slipImgError ? (
                   // สลิปโหลดไม่ขึ้น
-                  <div className="flex h-[460px] w-full flex-col items-center justify-center gap-2 border border-rose-300 bg-rose-50/60 text-center">
+                  <div className="flex h-[200px] w-full flex-col items-center justify-center gap-2 border border-rose-300 bg-rose-50/60 text-center sm:h-[460px]">
                     <p className="text-sm font-semibold text-rose-600">โหลดรูปสลิปไม่สำเร็จ</p>
                     <button
                       type="button"
@@ -478,7 +482,7 @@ export default function VerifySlipsTab({
                   </div>
                 ) : (
                   // ไม่มีสลิปแนบ
-                  <div className="flex h-[460px] w-full items-center justify-center border border-dashed border-gray-300 text-center">
+                  <div className="flex h-[200px] w-full items-center justify-center border border-dashed border-gray-300 text-center sm:h-[460px]">
                     <p className="text-sm text-slate-500">ยังไม่มีการอัปโหลดสลิปสำหรับรายการนี้</p>
                   </div>
                 )}

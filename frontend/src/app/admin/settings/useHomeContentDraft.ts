@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { homeContentAPI } from '@/services/homeContentAPI';
 import { HomeContent, PublicCoach, HeroSlide, UpdateHomeContentReq } from '@/types/homeContent';
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 // ---- คีย์ของแต่ละหมวด (ใช้ diff draft vs saved เพื่อหา "จุดที่แก้ยังไม่บันทึก") ----
 // เฉพาะ field ที่อยู่ใน content blob (สไลด์/โค้ชบันทึกทันที ไม่นับรวม)
 export type SectionId =
@@ -30,7 +32,6 @@ export const SECTION_FIELDS: Record<SectionId, (keyof HomeContent)[]> = {
     'courses_footnote',
     'coaches_title',
     'coaches_subtitle',
-    'coaches_note',
     'coach_stats',
   ],
   coaches: [], // จัดการแยก (บันทึกทันที)
@@ -84,7 +85,6 @@ const toUpdateReq = (c: HomeContent): UpdateHomeContentReq => ({
   hero_headline: c.hero_headline,
   hero_subtext: c.hero_subtext,
   courses_footnote: c.courses_footnote,
-  coaches_note: c.coaches_note,
   facility_title: c.facility_title,
   facility_subtitle: c.facility_subtitle,
   footer_cta_title: c.footer_cta_title,
@@ -113,12 +113,17 @@ export interface UseHomeContentDraft {
   toggleSlide: (slide: HeroSlide) => Promise<void>;
   deleteSlide: (slide: HeroSlide) => Promise<void>;
   moveSlide: (index: number, dir: -1 | 1) => Promise<void>;
+  setSlideFocal: (id: number, x: number, y: number) => Promise<void>;
+  setSlideZoom: (id: number, zoom: number) => Promise<void>;
   // โค้ช (บันทึกทันที)
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => Promise<void>;
+  setHeadCoach: (coach: PublicCoach) => Promise<void>;
 }
 
 export function useHomeContentDraft(): UseHomeContentDraft {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -140,15 +145,16 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       ]);
       setSaved(c);
       setDraft(c);
-      setCoaches(co);
-      setSlides(sl);
+      // backend ส่ง list ว่างเป็น null — กัน .filter/.length ในหน้า settings พังตอนยังไม่มีสไลด์/โค้ช
+      setCoaches(co ?? []);
+      setSlides(sl ?? []);
     } catch (error) {
       console.error('โหลดข้อมูลหน้าแรกไม่สำเร็จ:', error);
-      alert('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ');
+      showToast('ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบการเชื่อมต่อ', "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     loadAll();
@@ -184,11 +190,11 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (error) {
-      alert(`บันทึกไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`บันทึกไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setSaving(false);
     }
-  }, [draft]);
+  }, [draft, showToast]);
 
   // ---------- สไลด์ (บันทึกทันที) ----------
   const uploadSlide = useCallback(
@@ -199,12 +205,12 @@ export function useHomeContentDraft(): UseHomeContentDraft {
         const created = await homeContentAPI.createSlide({ image_url, sort_order: slides.length });
         setSlides((prev) => [...prev, created]);
       } catch (error) {
-        alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+        showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
       } finally {
         setUploadingSlide(false);
       }
     },
-    [slides.length]
+    [slides.length, showToast]
   );
 
   const toggleSlide = useCallback(async (slide: HeroSlide) => {
@@ -212,19 +218,68 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       const updated = await homeContentAPI.updateSlide(slide.id, { is_active: !slide.is_active });
       setSlides((prev) => prev.map((s) => (s.id === slide.id ? updated : s)));
     } catch (error) {
-      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [showToast]);
+
+  // ตั้งจุดโฟกัสของสไลด์ (0-100) — อัปเดต local ทันทีให้ preview ลื่น แล้วค่อยยิง API
+  // เรียกตอน "ปล่อยเมาส์" ครั้งเดียว ไม่ใช่ทุก pixel ระหว่างลาก จึงไม่ถล่ม API
+  const setSlideFocal = useCallback(
+    async (id: number, x: number, y: number) => {
+      const fx = Math.round(Math.min(100, Math.max(0, x)));
+      const fy = Math.round(Math.min(100, Math.max(0, y)));
+      let prev: HeroSlide | undefined;
+      setSlides((list) =>
+        list.map((s) => {
+          if (s.id === id) prev = s;
+          return s.id === id ? { ...s, focal_x: fx, focal_y: fy } : s;
+        })
+      );
+      try {
+        const updated = await homeContentAPI.updateSlide(id, { focal_x: fx, focal_y: fy });
+        setSlides((list) => list.map((s) => (s.id === id ? updated : s)));
+      } catch (error) {
+        // ย้อนค่ากลับถ้าบันทึกไม่สำเร็จ
+        if (prev) setSlides((list) => list.map((s) => (s.id === id ? prev! : s)));
+        alert(`บันทึกจุดโฟกัสไม่สำเร็จ: ${(error as Error).message}`);
+      }
+    },
+    []
+  );
+
+  // ตั้งระดับซูมของสไลด์ (100-300 = 1x-3x) — อัปเดต local ทันทีให้ preview ลื่น แล้วค่อยยิง API
+  // เรียกตอน "ปล่อยแถบเลื่อน" ครั้งเดียว ไม่ใช่ทุกก้าวระหว่างลาก จึงไม่ถล่ม API
+  const setSlideZoom = useCallback(
+    async (id: number, zoom: number) => {
+      const z = Math.round(Math.min(300, Math.max(100, zoom)));
+      let prev: HeroSlide | undefined;
+      setSlides((list) =>
+        list.map((s) => {
+          if (s.id === id) prev = s;
+          return s.id === id ? { ...s, zoom: z } : s;
+        })
+      );
+      try {
+        const updated = await homeContentAPI.updateSlide(id, { zoom: z });
+        setSlides((list) => list.map((s) => (s.id === id ? updated : s)));
+      } catch (error) {
+        // ย้อนค่ากลับถ้าบันทึกไม่สำเร็จ
+        if (prev) setSlides((list) => list.map((s) => (s.id === id ? prev! : s)));
+        alert(`บันทึกระดับซูมไม่สำเร็จ: ${(error as Error).message}`);
+      }
+    },
+    []
+  );
 
   const deleteSlide = useCallback(async (slide: HeroSlide) => {
-    if (!confirm('ลบรูปสไลด์นี้?')) return;
+    if (!(await confirmAction({ message: 'ลบรูปสไลด์นี้?', tone: 'danger' }))) return;
     try {
       await homeContentAPI.deleteSlide(slide.id);
       setSlides((prev) => prev.filter((s) => s.id !== slide.id));
     } catch (error) {
-      alert(`ลบไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`ลบไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [confirmAction, showToast]);
 
   const moveSlide = useCallback(
     async (index: number, dir: -1 | 1) => {
@@ -236,11 +291,11 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       try {
         await homeContentAPI.reorderSlides(reordered.map((s) => s.id));
       } catch (error) {
-        alert(`จัดลำดับไม่สำเร็จ: ${(error as Error).message}`);
+        showToast(`จัดลำดับไม่สำเร็จ: ${(error as Error).message}`, "error");
         loadAll();
       }
     },
-    [slides, loadAll]
+    [slides, loadAll, showToast]
   );
 
   // ---------- โค้ช (บันทึกทันที) ----------
@@ -249,9 +304,25 @@ export function useHomeContentDraft(): UseHomeContentDraft {
       const updated = await homeContentAPI.setCoachFeature(coach.id, !coach.feature_on_home);
       setCoaches((prev) => prev.map((c) => (c.id === coach.id ? updated : c)));
     } catch (error) {
-      alert(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
     }
-  }, []);
+  }, [showToast]);
+
+  // ⚠️ ตั้งหัวหน้าคนใหม่ = backend ปลดคนเดิมให้เอง จึงต้องล้างธงของทุกคนในฝั่ง UI ด้วย
+  // ถ้าอัปเดตเฉพาะแถวที่กด หน้าจอจะโชว์หัวหน้าโค้ชสองคนจนกว่าจะรีโหลด
+  const setHeadCoach = useCallback(async (coach: PublicCoach) => {
+    const next = !coach.is_head_coach;
+    try {
+      const updated = await homeContentAPI.setHeadCoach(coach.id, next);
+      setCoaches((prev) =>
+        prev.map((c) =>
+          c.id === coach.id ? updated : next ? { ...c, is_head_coach: false } : c
+        )
+      );
+    } catch (error) {
+      showToast(`อัปเดตไม่สำเร็จ: ${(error as Error).message}`, "error");
+    }
+  }, [showToast]);
 
   return {
     loading,
@@ -269,7 +340,10 @@ export function useHomeContentDraft(): UseHomeContentDraft {
     toggleSlide,
     deleteSlide,
     moveSlide,
+    setSlideFocal,
+    setSlideZoom,
     coaches,
     toggleCoach,
+    setHeadCoach,
   };
 }

@@ -118,7 +118,7 @@ export default function EnrollmentHistoryModal({ enrollments, onClose }: Props) 
                         <StatusTag status={e.status} />
                       </div>
 
-                      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <dl className="mt-2 grid grid-cols-1 gap-y-1 text-xs text-gray-600 sm:grid-cols-2 sm:gap-x-4">
                         <div className="flex justify-between">
                           <dt className="text-gray-500">ช่วงที่เรียน</dt>
                           <dd className="font-medium">

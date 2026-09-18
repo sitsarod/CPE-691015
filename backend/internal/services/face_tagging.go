@@ -62,25 +62,23 @@ func NewFaceTaggingService(db *gorm.DB, engine FaceEngine, roster *EvaluationSer
 // ผู้เรียกควรปล่อยให้อัปโหลดสำเร็จต่อไปแล้วให้โค้ชแท็กเอง
 var ErrFaceTaggingUnavailable = errors.New("ระบบจำแนกใบหน้ายังไม่พร้อมใช้งาน")
 
-// DetectStudentsInPhoto หาว่าในรูปมีนักเรียนคนไหนของคอร์สนี้บ้าง
+// DetectStudentsInPhoto หาว่าในรูปมีนักเรียนคนไหนของโรงเรียนบ้าง
 //
 // คืน (รายชื่อที่เดาได้, จำนวนใบหน้าทั้งหมดที่เจอในรูป, error)
 //
 // จำนวนใบหน้ามีประโยชน์กับหน้าจอ — บอกโค้ชได้ว่า "เจอ 5 หน้า จับคู่ได้ 3 คน"
 // เพื่อให้รู้ว่าต้องแท็กเองเพิ่มอีกกี่คน ไม่ใช่เข้าใจผิดว่าระบบเจอครบแล้ว
-func (s *FaceTaggingService) DetectStudentsInPhoto(
-	ctx context.Context,
-	coachUserID uint,
-	courseID uint,
-	image []byte,
-) ([]FaceMatch, int, error) {
+//
+// ⚠️ เทียบกับ "นักเรียนทั้งโรงเรียน" ไม่ใช่แค่คอร์ส/โค้ชของคนอัปโหลด — เพราะคนที่อัปโหลด
+// (โค้ชหรือแอดมิน) อาจไม่ใช่คนสอนคอร์สของคนในรูป/วิดีโอนั้นก็ได้ (ดูเหตุผลเต็มที่ GetAllActiveStudents)
+func (s *FaceTaggingService) DetectStudentsInPhoto(ctx context.Context, image []byte) ([]FaceMatch, int, error) {
 	if s.engine == nil || !s.engine.Enabled() {
 		return nil, 0, ErrFaceTaggingUnavailable
 	}
 
-	// จำกัดวงคนที่ต้องเทียบให้เหลือเฉพาะนักเรียนของคอร์สนี้ก่อนเรียกโมเดล — ยิ่งกลุ่มเล็กยิ่งจับผิดคน
-	// ยาก และถ้าไม่มีนักเรียนในคอร์สนี้เลยก็ไม่ต้องเสียเวลา/เงิน (เรียก API จริง) เรียกโมเดลเลย
-	customerIDs, nicknames, err := s.loadRoster(coachUserID, courseID)
+	// จำกัดวงคนที่ต้องเทียบให้เหลือเฉพาะนักเรียนที่ลงทะเบียนอยู่จริงก่อนเรียกโมเดล — ถ้าไม่มีใครเลย
+	// ก็ไม่ต้องเสียเวลา/เงิน (เรียก API จริง) เรียกโมเดลเลย
+	customerIDs, nicknames, err := s.loadRoster()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -93,24 +91,19 @@ func (s *FaceTaggingService) DetectStudentsInPhoto(
 		return nil, 0, err
 	}
 
-	matches := s.matchFacesToRoster(courseID, result.Faces, customerIDs, nicknames)
+	matches := s.matchFacesToRoster(result.Faces, customerIDs, nicknames)
 	return matches, result.FaceCount, nil
 }
 
-// DetectStudentsInVideo หาว่าในวิดีโอมีนักเรียนคนไหนของคอร์สนี้บ้าง — เหมือน DetectStudentsInPhoto
+// DetectStudentsInVideo หาว่าในวิดีโอมีนักเรียนคนไหนของโรงเรียนบ้าง — เหมือน DetectStudentsInPhoto
 // ทุกอย่าง ต่างกันแค่เรียก face-service คนละ endpoint (สุ่มตรวจหลายเฟรมแทนรูปเดียว ดู
 // EmbedAllVideo/main.py:embed_all_video) ตรรกะจับคู่/กรองที่เหลือใช้ร่วมกันหมด
-func (s *FaceTaggingService) DetectStudentsInVideo(
-	ctx context.Context,
-	coachUserID uint,
-	courseID uint,
-	video []byte,
-) ([]FaceMatch, int, error) {
+func (s *FaceTaggingService) DetectStudentsInVideo(ctx context.Context, video []byte) ([]FaceMatch, int, error) {
 	if s.engine == nil || !s.engine.Enabled() {
 		return nil, 0, ErrFaceTaggingUnavailable
 	}
 
-	customerIDs, nicknames, err := s.loadRoster(coachUserID, courseID)
+	customerIDs, nicknames, err := s.loadRoster()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -123,14 +116,14 @@ func (s *FaceTaggingService) DetectStudentsInVideo(
 		return nil, 0, err
 	}
 
-	matches := s.matchFacesToRoster(courseID, result.Faces, customerIDs, nicknames)
+	matches := s.matchFacesToRoster(result.Faces, customerIDs, nicknames)
 	return matches, result.FaceCount, nil
 }
 
-// loadRoster ดึงรายชื่อนักเรียนของคอร์สนี้มาเป็นรูปแบบที่ใช้จับคู่ใบหน้าได้เลย — ใช้ร่วมกันทั้ง
+// loadRoster ดึงรายชื่อนักเรียนทั้งโรงเรียนมาเป็นรูปแบบที่ใช้จับคู่ใบหน้าได้เลย — ใช้ร่วมกันทั้ง
 // DetectStudentsInPhoto และ DetectStudentsInVideo (กติกาการดึง roster ต้องเหมือนกันเป๊ะทั้งสองทาง)
-func (s *FaceTaggingService) loadRoster(coachUserID, courseID uint) (customerIDs []uint, nicknames map[uint]string, err error) {
-	students, err := s.roster.GetMyStudents(coachUserID, &courseID)
+func (s *FaceTaggingService) loadRoster() (customerIDs []uint, nicknames map[uint]string, err error) {
+	students, err := s.roster.GetAllActiveStudents()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,11 +137,10 @@ func (s *FaceTaggingService) loadRoster(coachUserID, courseID uint) (customerIDs
 	return customerIDs, nicknames, nil
 }
 
-// matchFacesToRoster จับคู่ใบหน้าที่ตรวจพบมาแล้ว (จากรูปหรือวิดีโอก็ได้) กับรายชื่อนักเรียนของ
-// คอร์สนี้ — แยกออกมาจาก DetectStudentsInPhoto/DetectStudentsInVideo เพื่อไม่ต้องเขียนตรรกะ
+// matchFacesToRoster จับคู่ใบหน้าที่ตรวจพบมาแล้ว (จากรูปหรือวิดีโอก็ได้) กับรายชื่อนักเรียนที่ส่งมา
+// แยกออกมาจาก DetectStudentsInPhoto/DetectStudentsInVideo เพื่อไม่ต้องเขียนตรรกะ
 // กรอง/จับคู่/เรียงลำดับซ้ำสองที่
 func (s *FaceTaggingService) matchFacesToRoster(
-	courseID uint,
 	faces []DetectedFaceEmbedding,
 	customerIDs []uint,
 	nicknames map[uint]string,
@@ -172,7 +164,7 @@ func (s *FaceTaggingService) matchFacesToRoster(
 
 		customerID, confidence, err := s.matchFace(face.Embedding, customerIDs)
 		if err != nil {
-			log.Printf("แท็กใบหน้าไม่สำเร็จ (course %d): %v", courseID, err)
+			log.Printf("แท็กใบหน้าไม่สำเร็จ: %v", err)
 			continue
 		}
 		if customerID == 0 {

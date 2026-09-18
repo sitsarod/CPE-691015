@@ -8,6 +8,8 @@ import { getUserProfileAPI } from '../services/userAPI';
 import { AutoQA, ChatSession, CreateChatSessionReq } from '../types/autoQa';
 import { useVisibleInterval } from '../hooks/useVisibleInterval';
 
+import { useGlobalToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 interface ChatMessage {
   id: string;
   rowId?: number; // id ของแถว AutoQA จริง (ใช้แก้ไข/ลบ) — ข้อความชั่วคราวจะไม่มี
@@ -89,6 +91,8 @@ function mapAutoQAsToMessages(qas: AutoQA[]): ChatMessage[] {
 }
 
 export default function ChatWidget() {
+  const showToast = useGlobalToast();
+  const confirmAction = useConfirm();
   const [isOpen, setIsOpen] = useState(false);
   const [session, setSession] = useState<ChatSession | null>(null);
   // กุญแจลับของห้องปัจจุบัน — เก็บแยกจาก session เพราะ backend ส่ง access_token กลับเฉพาะตอนสร้าง
@@ -435,7 +439,7 @@ export default function ChatWidget() {
       const res = await autoQaAPI.uploadChatAttachment(file);
       setPendingAttachment({ url: res.url, type: res.type, name: res.name });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'อัปโหลดไฟล์ไม่สำเร็จ');
+      showToast(err instanceof Error ? err.message : 'อัปโหลดไฟล์ไม่สำเร็จ', "error");
     } finally {
       setUploading(false);
     }
@@ -504,7 +508,7 @@ export default function ChatWidget() {
       await autoQaAPI.editChatMessage(session.id, rowId, t, sessionToken ?? undefined);
       setMessages((prev) => prev.map((m) => (m.rowId === rowId && m.sender === 'user' ? { ...m, text: t } : m)));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'แก้ไขข้อความไม่สำเร็จ');
+      showToast(err instanceof Error ? err.message : 'แก้ไขข้อความไม่สำเร็จ', "error");
     } finally {
       setEditingRowId(null);
       setEditText('');
@@ -513,12 +517,12 @@ export default function ChatWidget() {
 
   const handleDeleteMessage = async (rowId: number) => {
     if (!session) return;
-    if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) return;
+    if (!(await confirmAction({ message: 'ต้องการลบข้อความนี้ใช่หรือไม่?', tone: 'danger' }))) return;
     try {
       await autoQaAPI.deleteChatMessage(session.id, rowId, sessionToken ?? undefined);
       setMessages((prev) => prev.filter((m) => m.rowId !== rowId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'ลบข้อความไม่สำเร็จ');
+      showToast(err instanceof Error ? err.message : 'ลบข้อความไม่สำเร็จ', "error");
     }
   };
 

@@ -6,12 +6,23 @@ import (
 )
 
 type CreateExpenseRequest struct {
-	Amount      float64            `json:"expenseamount" binding:"required,gt=0"`
-	Type        models.ExpenseType `json:"expensetype" binding:"required"`
+	Amount float64 `json:"expenseamount" binding:"required,gt=0"`
+	// ⚠️ ต้องมี oneof — ไม่งั้นส่ง type อะไรก็ได้แล้วข้ามด่านตรวจค่าจ้างทั้งหมด
+	// (validateCoachWage ปล่อยผ่านทุก type ที่ไม่ใช่ coach_wages)
+	Type        models.ExpenseType `json:"expensetype" binding:"required,oneof=coach_wages coach_other court_rental equipment advertising other"`
 	Description string             `json:"expensedescription"`
 	Date        time.Time          `json:"expensedate" binding:"required"`
 	CoachID     *uint              `json:"coach_id"`
 	ReceiptURL  string             `json:"receipturl"`
+}
+
+// CreateExpenseBatchRequest บันทึกหลายรายการเป็นก้อนเดียว
+//
+// ⚠️ หน้าจ่ายค่าจ้างบันทึก "ค่าจ้าง + โบนัสหลายรายการ" พร้อมกัน
+// ถ้าแยกยิงทีละรายการแล้วพังกลางทาง จะเหลือผลลัพธ์ครึ่ง ๆ ที่แอดมินไม่รู้ว่าอันไหนลงไปแล้ว
+// จึงต้องส่งมาเป็นก้อนเดียวให้ backend คุมเป็นทรานแซกชันเดียว
+type CreateExpenseBatchRequest struct {
+	Items []CreateExpenseRequest `json:"items" binding:"required,min=1,max=50,dive"`
 }
 
 // UpdateExpenseRequest — ทุกฟิลด์เป็น optional (แก้เฉพาะที่ส่งมา)

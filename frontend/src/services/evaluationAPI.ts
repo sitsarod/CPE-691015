@@ -1,6 +1,12 @@
 // frontend/src/services/evaluationAPI.ts
 import { apiFetch } from "@/services/apiClient";
-import type { CreateEvaluationInput, EvaluableCourse, EvaluableStudent, Evaluation } from "@/types/evaluation";
+import type {
+  CreateEvaluationInput,
+  EvaluableCourse,
+  EvaluableStudent,
+  Evaluation,
+  StudentMediaSummary,
+} from "@/types/evaluation";
 
 // [GET] รายชื่อนักเรียนที่ลงทะเบียนเรียนกับโค้ชที่ล็อกอินอยู่ (เฉพาะ role coach)
 // courseId ไม่ใส่ = รวมทุกคอร์สเหมือนเดิม ใส่มา = กรองเฉพาะนักเรียนของคอร์สนั้น
@@ -13,6 +19,20 @@ export async function fetchMyStudents(courseId?: number): Promise<EvaluableStude
 // [GET] รายชื่อคอร์สที่โค้ชที่ล็อกอินอยู่มีตารางสอนอยู่จริง (เฉพาะ role coach)
 export async function fetchMyCourses(): Promise<EvaluableCourse[]> {
   const res = await apiFetch<{ data: EvaluableCourse[] }>("/evaluations/courses");
+  return res.data ?? [];
+}
+
+// [GET] รายชื่อนักเรียนที่ลงทะเบียนเรียนอยู่จริงทั้งโรงเรียน ไม่กรองตามโค้ช/คอร์ส (โค้ชหรือแอดมิน)
+// ใช้ตอนแท็กนักเรียนในรูป/วิดีโอ (หน้า coach/detect) เพราะคนอัปโหลดอาจไม่ใช่คนสอนคอร์สนั้นก็ได้
+export async function fetchAllActiveStudents(): Promise<EvaluableStudent[]> {
+  const res = await apiFetch<{ data: EvaluableStudent[] }>("/evaluations/students/all");
+  return res.data ?? [];
+}
+
+// [GET] เหมือน fetchAllActiveStudents แต่แนบจำนวนรูป/วิดีโอที่ถูกแท็กไว้มาด้วย (เฉพาะแอดมิน)
+// ใช้แสดงลิสต์ "โฟลเดอร์เสมือน" ในหน้า admin/detect/media
+export async function fetchStudentsMediaSummary(): Promise<StudentMediaSummary[]> {
+  const res = await apiFetch<{ data: StudentMediaSummary[] }>("/admin/students/media-summary");
   return res.data ?? [];
 }
 

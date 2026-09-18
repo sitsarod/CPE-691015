@@ -24,7 +24,7 @@ func main() {
 	if dsn == "" {
 		log.Fatal("กรุณาตั้งค่า DATABASE_URL ในไฟล์ .env ด้วยซะล่ะ!")
 	}
-	
+
 	// เชื่อมต่อฐานข้อมูล
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -33,7 +33,7 @@ func main() {
 	fmt.Println("เชื่อมต่อสำเร็จแล้ว!")
 	// 2. clear database and auto migrate models
 	db.Exec("DROP SCHEMA public CASCADE;")
-    db.Exec("CREATE SCHEMA public;")
+	db.Exec("CREATE SCHEMA public;")
 
 	// ต้องเปิดใหม่ทุกครั้ง เพราะ DROP SCHEMA ลบ extension ไปด้วย และต้องมาก่อน AutoMigrate
 	if err := services.EnableVectorExtension(db); err != nil {
@@ -79,15 +79,23 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.PasswordResetOTP{},
+		&models.EmailVerificationOTP{},
 		&models.Court{},
+		&models.AppSetting{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
+		&models.LegalDocumentRevision{},
 	)
 	if err != nil {
 		log.Fatalf("การทำ Auto Migration ล้มเหลว: %v", err)
 	}
 
 	// === SEEDING DEFAULT DATA ===
+	// ไม่มีแถวพวกนี้ = อนุมัติคำขอสมัครเรียนและออกบิลค่าสนามไม่ได้เลย
+	if err := services.EnsureBillingTypes(db); err != nil {
+		log.Fatalf("เติมประเภทบิลมาตรฐานไม่สำเร็จ: %v", err)
+	}
+
 	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ ต้องสร้างก่อน seed
 	// ไม่งั้นข้อมูลตัวอย่างที่ยังไม่มีรหัสประจำตัวจะชนกันเอง
 	if err := services.EnsureMemberCodeIndexes(db); err != nil {
@@ -119,6 +127,10 @@ func main() {
 		log.Fatalf("ทบครั้งคงเหลือย้อนหลังไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.BackfillCarryOverIntoRenewals(db); err != nil {
+		log.Fatalf("ย้ายยอดทบเก่าเข้าใบที่สมัครต่อไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.BackfillCompletedEnrollments(db); err != nil {
 		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
 	}
@@ -131,15 +143,12 @@ func main() {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
 	}
 
-	seedBillingTypes(db)
-	seedAdmins(db)
-	seedCoaches(db)
-	seedCustomers(db)
-	seedCoursesAndPackages(db)
-	seedBankAccounts(db)
-	seedHomeContent(db)
-	seedHeroSlides(db)
-	seedOperationalData(db) // คาบสอน + การเงิน (ต้องรันหลังคอร์ส/ลูกค้า/โค้ช)
+	seedAdmins(db)              // ต้องมี admin เป็นเจ้าของคอร์ส (และไว้ login)
+	seedCoursesAndPackages(db) // คอร์ส + แพ็กเกจ
+
+	// บัญชีที่ seed ไว้ข้างบนสร้างตรงด้วย tx.Create ไม่ได้ผ่าน UserService.CreateUser
+	// จึงไม่มี email_verified_at ติดมา — ปักให้ครบตรงนี้ที่เดียว ไม่งั้น login ไม่ได้เลย
+	if err := services.BackfillEmailVerifiedForExistingUsers(db); err != nil {
+		log.Fatalf("%v", err)
+	}
 }
-
-

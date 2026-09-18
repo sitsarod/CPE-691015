@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Users,
   Check,
@@ -13,6 +13,7 @@ import {
   Trash2,
   ChevronDown,
   X,
+  Star,
 } from 'lucide-react';
 import { StatItem, FacilityTile, FaqItem, HeroSlide, PublicCoach } from '@/types/homeContent';
 import { homeContentAPI } from '@/services/homeContentAPI';
@@ -24,6 +25,7 @@ import {
   DragHandle,
 } from './primitives';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 // input พื้นฐานของแถว (ไม่กำหนดความกว้างเอง เพื่อคุมความกว้างด้วย flex ภายนอก)
 const rowInput =
   'rounded-lg border border-gray-200 px-3 py-2 outline-none transition-colors focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20';
@@ -78,6 +80,7 @@ export function TileListEditor({
   items: FacilityTile[] | null | undefined;
   onChange: (v: FacilityTile[]) => void;
 }) {
+  const showToast = useGlobalToast();
   const list = items ?? [];
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const update = (i: number, patch: Partial<FacilityTile>) =>
@@ -89,7 +92,7 @@ export function TileListEditor({
       const url = await homeContentAPI.uploadImage(file);
       update(i, { image_url: url });
     } catch (error) {
-      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setUploadingIdx(null);
     }
@@ -254,6 +257,166 @@ export function FaqListEditor({
   );
 }
 
+// ---------- ตัวเลือกจุดโฟกัสของสไลด์ (จับลากภาพแบบ pan) ----------
+// preview เป็น object-cover + object-position = เห็นภาพครอปจริงระหว่างลาก
+// ลากภาพเพื่อเลื่อน focal (x,y เป็น %) แล้วเอาไปใช้เป็น object-position บนหน้าแรกตรง ๆ
+function FocalPointPicker({
+  slide,
+  index,
+  onSetFocal,
+  onSetZoom,
+}: {
+  slide: HeroSlide;
+  index: number;
+  onSetFocal: (id: number, x: number, y: number) => void;
+  onSetZoom: (id: number, zoom: number) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  // ลากแบบ pan: จำจุดที่เริ่มลาก (ตำแหน่งเมาส์ + focal ตอนนั้น) แล้วเลื่อน focal ตามระยะที่ลาก
+  // ระหว่างลากเก็บค่าชั่วคราวใน state เพื่อให้ preview ลื่น ปล่อยเมาส์ค่อย commit ลง API
+  const panStart = useRef<{ px: number; py: number; fx: number; fy: number } | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const x = drag ? drag.x : slide.focal_x;
+  const y = drag ? drag.y : slide.focal_y;
+
+  // ระหว่างลากแถบซูมเก็บค่าชั่วคราวเพื่อ preview ลื่น (100-300 = 1x-3x) ปล่อยแถบค่อย commit
+  const [zoomDraft, setZoomDraft] = useState<number | null>(null);
+  const zoom = zoomDraft ?? slide.zoom ?? 100;
+
+  // ระยะที่ลาก (px) → focal ใหม่ (%) แบบ pan: ลากภาพไปทางขวา = เห็นฝั่งซ้ายมากขึ้น → focal ลด
+  // หารด้วยระดับซูม ยิ่งซูมมากยิ่งขยับละเอียด (เหมือนแพนภาพที่ถูกขยาย)
+  const panFromEvent = (e: React.PointerEvent) => {
+    const s = panStart.current;
+    const box = boxRef.current;
+    if (!s || !box) return { x, y };
+    const r = box.getBoundingClientRect();
+    const scale = zoom / 100;
+    const dx = (((e.clientX - s.px) / r.width) * 100) / scale;
+    const dy = (((e.clientY - s.py) / r.height) * 100) / scale;
+    return {
+      x: Math.min(100, Math.max(0, Math.round(s.fx - dx))),
+      y: Math.min(100, Math.max(0, Math.round(s.fy - dy))),
+    };
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* กรอบตัวอย่าง = จำลองแบนเนอร์บนหน้าเว็บจริง (กว้าง 21:9 + ไล่เฉดดำซ้าย + พาดหัวตัวอย่าง)
+          แอดมินจะได้เห็นเลยว่าเวลาโดนครอปบนหน้าแรก ส่วนไหนของภาพจะถูกเก็บไว้ */}
+      <div
+        ref={boxRef}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          // เริ่มจาก focal ปัจจุบัน (ไม่กระโดด) แล้วค่อยเลื่อนตามที่ลาก — คลิกเฉย ๆ ไม่ทำอะไร
+          panStart.current = { px: e.clientX, py: e.clientY, fx: slide.focal_x, fy: slide.focal_y };
+          setDrag({ x: slide.focal_x, y: slide.focal_y });
+        }}
+        onPointerMove={(e) => {
+          if (panStart.current) setDrag(panFromEvent(e));
+        }}
+        onPointerUp={() => {
+          const p = drag;
+          panStart.current = null;
+          setDrag(null);
+          if (p && (p.x !== slide.focal_x || p.y !== slide.focal_y)) onSetFocal(slide.id, p.x, p.y);
+        }}
+        className={`relative aspect-[5/2] touch-none select-none overflow-hidden rounded-lg bg-gray-100 ${
+          drag !== null ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={slide.image_url}
+          alt={`สไลด์ ${index + 1}`}
+          loading="lazy"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{
+            objectPosition: `${x}% ${y}%`,
+            transform: zoom > 100 ? `scale(${zoom / 100})` : undefined,
+            transformOrigin: `${x}% ${y}%`,
+          }}
+        />
+
+        {/* ===== เลียนแบบหน้าเว็บจริง ===== ไล่เฉดดำจากซ้าย + ล่าง เหมือน hero บนหน้าแรก */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+        {/* พาดหัวตัวอย่าง — วางตำแหน่งเดียวกับ headline จริง (กลางแนวตั้ง ชิดซ้าย) */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-1 px-3">
+          <span className="text-[7px] font-light uppercase tracking-[0.18em] text-white/80">
+            ตัวอย่างพาดหัว
+          </span>
+          <span className="text-xs font-semibold leading-tight text-white drop-shadow sm:text-sm">
+            ข้อความพาดหัว
+            <br />
+            จะทับตรงนี้
+          </span>
+        </div>
+
+        <span className="absolute left-0 top-0 bg-[#CC0000] px-2 py-0.5 text-xs font-medium text-white">
+          #{index + 1}
+          {!slide.is_active && ' · ซ่อน'}
+        </span>
+        <span className="absolute right-0 top-0 bg-black/55 px-2 py-0.5 text-[10px] font-light text-white">
+          ตัวอย่างหน้าเว็บ
+        </span>
+      </div>
+
+      {/* คำอธิบายวิธีใช้ — ลากภาพด้วยเมาส์เพื่อเลือกส่วนที่อยากให้เด่น */}
+      <p className="px-0.5 text-[11px] leading-snug text-gray-500">
+        <span className="font-medium text-gray-600">ลากภาพด้วยเมาส์</span> ไปยังส่วนที่อยากให้เด่น —
+        ส่วนนั้นจะถูกเก็บไว้เสมอเวลาแบนเนอร์โดนครอปบนจอมือถือ/จอกว้าง
+      </p>
+
+      {/* แถบเลื่อนซูม — 1x ถึง 3x ซูมเข้าหาจุดโฟกัสที่เลือกไว้ (commit ตอนปล่อยแถบ) */}
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="flex-none text-[11px] text-gray-500">ซูม</span>
+        <input
+          type="range"
+          min={100}
+          max={300}
+          step={5}
+          value={zoom}
+          onChange={(e) => setZoomDraft(Number(e.target.value))}
+          onPointerUp={() => {
+            if (zoomDraft !== null && zoomDraft !== (slide.zoom ?? 100)) onSetZoom(slide.id, zoomDraft);
+            setZoomDraft(null);
+          }}
+          onKeyUp={() => {
+            if (zoomDraft !== null && zoomDraft !== (slide.zoom ?? 100)) onSetZoom(slide.id, zoomDraft);
+            setZoomDraft(null);
+          }}
+          className="h-1.5 flex-1 cursor-pointer accent-[#CC0000]"
+          aria-label="ระดับซูมของภาพ"
+        />
+        <span className="w-9 flex-none text-right text-[11px] tabular-nums text-gray-500">
+          {(zoom / 100).toFixed(1)}x
+        </span>
+        {zoom > 100 && (
+          <button
+            type="button"
+            onClick={() => {
+              setZoomDraft(null);
+              onSetZoom(slide.id, 100);
+            }}
+            className="flex-none rounded px-1.5 py-0.5 text-[10px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-[#CC0000]"
+            title="รีเซ็ตซูมกลับ 1x"
+          >
+            รีเซ็ต
+          </button>
+        )}
+      </div>
+
+      {/* ค่าจุดโฟกัสปัจจุบัน (อ่านอย่างเดียว) */}
+      <div className="flex justify-end px-0.5">
+        <span className="text-[11px] tabular-nums text-gray-400">
+          โฟกัส {x}% · {y}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ---------- สไลด์ Hero (บันทึกทันที) ----------
 export function SlideGrid({
   slides,
@@ -262,6 +425,8 @@ export function SlideGrid({
   onToggle,
   onDelete,
   onMove,
+  onSetFocal,
+  onSetZoom,
 }: {
   slides: HeroSlide[];
   uploading: boolean;
@@ -269,6 +434,8 @@ export function SlideGrid({
   onToggle: (slide: HeroSlide) => void;
   onDelete: (slide: HeroSlide) => void;
   onMove: (index: number, dir: -1 | 1) => void;
+  onSetFocal: (id: number, x: number, y: number) => void;
+  onSetZoom: (id: number, zoom: number) => void;
 }) {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -285,18 +452,8 @@ export function SlideGrid({
             slide.is_active ? '' : 'opacity-50'
           }`}
         >
-          <div className="relative aspect-video bg-gray-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={slide.image_url}
-              alt={`สไลด์ ${i + 1}`}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-            <span className="absolute left-0 top-0 bg-[#CC0000] px-2 py-0.5 text-xs font-medium text-white">
-              #{i + 1}
-              {!slide.is_active && ' · ซ่อน'}
-            </span>
+          <div className="p-2">
+            <FocalPointPicker slide={slide} index={i} onSetFocal={onSetFocal} onSetZoom={onSetZoom} />
           </div>
           <div className="flex items-center justify-between gap-1 border-t border-gray-100 bg-white px-2 py-2">
             <div className="flex items-center gap-1">
@@ -357,9 +514,11 @@ export function SlideGrid({
 export function CoachGrid({
   coaches,
   onToggle,
+  onSetHead,
 }: {
   coaches: PublicCoach[];
   onToggle: (coach: PublicCoach) => void;
+  onSetHead: (coach: PublicCoach) => void;
 }) {
   if (coaches.length === 0) {
     return <p className="text-sm text-gray-400">ยังไม่มีข้อมูลโค้ชในระบบ</p>;
@@ -372,14 +531,19 @@ export function CoachGrid({
           [coach.firstName, coach.lastName].filter(Boolean).join(' ') ||
           `โค้ช #${coach.id}`;
         return (
-          <button
+          // ⚠️ ห้ามเป็น <button> ครอบทั้งใบ เพราะข้างในมีปุ่ม "ตั้งเป็นหัวหน้า" อีกตัว
+          // ปุ่มซ้อนปุ่มเป็น HTML ที่ไม่ถูกต้อง เบราว์เซอร์จะยิง onClick ตัวนอกไปด้วย
+          <div
             key={coach.id}
-            onClick={() => onToggle(coach)}
-            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+            className={`flex flex-col gap-2 rounded-xl border p-3 transition-colors ${
               coach.feature_on_home
                 ? 'border-[#CC0000] bg-[#FFF0F0]'
-                : 'border-gray-200 hover:bg-gray-50'
+                : 'border-gray-200'
             }`}
+          >
+          <button
+            onClick={() => onToggle(coach)}
+            className="flex items-center gap-3 text-left"
           >
             {coach.profile_picture ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -405,6 +569,19 @@ export function CoachGrid({
               {coach.feature_on_home && <Check size={14} />}
             </span>
           </button>
+
+          <button
+            onClick={() => onSetHead(coach)}
+            className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+              coach.is_head_coach
+                ? 'border-[#CC0000] bg-[#CC0000] text-white'
+                : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }`}
+          >
+            <Star size={13} className={coach.is_head_coach ? 'fill-current' : ''} />
+            {coach.is_head_coach ? 'หัวหน้าผู้ฝึกสอน' : 'ตั้งเป็นหัวหน้า'}
+          </button>
+          </div>
         );
       })}
     </div>

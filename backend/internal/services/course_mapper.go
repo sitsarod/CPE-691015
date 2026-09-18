@@ -34,6 +34,7 @@ func ToCourseDTO(courseItem *models.Course) dto.CourseDTO {
 			Price:              pkg.Price,
 			MaxSeats:           pkg.MaxSeats,
 			DurationDays:       durationDays,
+			IsTrial:            pkg.IsTrial,
 			CurrentEnrollments: uint(len(pkg.Enrollments)),
 			Schedules:          schedulesDTO,
 		})

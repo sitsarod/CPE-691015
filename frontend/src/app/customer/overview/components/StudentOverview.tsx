@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   Wallet,
@@ -36,6 +37,7 @@ import {
   type NotifTone,
 } from "./parts";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 /* ------------------------------- helpers -------------------------------- */
 
 const fmtBaht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
@@ -143,6 +145,8 @@ type AlertItem = {
 /* ------------------------------- component ------------------------------ */
 
 export default function StudentOverview() {
+  const showToast = useGlobalToast();
+  const router = useRouter();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [billings, setBillings] = useState<BillingDTO[]>([]);
   const [consent, setConsent] = useState<FaceConsentStatus | null>(null);
@@ -194,8 +198,12 @@ export default function StudentOverview() {
       const updated = await recordFaceConsent(action);
       setConsent(updated);
       setIsConsentOpen(false);
+      if (action === "granted") {
+        // ยินยอมแล้วพาไปหน้าลงทะเบียนใบหน้าต่อเลย
+        router.push("/customer/settings/face");
+      }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้", "error");
     } finally {
       setIsSavingConsent(false);
     }
@@ -619,23 +627,23 @@ export default function StudentOverview() {
                 }
               />
               <div className="mb-6 grid grid-cols-3 gap-px border border-gray-200 bg-gray-200">
-                <div className="flex flex-col gap-1.5 bg-white px-4 py-4">
+                <div className="flex min-w-0 flex-col gap-1.5 bg-white px-2.5 py-4 sm:px-4">
                   <span className="text-[11px] font-light uppercase tracking-wide text-[#CC0000]">ค้างชำระ</span>
-                  <span className="text-xl font-semibold tabular-nums text-[#CC0000] sm:text-2xl">
+                  <span className="truncate text-base font-semibold tabular-nums text-[#CC0000] sm:text-2xl">
                     {fmtBaht(unpaidAmount)}
                   </span>
                   <span className="text-[11px] font-light text-gray-400">{unpaidBillings.length} รายการ</span>
                 </div>
-                <div className="flex flex-col gap-1.5 bg-white px-4 py-4">
+                <div className="flex min-w-0 flex-col gap-1.5 bg-white px-2.5 py-4 sm:px-4">
                   <span className="text-[11px] font-light uppercase tracking-wide text-gray-500">รอตรวจสอบ</span>
-                  <span className="text-xl font-semibold tabular-nums text-gray-900 sm:text-2xl">
+                  <span className="truncate text-base font-semibold tabular-nums text-gray-900 sm:text-2xl">
                     {fmtBaht(waitcheckAmount)}
                   </span>
                   <span className="text-[11px] font-light text-gray-400">{waitcheckBillings.length} รายการ</span>
                 </div>
-                <div className="flex flex-col gap-1.5 bg-white px-4 py-4">
+                <div className="flex min-w-0 flex-col gap-1.5 bg-white px-2.5 py-4 sm:px-4">
                   <span className="text-[11px] font-light uppercase tracking-wide text-emerald-600">ชำระแล้ว</span>
-                  <span className="text-xl font-semibold tabular-nums text-emerald-600 sm:text-2xl">
+                  <span className="truncate text-base font-semibold tabular-nums text-emerald-600 sm:text-2xl">
                     {fmtBaht(paidAmount)}
                   </span>
                   <span className="text-[11px] font-light text-gray-400">{paidBillings.length} รายการ</span>
@@ -715,7 +723,7 @@ export default function StudentOverview() {
                     <Link
                       key={href}
                       href={href}
-                      className="flex flex-col gap-2.5 bg-white py-3 pr-3 transition-colors hover:text-[#CC0000]"
+                      className="flex flex-col gap-2.5 bg-white p-3 transition-colors hover:text-[#CC0000]"
                     >
                       <Icon className="h-5 w-5 text-[#CC0000]" />
                       <span className="text-[13px] font-light text-gray-600">{label}</span>

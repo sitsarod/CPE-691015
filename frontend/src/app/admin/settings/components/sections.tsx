@@ -16,7 +16,9 @@ import {
   CoachGrid,
 } from './editors';
 import { HeroPreview } from './HeroPreview';
+import { LegalConsentEditors } from './LegalConsentEditors';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export interface SectionCtx {
   draft: HomeContent;
   setField: <K extends keyof HomeContent>(key: K, value: HomeContent[K]) => void;
@@ -27,8 +29,11 @@ export interface SectionCtx {
   toggleSlide: (slide: HeroSlide) => void;
   deleteSlide: (slide: HeroSlide) => void;
   moveSlide: (index: number, dir: -1 | 1) => void;
+  setSlideFocal: (id: number, x: number, y: number) => void;
+  setSlideZoom: (id: number, zoom: number) => void;
   coaches: PublicCoach[];
   toggleCoach: (coach: PublicCoach) => void;
+  setHeadCoach: (coach: PublicCoach) => void;
 }
 
 const UnsavedChip = () => (
@@ -45,6 +50,7 @@ function ImageUploadField({
   value: string;
   onChange: (url: string) => void;
 }) {
+  const showToast = useGlobalToast();
   const [uploading, setUploading] = useState(false);
 
   const handleImage = async (file: File) => {
@@ -53,7 +59,7 @@ function ImageUploadField({
       const url = await homeContentAPI.uploadImage(file);
       onChange(url);
     } catch (error) {
-      alert(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`);
+      showToast(`อัปโหลดรูปไม่สำเร็จ: ${(error as Error).message}`, "error");
     } finally {
       setUploading(false);
     }
@@ -177,6 +183,8 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
             onToggle={ctx.toggleSlide}
             onDelete={ctx.deleteSlide}
             onMove={ctx.moveSlide}
+            onSetFocal={ctx.setSlideFocal}
+            onSetZoom={ctx.setSlideZoom}
           />
         </>
       );
@@ -287,15 +295,6 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
               <Field label="คำโปรย">
                 <input type="text" value={draft.coaches_subtitle} onChange={(e) => setField('coaches_subtitle', e.target.value)} className={inputClass} />
               </Field>
-              <Field label="ข้อความปิดท้ายส่วนโค้ช">
-                <input
-                  type="text"
-                  value={draft.coaches_note}
-                  onChange={(e) => setField('coaches_note', e.target.value)}
-                  placeholder="เช่น โค้ชทุกคนผ่านการตรวจประวัติ..."
-                  className={inputClass}
-                />
-              </Field>
             </div>
           </div>
           <div className="mt-6">
@@ -319,7 +318,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
           <p className="-mt-2 mb-5 max-w-[66ch] text-[13.5px] leading-relaxed text-gray-500">
             ดึงข้อมูลโค้ชจริงจากระบบ · โค้ชเป็นจุดขายหลักของหน้าแรก คนที่เลือกไว้จะแสดงพร้อมประวัติและใบรับรอง
           </p>
-          <CoachGrid coaches={ctx.coaches} onToggle={ctx.toggleCoach} />
+          <CoachGrid coaches={ctx.coaches} onToggle={ctx.toggleCoach} onSetHead={ctx.setHeadCoach} />
         </>
       );
 
@@ -489,6 +488,7 @@ export function SectionBody({ meta, ctx }: { meta: SectionMeta; ctx: SectionCtx 
               แสดงเป็นหน้าแยก (/privacy, /terms) และมีลิงก์ท้ายหน้า · เว้นว่างไว้ = ไม่แสดงลิงก์นั้น
             </p>
           </div>
+          <LegalConsentEditors />
         </>
       );
 

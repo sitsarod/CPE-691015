@@ -17,6 +17,7 @@ import {
 import EnrollmentReviewPanel from "./components/EnrollmentReviewPanel";
 
 
+import { useGlobalToast } from "@/components/ToastProvider";
 // แยกออกมาเพราะทั้งการ์ดและตารางใช้ชุดเดียวกัน — ถ้าปล่อยไว้ในที่เดิมจะต้อง
 // ก๊อปโซ่ ternary หกชั้นไปวางสองที่ แล้ววันหลังแก้ที่เดียวลืมอีกที่
 
@@ -98,6 +99,7 @@ function ReviewButton({
 }
 
 export default function AdminEnrollmentsPage() {
+  const showToast = useGlobalToast();
   const [enrollments, setEnrollments] = useState<AdminEnrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,10 +135,10 @@ export default function AdminEnrollmentsPage() {
       if (!token) return;
       await approveEnrollment(id, token, allowOverbook);
       setReviewingId(null);
-      alert("อนุมัติสำเร็จ!");
+      showToast("อนุมัติสำเร็จ!", "success");
       loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถอนุมัติได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถอนุมัติได้", "error");
     } finally {
       setProcessingId(null);
     }
@@ -149,10 +151,10 @@ export default function AdminEnrollmentsPage() {
       if (!token) return;
       await rejectEnrollment(id, reason, token);
       setReviewingId(null);
-      alert("ปฏิเสธคำขอเรียบร้อย ระบบแจ้งเตือนนักเรียนพร้อมเหตุผลแล้ว");
+      showToast("ปฏิเสธคำขอเรียบร้อย ระบบแจ้งเตือนนักเรียนพร้อมเหตุผลแล้ว", "success");
       loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "ไม่สามารถปฏิเสธคำขอได้");
+      showToast(err instanceof Error ? err.message : "ไม่สามารถปฏิเสธคำขอได้", "error");
     } finally {
       setRejectingId(null);
     }
@@ -232,7 +234,7 @@ export default function AdminEnrollmentsPage() {
                 {item.package?.course?.course_name}
               </p>
               <p className="text-xs text-gray-600">
-                แพ็กเกจ {item.package?.sessions_count} ครั้ง ·{' '}
+                {item.package?.is_trial ? 'ทดลองเรียนฟรี' : `แพ็กเกจ ${item.package?.sessions_count} ครั้ง`} ·{' '}
                 <span className="font-semibold text-gray-900">
                   {(item.agreed_price || item.package?.price)?.toLocaleString()} ฿
                 </span>
@@ -286,7 +288,7 @@ export default function AdminEnrollmentsPage() {
                     {item.package?.course?.course_name}
                   </div>
                   <div className="truncate text-xs text-gray-600">
-                    แพ็กเกจ {item.package?.sessions_count} ครั้ง
+                    {item.package?.is_trial ? 'ทดลองเรียนฟรี' : `แพ็กเกจ ${item.package?.sessions_count} ครั้ง`}
                   </div>
                 </td>
                 <td className="p-4 font-semibold text-gray-900">

@@ -39,6 +39,9 @@ func main() {
 		log.Fatalf("เปิด extension pgvector ไม่สำเร็จ: %v", err)
 	}
 
+	// ต้องเช็คก่อน AutoMigrate สร้างคอลัมน์ — ใช้แยกรอบเก่าที่ปิดไปก่อนมีระบบค่าสนาม
+	hadCourtFeeColumn := db.Migrator().HasColumn(&models.AttendanceSession{}, "court_billed_at")
+
 	// AutoMigrate ทุกโมเดล (รายการเดียวกับ cmd/init แต่ไม่ DROP SCHEMA)
 	// เพิ่มคอลัมน์/ตารางที่ขาดให้อัตโนมัติทุกครั้งที่เพิ่มฟิลด์ใหม่ในโมเดล
 	if err := db.AutoMigrate(
@@ -80,11 +83,36 @@ func main() {
 		&models.CoachAvailability{},
 		&models.BiometricConsent{},
 		&models.PasswordResetOTP{},
+		&models.EmailVerificationOTP{},
 		&models.Court{},
 		&models.Notification{},
 		&models.ClassConfirmation{},
+		&models.AppSetting{},
+		&models.LegalDocumentRevision{},
+		
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
+	}
+
+	// ต้องรันก่อนอื่นหลัง AutoMigrate — ไม่งั้นบัญชีเดิมทุกบัญชีจะ login ไม่ได้ทันที
+	// เพราะ email_verified_at เพิ่งเพิ่มเป็น NULL หมด (ดูเหตุผลที่ฟังก์ชันนี้)
+	if err := services.BackfillEmailVerifiedForExistingUsers(db); err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	if !hadCourtFeeColumn {
+		if err := services.MarkLegacyCourtFeeSessions(db); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+
+	if err := services.BackfillCourtFeeSource(db); err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	// ไม่มีแถวพวกนี้ = อนุมัติคำขอสมัครเรียนและออกบิลค่าสนามไม่ได้เลย
+	if err := services.EnsureBillingTypes(db); err != nil {
+		log.Fatalf("เติมประเภทบิลมาตรฐานไม่สำเร็จ: %v", err)
 	}
 
 	// index แบบมีเงื่อนไขที่ GORM ประกาศผ่านแท็กไม่ได้ (ดู services.EnsureMemberCodeIndexes)
@@ -126,6 +154,10 @@ func main() {
 		log.Fatalf("ทบครั้งคงเหลือย้อนหลังไม่สำเร็จ: %v", err)
 	}
 
+	if err := services.BackfillCarryOverIntoRenewals(db); err != nil {
+		log.Fatalf("ย้ายยอดทบเก่าเข้าใบที่สมัครต่อไม่สำเร็จ: %v", err)
+	}
+
 	if err := services.BackfillCompletedEnrollments(db); err != nil {
 		log.Fatalf("ปิดใบที่เรียนครบย้อนหลังไม่สำเร็จ: %v", err)
 	}
@@ -136,6 +168,12 @@ func main() {
 
 	if err := services.EnsureClassConfirmationIndexes(db); err != nil {
 		log.Fatalf("รื้อ index การยืนยันตัวเก่าไม่สำเร็จ: %v", err)
+	}
+
+	// รูปแบบเวลาต้องเป็นแบบเดียวก่อนขั้นอื่น เพราะขั้นที่เหลือจับคู่คลาสด้วยเวลา
+	// ถ้าล้มต้องหยุด — ปล่อยให้ปนกันจะทำให้การจับคู่พลาดเป็นบางแถวแบบเดาไม่ได้
+	if err := services.NormalizeClockTimeColumns(db); err != nil {
+		log.Fatalf("แปลงรูปแบบเวลาให้เป็นมาตรฐานเดียวไม่สำเร็จ: %v", err)
 	}
 
 	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {
@@ -151,6 +189,13 @@ func main() {
 	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
 	if err := services.CleanupLegacyFacePhotos(db); err != nil {
 		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)
+	}
+
+	// ค่าสนามเปลี่ยนจากราคาต่อชั่วโมงเป็นยอดรวมของคาบ
+	if db.Migrator().HasColumn(&models.AttendanceSession{}, "court_hourly_rate") {
+		if err := db.Migrator().DropColumn(&models.AttendanceSession{}, "court_hourly_rate"); err != nil {
+			log.Fatalf("ลบคอลัมน์ค่าสนามต่อชั่วโมงไม่สำเร็จ: %v", err)
+		}
 	}
 
 	fmt.Println("อัปเดตสคีมาเรียบร้อย — เพิ่มคอลัมน์/ตารางที่ขาดของทุกโมเดลแล้ว (ข้อมูลเดิมอยู่ครบ)")

@@ -21,10 +21,6 @@ import { DetectManager, DetectStudent, Detection, BatchItem, MAX_BATCH_FILES, AU
 export function DetectDesktop({ manager }: { manager: DetectManager }) {
   const {
     inputRef,
-    courses,
-    coursesLoading,
-    selectedCourseId,
-    setSelectedCourseId,
     students,
     items,
     dragActive,
@@ -58,19 +54,9 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
   const goPrev = () => setActiveIndex((i) => Math.max(0, i - 1));
   const goNext = () => setActiveIndex((i) => Math.min(analyzedItems.length - 1, i + 1));
 
-  // เลื่อนด้วยลูกศรซ้าย/ขวาบนแป้นพิมพ์ — ข้ามถ้าโฟกัสอยู่ในช่องกรอกข้อมูล/dropdown อยู่แล้ว
-  // (ไม่งั้นจะแย่ง arrow key จากตอนกำลังเลือก option ในเมนู)
-  useEffect(() => {
-    if (analyzedItems.length <= 1) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      if (e.key === 'ArrowLeft') goPrev();
-      else if (e.key === 'ArrowRight') goNext();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [analyzedItems.length]);
+  // ⚠️ ลูกศรซ้าย/ขวาบนแป้นพิมพ์ตอนนี้ผูกกับการเลื่อน "ระหว่างคนที่ตรวจพบในไฟล์เดียวกัน" แทน
+  // (ดู ItemReviewPanel) เพราะละเอียดกว่าและใช้บ่อยกว่าการเลื่อนไฟล์ — เลื่อนไฟล์ยังใช้ปุ่ม ‹ ›
+  // กับลากด้วยเมาส์/นิ้วได้เหมือนเดิม แค่ไม่ผูกคีย์บอร์ดซ้ำกันเพื่อกันชนกัน
 
   // ลากด้วยเมาส์/นิ้วเพื่อเลื่อนรูป — ตามเมาส์แบบ real-time ระหว่างลาก แล้วค่อยตัดสินว่าจะ
   // เปลี่ยนรูปหรือเด้งกลับตอนปล่อย (เกินสัดส่วนที่กำหนดของความกว้างการ์ดถึงจะเปลี่ยนรูป)
@@ -130,29 +116,6 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
         <p className="mt-1 text-sm text-gray-500">
           รองรับทั้งภาพนิ่งและวิดีโอ — AI จะตรวจจับใบหน้าและจับคู่กับรายชื่อผู้เรียนให้อัตโนมัติ
         </p>
-
-        {/* เลือกคอร์สก่อนเสมอ — ทุกไฟล์ในชุดเดียวกันผูกกับคอร์สเดียวกัน กันรายชื่อทุกคอร์สปนกันตอนแท็ก */}
-        <div className="mt-5">
-          <label className="mb-1 block text-sm font-bold text-gray-700">คอร์ส</label>
-          <select
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : '')}
-            disabled={coursesLoading}
-            className="w-full max-w-md rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none transition-all focus:border-[#CC0000] focus:ring-2 focus:ring-[#CC0000]/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="" disabled>
-              {coursesLoading ? 'กำลังโหลดคอร์ส...' : 'เลือกคอร์สที่ถ่ายรูป/วิดีโอนี้มา...'}
-            </option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {!coursesLoading && courses.length === 0 && (
-            <p className="mt-1.5 text-xs text-amber-600">ยังไม่พบคอร์สที่คุณมีตารางสอนอยู่</p>
-          )}
-        </div>
 
         {/* Dropzone */}
         <div
@@ -236,7 +199,7 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
           <button
             type="button"
             onClick={analyzeAll}
-            disabled={readyToAnalyzeCount === 0 || analyzingAll || selectedCourseId === ''}
+            disabled={readyToAnalyzeCount === 0 || analyzingAll}
             className="flex items-center gap-2 rounded-xl bg-[#CC0000] px-6 py-2.5 font-bold text-white shadow-md shadow-[#CC0000]/20 transition-colors hover:bg-[#990000] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analyzingAll ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
@@ -295,11 +258,12 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
               onPointerLeave={endSlideDrag}
               onPointerCancel={endSlideDrag}
             >
-              {analyzedItems.map((item) => (
+              {analyzedItems.map((item, i) => (
                 <div key={item.uid} className="w-full flex-shrink-0">
                   <ItemReviewPanel
                     item={item}
                     students={students}
+                    isActive={i === activeIndex}
                     onConfirm={(detectionUid) => confirmDetection(item.uid, detectionUid)}
                     onConfirmAllPending={() => confirmAllPending(item.uid)}
                     onReassign={(detectionUid, studentId) => reassignDetection(item.uid, detectionUid, studentId)}
@@ -307,6 +271,8 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
                     onAddMissed={() => addMissedStudent(item.uid)}
                     onSave={() => saveItem(item.uid)}
                     allReviewed={isItemReviewed(item)}
+                    onGoPrevFile={goPrev}
+                    onGoNextFile={goNext}
                   />
                 </div>
               ))}
@@ -332,6 +298,7 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
 function ItemReviewPanel({
   item,
   students,
+  isActive,
   onConfirm,
   onConfirmAllPending,
   onReassign,
@@ -339,9 +306,14 @@ function ItemReviewPanel({
   onAddMissed,
   onSave,
   allReviewed,
+  onGoPrevFile,
+  onGoNextFile,
 }: {
   item: BatchItem;
   students: DetectStudent[];
+  // true เฉพาะไฟล์ที่กำลังโชว์อยู่บนสไลด์ตอนนี้ — กันไม่ให้ลูกศรคีย์บอร์ดของไฟล์ที่ซ่อนอยู่
+  // (ทุกไฟล์ mount ค้างไว้หมดในสไลด์ ไม่ได้ unmount ตอนเลื่อนผ่าน) ทำงานพร้อมกันหมดทุกไฟล์
+  isActive: boolean;
   onConfirm: (detectionUid: string) => void;
   onConfirmAllPending: () => void;
   onReassign: (detectionUid: string, studentId: number) => void;
@@ -349,9 +321,83 @@ function ItemReviewPanel({
   onAddMissed: () => void;
   onSave: () => void;
   allReviewed: boolean;
+  // เลื่อนไฟล์ (สไลด์นอกสุด) ด้วยลูกศรเดียวกัน เฉพาะตอนไม่มีคนให้เลื่อนดูในไฟล์นี้แล้ว (≤1 คน)
+  // กันไม่ให้ลูกศรทำสองอย่างพร้อมกัน — มีคนให้เลื่อนก็เลื่อนคนก่อนเสมอ ไม่มีคนแล้วค่อยเลื่อนไฟล์แทน
+  onGoPrevFile: () => void;
+  onGoNextFile: () => void;
 }) {
   const detections = item.detections ?? [];
   const pendingCount = detections.filter((d) => d.status === 'pending').length;
+
+  // เลื่อนดูทีละคนที่ตรวจพบ (เหมือนสไลด์เลื่อนไฟล์ด้านนอก แต่ระดับ "คนในไฟล์เดียวกัน")
+  const [activeDetectionIndex, setActiveDetectionIndex] = useState(0);
+  useEffect(() => {
+    setActiveDetectionIndex((i) => Math.min(i, Math.max(0, detections.length - 1)));
+  }, [detections.length]);
+
+  const goPrevDetection = () => setActiveDetectionIndex((i) => Math.max(0, i - 1));
+  const goNextDetection = () => setActiveDetectionIndex((i) => Math.min(detections.length - 1, i + 1));
+
+  // ลูกศรซ้าย/ขวาผูกกับ "คนในไฟล์นี้" เป็นหลัก — ถ้าไฟล์นี้เหลือคนเดียวหรือไม่มีคนให้เลื่อนแล้ว
+  // (ไม่มีอะไรให้ลูกศรทำในระดับนี้) ถือว่าลูกศรว่าง เลยยกให้ไปเลื่อน "ไฟล์" แทน กันปุ่มเดียวกันไม่ทำอะไรเลย
+  // ทำงานเฉพาะไฟล์ที่กำลังแอคทีฟอยู่เท่านั้น
+  useEffect(() => {
+    if (!isActive) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (detections.length > 1) {
+        if (e.key === 'ArrowLeft') goPrevDetection();
+        else goNextDetection();
+      } else {
+        if (e.key === 'ArrowLeft') onGoPrevFile();
+        else onGoNextFile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, detections.length, onGoPrevFile, onGoNextFile]);
+
+  // เพิ่มคนที่ตกหล่นแล้วเลื่อนไปโชว์รายการที่เพิ่งเพิ่มทันที (ต่อท้ายลิสต์เสมอ)
+  const handleAddMissed = () => {
+    onAddMissed();
+    setActiveDetectionIndex(detections.length);
+  };
+
+  const activeDetection: Detection | null = detections[activeDetectionIndex] ?? null;
+
+  // ลากด้วยเมาส์/นิ้วเพื่อเลื่อนดูคนถัดไป (โดยเฉพาะเฟรมวิดีโอที่แคปมาโชว์) เหมือนสไลด์เลื่อนไฟล์
+  // ด้านนอกทุกอย่าง แค่ทำงานแค่ "ระดับคน" เท่านั้น — ต้อง stopPropagation ตอนกดลงไป กันไม่ให้สไลด์ไฟล์
+  // ด้านนอกแย่งลากไปพร้อมกัน (ไม่งั้นจะเลื่อนทั้งไฟล์และคนพร้อมกันในลากเดียว)
+  const detectionViewportRef = useRef<HTMLDivElement>(null);
+  const detectionDragStartXRef = useRef(0);
+  const [isDetectionDragging, setIsDetectionDragging] = useState(false);
+  const [detectionDragOffset, setDetectionDragOffset] = useState(0);
+
+  const handleDetectionPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (detections.length <= 1) return;
+    if ((e.target as HTMLElement).closest('button, select, input, a, textarea')) return;
+    e.stopPropagation();
+    setIsDetectionDragging(true);
+    detectionDragStartXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleDetectionPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDetectionDragging) return;
+    setDetectionDragOffset(e.clientX - detectionDragStartXRef.current);
+  };
+
+  const endDetectionDrag = () => {
+    if (!isDetectionDragging) return;
+    setIsDetectionDragging(false);
+    const width = detectionViewportRef.current?.offsetWidth || 1;
+    const threshold = width * 0.15;
+    if (detectionDragOffset < -threshold) goNextDetection();
+    else if (detectionDragOffset > threshold) goPrevDetection();
+    setDetectionDragOffset(0);
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -393,25 +439,66 @@ function ItemReviewPanel({
       )}
 
       {/* รูปที่อัปโหลดพร้อมกรอบ+ชื่อทับใบหน้าที่ตรวจพบ — ไว้ตรวจทานเท่านั้น ตัวไฟล์จริงไม่ถูกแก้ */}
-      {!item.isVideo && <PhotoPreviewWithMarks file={item.file} detections={detections} />}
+      {!item.isVideo && (
+        <PhotoPreviewWithMarks file={item.file} detections={detections} activeDetectionUid={activeDetection?.uid ?? null} />
+      )}
 
-      <div className="mt-5 flex flex-col gap-3">
-        {detections.map((d) => (
-          <DetectionRow
-            key={d.uid}
-            detection={d}
-            students={students}
-            onConfirm={() => onConfirm(d.uid)}
-            onReassign={(studentId) => onReassign(d.uid, studentId)}
-            onRemove={() => onRemove(d.uid)}
-          />
-        ))}
-      </div>
+      {detections.length > 0 && (
+        <div className="mt-5 space-y-3">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={goPrevDetection}
+              disabled={activeDetectionIndex === 0}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[64px] text-center text-xs font-bold text-gray-500">
+              คนที่ {activeDetectionIndex + 1} / {detections.length}
+            </span>
+            <button
+              type="button"
+              onClick={goNextDetection}
+              disabled={activeDetectionIndex === detections.length - 1}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-[#CC0000] hover:text-[#CC0000] disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div ref={detectionViewportRef} className="overflow-hidden">
+            <div
+              className={`flex cursor-grab touch-pan-y select-none active:cursor-grabbing ${
+                isDetectionDragging ? '' : 'transition-transform duration-300 ease-out'
+              }`}
+              style={{ transform: `translateX(calc(-${activeDetectionIndex * 100}% + ${detectionDragOffset}px))` }}
+              onPointerDown={handleDetectionPointerDown}
+              onPointerMove={handleDetectionPointerMove}
+              onPointerUp={endDetectionDrag}
+              onPointerLeave={endDetectionDrag}
+              onPointerCancel={endDetectionDrag}
+            >
+              {detections.map((d) => (
+                <div key={d.uid} className="w-full flex-shrink-0">
+                  <DetectionRow
+                    detection={d}
+                    students={students}
+                    onConfirm={() => onConfirm(d.uid)}
+                    onReassign={(studentId) => onReassign(d.uid, studentId)}
+                    onRemove={() => onRemove(d.uid)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* เพิ่มผู้เรียนที่ตกหล่น */}
       <button
         type="button"
-        onClick={onAddMissed}
+        onClick={handleAddMissed}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm font-semibold text-gray-500 transition-colors hover:border-[#CC0000]/40 hover:text-[#CC0000]"
       >
         <Plus size={16} />
@@ -456,7 +543,19 @@ function ItemReviewPanel({
 // ==================== รูปพร้อมกรอบ+ชื่อทับใบหน้า (เฉพาะตอนตรวจทาน) ====================
 // bbox ที่ backend ส่งมาเป็นพิกเซลของรูปต้นฉบับ — แปลงเป็น % ของขนาดจริง (naturalWidth/Height)
 // เพื่อวางกรอบให้ตรงตำแหน่งไม่ว่ารูปจะถูกย่อแสดงผลเล็กแค่ไหนบนจอ
-function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: Detection[] }) {
+//
+// ไฮไลต์เฉพาะคนที่กำลังตรวจทานอยู่ตอนนี้ (activeDetectionUid) ด้วยกรอบแดง+ชื่อเต็ม ส่วนคนอื่นที่
+// เจอในรูปเดียวกันแสดงแค่กรอบจางๆ ไว้ให้เห็นว่ายังมีคนอื่นอยู่ ไม่แย่งความสนใจจากคนที่กำลังโฟกัส —
+// ให้ประสบการณ์ตรงกับฝั่งวิดีโอที่โฟกัสทีละคนต่อการ์ดด้านล่างเหมือนกัน
+function PhotoPreviewWithMarks({
+  file,
+  detections,
+  activeDetectionUid,
+}: {
+  file: File;
+  detections: Detection[];
+  activeDetectionUid: string | null;
+}) {
   const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
 
@@ -471,7 +570,8 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
       <img
         src={previewUrl}
         alt=""
-        className="block w-full"
+        draggable={false}
+        className="block w-full select-none"
         onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
       />
       {naturalSize &&
@@ -485,6 +585,7 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
           const y1 = Math.max(0, by1 - padY);
           const x2 = Math.min(naturalSize.w, bx2 + padX);
           const y2 = Math.min(naturalSize.h, by2 + padY);
+          const isActive = d.uid === activeDetectionUid;
 
           return (
             <div
@@ -497,13 +598,23 @@ function PhotoPreviewWithMarks({ file, detections }: { file: File; detections: D
                 height: `${((y2 - y1) / naturalSize.h) * 100}%`,
               }}
             >
-              {/* กรอบล้อมใบหน้า — สี่เหลี่ยมสีแดงของธีมเว็บ ไล่ตามสัดส่วนกรอบหน้าที่ตรวจพบ */}
-              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
-              {/* ป้ายชื่อไว้ด้านล่างกรอบแทนด้านบน — กันชนขอบบนของรูปเวลาใบหน้าอยู่ริมภาพ */}
-              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2.5 py-1 text-sm font-black text-white shadow-md">
-                {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
-              </span>
+              {/* กรอบล้อมใบหน้า — คนที่กำลังโฟกัสอยู่เป็นสีแดงเต็ม คนอื่นในรูปเดียวกันจางไว้ */}
+              <div
+                className={`absolute inset-0 rounded-md ${
+                  isActive
+                    ? 'border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]'
+                    : 'border-2 border-white/70 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]'
+                }`}
+              />
+              {isActive && (
+                <>
+                  {/* ป้ายชื่อไว้ด้านล่างกรอบแทนด้านบน — กันชนขอบบนของรูปเวลาใบหน้าอยู่ริมภาพ */}
+                  <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2.5 py-1 text-sm font-black text-white shadow-md">
+                    {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}
@@ -651,7 +762,8 @@ function VideoFrameMark({
       <img
         src={`data:image/jpeg;base64,${frameImage}`}
         alt=""
-        className="block w-full"
+        draggable={false}
+        className="block w-full select-none"
         onLoad={(e) => setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
       />
       {naturalSize &&

@@ -68,6 +68,27 @@ func startAttendanceAutoCloseJob() {
 	}()
 }
 
+// startClassConfirmReminderJob เตือนนักเรียนที่ยังไม่ยืนยันคาบของวันพรุ่งนี้ วันละครั้งตามเวลาที่กำหนด
+// (ดู NotifyPendingConfirmations) · สตาร์ทหลังเวลาเตือนของวันนี้จะส่งทันที กันซ้ำด้วย signature ต่อคนต่อวัน
+func startClassConfirmReminderJob() {
+	confirmationService := services.NewClassConfirmationService(config.DB)
+	run := func() {
+		if err := confirmationService.NotifyPendingConfirmations(); err != nil {
+			log.Printf("เตือนยืนยันมาเรียนอัตโนมัติล้มเหลว: %v", err)
+		}
+	}
+
+	go func() {
+		if services.ConfirmReminderPassedToday(time.Now()) {
+			run()
+		}
+		for {
+			time.Sleep(time.Until(services.NextConfirmReminderAt(time.Now())))
+			run()
+		}
+	}()
+}
+
 // startBillingOverdueJob เลื่อนสถานะบิล unfunded ที่เลยวันครบกำหนดเป็น overdue อัตโนมัติ
 // (และเลื่อนกลับถ้า due_date ถูกแก้เป็นอนาคต) รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 1 ชั่วโมง
 func startBillingOverdueJob() {
@@ -173,6 +194,9 @@ func main() {
 
 	// 3.3 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน
 	startAttendanceAutoCloseJob()
+
+	// 3.3.1 เตือนนักเรียนที่ยังไม่ยืนยันมาเรียนก่อนปิดรับ
+	startClassConfirmReminderJob()
 
 	// 3.4 เลื่อนสถานะบิลค้างชำระที่เลยวันครบกำหนดเป็นเกินกำหนด (overdue) อัตโนมัติ
 	startBillingOverdueJob()

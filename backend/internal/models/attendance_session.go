@@ -52,4 +52,18 @@ type AttendanceSession struct {
 	// กับความจริงที่เกิดขึ้นวันนั้น (เช่นย้ายคาบจาก 18:00 เป็น 17:00 แล้วประวัติเก่าเพี้ยนตาม)
 	ScheduleStartTime string `json:"schedule_start_time" gorm:"type:varchar(10);uniqueIndex:uniq_attendance_session_slot"`
 	ScheduleEndTime   string `json:"schedule_end_time" gorm:"type:varchar(10)"`
+
+	// CourtBilledAt มีค่า = รอบนี้ออกบิลค่าสนามแล้ว ห้ามออกซ้ำ · ยอดรวมเป็น nil = ออกบิลทางอื่น
+	CourtFeeTotal  *float64       `json:"court_fee_total" gorm:"type:decimal(10,2)"`
+	CourtBilledAt  *time.Time     `json:"court_billed_at"`
+	CourtFeeSource CourtFeeSource `json:"court_fee_source" gorm:"type:varchar(20)"`
 }
+
+// CourtFeeSource บอกว่า CourtBilledAt มาจากไหน — legacy ยังออกบิลย้อนหลังด้วยฟอร์มหารเฉลี่ยได้ อย่างอื่นห้ามซ้ำ
+type CourtFeeSource string
+
+const (
+	CourtFeeSourceAttendance CourtFeeSource = "attendance"
+	CourtFeeSourceSplit      CourtFeeSource = "split"
+	CourtFeeSourceLegacy     CourtFeeSource = "legacy"
+)

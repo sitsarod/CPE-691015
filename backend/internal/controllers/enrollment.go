@@ -28,13 +28,14 @@ func mapEnrollmentError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrEnrollmentNotFound),
 		errors.Is(err, services.ErrPackageNotFound),
 		errors.Is(err, services.ErrCustomerProfileNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
 
-	case errors.Is(err, services.ErrEnrollmentRejectReason):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrEnrollmentRejectReason),
+		errors.Is(err, services.ErrEnrollmentTermsNotAccepted):
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, services.ErrEnrollmentForbidden):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": err.Error()})
 
 	// สถานะไม่เอื้อให้ทำตอนนี้ — ยิงซ้ำก็ไม่ช่วย
 	case errors.Is(err, services.ErrAlreadyEnrolled),
@@ -42,11 +43,13 @@ func mapEnrollmentError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrPackageSeatsFull),
 		errors.Is(err, services.ErrEnrollmentNotPending),
 		errors.Is(err, services.ErrEnrollmentNotCancellable),
-		errors.Is(err, services.ErrEnrollmentBillingLocked):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		errors.Is(err, services.ErrEnrollmentBillingLocked),
+		errors.Is(err, services.ErrTrialAlreadyUsed),
+		errors.Is(err, services.ErrTrialNotForExisting):
+		respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
 
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 }
 
@@ -54,10 +57,15 @@ func mapEnrollmentError(c *gin.Context, err error) {
 func (ctrl *EnrollmentController) GetAvailableCourses(c *gin.Context) {
     courses, err := ctrl.service.GetAvailableCourses()
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลคอร์สเรียนได้"})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลคอร์สเรียนได้"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": courses})
+    respondJSON(c, http.StatusOK, gin.H{"data": courses})
+}
+
+// GetTerms [GET] /api/enrollments/terms — ข้อตกลงการสมัครเรียนฉบับปัจจุบัน (public)
+func (ctrl *EnrollmentController) GetTerms(c *gin.Context) {
+	respondJSON(c, http.StatusOK, gin.H{"data": ctrl.service.GetTerms()})
 }
 
 // EnrollCourse
@@ -65,18 +73,18 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
     var input dto.CreateEnrollmentReq
 
     if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน หรือรูปแบบไม่ถูกต้อง"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ครบถ้วน หรือรูปแบบไม่ถูกต้อง"})
         return
     }
 
 	// input.CustomerID คือ users.id (service จะแปลงเป็น customers.id ให้เอง)
 	// จึงเทียบกับ JWT ผ่าน CheckIDOR ได้ตรงชนิด
 	if !CheckIDOR(c, input.CustomerID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์ลงทะเบียนให้ผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์ลงทะเบียนให้ผู้อื่น"})
 		return
 	}
 
-    result, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID)
+    result, err := ctrl.service.EnrollCourse(input.CustomerID, input.PackageID, input.AcceptedTermsVersion)
     if err != nil {
         mapEnrollmentError(c, err)
         return
@@ -91,7 +99,7 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
         message = "ลงทะเบียนสำเร็จ เปิดสิทธิ์เรียนให้แล้ว มีบิลค่าคอร์สรอชำระอยู่ที่เมนูชำระเงิน"
     }
 
-    c.JSON(http.StatusCreated, dto.CreateEnrollmentRes{
+    respondJSON(c, http.StatusCreated, dto.CreateEnrollmentRes{
         Message: message,
         Data: dto.CreateEnrollmentData{
             EnrollmentID: enrollment.ID,
@@ -106,13 +114,13 @@ func (ctrl *EnrollmentController) EnrollCourse(c *gin.Context) {
 func (ctrl *EnrollmentController) CancelMyEnrollment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	userID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน"})
 		return
 	}
 
@@ -121,7 +129,7 @@ func (ctrl *EnrollmentController) CancelMyEnrollment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกใบสมัครเรียบร้อยแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ยกเลิกใบสมัครเรียบร้อยแล้ว"})
 }
 
 // RejectEnrollment [PATCH] /api/admin/enrollments/:id/reject — ปฏิเสธคำขอพร้อมเหตุผล (adminOnly)
@@ -130,19 +138,19 @@ func (ctrl *EnrollmentController) CancelMyEnrollment(c *gin.Context) {
 func (ctrl *EnrollmentController) RejectEnrollment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
 		return
 	}
 
 	adminID, _, ok := GetAuthContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
 		return
 	}
 
 	var req dto.RejectEnrollmentReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "กรุณาระบุเหตุผลในการปฏิเสธ (3–500 ตัวอักษร)"})
 		return
 	}
 
@@ -151,14 +159,14 @@ func (ctrl *EnrollmentController) RejectEnrollment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ปฏิเสธคำขอเรียบร้อยแล้ว แจ้งเตือนไปหานักเรียนแล้ว"})
+	respondJSON(c, http.StatusOK, gin.H{"message": "ปฏิเสธคำขอเรียบร้อยแล้ว แจ้งเตือนไปหานักเรียนแล้ว"})
 }
 
 // ApproveEnrollment
 func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
@@ -166,12 +174,12 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
     // สมมติว่า AuthMiddleware เซ็ต `userID` ไว้ใน context
     adminIDVal, exists := c.Get("userID")
     if !exists {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
+        respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน (Admin)"})
         return
     }
     adminIDFloat, ok := adminIDVal.(float64)
     if !ok {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "ข้อมูลผู้ใช้งาน (Admin) ไม่ถูกต้อง"})
+        respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ข้อมูลผู้ใช้งาน (Admin) ไม่ถูกต้อง"})
         return
     }
     adminID := uint(adminIDFloat)
@@ -179,7 +187,7 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
     var req dto.ApproveEnrollmentReq
     if c.Request.ContentLength > 0 {
         if err := c.ShouldBindJSON(&req); err != nil {
-            c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+            respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
             return
         }
     }
@@ -188,16 +196,16 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
     if err != nil {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
-            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
         case errors.Is(err, services.ErrEnrollmentNotPending), errors.Is(err, services.ErrPackageSeatsFull):
-            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
         default:
-            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
         }
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
+    respondJSON(c, http.StatusOK, gin.H{
         "message": "อนุมัติการลงทะเบียนและสร้างบิลเรียบร้อยแล้ว",
         "data": enrollment,
     })
@@ -209,21 +217,21 @@ func (ctrl *EnrollmentController) ApproveEnrollment(c *gin.Context) {
 func (ctrl *EnrollmentController) GetCustomerEnrollments(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
 	if !CheckIDOR(c, uint(id)) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
+		respondJSON(c, http.StatusForbidden, gin.H{"error": "ไม่มีสิทธิ์เข้าถึงข้อมูลของผู้อื่น"})
 		return
 	}
 
     enrollments, err := ctrl.service.GetCustomerEnrollments(uint(id))
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": enrollments})
+    respondJSON(c, http.StatusOK, gin.H{"data": enrollments})
 }
 
 // GetEnrollmentReview ดึงข้อมูลตรวจสอบผู้สมัครแบบละเอียดก่อนอนุมัติ (adminOnly)
@@ -232,60 +240,60 @@ func (ctrl *EnrollmentController) GetCustomerEnrollments(c *gin.Context) {
 func (ctrl *EnrollmentController) GetEnrollmentReview(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
     review, err := ctrl.service.GetEnrollmentReview(uint(id))
     if err != nil {
         if errors.Is(err, services.ErrEnrollmentNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
             return
         }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้สมัครได้"})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ไม่สามารถดึงข้อมูลผู้สมัครได้"})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"data": review})
+    respondJSON(c, http.StatusOK, gin.H{"data": review})
 }
 
 func (ctrl *EnrollmentController) GetEnrollmentExtensions(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
     items, err := ctrl.service.GetEnrollmentExtensions(uint(id))
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"data": items})
+    respondJSON(c, http.StatusOK, gin.H{"data": items})
 }
 
 // GetAllEnrollments
 func (ctrl *EnrollmentController) GetAllEnrollments(c *gin.Context) {
     enrollments, err := ctrl.service.GetAllEnrollments()
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
+        respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลไม่สำเร็จ"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"data": enrollments})
+    respondJSON(c, http.StatusOK, gin.H{"data": enrollments})
 }
 
 // UpdateEnrollment
 func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
     var input dto.UpdateEnrollmentReq
     if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ข้อมูลไม่ถูกต้อง"})
         return
     }
 
@@ -293,36 +301,36 @@ func (ctrl *EnrollmentController) UpdateEnrollment(c *gin.Context) {
     if err != nil {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
-            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
         case errors.Is(err, services.ErrEnrollmentBillingLocked),
             errors.Is(err, services.ErrEnrollmentDuplicateActive):
-            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
         default:
-            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
         }
         return
     }
-    c.JSON(http.StatusOK, gin.H{"message": "อัปเดตสำเร็จ", "data": enrollment})
+    respondJSON(c, http.StatusOK, gin.H{"message": "อัปเดตสำเร็จ", "data": enrollment})
 }
 
 // DeleteEnrollment
 func (ctrl *EnrollmentController) DeleteEnrollment(c *gin.Context) {
     id, err := strconv.ParseUint(c.Param("id"), 10, 32)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+        respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
         return
     }
 
     if err := ctrl.service.CancelEnrollment(uint(id)); err != nil {
         switch {
         case errors.Is(err, services.ErrEnrollmentNotFound):
-            c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusNotFound, gin.H{"error": err.Error()})
         case errors.Is(err, services.ErrEnrollmentBillingLocked):
-            c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+            respondJSON(c, http.StatusConflict, gin.H{"error": err.Error()})
         default:
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "ลบข้อมูลไม่สำเร็จ"})
+            respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ลบข้อมูลไม่สำเร็จ"})
         }
         return
     }
-    c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการลงทะเบียนสำเร็จ"})
+    respondJSON(c, http.StatusOK, gin.H{"message": "ยกเลิกการลงทะเบียนสำเร็จ"})
 }

@@ -19,7 +19,8 @@ import {
   FileText,
 } from "lucide-react";
 
-import { fetchMyCoachProfile, fetchCoachWages, fetchCoachTaughtSessionDates } from "@/services/coachAPI";
+import { fetchMyCoachProfile, fetchCoachWages, fetchCoachPayroll } from "@/services/coachAPI";
+import type { CoachPayroll } from "@/services/coachAPI";
 import { CoachWageEntry } from "@/types/coach";
 import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
 import ImageLightbox from "@/components/ImageLightbox";
@@ -75,6 +76,18 @@ export default function CoachPaymentPage() {
 
   const [coachId, setCoachId] = useState<number | null>(null);
   const [payRate, setPayRate] = useState(0);
+
+  // ยอดค่าจ้างทั้งหมดมาจาก backend
+  //
+  // ⚠️ ห้ามคำนวณค่าจ้างเองในไฟล์นี้อีก
+  //
+  // เดิมหน้านี้คิด expected = sessionsDone * payRate เอง ด้วย payRate "ปัจจุบัน"
+  // ผลคือวันที่โรงเรียนขึ้นค่าจ้าง หน้านี้จะขึ้นส่วนต่างติดลบเป็นก้อน = บอกโค้ชว่า
+  // โรงเรียนค้างจ่ายย้อนหลังทั้งที่ไม่ได้ค้าง และเลขไม่ตรงกับหน้าของแอดมิน
+  // ซึ่งคิดจากสแนปช็อตเรตของแต่ละคาบ
+  //
+  // แหล่งเดียวคือ GET /coaches/:id/payroll (backend: services/coach_payroll.go)
+  const [payroll, setPayroll] = useState<CoachPayroll | null>(null);
   const [paymentType, setPaymentType] = useState<"per_session" | "monthly">("per_session");
   const [avatarUrl, setAvatarUrl] = useState("");
   // ข้อมูลบัญชีรับเงิน (แก้ผ่าน modal ที่เปิดจากไอคอนดินสอ)
@@ -85,7 +98,6 @@ export default function CoachPaymentPage() {
   const [bankModalKey, setBankModalKey] = useState(0); // บังคับ remount การ์ดให้ค่าเริ่มต้นใหม่ทุกครั้งที่เปิด
   const [wages, setWages] = useState<CoachWageEntry[]>([]);
   // วันที่ของคาบที่ "สอนจริง" (เช็คชื่อปิดรอบแล้ว + fallback คาบเก่า) รูปแบบ YYYY-MM-DD
-  const [taughtDates, setTaughtDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,12 +164,12 @@ export default function CoachPaymentPage() {
         setPromptPay(myProfile.prompt_pay || "");
       }
 
-      const [wagesData, taughtDatesData] = await Promise.all([
+      const [wagesData, payrollData] = await Promise.all([
         fetchCoachWages(resolvedId, token),
-        fetchCoachTaughtSessionDates(resolvedId, token),
+        fetchCoachPayroll(resolvedId, token),
       ]);
       setWages(wagesData);
-      setTaughtDates(taughtDatesData);
+      setPayroll(payrollData);
     } catch (err: unknown) {
       console.error(err);
       setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดึงข้อมูล");
@@ -345,29 +357,30 @@ export default function CoachPaymentPage() {
 
   const maxMonthTotal = currentYearGroup ? Math.max(...currentYearGroup.months.map((m) => m.total), 0) : 0;
 
-  // นับ "คาบที่สอนจริง" (จาก backend = เช็คชื่อปิดรอบแล้ว) แยกตามปี-เดือน
-  // parse YYYY-MM-DD เองแบบ tz-proof (ไม่ผ่าน new Date เพื่อกันวันเพี้ยนข้ามเดือน)
-  const sessionCountByYearMonth = useMemo(() => {
-    const map = new Map<string, number>();
-    taughtDates.forEach((ds) => {
-      const [y, m] = ds.split("-").map(Number);
-      if (!y || !m) return;
-      const key = `${y}-${m - 1}`; // m เป็น 1-12 → เก็บเป็น 0-11 ให้ตรงกับ getMonth()
-      map.set(key, (map.get(key) || 0) + 1);
+  // ยอดรายเดือนที่ backend คิดมาให้ (คิดจากสแนปช็อตเรตของแต่ละคาบ)
+  // เก็บ month เป็น 0-11 ให้ตรงกับ getMonth() ที่ส่วนอื่นของไฟล์ใช้
+  const payrollMonthByYearMonth = useMemo(() => {
+    const map = new Map<string, { sessions: number; expected: number }>();
+    (payroll?.monthly_breakdown ?? []).forEach((m) => {
+      map.set(`${m.year}-${m.month - 1}`, { sessions: m.sessions, expected: m.expected });
     });
     return map;
-  }, [taughtDates]);
+  }, [payroll]);
 
   const scheduleComparison = useMemo(() => {
     if (!currentYearGroup) return null;
     const rows = currentYearGroup.months.map((m) => {
-      const sessionsDone = sessionCountByYearMonth.get(`${currentYearGroup.year}-${m.month}`) || 0;
-      const expected = sessionsDone * payRate;
+      const fromBackend = payrollMonthByYearMonth.get(`${currentYearGroup.year}-${m.month}`);
+      const sessionsDone = fromBackend?.sessions ?? 0;
+      const expected = fromBackend?.expected ?? 0;
       return {
         month: m.month,
         sessionsDone,
         expected,
         actual: m.total,
+        // ส่วนต่างรายเดือน = "เงินที่รับในเดือนนี้" เทียบ "งานที่ทำในเดือนนี้"
+        // ไม่ใช่ยอดค้างจ่าย เพราะคาบที่สอนเดือนนี้อาจถูกจ่ายเดือนหน้า
+        // ยอดค้างจ่ายจริงมีตัวเดียวคือ payroll.unpaid
         variance: m.total - expected,
       };
     });
@@ -381,10 +394,10 @@ export default function CoachPaymentPage() {
       { sessionsDone: 0, expected: 0, actual: 0, variance: 0 }
     );
     return { rows, totals };
-  }, [currentYearGroup, sessionCountByYearMonth, payRate]);
+  }, [currentYearGroup, payrollMonthByYearMonth]);
 
   // โค้ชรายเดือนได้เงินคงที่ไม่ผูกกับจำนวนคาบ จึงไม่โชว์คอลัมน์เทียบตารางสอน (null)
-  const comparison = paymentType !== "monthly" ? scheduleComparison : null;
+  const comparison = (payroll?.payment_type ?? paymentType) !== "monthly" ? scheduleComparison : null;
   const compByMonth = useMemo(
     () => new Map((comparison?.rows ?? []).map((r) => [r.month, r] as const)),
     [comparison]
@@ -643,7 +656,6 @@ export default function CoachPaymentPage() {
       {/* header */}
       <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CC0000]">Coach Earnings</span>
           <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-gray-900">การเงิน</h1>
           <p className="mt-1.5 text-[13px] font-light text-gray-500">
             ค่าจ้างการสอนและรายได้อื่นที่สถาบันบันทึกให้คุณ · โค้ช ·{" "}
@@ -834,7 +846,7 @@ export default function CoachPaymentPage() {
                   <h3 className="text-xl font-semibold tracking-tight text-gray-900">รายละเอียดรายเดือน</h3>
                   <p className="mt-1.5 text-[13px] font-light text-gray-500">
                     {comparison
-                      ? <>คลิกที่แถวเพื่อดูรายการของเดือนนั้น · &quot;ได้รับจริง&quot; รวมค่าจ้างสอน + โบนัส/รายได้อื่น เทียบกับรายได้ที่ควรได้จากคาบที่สอนจริง × ค่าจ้างต่อคาบ (฿{payRate.toLocaleString()}/คาบ){payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้าง ตัวเลขที่ควรได้จึงยังไม่ถูกต้อง"}</>
+                      ? <>คลิกที่แถวเพื่อดูรายการของเดือนนั้น · &quot;ได้รับจริง&quot; รวมค่าจ้างสอน + โบนัส/รายได้อื่น เทียบกับค่าจ้างของคาบที่สอนในเดือนนั้น (คิดตามอัตราที่บันทึกไว้ ณ วันที่รับงาน){payRate === 0 && " — ยังไม่ได้ตั้งค่าอัตราค่าจ้าง ตัวเลขที่ควรได้จึงยังไม่ถูกต้อง"}</>
                       : "คลิกที่แถวเพื่อดูรายการของเดือนนั้น · ยอดรวมค่าจ้างสอน + โบนัส/รายได้อื่น"}
                   </p>
                 </div>
@@ -1018,6 +1030,39 @@ export default function CoachPaymentPage() {
                     })()}
                   </table>
                 </div>
+
+                {/* ยอดค้างจ่ายมีตัวเดียว และไม่ใช่ผลรวมของส่วนต่างรายเดือน
+                    คาบที่สอนเดือนนี้อาจถูกจ่ายเดือนหน้า ส่วนต่างรายเดือนจึงติดลบได้
+                    ทั้งที่จ่ายครบแล้ว — ถ้าไม่บอกตรงนี้ โค้ชจะอ่านตารางแล้วเข้าใจผิด */}
+                {payroll && payroll.payment_type !== "monthly" && (
+                  <div className="px-5 py-4 border-t border-gray-100 bg-gray-50">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-sm font-bold text-gray-800">
+                        ยอดค้างจ่ายจริง (นับสะสมทั้งช่วง)
+                      </span>
+                      <span className={`text-lg font-black tabular-nums ${payroll.unpaid > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                        ฿{payroll.unpaid.toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      คิดจากค่าจ้างของทุกคาบที่สอนแล้ว หักด้วยเงินที่ได้รับไปแล้วทั้งหมด ·
+                      ส่วนต่างรายเดือนในตารางด้านบนไม่ใช่ยอดค้างจ่าย เพราะคาบที่สอนเดือนหนึ่งอาจถูกจ่ายในเดือนถัดไป
+                    </p>
+                    {payroll.overpaid > 0 && (
+                      <p className="text-[11px] font-bold text-rose-700 mt-1.5">
+                        หมายเหตุ: ยอดที่ได้รับมากกว่าค่าจ้างของคาบที่สอนแล้ว ฿{payroll.overpaid.toLocaleString()}
+                        {" "}หากไม่ถูกต้องกรุณาแจ้งแอดมิน
+                      </p>
+                    )}
+                    {payroll.unresolved_sessions > 0 && (
+                      <p className="text-[11px] text-amber-700 mt-1.5">
+                        หมายเหตุ: ยังมี {payroll.unresolved_sessions} คาบที่ไม่มีรอบเช็คชื่อ
+                        {payroll.unresolved_amount > 0 && ` (฿${payroll.unresolved_amount.toLocaleString()})`}
+                        {" "}จึงยังไม่ถูกนับในยอดนี้ — แจ้งแอดมินให้เคลียร์ได้
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           ) : effectiveView === "yearly" ? (

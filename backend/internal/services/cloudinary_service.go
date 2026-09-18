@@ -289,18 +289,6 @@ func CloudinaryAssetFromURL(u string) (publicID, resourceType string, ok bool) {
 	return joined, resourceType, true
 }
 
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 // DownloadPrivateImage ดึงไฟล์มาให้ backend stream ต่อเอง — ผู้เรียกต้องปิด ReadCloser เสมอ
 //
 // ⚠️ ตั้งใจไม่คืน signed URL ให้ client เพราะเป็นลิงก์ที่ใครถือก็เปิดได้จนกว่าจะหมดอายุ

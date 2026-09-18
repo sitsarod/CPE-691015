@@ -59,7 +59,9 @@ export interface WeekSession {
 // [GET] ดึงคาบเรียนของทุก package ในสัปดาห์ (เฉพาะที่มี enrollment active)
 export async function getWeekSessions(weekStart: string): Promise<WeekSession[]> {
   const res = await apiFetch<WeekSession[]>(`/schedule-sessions?week_start=${weekStart}`, { method: "GET" });
-  return res || [];
+  // เซสชันที่ยังไม่มีโค้ช backend ส่ง assigned_coaches เป็น null — การันตีเป็น array เสมอ
+  // (จอนี้สร้างมาเพื่อโชว์เซสชันที่ยังไม่มอบหมายโดยเฉพาะ เคสนี้จึงเกิดบ่อย)
+  return (res || []).map(s => ({ ...s, assigned_coaches: s.assigned_coaches ?? [] }));
 }
 
 // [GET] ดึงตารางสอนของทุกโค้ช (admin) — ใช้เรนเดอร์ปฏิทินรวมทั้งสัปดาห์

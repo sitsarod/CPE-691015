@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ScanFace,
   Loader2,
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export default function PrivacySettings({ role }: Props) {
+  const router = useRouter();
   const [consent, setConsent] = useState<FaceConsentStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -74,11 +76,12 @@ export default function PrivacySettings({ role }: Props) {
     try {
       setConsent(await recordFaceConsent(action));
       setIsConsentOpen(false);
-      setNotice(
-        action === "granted"
-          ? "บันทึกความยินยอมเรียบร้อยแล้ว ท่านจะเช็คชื่อได้ทั้งการสแกนใบหน้าและ QR code"
-          : "รับทราบแล้ว ระบบจะไม่เก็บข้อมูลใบหน้าของท่าน"
-      );
+      if (action === "granted") {
+        // ยินยอมแล้วพาไปหน้าลงทะเบียนใบหน้าต่อเลย ไม่ต้องหาเมนูเอง
+        router.push(`/${role}/settings/face`);
+        return;
+      }
+      setNotice("รับทราบแล้ว ระบบจะไม่เก็บข้อมูลใบหน้าของท่าน");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ไม่สามารถบันทึกการตัดสินใจได้");
     } finally {

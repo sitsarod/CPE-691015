@@ -60,11 +60,14 @@ export default function InvoicesTab({
         <div className="space-y-4">
           {invoices.map((inv) => {
             const isExpanded = !!expandedInvoiceIds[inv.id];
-            
+
+            // backend ส่ง paymentitems เป็น null ได้ (Go marshal slice ว่างเป็น null) — กันไว้ก่อนเสมอ
+            const items = inv.paymentitems ?? [];
+
             // An older invoice (rejected/cancelled/pending) is stale once its billing
             // has already been settled through a different, newer invoice.
             const isSuperseded = inv.invoicestatus !== "success" &&
-              inv.paymentitems.some(item => item.billing?.billingstatus === "paid");
+              items.some(item => item.billing?.billingstatus === "paid");
 
             // If a newer (higher-id), non-cancelled invoice already covers the same billing(s),
             // resubmitting a slip against this older rejected invoice would just create a duplicate
@@ -72,8 +75,8 @@ export default function InvoicesTab({
             const hasNewerInvoiceForSameBilling = invoices.some(other =>
               other.id > inv.id &&
               other.invoicestatus !== "cancelled" &&
-              other.paymentitems.some(otherItem =>
-                inv.paymentitems.some(item => item.billing_id === otherItem.billing_id)
+              (other.paymentitems ?? []).some(otherItem =>
+                items.some(item => item.billing_id === otherItem.billing_id)
               )
             );
 
@@ -234,9 +237,9 @@ export default function InvoicesTab({
                 {/* Expanded Items */}
                 {isExpanded && (
                   <div className="border-t border-gray-200 bg-gray-50/50 p-5 space-y-4">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">รายการที่รวมชำระ ({inv.paymentitems.length})</h4>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">รายการที่รวมชำระ ({items.length})</h4>
                     <div className="space-y-2">
-                      {inv.paymentitems.map((item, idx) => (
+                      {items.map((item, idx) => (
                         <div key={`inv-item-${item.id || idx}`} className="flex items-center justify-between gap-3 border border-gray-200 bg-white p-3.5">
                           <div>
                             <span className="text-[10px] font-bold text-gray-400">BILL-{item.billing_id}</span>
@@ -254,9 +257,9 @@ export default function InvoicesTab({
                       ))}
                     </div>
                     {inv.transactionid && (
-                      <div className="text-[11px] text-gray-500 bg-white border border-gray-200 p-3 rounded-xl flex items-center justify-between">
-                        <span className="font-bold">Transaction Reference ID:</span>
-                        <code className="font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded">{inv.transactionid}</code>
+                      <div className="text-[11px] text-gray-500 bg-white border border-gray-200 p-3 rounded-xl flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                        <span className="font-bold shrink-0">Transaction Reference ID:</span>
+                        <code className="min-w-0 break-all font-mono text-gray-800 select-all bg-gray-100 px-1.5 py-0.5 rounded sm:text-right">{inv.transactionid}</code>
                       </div>
                     )}
                   </div>

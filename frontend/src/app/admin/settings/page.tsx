@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react';
 import { useHomeContentDraft, SectionId } from './useHomeContentDraft';
 import { SECTIONS, SectionGroup, sectionChip, sectionHint } from './registry';
 import { SectionIndex } from './components/SectionIndex';
 import { HeroPreview } from './components/HeroPreview';
 import { SectionBody, SectionCtx } from './components/sections';
+import SettingsSkeleton from './components/SettingsSkeleton';
 
 const GROUP_LABEL: Record<SectionGroup, string> = {
   content: 'เนื้อหาหน้าแรก',
@@ -118,17 +119,16 @@ export default function AdminSettingsPage() {
       toggleSlide: c.toggleSlide,
       deleteSlide: c.deleteSlide,
       moveSlide: c.moveSlide,
+      setSlideFocal: c.setSlideFocal,
+      setSlideZoom: c.setSlideZoom,
       coaches: c.coaches,
       toggleCoach: c.toggleCoach,
+      setHeadCoach: c.setHeadCoach,
     };
   }, [c]);
 
   if (c.loading || !c.draft || !ctx) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#CC0000]" />
-      </div>
-    );
+    return <SettingsSkeleton variant={isDesktop ? 'desktop' : 'mobile'} />;
   }
 
   const editedMeta = formatEdited(c.saved?.updated_at);

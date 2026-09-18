@@ -60,6 +60,14 @@ func validatePackageSchedules(schedules []dto.PackageScheduleReq) error {
 
 const maxPackageDurationDays = 366
 
+// applyTrialRules บังคับค่าของแพ็กเกจทดลอง — ไม่เชื่อค่าที่หน้าเว็บส่งมา
+func applyTrialRules(pkg *models.Package) {
+	if pkg.IsTrial {
+		pkg.SessionsCount = 1
+		pkg.Price = 0
+	}
+}
+
 func resolvePackageDuration(days uint) (uint, error) {
 	if days == 0 {
 		return defaultEnrollmentDurationDays, nil
@@ -116,8 +124,11 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 	for _, sch := range req.Schedules {
 		schedules = append(schedules, models.PackageSchedule{
 			DayOfWeek: models.DayOfWeek(sch.DayOfWeek),
-			StartTime: sch.StartTime,
-			EndTime:   sch.EndTime,
+			// เก็บรูปแบบมาตรฐานเสมอ — เวลาของตารางเรียนถูกเอาไปเทียบกับ
+			// work_schedules.start_time ที่แอดมินกรอกจากอีกหน้า ถ้ารูปแบบไม่ตรงกัน
+			// การจับคู่คลาสจะพลาด แล้วโค้ชไม่ได้เงิน (ดู normalizeClockTime)
+			StartTime: normalizeClockTime(sch.StartTime),
+			EndTime:   normalizeClockTime(sch.EndTime),
 		})
 	}
 
@@ -133,8 +144,10 @@ func (s *PackageService) CreatePackage(req dto.CreatePackageReq) (*models.Packag
 		Price:         req.Price,
 		MaxSeats:      req.MaxSeats,
 		DurationDays:  durationDays,
+		IsTrial:       req.IsTrial,
 		Schedules:     schedules,
 	}
+	applyTrialRules(&newPkg)
 
 	if err := s.db.Create(&newPkg).Error; err != nil {
 		return nil, errors.New("ไม่สามารถสร้างแพ็กเกจและตารางเรียนได้")
@@ -187,6 +200,10 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 			}
 			pkg.DurationDays = *req.DurationDays
 		}
+		if req.IsTrial != nil {
+			pkg.IsTrial = *req.IsTrial
+		}
+		applyTrialRules(&pkg)
 
 		if err := tx.Save(&pkg).Error; err != nil {
 			return errors.New("ไม่สามารถแก้ไขแพ็กเกจได้")
@@ -209,8 +226,8 @@ func (s *PackageService) UpdatePackage(id uint, req dto.UpdatePackageReq) (*mode
 				newSchedules = append(newSchedules, models.PackageSchedule{
 					PackageID: pkg.ID,
 					DayOfWeek: models.DayOfWeek(sch.DayOfWeek),
-					StartTime: sch.StartTime,
-					EndTime:   sch.EndTime,
+					StartTime: normalizeClockTime(sch.StartTime),
+					EndTime:   normalizeClockTime(sch.EndTime),
 				})
 			}
 

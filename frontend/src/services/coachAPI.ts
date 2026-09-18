@@ -308,6 +308,19 @@ export interface CoachPayrollLine {
   amount: number;
 }
 
+// หนึ่งเดือน — แยก "งานที่ทำ" ออกจาก "เงินที่จ่าย"
+//
+// ⚠️ expected กับ paid ของเดือนเดียวกันไม่จำเป็นต้องเท่ากัน และไม่ใช่ความผิดพลาด
+// คาบที่สอนเดือนมกราอาจถูกจ่ายเดือนกุมภา ผลต่างรายเดือนจึงไม่ใช่ "ยอดค้างจ่าย"
+// ยอดค้างจ่ายจริงมีตัวเดียวคือ CoachPayroll.unpaid (คิดสะสมทั้งช่วง)
+export interface CoachPayrollMonth {
+  year: number;
+  month: number; // 1-12
+  sessions: number;
+  expected: number;
+  paid: number;
+}
+
 export interface CoachPayroll {
   coach_id: number;
   payment_type: 'per_session' | 'monthly';
@@ -318,10 +331,17 @@ export interface CoachPayroll {
   already_paid: number;
   unpaid: number;
 
+  // จ่ายเกินไปเท่าไร (0 ถ้าไม่เกิน) — unpaid กับ overpaid ไม่มีทางมากกว่า 0 พร้อมกัน
+  //
+  // ⚠️ unpaid ถูก clamp ที่ 0 ฝั่ง backend เพราะมันเป็นเพดานของยอดที่จ่ายได้
+  // ถ้าไม่มีฟิลด์นี้ "จ่ายครบพอดี" กับ "จ่ายเกินเก้าพัน" จะแสดงเป็น ฿0 เหมือนกัน
+  overpaid: number;
+
   unresolved_sessions: number;
   unresolved_amount: number;
 
   rate_breakdown: CoachPayrollLine[];
+  monthly_breakdown: CoachPayrollMonth[];
   period_note: string;
 }
 

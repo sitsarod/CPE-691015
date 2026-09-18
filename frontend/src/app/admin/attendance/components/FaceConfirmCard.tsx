@@ -19,6 +19,15 @@ interface Props {
   onCancel: () => void;
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-4 py-2.5">
+      <dt className="shrink-0 text-sm text-gray-500">{label}</dt>
+      <dd className="min-w-0 truncate text-right text-base font-semibold text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
 export default function FaceConfirmCard({
   candidate,
   isSubmitting,
@@ -31,12 +40,7 @@ export default function FaceConfirmCard({
 
   const fullName = person.full_name.trim();
   const nickname = person.nickname;
-  const name = fullName || nickname;
-
-  // โค้ชไม่มีคอร์สและโควตา บอกแค่บทบาทแทน
-  const subtitle = isCoach
-    ? "โค้ชผู้สอน"
-    : `${candidate.student.course_name} · เหลือ ${candidate.student.remaining_sessions} ครั้ง`;
+  const displayName = fullName || nickname;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
@@ -46,19 +50,29 @@ export default function FaceConfirmCard({
             <ScanFace className="h-9 w-9 text-[#CC0000]" strokeWidth={1.5} />
           </div>
 
-          <p className="mt-4 text-sm text-gray-500">ระบบคิดว่าเป็น</p>
-          <h2 className="mt-1 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            {isCoach ? `โค้ช${nickname || name}` : nickname || name}
+          <h2 className="mt-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            {isCoach ? `โค้ช${displayName}` : displayName}
           </h2>
-          {fullName && <p className="mt-1 text-base text-gray-500">{fullName}</p>}
+          {fullName && nickname && (
+            <p className="mt-1 text-lg text-gray-500">ชื่อเล่น {nickname}</p>
+          )}
 
-          <p className="mt-3 text-sm text-gray-500">{subtitle}</p>
-
-          {/* โชว์คะแนนให้แอดมินใช้ประกอบการตัดสินใจ ไม่ใช่ให้ระบบตัดสินแทน */}
-          <p className="mt-2 text-xs text-gray-400">
-            ความมั่นใจ {(person.confidence * 100).toFixed(0)}%
-            {" · "}นำอันดับสอง {(person.margin * 100).toFixed(0)}%
-          </p>
+          {candidate.kind === "student" ? (
+            <dl className="mt-5 w-full divide-y divide-gray-100 rounded-2xl bg-gray-50 text-left">
+              <InfoRow label="คอร์ส" value={candidate.student.course_name || "-"} />
+              <InfoRow
+                label="แพ็กเกจ"
+                value={
+                  candidate.student.package_sessions
+                    ? `${candidate.student.package_sessions} ครั้ง`
+                    : "-"
+                }
+              />
+              <InfoRow label="เหลือ" value={`${candidate.student.remaining_sessions} ครั้ง`} />
+            </dl>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">โค้ชผู้สอน</p>
+          )}
 
           {!person.can_check_in && person.reason && (
             <p className="mt-4 w-full rounded-xl bg-red-50 px-4 py-3 text-sm text-[#CC0000]">

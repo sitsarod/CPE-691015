@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"time"
 
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
@@ -160,46 +161,72 @@ func (s *CoachService) Create(req dto.CreateCoachRequest) (*models.Coach, error)
 		return nil, ErrCoachDuplicateUID
 	}
 
-	// 4. payment_type ต้องเป็นค่าที่ระบบรองรับเท่านั้น
-	if !isValidPaymentType(req.PaymentType) {
-		return nil, ErrCoachInvalidPaymentType
-	}
-
-	// QR ประจำตัวโค้ช สุ่มจากฝั่งเซิร์ฟเวอร์เสมอ ไม่รับค่าจาก client
-	// (ใช้ namespace เดียวกับ QR ของนักเรียน — ไม่ซ้ำกันข้ามสองตาราง)
-	qrCode, err := GenerateUniqueQRCode(s.db)
-	if err != nil {
+	// 4. payment_type + pay_rate ต้องผ่านกติกาชุดเดียวกับทุกเส้นทางที่แก้ค่าจ้าง
+	// (เดิมตรงนี้ตรวจแค่ payment_type จึงสร้างโค้ชด้วย pay_rate ติดลบได้
+	//  ขณะที่ AdminUpdate ตรวจอยู่ — กฎเดียวกันสองมาตรฐาน ดู ValidateCoachPay)
+	if err := ValidateCoachPay(req.PaymentType, req.PayRate); err != nil {
 		return nil, err
 	}
 
-	// รหัสประจำตัวแบบอ่านออกพูดได้ ใช้ชุดเลขเดียวกับนักเรียน
-	memberCode, err := GenerateMemberCode(s.db, models.CoachRole)
+	var coach models.Coach
+
+	// ⚠️ ทั้งก้อนอยู่ในทรานแซกชันเดียว
+	//
+	// เดิม GenerateUniqueQRCode และ GenerateMemberCode ถูกเรียกก่อน Create แบบลอย ๆ
+	// ถ้า Create ล้มเหลว รหัสที่จองไว้จะสูญไปเฉย ๆ (ไม่ร้ายแรง แต่ทำให้เลขกระโดด
+	// และถ้ามีตารางจองเลขในอนาคตจะกลายเป็นขยะ)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// QR ประจำตัวโค้ช สุ่มจากฝั่งเซิร์ฟเวอร์เสมอ ไม่รับค่าจาก client
+		// (ใช้ namespace เดียวกับ QR ของนักเรียน — ไม่ซ้ำกันข้ามสองตาราง)
+		qrCode, err := GenerateUniqueQRCode(tx)
+		if err != nil {
+			return err
+		}
+
+		// รหัสประจำตัวแบบอ่านออกพูดได้ ใช้ชุดเลขเดียวกับนักเรียน
+		memberCode, err := GenerateMemberCode(tx, models.CoachRole)
+		if err != nil {
+			return err
+		}
+
+		coach = models.Coach{
+			UserID:         req.UserID,
+			Phone:          req.Phone,
+			PersonalQRCode: qrCode,
+			MemberCode:     memberCode,
+			LineID:         req.LineID,
+			Facebook:       req.Facebook,
+			Uid:            req.Uid,
+			Address:        req.Address,
+			BirthDate:      req.BirthDate,
+			Nickname:       req.Nickname,
+			ProfilePicture: req.ProfilePicture,
+			Specialization: req.Specialization,
+			CoachLicense:   req.CoachLicense,
+			BankAccount:    req.BankAccount,
+			PaymentInfo:    req.PaymentInfo,
+			PromptPay:      req.PromptPay,
+			PaymentType:    req.PaymentType,
+			PayRate:        req.PayRate,
+		}
+
+		// ⚠️ พึ่ง unique index เป็นด่านสุดท้าย ไม่ใช่พึ่งการเช็คซ้ำข้างบนอย่างเดียว
+		//
+		// การเช็คด้วย First().Error == nil ข้างบนเป็น TOCTOU — สอง request ที่เข้ามา
+		// พร้อมกันจะอ่านเจอ "ยังไม่มี" ทั้งคู่แล้วผ่านไปทั้งคู่
+		//
+		// ด่านจริงคือ unique index ที่ฐาน แต่เดิม error ที่ได้จะหลุดเป็น 500
+		// แปลงกลับเป็น sentinel เดิมเพื่อให้ controller ตอบ 409 ตามที่ควรเป็น
+		// (แพทเทิร์นเดียวกับ recordCoachAttendance ที่ทำเรื่องนี้ถูกอยู่แล้ว)
+		if err := tx.Create(&coach).Error; err != nil {
+			if isUniqueViolation(err) {
+				return ErrCoachDuplicateUID
+			}
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, err
-	}
-
-	coach := models.Coach{
-		UserID:         req.UserID,
-		Phone:          req.Phone,
-		PersonalQRCode: qrCode,
-		MemberCode:     memberCode,
-		LineID:         req.LineID,
-		Facebook:       req.Facebook,
-		Uid:            req.Uid,
-		Address:        req.Address,
-		BirthDate:      req.BirthDate,
-		Nickname:       req.Nickname,
-		ProfilePicture: req.ProfilePicture,
-		Specialization: req.Specialization,
-		CoachLicense:   req.CoachLicense,
-		BankAccount:    req.BankAccount,
-		PaymentInfo:    req.PaymentInfo,
-		PromptPay:      req.PromptPay,
-		PaymentType:    req.PaymentType,
-		PayRate:        req.PayRate,
-	}
-
-	if err := s.db.Create(&coach).Error; err != nil {
 		return nil, err
 	}
 	return &coach, nil
@@ -319,23 +346,20 @@ func (s *CoachService) AdminUpdate(id uint, req dto.AdminUpdateCoachRequest) (*m
 	if req.CoachLicense != nil {
 		updateData["coach_license"] = *req.CoachLicense
 	}
-	if req.PaymentType != nil {
-		if !isValidPaymentType(*req.PaymentType) {
-			return nil, ErrCoachInvalidPaymentType
-		}
-		updateData["payment_type"] = *req.PaymentType
-	}
-	if req.PayRate != nil {
-		if *req.PayRate < 0 {
-			return nil, errors.New("pay_rate ต้องไม่ติดลบ")
-		}
-		updateData["pay_rate"] = *req.PayRate
-	}
 
-	if len(updateData) > 0 {
-		if err := s.db.Model(&coach).Updates(updateData).Error; err != nil {
-			return nil, err
+	// ⚠️ pay_rate / payment_type ไม่ได้อยู่ใน updateData โดยตั้งใจ
+	// สองฟิลด์นี้มีผลย้อนหลังกับเงิน จึงต้องผ่าน ApplyCoachPayChange เท่านั้น
+	// (มีด่านห้ามสลับวิธีจ่ายตอนยังค้างจ่าย และเติมสแนปช็อตให้คาบเดิม)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if len(updateData) > 0 {
+			if err := tx.Model(&models.Coach{}).Where("id = ?", id).Updates(updateData).Error; err != nil {
+				return err
+			}
 		}
+		return ApplyCoachPayChange(tx, id, req.PaymentType, req.PayRate, time.Now())
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.db.First(&coach, id).Error; err != nil {

@@ -6,7 +6,9 @@ import { createCourse, createPackage } from "@/services/courseAPI";
 import CourseImageField from "./CourseImageField";
 import { ScheduleFormInput, PackageFormInput } from "@/types/course";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void }) {
+  const showToast = useGlobalToast();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +26,11 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   
   const updatePackage = (pkgId: string, field: keyof PackageFormInput, value: string | number) => {
     setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, [field]: value } : pkg));
+  };
+
+  // แพ็กเกจทดลองบังคับ 1 ครั้ง ราคา 0 (backend บังคับซ้ำอีกชั้น)
+  const setTrial = (pkgId: string, checked: boolean) => {
+    setPackages(packages.map(pkg => pkg.id === pkgId ? { ...pkg, is_trial: checked, ...(checked ? { sessions_count: 1, price: 0 } : {}) } : pkg));
   };
 
   const addSchedule = (pkgId: string) => {
@@ -73,6 +80,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
             hours_count: Number(pkg.hours_count),
             max_seats: Number(pkg.max_seats),
             price: Number(pkg.price),
+            is_trial: !!pkg.is_trial,
             ...(pkg.duration_days !== "" ? { duration_days: Number(pkg.duration_days) } : {}),
             schedules: pkg.schedules.map(s => ({
               day_of_week: s.day_of_week,
@@ -83,7 +91,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         }
       }
       
-      alert("สร้างคอร์สและแพ็กเกจสำเร็จ!");
+      showToast("สร้างคอร์สและแพ็กเกจสำเร็จ!", "success");
       onSuccess(); // กลับไปหน้า List
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ไม่สามารถสร้างคอร์สได้ โปรดลองอีกครั้ง");
@@ -159,12 +167,21 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
               )}
 
               <h3 className="font-bold text-gray-900 mb-4">แพ็กเกจที่ {index + 1}</h3>
+
+              <label className="mb-4 flex w-fit cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox" checked={!!pkg.is_trial} onChange={(e) => setTrial(pkg.id, e.target.checked)}
+                  className="h-4 w-4 accent-[#CC0000]"
+                />
+                แพ็กเกจทดลองเรียนฟรี
+                <span className="text-xs font-normal text-gray-400">(1 ครั้ง · ราคา 0 บาท · สมัครได้ครั้งเดียวต่อคนต่อคอร์ส)</span>
+              </label>
               
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">จำนวนครั้ง (Sessions) <span className="text-red-500">*</span></label>
                   <input 
-                    type="number" required min="1" value={pkg.sessions_count} onChange={(e) => updatePackage(pkg.id, "sessions_count", e.target.value)}
+                    type="number" required min="1" disabled={!!pkg.is_trial} value={pkg.sessions_count} onChange={(e) => updatePackage(pkg.id, "sessions_count", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เช่น 8"
                   />
                 </div>
@@ -188,7 +205,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label>
                   <input
-                    type="number" required min="0" value={pkg.price} onChange={(e) => updatePackage(pkg.id, "price", e.target.value)}
+                    type="number" required min="0" disabled={!!pkg.is_trial} value={pkg.price} onChange={(e) => updatePackage(pkg.id, "price", e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:border-[#CC0000]" placeholder="เช่น 2000"
                   />
                 </div>
@@ -260,7 +277,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
         </div>
       </div>
 
-      <div className="flex justify-end pt-6 border-t border-gray-200">
+      <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-40 flex justify-end border-t border-gray-200 bg-white/95 py-4 backdrop-blur md:bottom-0">
         <button 
           type="submit" disabled={isLoading}
           className="flex items-center justify-center w-full md:w-auto bg-[#CC0000] text-white font-bold px-8 py-3 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"

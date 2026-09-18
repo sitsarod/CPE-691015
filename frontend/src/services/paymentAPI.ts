@@ -376,3 +376,28 @@ export async function cancelInvoice(invoiceId: number, token: string): Promise<I
   return resData.data || resData;
 }
 
+// [POST] บันทึกค่าใช้จ่ายหลายรายการเป็นก้อนเดียว — สำเร็จทั้งหมดหรือไม่สำเร็จเลย
+//
+// ⚠️ หน้าจ่ายค่าจ้างต้องใช้ตัวนี้ ไม่ใช่วนลูปเรียก createExpense ทีละรายการ
+// การวนลูปทำให้เกิดผลลัพธ์ครึ่ง ๆ เมื่อรายการใดรายการหนึ่งพัง (ค่าจ้างลงแล้ว
+// แต่โบนัสไม่ลง) แล้วแอดมินไม่รู้ว่าอันไหนบันทึกไปแล้ว จะกดซ้ำก็ไม่กล้า
+//
+// 409 = ยอดค่าจ้างเกินที่ค้างจ่ายจริง หรือไม่มียอดค้าง (ข้อความจาก backend อ่านรู้เรื่องแล้ว)
+export async function createExpensesBatch(
+  items: CreateExpenseReq[],
+  token: string,
+): Promise<void> {
+  const response = await fetch(`${BASE_URL}/expenses/batch`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ items }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "ไม่สามารถบันทึกค่าใช้จ่ายได้");
+  }
+}

@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Clock, Wallet, UserCircle, Users, ListTodo, Star, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
+import { Home, Calendar, Clock, Wallet, UserCircle, Camera, ListTodo, Star, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 
 const navItems = [
   { href: "/coach/dashboard", icon: <Home />, label: "หน้าแรก" },
   { href: "/coach/schedule", icon: <Calendar />, label: "ตารางงาน" },
   { href: "/coach/availability", icon: <Clock />, label: "เวลาว่าง" },
   { href: "/coach/evalution", icon: <ListTodo />, label: "ประเมินผู้เรียน" },
-  { href: "/coach/detect", icon: <Users />, label: "จำแนกผู้เรียน" },
+  { href: "/coach/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
   { href: "/coach/feedback", icon: <Star />, label: "รีวิวของฉัน" },
   { href: "/coach/payment", icon: <Wallet />, label: "การเงิน" },
 ];
@@ -89,7 +89,7 @@ export default function CoachSidebar() {
       </aside>
 
       {/* Mobile (< md): icon-only horizontal bottom bar */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-[60] items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
+      <nav className="flex md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-40 items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
         {primaryItems.map((item) => (
           <BottomBarItem
             key={item.href}

@@ -97,15 +97,26 @@ export default function FaceEnrollment({ privacyHref }: Props) {
 
   const handleUpload = async (pose: FacePose, photo: Blob) => {
     await uploadFaceImage(pose, photo); // ถ้า throw CaptureDialog จะโชว์ error เอง
-    setCapturingPose(null);
 
-    // ต้อง catch แยก — dialog ปิดไปแล้ว error ที่ throw ต่อจะไม่มีใครรับ
-    // (setState ของ component ที่ unmount แล้วเป็น no-op)
+    // โหลดรายการใหม่เพื่อดูว่าเหลือท่าไหนต้องถ่ายต่อ
+    let list: FaceImage[];
     try {
-      setImages(await fetchMyFaceImages());
+      list = await fetchMyFaceImages();
+      setImages(list);
     } catch {
       setError("อัปโหลดสำเร็จแล้ว แต่โหลดรายการใหม่ไม่สำเร็จ กรุณารีเฟรชหน้า");
+      setCapturingPose(null);
+      return;
     }
+
+    // ถ่ายเสร็จรูปหนึ่งแล้วเด้งไปถ่ายท่าถัดไปที่ยังไม่มีรูป (หรือรูปถูกปฏิเสธ) อัตโนมัติ
+    // ครบทุกท่าแล้วจึงปิดกล้อง
+    const byPose = new Map(list.map((img) => [img.pose, img]));
+    const nextPose = FACE_POSES.find((p) => {
+      const img = byPose.get(p);
+      return !img || img.status === "rejected";
+    });
+    setCapturingPose(nextPose ?? null);
   };
 
   // ถ่ายใหม่ = ลบของเดิมแล้วเปิดกล้องต่อในคลิกเดียว
@@ -292,6 +303,8 @@ export default function FaceEnrollment({ privacyHref }: Props) {
 
       {capturingPose && (
         <CaptureDialog
+          // เปลี่ยนท่า = remount ใหม่ ให้กล้อง/รูปตัวอย่างรีเซ็ตพร้อมถ่ายท่าถัดไป
+          key={capturingPose}
           pose={capturingPose}
           onCancel={() => setCapturingPose(null)}
           onConfirm={(photo) => handleUpload(capturingPose, photo)}

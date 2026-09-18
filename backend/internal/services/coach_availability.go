@@ -129,8 +129,8 @@ func (s *CoachAvailabilityService) UpdateAvailability(coachID uint, userID uint,
 			newAvailabilities = append(newAvailabilities, models.CoachAvailability{
 				CoachID:   coachID,
 				DayOfWeek: models.DayOfWeek(a.DayOfWeek), // แปลง string -> custom type DayOfWeek
-				StartTime: a.StartTime,
-				EndTime:   a.EndTime,
+				StartTime: normalizeClockTime(a.StartTime),
+				EndTime:   normalizeClockTime(a.EndTime),
 			})
 		}
 
@@ -150,18 +150,41 @@ func (s *CoachAvailabilityService) UpdateAvailability(coachID uint, userID uint,
 	return result, nil
 }
 
-// DeleteAll ลบเวลาว่างทั้งหมดของ coach (เผื่อใช้กรณี coach อยากล้างตารางแล้วเริ่มใหม่)
-func (s *CoachAvailabilityService) DeleteAll(coachID uint) error {
-	return s.db.Where("coach_id = ?", coachID).Delete(&models.CoachAvailability{}).Error
-}
+// ─── หมายเหตุ: เคยมี DeleteAll(coachID) อยู่ตรงนี้ ถูกลบออกแล้ว ───
+//
+// มันไม่เคยถูก wire เข้า router เลย และ "ไม่มี ownership check"
+// ถ้าวันหนึ่งมีคนเห็นแล้วต่อ route ให้ จะกลายเป็นช่องโหว่ IDOR ทันที
+// (โค้ชคนไหนก็ล้างตารางของคนอื่นได้ด้วยการเปลี่ยนเลข id)
+//
+// การล้างเวลาว่างทั้งหมดทำได้ผ่าน UpdateAvailability ด้วยรายการว่างอยู่แล้ว
+// ซึ่งเดินผ่าน VerifyCoachSelf และ ensureNoScheduleConflict ครบทุกด่าน
 
 // ensureNoScheduleConflict ตรวจว่าเวลาว่างชุดใหม่ยังคลุมคาบสอนที่ถูก assign ไว้แล้วในอนาคตครบทุกคาบ
 // ถ้ามีคาบไหนหลุดออกนอกเวลาว่างใหม่ จะคืน ErrAvailabilityConflictsSchedule (บล็อกการบันทึก)
+//
+// ─── สองเงื่อนไขที่ต้องยกเว้น ───
+//
+//  1. คาบฉุกเฉิน (is_emergency = true) คือคาบที่ถูกสร้างขึ้น "นอกเวลาว่างโดยตั้งใจ"
+//     ทั้งจากแอดมินติ๊กฉุกเฉินเอง และจากระบบสร้างให้ตอนโค้ชสแกนเช็คชื่อคาบที่ไม่มีในตาราง
+//     (ดู ensureCoachWorkSchedule — สร้างโดยไม่ตรวจอะไรเลย)
+//
+//     ถ้าไม่ยกเว้น จะเกิดวงจรที่โค้ชออกเองไม่ได้: สแกนเช็คชื่อหน้างานครั้งเดียว
+//     → ระบบสร้างคาบฉุกเฉินในอนาคตให้ → เวลาว่างชุดใหม่ไม่คลุมคาบนั้น (เพราะมันอยู่นอกเวลาว่าง
+//     ตั้งแต่แรก) → โค้ชแก้เวลาว่างตัวเองไม่ได้เลยจนกว่าจะเลยวันนั้น โดยได้ error
+//     ว่า "กรุณาติดต่อแอดมิน" ทั้งที่ไม่ได้ทำอะไรผิด
+//
+//  2. คาบของวันนี้ที่สอนจบไปแล้ว — เดิมใช้ date >= today ซึ่งเหมารวมคาบเช้าที่จบตอนเที่ยง
+//     การแก้เวลาว่างตอนเย็นจึงยังติดคาบนั้นอยู่ ทั้งที่ไม่มีอะไรให้กระทบแล้ว
 func (s *CoachAvailabilityService) ensureNoScheduleConflict(coachID uint, avails []dto.AvailabilityDetail) error {
-	today := time.Now().Format("2006-01-02")
+	now := time.Now().In(appLocation())
+	today := now.Format("2006-01-02")
+	nowClock := now.Format("15:04")
 
 	var futureWS []models.WorkSchedule
-	if err := s.db.Where("coach_id = ? AND date >= ?", coachID, today).Find(&futureWS).Error; err != nil {
+	if err := s.db.
+		Where("coach_id = ? AND is_emergency = ?", coachID, false).
+		Where("(date > ? OR (date = ? AND end_time > ?))", today, today, nowClock).
+		Find(&futureWS).Error; err != nil {
 		return err
 	}
 	if len(futureWS) == 0 {

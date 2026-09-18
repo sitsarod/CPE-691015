@@ -193,6 +193,7 @@ export function useCoachManagement() {
         `ถ้าต้องการแค่ให้หยุดรับงานชั่วคราว ให้ใช้ปุ่มพักงานแทน`,
       () => deleteCoachAPI(item.id).then(() => undefined),
       "ไม่สามารถลบข้อมูลได้",
+      "danger",
     );
 
   /** สลับสถานะเปิด/ปิดใช้งานของโค้ช (พักงาน) */

@@ -25,7 +25,9 @@ import BillingsTab from "./components/BillingsTab";
 import InvoicesTab from "./components/InvoicesTab";
 import CheckoutModal from "./components/CheckoutModal";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 export default function CustomerPaymentPage() {
+  const confirmAction = useConfirm();
   const router = useRouter();
   
   // Data States
@@ -172,7 +174,7 @@ export default function CustomerPaymentPage() {
 
   const handlePayExistingInvoice = (invoice: InvoiceDTO) => {
     setCheckoutAmount(invoice.invoicetotalamount);
-    setCheckoutBillingIds(invoice.paymentitems.map(item => item.billing_id));
+    setCheckoutBillingIds((invoice.paymentitems ?? []).map(item => item.billing_id));
     setCheckoutInvoiceId(invoice.id);
     setCheckoutMode("existing");
     setUploadedSlipUrl(invoice.slipurl || "");
@@ -219,7 +221,10 @@ export default function CustomerPaymentPage() {
 
   // ---------------- Invoice Cancellation Logic ----------------
   const handleCancelInvoice = async (invoiceId: number) => {
-    if (!window.confirm("คุณต้องการยกเลิกใบแจ้งหนี้นี้ใช่หรือไม่? เมื่อยกเลิกแล้ว บิลย่อยที่รวมอยู่ในใบแจ้งหนี้นี้จะกลับมาค้างชำระเหมือนเดิม")) {
+    if (!(await confirmAction({
+      message: "คุณต้องการยกเลิกใบแจ้งหนี้นี้ใช่หรือไม่?\n\nเมื่อยกเลิกแล้ว บิลย่อยที่รวมอยู่ในใบแจ้งหนี้นี้จะกลับมาค้างชำระเหมือนเดิม",
+      tone: "danger",
+    }))) {
       return;
     }
 

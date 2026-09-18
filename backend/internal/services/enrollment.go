@@ -37,11 +37,12 @@ var (
 	ErrEnrollmentRejectReason   = errors.New("กรุณาระบุเหตุผลในการปฏิเสธ (อย่างน้อย 3 ตัวอักษร)")
 	ErrEnrollmentForbidden      = errors.New("ไม่มีสิทธิ์ยกเลิกการลงทะเบียนของผู้อื่น")
 	ErrEnrollmentNotCancellable = errors.New("ยกเลิกเองได้เฉพาะใบที่ยังรออนุมัติ หากแอดมินอนุมัติไปแล้วกรุณาติดต่อแอดมิน")
+
+	ErrTrialAlreadyUsed    = errors.New("คุณใช้สิทธิ์ทดลองเรียนคอร์สนี้ไปแล้ว — ทดลองได้ครั้งเดียวต่อคอร์ส")
+	ErrTrialNotForExisting = errors.New("สิทธิ์ทดลองเรียนสำหรับผู้ที่ยังไม่เคยเรียนคอร์สนี้เท่านั้น")
 )
 
 const defaultEnrollmentDurationDays = 30
-
-const billingTypeCourseFee = "ค่าคอร์สเรียน"
 
 func resolveDurationDays(pkg *models.Package, enrollmentID uint) uint {
 	if pkg == nil {
@@ -73,6 +74,11 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 	e.StartedAt = &now
 	e.ExpiresAt = &expiresAt
 
+	// ใบทดลองเรียนไม่ดูดครั้งที่ทบไว้ — ยอดทบต้องไปลงใบที่สมัครจริง
+	if pkg != nil && pkg.IsTrial {
+		return nil
+	}
+
 	carried, err := consumeCarryOver(tx, e, pkg)
 	if err != nil {
 		return err
@@ -94,9 +100,9 @@ func activateEnrollment(tx *gorm.DB, e *models.Enrollment, pkg *models.Package) 
 }
 
 func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) error {
-	var billingType models.BillingType
-	if err := tx.Where("billing_type_name = ?", billingTypeCourseFee).First(&billingType).Error; err != nil {
-		return errors.New("ไม่พบประเภทบิล 'ค่าคอร์สเรียน' ในระบบ")
+	billingTypeID, err := billingTypeIDByName(tx, billingTypeCourseFee)
+	if err != nil {
+		return err
 	}
 
 	billingUserID, err := ResolveUserID(tx, e.CustomerID)
@@ -124,7 +130,7 @@ func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) e
 		DueDate:       time.Now().AddDate(0, 0, 3), // ให้เวลาจ่าย 3 วัน
 		Status:        models.StatusUnfunded,
 		CustomerID:    billingUserID,
-		BillingTypeID: billingType.ID,
+		BillingTypeID: billingTypeID,
 		AdminID:       adminID,
 	}
 
@@ -141,11 +147,13 @@ func createEnrollmentBilling(tx *gorm.DB, e *models.Enrollment, adminID *uint) e
 	return nil
 }
 
+// ⚠️ ใบทดลองเรียนไม่นับเป็นประวัติการเรียน — ไม่งั้นทดลองฟรีแล้วสมัครจริงจะข้ามด่านจ่ายเงินก่อนเรียน
 func hasStudiedAnything(tx *gorm.DB, customerID uint, excludeEnrollmentID uint) (bool, error) {
 	var count int64
 	if err := tx.Model(&models.Enrollment{}).
-		Where("customer_id = ? AND id <> ? AND started_at IS NOT NULL",
-			customerID, excludeEnrollmentID).
+		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Where("enrollments.customer_id = ? AND enrollments.id <> ? AND enrollments.started_at IS NOT NULL AND packages.is_trial = ?",
+			customerID, excludeEnrollmentID, false).
 		Count(&count).Error; err != nil {
 		return false, errors.New("ไม่สามารถตรวจสอบประวัติการเรียนได้")
 	}
@@ -156,12 +164,38 @@ func hasStudiedCourse(tx *gorm.DB, customerID uint, courseID uint) (bool, error)
 	var count int64
 	if err := tx.Model(&models.Enrollment{}).
 		Joins("JOIN packages ON packages.id = enrollments.package_id").
-		Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.started_at IS NOT NULL",
-			customerID, courseID).
+		Where("enrollments.customer_id = ? AND packages.course_id = ? AND enrollments.started_at IS NOT NULL AND packages.is_trial = ?",
+			customerID, courseID, false).
 		Count(&count).Error; err != nil {
 		return false, errors.New("ไม่สามารถตรวจสอบประวัติการเรียนคอร์สนี้ได้")
 	}
 	return count > 0, nil
+}
+
+// checkTrialEligible ทดลองเรียนได้ครั้งเดียวต่อคอร์ส และเฉพาะคนที่ยังไม่เคยเรียนคอร์สนั้น
+func checkTrialEligible(tx *gorm.DB, customerID, courseID uint) error {
+	var trials int64
+	if err := tx.Model(&models.Enrollment{}).
+		Joins("JOIN packages ON packages.id = enrollments.package_id").
+		Where("enrollments.customer_id = ? AND packages.course_id = ? AND packages.is_trial = ?",
+			customerID, courseID, true).
+		Where("enrollments.status NOT IN ?",
+			[]models.EnrollmentStatus{models.EnrollmentStatusCancelled, models.EnrollmentStatusRejected}).
+		Count(&trials).Error; err != nil {
+		return errors.New("ไม่สามารถตรวจสอบสิทธิ์ทดลองเรียนได้")
+	}
+	if trials > 0 {
+		return ErrTrialAlreadyUsed
+	}
+
+	studied, err := hasStudiedCourse(tx, customerID, courseID)
+	if err != nil {
+		return err
+	}
+	if studied {
+		return ErrTrialNotForExisting
+	}
+	return nil
 }
 
 // seatsTaken นับที่นั่งที่ถูกยึดแล้ว (อนุมัติแล้ว) ของแพ็กเกจหนึ่ง
@@ -320,7 +354,11 @@ type EnrollResult struct {
 }
 
 // [POST] ลงทะเบียนคอร์สเรียน
-func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollResult, error) {
+func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint, acceptedTermsVersion string) (*EnrollResult, error) {
+	if acceptedTermsVersion != CurrentEnrollmentTermsVersion(s.db) {
+		return nil, ErrEnrollmentTermsNotAccepted
+	}
+
 	var pkg models.Package
 
 	if err := s.db.Preload("Course").First(&pkg, packageID).Error; err != nil {
@@ -338,12 +376,15 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		return nil, err
 	}
 
+	acceptedAt := time.Now()
 	newEnrollment := models.Enrollment{
 		CustomerID:        customerID,
 		PackageID:         packageID,
-		EnrollmentDate:    time.Now(),
+		EnrollmentDate:    acceptedAt,
 		TotalSessions:     pkg.SessionsCount,
 		RemainingSessions: pkg.SessionsCount,
+		TermsVersion:      acceptedTermsVersion,
+		TermsAcceptedAt:   &acceptedAt,
 	}
 
 	waitlisted := false
@@ -368,6 +409,12 @@ func (s *EnrollmentService) EnrollCourse(userID uint, packageID uint) (*EnrollRe
 		}
 		if existingCount > 0 {
 			return ErrAlreadyEnrolled
+		}
+
+		if pkg.IsTrial {
+			if err := checkTrialEligible(tx, customerID, pkg.CourseID); err != nil {
+				return err
+			}
 		}
 
 		// ⚠️ เกณฑ์ "รายคอร์ส" ตั้งใจให้ต่างจาก hasStudiedAnything ใน ApproveEnrollment
@@ -511,6 +558,11 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 			return ErrEnrollmentNotPending
 		}
 		enrollment.Status = models.EnrollmentStatusAwaitingPayment
+
+		// ทดลองเรียนฟรี ไม่มีบิลให้รอจ่าย — อนุมัติแล้วเปิดสิทธิ์ทันที
+		if enrollment.Package.IsTrial {
+			return activateEnrollment(tx, &enrollment, enrollment.Package)
+		}
 
 		if err := createEnrollmentBilling(tx, &enrollment, &adminID); err != nil {
 			return err

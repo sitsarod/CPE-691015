@@ -35,6 +35,9 @@ type Billing struct {
 	UpdatedByID *uint `json:"updated_by_id"`
 	UpdatedBy   *User `json:"updated_by" gorm:"foreignKey:UpdatedByID"`
 
+	// AttendanceSessionID มีค่า = บิลค่าสนามที่ออกจากรอบเช็คชื่อนั้น ใช้ยกเลิกทั้งรอบแล้วออกใหม่
+	AttendanceSessionID *uint `json:"attendance_session_id" gorm:"index"`
+
 	PaymentItem []PaymentItem `json:"paymentitem" gorm:"foreignKey:BillingID"`
 	Enrollment  *Enrollment   `json:"enrollment" gorm:"foreignKey:BillingID"`
 }

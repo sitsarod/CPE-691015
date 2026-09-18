@@ -16,6 +16,7 @@ import { normalizeRole, isActive, type RoleKey } from "@/components/admin/Manage
 import { emptyCustomer, emptyCoach } from "@/components/admin/modals/CreateMemberModal";
 import { useAdminResource, errorMessage, getId } from "@/components/admin/shared/useAdminResource";
 
+import { useGlobalToast } from "@/components/ToastProvider";
 /** เผื่อไฟล์อื่นในโฟลเดอร์นี้ยัง import getId จากที่นี่ตามเดิม */
 export { getId };
 
@@ -64,19 +65,26 @@ function validateCreateForm(form: AdminCreateUserInput): string | null {
   if (form.password.length < 8) {
     return "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร";
   }
+  if (!/\d/.test(form.password)) {
+    return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว";
+  }
 
   if (form.role === "customer") {
     const c = form.customer;
     if (!c?.nickname.trim()) return "กรุณากรอก: ชื่อเล่น";
     if (!c.gender) return "กรุณาเลือก: เพศ";
     if (!c.birthDate) return "กรุณากรอก: วันเกิด";
-    if (!/^\d{10}$/.test(c.phoneNumber)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
+    if (new Date(c.birthDate) > new Date()) return "วันเกิดต้องไม่ใช่วันที่ในอนาคต";
+    const minBirthDate = new Date();
+    minBirthDate.setFullYear(minBirthDate.getFullYear() - 3);
+    if (new Date(c.birthDate) > minBirthDate) return "อายุต้องไม่ต่ำกว่า 3 ปี";
+    if (!/^0\d{9}$/.test(c.phoneNumber)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0";
   }
 
   if (form.role === "coach") {
     const co = form.coach;
     if (!co?.nickname.trim()) return "กรุณากรอก: ชื่อเล่น";
-    if (!/^\d{10}$/.test(co.phone)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
+    if (!/^0\d{9}$/.test(co.phone)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0";
     if (!/^\d{13}$/.test(co.uid)) return "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก";
     if (!co.birth_date) return "กรุณากรอก: วันเกิด";
     if (!co.address.trim()) return "กรุณากรอก: ที่อยู่";
@@ -92,6 +100,7 @@ function validateCreateForm(form: AdminCreateUserInput): string | null {
 }
 
 export function useMemberManagement() {
+  const showToast = useGlobalToast();
   const base = useAdminResource<UserProfileResponseDTO, AdminUserDetail>({
     fetchList: getAllUsersAPI,
     fetchDetail: (item) => adminGetUserDetailAPI(getId(item)),
@@ -196,13 +205,13 @@ export function useMemberManagement() {
     // เพราะยิง API ตรงข้ามหน้าเว็บได้เสมอ
     const currentUserId = Number(localStorage.getItem("user_id"));
     if (getId(item) === currentUserId) {
-      alert("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ");
+      showToast("ลบบัญชีของตัวเองไม่ได้ กรุณาให้ผู้ดูแลระบบคนอื่นเป็นผู้ดำเนินการ", "error");
       return;
     }
 
     const adminCount = base.items.filter((m) => normalizeRole(m.role) === "admin").length;
     if (normalizeRole(item.role) === "admin" && adminCount <= 1) {
-      alert("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก");
+      showToast("ลบไม่ได้ เพราะนี่คือผู้ดูแลระบบคนสุดท้าย หากลบแล้วจะไม่มีใครเข้าจัดการระบบได้อีก", "error");
       return;
     }
 

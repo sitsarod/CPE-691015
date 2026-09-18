@@ -15,6 +15,15 @@ func classPackageIDs(db *gorm.DB, courseID uint, weekday, startTime, endTime str
 		return nil, nil
 	}
 
+	// ⚠️ normalize ทั้งตอนเขียนและตอนค้น
+	//
+	// ฐานมีทั้ง "18:00" และ "18:00:00" ปนกันจากอดีต (คนละหน้ากรอก คนละเวลา)
+	// NormalizeClockTimeColumns แปลงของเก่าให้ตอนรัน migrate แต่ถ้าพึ่งแค่นั้น
+	// ความถูกต้องของการจับคู่คลาส (และการคิดเงิน) จะขึ้นกับว่ามีคนรัน migrate หรือยัง
+	// ซึ่งเป็นกฎที่บังคับไม่ได้ — จึงกันไว้อีกชั้นตรงนี้
+	startTime = normalizeClockTime(startTime)
+	endTime = normalizeClockTime(endTime)
+
 	var ids []uint
 	err := db.Raw(`
 		SELECT DISTINCT p.id
@@ -186,6 +195,21 @@ func confirmedForClass(db *gorm.DB, customerID uint, packageIDs []uint, classDat
 	return n > 0
 }
 
+// openSessionForSlot หารอบเช็คชื่อที่มีอยู่แล้วของ "คาบนี้" ในวันนั้น
+//
+// ⚠️ ต้องกรองเวลาคาบด้วย ไม่ใช่แค่แพ็กเกจกับวันที่
+//
+// เดิมหาด้วย (package_id IN ?, วันที่) เท่านั้น ซึ่งพังเมื่อแพ็กเกจเดียวมีคาบเรียน
+// หลายช่วงในวันเดียวกัน (เช่น เสาร์ 10:00-12:00 และ เสาร์ 14:00-16:00)
+//
+//	เปิดรอบบ่ายไปแล้ว → จะเปิดรอบเช้า → เจอรอบบ่ายแล้วคืนตัวนั้นกลับไป
+//	→ รอบเช้าเปิดไม่ได้ → คาบเช้าไม่มีรอบที่ปิด → โค้ชไม่ได้เงินของคาบนั้น
+//
+// startTime/endTime = เวลาของคาบที่กำลังจะเปิด (สแนปช็อตชุดเดียวกับที่เก็บใน session)
+//
+// เงื่อนไข OR ท่อนหลังเป็นทางถอยสำหรับรอบรุ่นเก่าที่ยังไม่มีสแนปช็อตเวลา
+// ซึ่งเทียบเวลาไม่ได้ จึงถือว่าเป็นรอบของคาบนี้ไปตามเดิม (หลักเดียวกับ
+// closedSessionForScheduleSQL ในฝั่งคิดเงิน)
 func (s *AttendanceService) openSessionForSlot(
 	tx *gorm.DB,
 	packageIDs []uint,
@@ -195,8 +219,12 @@ func (s *AttendanceService) openSessionForSlot(
 	if len(packageIDs) == 0 {
 		return nil, nil
 	}
+	startTime = normalizeClockTime(startTime) // เหตุผลเดียวกับ classPackageIDs
 
 	var existing models.AttendanceSession
+	// ใช้เงื่อนไขฝั่ง main — เวลาเริ่มอย่างเดียวพอระบุคาบได้
+	// (แพ็กเกจเดียวกันในวันเดียวกันมีคาบที่เริ่มเวลาเดียวกันสองคาบไม่ได้)
+	// ฝั่งนี้เคยเขียนแบบเทียบทั้ง start และ end ซึ่งให้ผลเหมือนกันแต่ต่างจาก main เปล่า ๆ
 	err := tx.Where("package_id IN ? AND session_date >= ? AND session_date < ?",
 		packageIDs, dayStart, dayEnd).
 		Where("COALESCE(schedule_start_time, '') = '' OR schedule_start_time = ?", startTime).

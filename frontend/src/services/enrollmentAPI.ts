@@ -7,11 +7,27 @@ import {
   CreateEnrollmentReq,
   CreateEnrollmentRes,
   UpdateEnrollmentReq,
-  EnrollmentExtension
+  EnrollmentExtension,
+  EnrollmentTerms
 } from "@/types/enrollment";
 import { CourseDTO } from "@/types/course";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// [GET] ข้อตกลงการสมัครเรียนฉบับปัจจุบัน (Public)
+export async function fetchEnrollmentTerms(): Promise<EnrollmentTerms> {
+  const response = await fetch(`${BASE_URL}/enrollments/terms`);
+  const resData: ApiResponse<EnrollmentTerms> = await response.json();
+  if (!response.ok || !resData.data) {
+    throw new Error(resData.error || resData.message || "ไม่สามารถโหลดข้อตกลงการสมัครเรียนได้");
+  }
+  // backend ส่ง slice ว่างเป็น null — การันตี sections และ items ของแต่ละ section เป็น array เสมอ
+  const terms = resData.data;
+  return {
+    ...terms,
+    sections: (terms.sections ?? []).map(section => ({ ...section, items: section.items ?? [] })),
+  };
+}
 
 
 // [GET] ดึงข้อมูลคอร์สที่เปิดสอน (Public)

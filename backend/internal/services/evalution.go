@@ -132,6 +132,25 @@ func (s *EvaluationService) GetMyStudents(coachUserID uint, courseID *uint) ([]m
 	return customers, nil
 }
 
+// GetAllActiveStudents คืนนักเรียนที่ลงทะเบียนเรียนอยู่จริงทั้งโรงเรียน ไม่กรองตามโค้ช/คอร์สเลย
+//
+// ใช้กับงานแท็กนักเรียนในรูป/วิดีโอ (FaceTaggingService) แทน GetMyStudents เพราะคนที่อัปโหลด
+// (โค้ชหรือแอดมิน) อาจไม่ใช่โค้ชที่สอนคอร์สของคนในรูป/วิดีโอนั้นก็ได้ (เช่นแอดมินถ่ายภาพรวม
+// หรือโค้ชคนอื่นถ่ายแทน) — จำนวนนักเรียนทั้งโรงเรียนยังน้อยพอที่จะเทียบกับทุกคนได้โดยไม่มีปัญหา
+// performance และตัวโค้ชยังต้องตรวจทานผลก่อนบันทึกจริงอยู่ดี จึงไม่มีความเสี่ยงเพิ่มจากพูลที่กว้างขึ้น
+func (s *EvaluationService) GetAllActiveStudents() ([]models.Customer, error) {
+	var customers []models.Customer
+	err := s.db.
+		Joins("JOIN enrollments ON enrollments.customer_id = customers.id").
+		Where("enrollments.status IN ?", enrolledEvaluableStatuses).
+		Group("customers.id").
+		Find(&customers).Error
+	if err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อนักเรียนทั้งหมดได้")
+	}
+	return customers, nil
+}
+
 // GetMyCourses คืนคอร์สที่โค้ชคนนี้มีตารางสอนอยู่จริง (ผ่าน work_schedules) — ใช้ให้เลือกก่อนดูรายชื่อ
 // นักเรียนแยกตามคอร์ส (เช่นตอนแท็กนักเรียนในรูป/วิดีโอ) กันรายชื่อทุกคอร์สปนกันเป็นก้อนเดียว
 func (s *EvaluationService) GetMyCourses(coachUserID uint) ([]models.Course, error) {

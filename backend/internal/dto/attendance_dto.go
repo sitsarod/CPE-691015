@@ -103,6 +103,32 @@ type AttendanceSessionDTO struct {
 	AbsentCount      int `json:"absent_count"`
 	OffScheduleCount int `json:"off_schedule_count"`
 	PendingCount     int `json:"pending_count"`
+
+	// nil = ยังไม่ได้ออกบิลค่าสนาม · มีวันที่แต่ไม่มียอดรวม = ออกบิลทางอื่น (ฟอร์มหารเฉลี่ย/รอบก่อนมีระบบนี้)
+	CourtFeeTotal *float64   `json:"court_fee_total"`
+	CourtBilledAt *time.Time `json:"court_billed_at"`
+}
+
+// CloseSessionReq ส่งค่าสนามรวมของคาบมาด้วยจะออกบิลค่าสนามทันทีตอนปิดรอบ
+type CloseSessionReq struct {
+	CourtFeeTotal *float64 `json:"court_fee_total" binding:"omitempty,gt=0"`
+}
+
+type BillCourtFeeReq struct {
+	CourtFeeTotal float64 `json:"court_fee_total" binding:"required,gt=0"`
+}
+
+// UnbilledCourtSessionDTO คือรอบที่ปิดแล้วแต่ยังไม่ได้ออกบิลค่าสนาม
+type UnbilledCourtSessionDTO struct {
+	ID          uint      `json:"id"`
+	CourseName  string    `json:"course_name"`
+	SessionDate time.Time `json:"session_date"`
+
+	ScheduleStartTime string     `json:"schedule_start_time"`
+	ScheduleEndTime   string     `json:"schedule_end_time"`
+	ClosedAt          *time.Time `json:"closed_at"`
+
+	PayerCount int `json:"payer_count"`
 }
 
 // OpenSessionSummaryDTO คือรอบที่ยัง status='open' อยู่ (ดู GetOpenSessions)
@@ -149,6 +175,7 @@ type ScanResultDTO struct {
 	Nickname     string `json:"nickname"`
 	CourseName   string `json:"course_name"`
 
+	PackageSessions   uint `json:"package_sessions"`
 	TotalSessions     uint `json:"total_sessions"`
 	RemainingSessions uint `json:"remaining_sessions"`
 
@@ -208,7 +235,9 @@ type CheckInResultDTO struct {
 
 	IsOffSchedule bool `json:"is_off_schedule"`
 
-	RemainingSessions uint `json:"remaining_sessions"`
+	CourseName        string `json:"course_name"`
+	PackageSessions   uint   `json:"package_sessions"`
+	RemainingSessions uint   `json:"remaining_sessions"`
 }
 
 // CoachRosterItemDTO คู่ขนานกับ RosterItemDTO — แต่รายชื่อมาจาก WorkSchedule
@@ -342,6 +371,28 @@ type AttendanceHistoryItemDTO struct {
 
 	// null = นักเรียนสแกนเอง / มีค่า = แอดมินเป็นคนบันทึกหรือแก้
 	RecordedByUserID *uint `json:"recorded_by_user_id"`
+}
+
+// MyAttendanceItemDTO คือประวัติหนึ่งครั้งที่นักเรียนเห็นของตัวเอง — ไม่มีหมายเหตุหรือรหัสแอดมินที่บันทึก
+type MyAttendanceItemDTO struct {
+	AttendanceID uint       `json:"attendance_id"`
+	CourseName   string     `json:"course_name"`
+	SessionDate  *time.Time `json:"session_date"`
+
+	ScheduleStartTime string `json:"schedule_start_time,omitempty"`
+	ScheduleEndTime   string `json:"schedule_end_time,omitempty"`
+
+	Status        string    `json:"status"`
+	CheckInMethod string    `json:"check_in_method"`
+	CheckInTime   time.Time `json:"check_in_time"`
+	IsOffSchedule bool      `json:"is_off_schedule"`
+}
+
+type MyAttendanceHistoryDTO struct {
+	Items        []MyAttendanceItemDTO `json:"items"`
+	Total        int64                 `json:"total"`
+	PresentCount int64                 `json:"present_count"`
+	AbsentCount  int64                 `json:"absent_count"`
 }
 
 // ToRosterItem แปลงหนึ่งแถวของรายชื่อ — attendance เป็น nil ได้ (ยังไม่เช็ค)

@@ -167,13 +167,15 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 	}
 
 	session := models.AttendanceSession{
-		PackageID:         pkg.ID,
-		SessionDate:       sessionDateValue(now),
-		Status:            models.AttendanceSessionOpen,
-		OpenedAt:          now,
-		OpenedByUserID:    adminUserID,
-		ScheduleStartTime: sch.StartTime,
-		ScheduleEndTime:   sch.EndTime,
+		PackageID:      pkg.ID,
+		SessionDate:    sessionDateValue(now),
+		Status:         models.AttendanceSessionOpen,
+		OpenedAt:       now,
+		OpenedByUserID: adminUserID,
+		// สแนปช็อตต้องเป็นรูปแบบมาตรฐาน เพราะถูกเอาไปเทียบกับ work_schedules
+		// ที่แอดมินกรอกจากอีกหน้าหนึ่ง (ดู normalizeClockTime)
+		ScheduleStartTime: normalizeClockTime(sch.StartTime),
+		ScheduleEndTime:   normalizeClockTime(sch.EndTime),
 	}
 
 	siblings, err := s.siblingPackageIDs(s.db, &session)
@@ -242,6 +244,8 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		Roster:            roster,
 		WalkInCandidates:  walkInCandidates,
 		Coaches:           coaches,
+		CourtFeeTotal:     session.CourtFeeTotal,
+		CourtBilledAt:     session.CourtBilledAt,
 	}
 	if session.Package != nil && session.Package.Course != nil {
 		result.CourseName = session.Package.Course.CourseName
@@ -482,6 +486,9 @@ type scanContext struct {
 	Nickname   string
 	CourseName string
 	Confirmed  bool
+
+	// PackageSessions = จำนวนครั้งของแพ็กเกจที่ใบนี้ผูกอยู่ (ไม่ใช่แพ็กเกจหลักของรอบ)
+	PackageSessions uint
 }
 
 func (s *AttendanceService) loadOpenSession(tx *gorm.DB, sessionID uint) (*models.AttendanceSession, error) {
@@ -642,6 +649,12 @@ func (s *AttendanceService) buildContext(
 	if err := tx.Preload("Course").First(&pkg, session.PackageID).Error; err == nil && pkg.Course != nil {
 		ctx.CourseName = pkg.Course.CourseName
 	}
+
+	// คาบเดียวรวมหลายแพ็กเกจ — ต้องอ่านแพ็กเกจของใบนี้เอง · Unscoped เพราะแพ็กเกจอาจถูกลบไปแล้ว
+	tx.Unscoped().Model(&models.Package{}).
+		Select("sessions_count").
+		Where("id = ?", enrollment.PackageID).
+		Scan(&ctx.PackageSessions)
 	return ctx
 }
 

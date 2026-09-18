@@ -28,6 +28,7 @@ type HomeContentService interface {
 	// coaches
 	ListCoaches(featuredOnly bool) ([]dto.PublicCoachDTO, error)
 	SetCoachFeature(coachID uint, feature bool) (*dto.PublicCoachDTO, error)
+	SetHeadCoach(coachID uint, isHead bool) (*dto.PublicCoachDTO, error)
 }
 
 type homeContentService struct {
@@ -240,9 +241,21 @@ func (s *homeContentService) CreateSlide(req *dto.CreateHeroSlideReq) (*dto.Hero
 		LinkURL:   req.LinkURL,
 		SortOrder: req.SortOrder,
 		IsActive:  true,
+		FocalX:    50,
+		FocalY:    50,
+		Zoom:      100,
 	}
 	if req.IsActive != nil {
 		slide.IsActive = *req.IsActive
+	}
+	if req.FocalX != nil {
+		slide.FocalX = clampPercent(*req.FocalX)
+	}
+	if req.FocalY != nil {
+		slide.FocalY = clampPercent(*req.FocalY)
+	}
+	if req.Zoom != nil {
+		slide.Zoom = clampZoom(*req.Zoom)
 	}
 	if err := s.db.Create(&slide).Error; err != nil {
 		return nil, err
@@ -271,11 +284,50 @@ func (s *homeContentService) UpdateSlide(id uint, req *dto.UpdateHeroSlideReq) (
 	if req.IsActive != nil {
 		slide.IsActive = *req.IsActive
 	}
+	if req.FocalX != nil {
+		slide.FocalX = clampPercent(*req.FocalX)
+	}
+	if req.FocalY != nil {
+		slide.FocalY = clampPercent(*req.FocalY)
+	}
+	if req.Zoom != nil {
+		slide.Zoom = clampZoom(*req.Zoom)
+	}
 	if err := s.db.Save(&slide).Error; err != nil {
 		return nil, err
 	}
 	d := mapToHeroSlideDTO(&slide)
 	return &d, nil
+}
+
+// clampPercent จำกัดค่าจุดโฟกัสให้อยู่ในช่วง 0-100 เสมอ
+func clampPercent(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
+}
+
+// clampZoom จำกัดระดับซูมให้อยู่ในช่วง 100-300 (%) — ต่ำกว่า 100 ภาพจะเล็กกว่ากรอบจนเห็นขอบ
+func clampZoom(v int) int {
+	if v < 100 {
+		return 100
+	}
+	if v > 300 {
+		return 300
+	}
+	return v
+}
+
+// normalizeZoom แปลงค่าซูมของแถวเก่า (ก่อนมีคอลัมน์ = 0) ให้เป็น 100 = ขนาดปกติ
+func normalizeZoom(v int) int {
+	if v == 0 {
+		return 100
+	}
+	return clampZoom(v)
 }
 
 func (s *homeContentService) DeleteSlide(id uint) error {
@@ -300,7 +352,8 @@ func (s *homeContentService) ReorderSlides(orderedIDs []uint) error {
 
 func (s *homeContentService) ListCoaches(featuredOnly bool) ([]dto.PublicCoachDTO, error) {
 	var coaches []models.Coach
-	q := s.db.Preload("User").Order("id ASC")
+	// หัวหน้าโค้ชขึ้นก่อนเสมอ — หน้าแรกวางการ์ดใบแรกเป็นตำแหน่งเด่น
+	q := s.db.Preload("User").Order("is_head_coach DESC, id ASC")
 	if featuredOnly {
 		q = q.Where("feature_on_home = ?", true)
 	}
@@ -321,6 +374,42 @@ func (s *homeContentService) SetCoachFeature(coachID uint, feature bool) (*dto.P
 	}
 	coach.FeatureOnHome = feature
 	if err := s.db.Model(&coach).UpdateColumn("feature_on_home", feature).Error; err != nil {
+		return nil, err
+	}
+	d := mapToPublicCoachDTO(&coach)
+	return &d, nil
+}
+
+// SetHeadCoach ตั้งหัวหน้าผู้ฝึกสอน — ทั้งระบบมีได้คนเดียว
+//
+// ⚠️ ต้องเคลียร์คนเดิมกับตั้งคนใหม่ในทรานแซกชันเดียว
+// ถ้าแยกกันแล้วอันหลังพลาด จะเหลือหัวหน้าโค้ชสองคน (หรือศูนย์คน) โดยไม่มีใครรู้
+// และหน้าแรกจะขึ้นป้าย HEAD COACH สองใบพร้อมกัน
+func (s *homeContentService) SetHeadCoach(coachID uint, isHead bool) (*dto.PublicCoachDTO, error) {
+	var coach models.Coach
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&coach, coachID).Error; err != nil {
+			return err
+		}
+
+		if isHead {
+			// ปลดคนเดิมก่อน ไม่งั้นได้หัวหน้าโค้ชสองคน
+			if err := tx.Model(&models.Coach{}).
+				Where("is_head_coach = ? AND id <> ?", true, coachID).
+				UpdateColumn("is_head_coach", false).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Model(&models.Coach{}).Where("id = ?", coachID).
+			UpdateColumn("is_head_coach", isHead).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Preload("User").First(&coach, coachID).Error; err != nil {
 		return nil, err
 	}
 	d := mapToPublicCoachDTO(&coach)
@@ -424,6 +513,9 @@ func mapToHeroSlideDTO(m *models.HeroSlide) dto.HeroSlideDTO {
 		LinkURL:   m.LinkURL,
 		SortOrder: m.SortOrder,
 		IsActive:  m.IsActive,
+		FocalX:    m.FocalX,
+		FocalY:    m.FocalY,
+		Zoom:      normalizeZoom(m.Zoom),
 	}
 }
 
@@ -437,6 +529,7 @@ func mapToPublicCoachDTO(m *models.Coach) dto.PublicCoachDTO {
 		HomeImage:      m.HomeImage,
 		Bio:            m.Bio,
 		FeatureOnHome:  m.FeatureOnHome,
+		IsHeadCoach:    m.IsHeadCoach,
 	}
 	if m.User != nil {
 		d.FirstName = m.User.FirstName

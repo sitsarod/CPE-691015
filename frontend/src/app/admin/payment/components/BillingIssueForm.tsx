@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { User, Users, Search, Tag, Calendar, Check, Pencil } from 'lucide-react';
+import { User, Users, Search, Tag, Check, Pencil } from 'lucide-react';
 import { BackendUser, BillingDTO } from './types';
 import { createBilling } from "@/services/paymentAPI";
+import DateField from '@/components/DateField';
 
 // enum ประเภทค่าใช้จ่าย (เดิมในโค้ด — ไม่ hardcode ในดีไซน์)
 const BILLING_TYPES = [
@@ -245,15 +246,11 @@ export default function BillingIssueForm({
             </div>
             <div className="min-w-0">
               <label className="mb-1.5 block text-sm text-slate-700">วันครบกำหนดชำระเงิน {req}</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className={`h-[46px] w-full rounded-lg border bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errDue)}`}
-                />
-                <Calendar className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              </div>
+              <DateField
+                value={dueDate}
+                onChange={(val) => setDueDate(val)}
+                buttonClassName={`h-[46px] rounded-lg border bg-white px-4 text-sm text-slate-800 outline-none transition-all ${fieldBorder(errDue)}`}
+              />
               {errDue && <p className="mt-1 text-[11.5px] text-rose-500">กรุณาเลือกวันครบกำหนดชำระ</p>}
             </div>
           </div>

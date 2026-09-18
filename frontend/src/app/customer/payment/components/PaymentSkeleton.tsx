@@ -21,9 +21,9 @@ export default function PaymentSkeleton() {
       {/* Stat row */}
       <div className="grid grid-cols-3 gap-px border border-gray-200 bg-gray-200">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-2.5 bg-white px-5 py-5">
-            <div className="h-3 w-24 rounded bg-gray-100" />
-            <div className="h-8 w-32 rounded bg-gray-200" />
+          <div key={i} className="flex min-w-0 flex-col gap-2.5 bg-white px-5 py-5">
+            <div className="h-3 w-24 max-w-full rounded bg-gray-100" />
+            <div className="h-8 w-32 max-w-full rounded bg-gray-200" />
             <div className="h-2.5 w-20 rounded bg-gray-100" />
           </div>
         ))}

@@ -29,7 +29,6 @@ const COURSE_COLORS = [
   "bg-cyan-100 border-cyan-200 text-cyan-900 hover:bg-cyan-200",
 ];
 
-const getCourseColor = (id: number) => COURSE_COLORS[id % COURSE_COLORS.length];
 
 
 const parseTime = (timeStr: string) => {
@@ -180,12 +179,48 @@ export default function CustomerSchedulePage() {
   const timeSlots = Array.from({ length: totalHours + 1 }, (_, i) => minHour + i);
 
   // คำนวณครั้งเดียวแล้วใช้ทั้งสองมุมมอง — ของเดิมคำนวณอยู่ในลูปของตารางแกนเวลา
+  // สีผูกกับชื่อคอร์ส ไม่ใช่เลขใบ — ใบเดิมกับใบที่สมัครต่อของคอร์สเดียวกันต้องเป็นสีเดียวกัน
+  const courseColorIndex = new Map<string, number>();
+  enrollments.forEach((e) => {
+    if (!courseColorIndex.has(e.courseName)) courseColorIndex.set(e.courseName, courseColorIndex.size);
+  });
+  const colorOf = (courseName: string) =>
+    COURSE_COLORS[(courseColorIndex.get(courseName) ?? 0) % COURSE_COLORS.length];
+
+  // บล็อกที่รวมหลายใบของคอร์สเดียวกัน ต้องบอกให้ครบว่ามาจากแพ็กเกจไหนบ้าง
+  const packageLabel = (dayKey: string, cls: ScheduleInfo & { course: FormattedEnrollment }) => {
+    const counts = enrollments
+      .filter(
+        (e) =>
+          e.courseName === cls.course.courseName &&
+          e.schedules.some(
+            (s) =>
+              s.day_of_week === dayKey &&
+              s.start_time === cls.start_time &&
+              s.end_time === cls.end_time
+          )
+      )
+      .map((e) => e.sessionsCount);
+    const unique = [...new Set(counts)].sort((a, b) => a - b);
+    return unique.length > 0 ? `แพ็กเกจ ${unique.join(", ")} ครั้ง` : "";
+  };
+
   const scheduleByDay = DAYS.map((day) => {
     const classes = enrollments
       .flatMap((course) =>
         course.schedules
           .filter((s) => s.day_of_week === day.key)
           .map((s) => ({ ...s, course }))
+      )
+      // มีหลายใบของคอร์สเดียวกัน (เช่นใบเดิมกับใบที่สมัครต่อ) คาบเดียวกันต้องเป็นบล็อกเดียว
+      .filter(
+        (cls, i, all) =>
+          all.findIndex(
+            (o) =>
+              o.course.courseName === cls.course.courseName &&
+              o.start_time === cls.start_time &&
+              o.end_time === cls.end_time
+          ) === i
       )
       .sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time));
 
@@ -236,7 +271,7 @@ export default function CustomerSchedulePage() {
                   <div className="flex items-start gap-3">
                     <div
                       className={`mt-0.5 h-10 w-2 shrink-0 rounded-full ${
-                        COURSE_COLORS[course.id % COURSE_COLORS.length].split(' ')[0]
+                        colorOf(course.courseName).split(' ')[0]
                       }`}
                     />
 
@@ -290,7 +325,7 @@ export default function CustomerSchedulePage() {
                   <tr key={course.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-3 h-10 shrink-0 rounded-full ${COURSE_COLORS[course.id % COURSE_COLORS.length].split(' ')[0]}`}></div>
+                        <div className={`w-3 h-10 shrink-0 rounded-full ${colorOf(course.courseName).split(' ')[0]}`}></div>
                         <div className="min-w-0">
                           <div className="truncate font-bold text-gray-900 text-lg">{course.courseName}</div>
                           {course.unifiedTime && (
@@ -367,7 +402,7 @@ export default function CustomerSchedulePage() {
                       <div key={`m-${day.key}-${idx}`} className="flex items-center gap-3 p-3">
                         <div
                           className={`h-9 w-1.5 shrink-0 rounded-full ${
-                            getCourseColor(cls.course.id).split(' ')[0]
+                            colorOf(cls.course.courseName).split(' ')[0]
                           }`}
                         />
                         <div className="min-w-0 flex-1">
@@ -377,6 +412,7 @@ export default function CustomerSchedulePage() {
                           <p className="mt-0.5 flex items-center text-xs text-gray-500">
                             <Clock className="mr-1 h-3 w-3 shrink-0" />
                             {cls.start_time} - {cls.end_time} น.
+                            {packageLabel(day.key, cls) && ` · ${packageLabel(day.key, cls)}`}
                           </p>
                         </div>
                       </div>
@@ -457,7 +493,7 @@ export default function CustomerSchedulePage() {
                           const laneTopPct = (lane / laneCount) * 100;
                           const laneHeightPct = (1 / laneCount) * 100;
 
-                          const colorClass = getCourseColor(cls.course.id);
+                          const colorClass = colorOf(cls.course.courseName);
 
                           return (
                             <div 
@@ -476,8 +512,12 @@ export default function CustomerSchedulePage() {
                               >
                                 {cls.course.courseName}
                               </span>
-                              <span className="text-[11px] font-semibold opacity-80 truncate w-full text-center mt-1">
+                              <span
+                                title={packageLabel(day.key, cls)}
+                                className="text-[11px] font-semibold opacity-80 truncate w-full text-center mt-1"
+                              >
                                 {cls.start_time} - {cls.end_time}
+                                {packageLabel(day.key, cls) && ` · ${packageLabel(day.key, cls)}`}
                               </span>
                             </div>
                           );

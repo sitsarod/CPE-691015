@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, CircleAlert, X, CalendarDays, List, MessageSquareText, Loader2 } from 'lucide-react';
+import { CheckCircle2, CircleAlert, X, CalendarDays, List, MessageSquareText } from 'lucide-react';
+import EvaluationSkeleton from './EvaluationSkeleton';
 import Toast from '@/components/Toast';
 import { EvaluationManager, EvaluationStudent, WeeklyEvaluation, FilterTab, formatRelative } from './useEvaluation';
 
@@ -179,14 +180,7 @@ export function EvaluationDesktop({ manager }: { manager: EvaluationManager }) {
     pendingCount
   } = manager;
 
-  if (loading) {
-    return (
-      <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 py-24 text-gray-400">
-        <Loader2 size={18} className="animate-spin" />
-        <span className="text-sm">กำลังโหลดรายชื่อนักเรียน...</span>
-      </div>
-    );
-  }
+  if (loading) return <EvaluationSkeleton />;
 
   if (loadError) {
     return (

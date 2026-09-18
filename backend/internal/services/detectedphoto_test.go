@@ -83,7 +83,8 @@ func TestVerifyCanViewRawPhoto(t *testing.T) {
 	})
 }
 
-// รูปที่อัปโหลดมาเกิน 7 วันต้องถูกลบถาวรทั้งแถว+แท็ก+ไฟล์จริง ส่วนรูปที่เพิ่งอัปโหลดต้องไม่โดนหางเลข
+// รูปที่ถูกแท็กเข้าโปรไฟล์มาเกิน 7 วันต้องถูกลบถาวรทั้งแถว+แท็ก+ไฟล์จริง ส่วนรูปที่เพิ่งแท็ก
+// ต้องไม่โดนหางเลข (นับอายุจากตอนแท็ก ไม่ใช่ตอนอัปโหลดดิบ — ดู DeleteOldRawPhotos)
 func TestDeleteOldRawPhotos(t *testing.T) {
 	db := newTestDB(t, &models.RawPhoto{}, &models.DetectedPhoto{}, &models.Customer{})
 	cleanupPrivateMediaRoot(t)
@@ -105,9 +106,6 @@ func TestDeleteOldRawPhotos(t *testing.T) {
 	if err := db.Create(&oldPhoto).Error; err != nil {
 		t.Fatalf("สร้างรูปเก่าไม่สำเร็จ: %v", err)
 	}
-	if err := db.Model(&oldPhoto).UpdateColumn("created_at", time.Now().Add(-10*24*time.Hour)).Error; err != nil {
-		t.Fatalf("ปรับวันที่ย้อนหลังไม่สำเร็จ: %v", err)
-	}
 
 	newPhoto := models.RawPhoto{StorageKey: newKey, PhotoURL: "/photo-posts/2/raw"}
 	if err := db.Create(&newPhoto).Error; err != nil {
@@ -116,7 +114,13 @@ func TestDeleteOldRawPhotos(t *testing.T) {
 
 	customer := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-retention"}
 	db.Create(&customer)
-	db.Create(&models.DetectedPhoto{CustomerID: customer.ID, RawPhotoID: oldPhoto.ID, PhotoURL: oldPhoto.PhotoURL})
+
+	oldTag := models.DetectedPhoto{CustomerID: customer.ID, RawPhotoID: oldPhoto.ID, PhotoURL: oldPhoto.PhotoURL}
+	db.Create(&oldTag)
+	if err := db.Model(&oldTag).UpdateColumn("created_at", time.Now().Add(-10*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่แท็กย้อนหลังไม่สำเร็จ: %v", err)
+	}
+	db.Create(&models.DetectedPhoto{CustomerID: customer.ID, RawPhotoID: newPhoto.ID, PhotoURL: newPhoto.PhotoURL})
 
 	deleted, err := svc.DeleteOldRawPhotos(7 * 24 * time.Hour)
 	if err != nil {
@@ -134,8 +138,8 @@ func TestDeleteOldRawPhotos(t *testing.T) {
 
 	var remainingTags int64
 	db.Model(&models.DetectedPhoto{}).Count(&remainingTags)
-	if remainingTags != 0 {
-		t.Fatalf("แท็กของรูปเก่าต้องถูกลบไปด้วย แต่ยังเหลือ %d", remainingTags)
+	if remainingTags != 1 {
+		t.Fatalf("แท็กของรูปเก่าต้องถูกลบไปด้วย เหลือแค่แท็กของรูปใหม่ แต่เหลือ %d", remainingTags)
 	}
 
 	if _, _, err := storage.Open(ctx, MediaKindPhotoPost, oldKey); !errors.Is(err, ErrMediaNotFound) {
@@ -143,6 +147,59 @@ func TestDeleteOldRawPhotos(t *testing.T) {
 	}
 	if _, _, err := storage.Open(ctx, MediaKindPhotoPost, newKey); err != nil {
 		t.Fatalf("ไฟล์ใหม่ไม่ควรถูกลบ แต่ได้: %v", err)
+	}
+}
+
+// รูปที่อัปโหลดมานานแล้วแต่เพิ่งถูกโค้ชตรวจทาน+แท็กเข้าโปรไฟล์เมื่อไม่นานมานี้ ต้องไม่ถูกลบ
+// (นักเรียนเพิ่งเห็นรูป ควรได้เวลาดาวน์โหลดเต็ม 7 วันนับจากตอนนั้น ไม่ใช่โดนหักเวลาที่โค้ชกว่าจะ
+// มาตรวจทานไปแล้ว) ส่วนรูปที่ไม่เคยถูกแท็กเลยยังใช้เวลาอัปโหลดดิบเป็นเกณฑ์เหมือนเดิม
+func TestDeleteOldRawPhotosCountsFromTagTimeNotUpload(t *testing.T) {
+	db := newTestDB(t, &models.RawPhoto{}, &models.DetectedPhoto{}, &models.Customer{})
+	cleanupPrivateMediaRoot(t)
+
+	storage := NewLocalMediaStorage()
+	svc := NewDetectedPhotoService(db).WithMediaStorage(storage)
+	ctx := context.Background()
+
+	recentlyTaggedKey, err := storage.Save(ctx, MediaKindPhotoPost, bytes.NewReader([]byte("recently-tagged")), ".jpg")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์ไม่สำเร็จ: %v", err)
+	}
+	neverTaggedKey, err := storage.Save(ctx, MediaKindPhotoPost, bytes.NewReader([]byte("never-tagged")), ".jpg")
+	if err != nil {
+		t.Fatalf("เตรียมไฟล์ไม่สำเร็จ: %v", err)
+	}
+
+	// อัปโหลดมา 30 วันแล้ว แต่โค้ชเพิ่งมาตรวจทาน+แท็กเมื่อวานนี้เอง
+	recentlyTagged := models.RawPhoto{StorageKey: recentlyTaggedKey, PhotoURL: "/photo-posts/1/raw"}
+	db.Create(&recentlyTagged)
+	if err := db.Model(&recentlyTagged).UpdateColumn("created_at", time.Now().Add(-30*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่อัปโหลดย้อนหลังไม่สำเร็จ: %v", err)
+	}
+	customer := models.Customer{Gender: models.GenderMale, PersonalQRCode: "qr-tag-recent"}
+	db.Create(&customer)
+	db.Create(&models.DetectedPhoto{CustomerID: customer.ID, RawPhotoID: recentlyTagged.ID, PhotoURL: recentlyTagged.PhotoURL})
+
+	// อัปโหลดมา 30 วันแล้ว ไม่เคยมีใครถูกแท็กเลย (AI หาไม่เจอ/โค้ชยังไม่ตรวจทาน)
+	neverTagged := models.RawPhoto{StorageKey: neverTaggedKey, PhotoURL: "/photo-posts/2/raw"}
+	db.Create(&neverTagged)
+	if err := db.Model(&neverTagged).UpdateColumn("created_at", time.Now().Add(-30*24*time.Hour)).Error; err != nil {
+		t.Fatalf("ปรับวันที่อัปโหลดย้อนหลังไม่สำเร็จ: %v", err)
+	}
+
+	deleted, err := svc.DeleteOldRawPhotos(7 * 24 * time.Hour)
+	if err != nil {
+		t.Fatalf("ควรผ่าน แต่ได้: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("ควรลบแค่รูปที่ไม่เคยถูกแท็กเลย 1 รูป แต่ลบไป %d", deleted)
+	}
+
+	if _, _, err := storage.Open(ctx, MediaKindPhotoPost, recentlyTaggedKey); err != nil {
+		t.Fatalf("รูปที่เพิ่งแท็กไม่ควรถูกลบ แต่ได้: %v", err)
+	}
+	if _, _, err := storage.Open(ctx, MediaKindPhotoPost, neverTaggedKey); !errors.Is(err, ErrMediaNotFound) {
+		t.Fatalf("รูปที่ไม่เคยถูกแท็กเลยและอัปโหลดมานานแล้วควรถูกลบ แต่ได้: %v", err)
 	}
 }
 

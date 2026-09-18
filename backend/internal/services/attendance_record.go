@@ -18,14 +18,25 @@ var (
 	ErrInvalidStatus      = errors.New("สถานะไม่ถูกต้อง (รองรับเฉพาะ present, absent)")
 )
 
-func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint) (*dto.AttendanceSessionDTO, error) {
+// CloseSession ปิดรอบ · ส่งค่าสนามรวมมาด้วยจะออกบิลค่าสนามให้คนในรอบทันทีใน transaction เดียวกัน
+func (s *AttendanceService) CloseSession(sessionID uint, adminUserID uint, courtFeeTotal *float64) (*dto.AttendanceSessionDTO, error) {
+	var issued []issuedBill
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		return s.closeSessionTx(tx, sessionID, &adminUserID, nowLocal())
+		if err := s.closeSessionTx(tx, sessionID, &adminUserID, nowLocal()); err != nil {
+			return err
+		}
+		if courtFeeTotal == nil {
+			return nil
+		}
+		var err error
+		issued, err = billCourtFeeTx(tx, sessionID, adminUserID, *courtFeeTotal)
+		return err
 	})
 
 	if err != nil {
 		return nil, err
 	}
+	notifyIssuedBills(s.db, issued)
 	return s.GetSession(sessionID)
 }
 
@@ -329,6 +340,10 @@ func (s *AttendanceService) UpdateAttendanceStatus(
 	if err != nil {
 		return nil, err
 	}
+
+	if result.FromStatus != result.ToStatus {
+		notifyAttendanceStatusChanged(s.db, attendanceID, newStatus, result.RemainingSessions)
+	}
 	return &result, nil
 }
 
@@ -345,6 +360,9 @@ type HistoryFilter struct {
 	Query    string // ค้นจากชื่อ-นามสกุลหรือชื่อเล่น
 	Limit    int    // <= 0 = ไม่จำกัด (ใช้ตอน export เท่านั้น)
 	Offset   int
+
+	// CustomerID มีค่า = เฉพาะประวัติของนักเรียนคนนี้ (หน้าประวัติของนักเรียนเอง)
+	CustomerID uint
 
 	SessionIDs []uint
 }
@@ -399,8 +417,12 @@ func (s *AttendanceService) historyBaseQuery(f HistoryFilter) (*gorm.DB, error) 
 	}
 
 	search := strings.TrimSpace(f.Query)
-	if f.CourseID != 0 || search != "" {
+	if f.CourseID != 0 || search != "" || f.CustomerID != 0 {
 		query = query.Joins("JOIN enrollments ON enrollments.id = student_attendances.enrollment_id")
+	}
+
+	if f.CustomerID != 0 {
+		query = query.Where("enrollments.customer_id = ?", f.CustomerID)
 	}
 
 	if f.CourseID != 0 {

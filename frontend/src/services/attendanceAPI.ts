@@ -13,6 +13,8 @@ import type {
   AttendanceStatus,
   MissedClass,
   ResolveMissedClassResult,
+  UnbilledCourtSession,
+  MyAttendanceHistory,
 } from "@/types/attendance";
 
 interface Envelope<T> {
@@ -63,7 +65,13 @@ export async function openSession(packageId: number): Promise<AttendanceSession>
     method: "POST",
     body: JSON.stringify({ package_id: packageId }),
   });
-  return res.data;
+  return normalizeSession(res.data);
+}
+
+// backend (Go) marshal slice ว่างเป็น null — การันตีว่า roster/coaches เป็น array เสมอ
+// กัน .map/.filter/.length พังทั้งหน้าสแกนและ RosterList เมื่อรอบยังไม่มีผู้เรียน/โค้ช
+function normalizeSession(s: AttendanceSession): AttendanceSession {
+  return { ...s, roster: s.roster ?? [], coaches: s.coaches ?? [] };
 }
 
 // [GET] รอบที่ยังเปิดค้างอยู่ทั้งหมด
@@ -75,7 +83,7 @@ export async function fetchOpenSessions(): Promise<OpenSessionSummary[]> {
 // [GET] รอบพร้อมรายชื่อและตัวเลขสรุป
 export async function fetchSession(sessionId: number): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(`/attendance/sessions/${sessionId}`);
-  return res.data;
+  return normalizeSession(res.data);
 }
 
 // [POST] สแกนแล้วบันทึกจริงในครั้งเดียว โควตาถูกหักที่นี่
@@ -152,12 +160,53 @@ export async function updateCoachAttendanceStatus(
 }
 
 // [PATCH] ปิดรอบ — คนที่ยืนยันว่าจะมาแล้วไม่มาจะถูกมาร์ค absent
-export async function closeSession(sessionId: number): Promise<AttendanceSession> {
+// ส่งค่าสนามรวมของคาบมาด้วยจะออกบิลค่าสนามให้คนในรอบทันที
+export async function closeSession(
+  sessionId: number,
+  courtFeeTotal?: number
+): Promise<AttendanceSession> {
   const res = await apiFetch<Envelope<AttendanceSession>>(
     `/attendance/sessions/${sessionId}/close`,
-    { method: "PATCH" }
+    {
+      method: "PATCH",
+      body: JSON.stringify(courtFeeTotal ? { court_fee_total: courtFeeTotal } : {}),
+    }
   );
   return res.data;
+}
+
+// [POST] ออกบิลค่าสนามให้รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิล
+export async function billCourtFee(
+  sessionId: number,
+  courtFeeTotal: number
+): Promise<AttendanceSession> {
+  const res = await apiFetch<Envelope<AttendanceSession>>(
+    `/attendance/sessions/${sessionId}/court-fee`,
+    { method: "POST", body: JSON.stringify({ court_fee_total: courtFeeTotal }) }
+  );
+  return res.data;
+}
+
+// [DELETE] ยกเลิกบิลค่าสนามทั้งรอบเพื่อออกใหม่ — ทำได้เฉพาะตอนยังไม่มีใครจ่าย
+export async function cancelCourtFee(sessionId: number): Promise<AttendanceSession> {
+  const res = await apiFetch<Envelope<AttendanceSession>>(
+    `/attendance/sessions/${sessionId}/court-fee`,
+    { method: "DELETE" }
+  );
+  return res.data;
+}
+
+// [GET] ประวัติการเข้าเรียนของนักเรียนที่ล็อกอินอยู่ พร้อมยอดสรุปมา/ขาดทั้งหมด
+export async function fetchMyAttendance(limit: number, offset: number): Promise<MyAttendanceHistory> {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  const res = await apiFetch<Envelope<MyAttendanceHistory>>(`/attendance/me?${qs.toString()}`);
+  return res.data;
+}
+
+// [GET] รอบที่ปิดแล้วแต่ยังไม่ได้ออกบิลค่าสนาม
+export async function fetchUnbilledCourtSessions(): Promise<UnbilledCourtSession[]> {
+  const res = await apiFetch<Envelope<UnbilledCourtSession[]>>("/attendance/court-fee/pending");
+  return res.data ?? [];
 }
 
 // [PATCH] แก้สถานะย้อนหลัง — ใช้ตอนคนมาเรียนจริงแต่ลืมสแกน แล้วมาปรับให้ทีหลัง
@@ -225,7 +274,8 @@ export async function downloadHistoryCsv(
 // [GET] คาบที่ผ่านวันมาแล้ว มีโค้ชถูกมอบหมาย แต่ไม่มีรอบเช็คชื่อที่ปิดแล้ว
 export async function fetchMissedClasses(): Promise<MissedClass[]> {
   const res = await apiFetch<Envelope<MissedClass[]>>("/attendance/missed-classes");
-  return res.data ?? [];
+  // นอกจาก list ราก ต้องกัน coaches ของแต่ละรายการที่ backend ส่งเป็น null ด้วย
+  return (res.data ?? []).map(item => ({ ...item, coaches: item.coaches ?? [] }));
 }
 
 // [POST] เคลียร์คาบที่ค้าง — สร้างรอบเช็คชื่อย้อนหลังพร้อมบันทึกว่าใครมาสอนบ้าง

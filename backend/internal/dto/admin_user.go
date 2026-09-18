@@ -37,13 +37,13 @@ type AdminCreateCustomerProfile struct {
 	Nickname    string     `json:"nickname" binding:"required"`
 	Gender      string     `json:"gender" binding:"required,oneof=male female"`
 	BirthDate   *time.Time `json:"birthDate" binding:"required"`
-	PhoneNumber string     `json:"phoneNumber" binding:"required,numeric,len=10"`
+	PhoneNumber string     `json:"phoneNumber" binding:"required,numeric,len=10,startswith=0"`
 
 	// ช่องทางติดต่อเสริมและข้อมูลผู้ปกครอง ไม่บังคับ
 	LineID            string `json:"lineId"`
 	Facebook          string `json:"facebook"`
 	ParentEmail       string `json:"parentEmail" binding:"omitempty,email"`
-	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10"`
+	ParentPhoneNumber string `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10,startswith=0"`
 }
 
 // AdminCreateCoachProfile ข้อมูลโค้ชที่แอดมินกรอกตอนสร้างบัญชี
@@ -52,7 +52,7 @@ type AdminCreateCustomerProfile struct {
 // และตามนโยบายจะแก้ได้เฉพาะแอดมินหลังตรวจหลักฐานเท่านั้น
 type AdminCreateCoachProfile struct {
 	Nickname    string `json:"nickname" binding:"required"`
-	Phone       string `json:"phone" binding:"required,numeric,len=10"`
+	Phone       string `json:"phone" binding:"required,numeric,len=10,startswith=0"`
 	Uid         string `json:"uid" binding:"required,numeric,len=13"`
 	BirthDate   string `json:"birth_date" binding:"required"` // รูปแบบ YYYY-MM-DD
 	Address     string `json:"address" binding:"required"`
@@ -104,11 +104,11 @@ type AdminUpdateCustomerProfile struct {
 	Nickname          *string    `json:"nickname"`
 	Gender            *string    `json:"gender" binding:"omitempty,oneof=male female"`
 	BirthDate         *time.Time `json:"birthDate"`
-	PhoneNumber       *string    `json:"phoneNumber" binding:"omitempty,numeric,len=10"`
+	PhoneNumber       *string    `json:"phoneNumber" binding:"omitempty,numeric,len=10,startswith=0"`
 	LineID            *string    `json:"lineId"`
 	Facebook          *string    `json:"facebook"`
 	ParentEmail       *string    `json:"parentEmail" binding:"omitempty,email"`
-	ParentPhoneNumber *string    `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10"`
+	ParentPhoneNumber *string    `json:"parentPhoneNumber" binding:"omitempty,numeric,len=10,startswith=0"`
 	Status            *string    `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
@@ -118,7 +118,7 @@ type AdminUpdateCustomerProfile struct {
 // แล้วต้องไปแก้ในฐานข้อมูลตรง ๆ ซึ่งไม่ควรเป็นวิธีทำงานปกติ
 type AdminUpdateCoachProfile struct {
 	Nickname       *string  `json:"nickname"`
-	Phone          *string  `json:"phone" binding:"omitempty,numeric,len=10"`
+	Phone          *string  `json:"phone" binding:"omitempty,numeric,len=10,startswith=0"`
 	LineID         *string  `json:"lineId"`
 	Facebook       *string  `json:"facebook"`
 	Uid            *string  `json:"uid" binding:"omitempty,numeric,len=13"`

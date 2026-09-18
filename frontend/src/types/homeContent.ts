@@ -7,6 +7,11 @@ export interface HeroSlide {
   link_url: string;
   sort_order: number;
   is_active: boolean;
+  // จุดโฟกัสภาพเป็น % (0-100) ใช้เป็น object-position ตอนครอปบนหน้าแรก (50/50 = กึ่งกลาง)
+  focal_x: number;
+  focal_y: number;
+  // ระดับซูมเป็น % (100 = ปกติ, 300 = ซูม 3 เท่า) ใช้เป็น transform: scale() รอบจุดโฟกัส
+  zoom: number;
 }
 
 export interface PublicCoach {
@@ -20,6 +25,8 @@ export interface PublicCoach {
   home_image: string; // รูปการ์ดโค้ชหน้าแรก (แอดมินตั้งเอง)
   bio: string; // รายละเอียดเพิ่มเติม แสดงตอนคลิกโค้ชในหน้าแรก
   feature_on_home: boolean;
+  // หัวหน้าผู้ฝึกสอน — แอดมินติ๊กเอง มีได้คนเดียวทั้งระบบ (backend บังคับให้)
+  is_head_coach: boolean;
 }
 
 // ข้อมูลชุดซ้ำที่แก้ผ่าน CMS (เก็บเป็น JSON array ฝั่ง backend)
@@ -70,7 +77,6 @@ export interface HomeContent {
   hero_headline: string;
   hero_subtext: string;
   courses_footnote: string;
-  coaches_note: string;
   facility_title: string;
   facility_subtitle: string;
   footer_cta_title: string;
@@ -122,7 +128,6 @@ export interface UpdateHomeContentReq {
   hero_headline?: string;
   hero_subtext?: string;
   courses_footnote?: string;
-  coaches_note?: string;
   facility_title?: string;
   facility_subtitle?: string;
   footer_cta_title?: string;
@@ -141,6 +146,9 @@ export interface CreateHeroSlideReq {
   link_url?: string;
   sort_order?: number;
   is_active?: boolean;
+  focal_x?: number;
+  focal_y?: number;
+  zoom?: number;
 }
 
 export interface UpdateHeroSlideReq {
@@ -149,4 +157,7 @@ export interface UpdateHeroSlideReq {
   link_url?: string;
   sort_order?: number;
   is_active?: boolean;
+  focal_x?: number;
+  focal_y?: number;
+  zoom?: number;
 }

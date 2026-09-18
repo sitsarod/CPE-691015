@@ -32,6 +32,7 @@ import {
   formatDuration,
 } from "@/components/course/expiryUtils";
 
+import { useConfirm } from "@/components/ConfirmProvider";
 interface EnrollmentReviewPanelProps {
   enrollmentId: number | null;
   onClose: () => void;
@@ -55,6 +56,7 @@ export default function EnrollmentReviewPanel({
   isApproving,
   isRejecting,
 }: EnrollmentReviewPanelProps) {
+  const confirmAction = useConfirm();
   const [data, setData] = useState<EnrollmentReview | null>(null);
 
   // ฟอร์มอยู่ใน footer ไม่ใช่ modal ซ้อน modal — แอดมินต้องอ่านข้อมูลผู้สมัครประกอบ
@@ -510,10 +512,10 @@ export default function EnrollmentReviewPanel({
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (seatsFull) {
                     const expanded = (data?.package.active_count ?? 0) + 1;
-                    const confirmed = window.confirm(
+                    const confirmed = await confirmAction(
                       `แพ็กเกจนี้เต็มแล้ว (อนุมัติแล้ว ${data?.package.active_count} จาก ${data?.package.max_seats} ที่)\n\n` +
                         `อนุมัติใบนี้จะขยายที่นั่งสูงสุดเป็น ${expanded} คนให้อัตโนมัติ\n\n` +
                         `ยืนยันหรือไม่?`

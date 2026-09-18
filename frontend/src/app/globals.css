@@ -108,3 +108,29 @@ table thead tr {
 table tbody tr:last-child {
   border-bottom: none !important;
 }
+/* =========================================================
+   Animation ของกล่องแจ้งเตือน/ยืนยัน
+   .animate-slideIn ถูกใช้ใน Toast มาตลอดแต่ไม่เคยถูกนิยาม
+   ========================================================= */
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dialogPopIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-slideIn { animation: toastSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-overlayIn { animation: overlayFadeIn 0.18s ease-out; }
+.animate-dialogIn { animation: dialogPopIn 0.24s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slideIn,
+  .animate-overlayIn,
+  .animate-dialogIn { animation: none; }
+}

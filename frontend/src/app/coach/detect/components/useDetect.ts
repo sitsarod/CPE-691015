@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchMyCourses, fetchMyStudents } from '@/services/evaluationAPI';
+import { fetchAllActiveStudents } from '@/services/evaluationAPI';
 import {
   assignPhotoStudents,
   assignVideoStudents,
@@ -7,16 +7,12 @@ import {
   uploadDetectVideo,
 } from '@/services/detectAPI';
 
+import { useGlobalToast } from "@/components/ToastProvider";
 export type DetectionStatus = 'pending' | 'confirmed' | 'edited';
 
 export interface DetectStudent {
   id: number;
   nickname: string;
-}
-
-export interface DetectCourse {
-  id: number;
-  name: string;
 }
 
 export interface Detection {
@@ -44,8 +40,7 @@ export const MAX_BATCH_FILES = 10;
 export const AUTO_CONFIRM_THRESHOLD = 65;
 
 // BatchItem คือไฟล์หนึ่งไฟล์ในชุดที่เลือกมาพร้อมกัน — แต่ละไฟล์มีสถานะ/ผลวิเคราะห์/การยืนยันแยกจากกัน
-// ทุกไฟล์ในชุดเดียวกันใช้ "คอร์สเดียวกัน" ที่เลือกไว้ตอนอัปโหลด (ยังไม่รองรับคนละคอร์สในชุดเดียว —
-// ถ้าโค้ชถ่ายมาจากหลายคาบ/หลายคอร์ส ต้องอัปโหลดแยกชุดตามคอร์ส)
+// ไม่ต้องเลือกคอร์สก่อนอัปโหลดแล้ว — ระบบจำแนกใบหน้าเทียบกับนักเรียนทั้งโรงเรียนให้เอง
 export interface BatchItem {
   uid: string;
   file: File;
@@ -84,16 +79,11 @@ function newBatchItem(file: File): BatchItem {
 }
 
 export function useDetect() {
+  const showToast = useGlobalToast();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [courses, setCourses] = useState<DetectCourse[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(true);
-  // ต้องเลือกคอร์สก่อนถึงจะเห็นรายชื่อนักเรียน — กันรายชื่อทุกคอร์สที่โค้ชสอนปนกันเป็นก้อนเดียว
-  // จนหาชื่อไม่เจอเวลาโค้ชสอนหลายคอร์ส (รูป/วิดีโอหนึ่งไฟล์ผูกกับคาบเดียวอยู่แล้วโดยธรรมชาติ)
-  const [selectedCourseId, setSelectedCourseId] = useState<number | ''>('');
-
   const [students, setStudents] = useState<DetectStudent[]>([]);
-  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsLoading, setStudentsLoading] = useState(true);
 
   const [items, setItems] = useState<BatchItem[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -101,35 +91,11 @@ export function useDetect() {
   const [savingAll, setSavingAll] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
 
-  // คอร์สที่โค้ชคนนี้สอนอยู่ — ให้เลือกก่อนถึงจะโหลดรายชื่อนักเรียนของคอร์สนั้น
+  // นักเรียนทั้งโรงเรียนที่ลงทะเบียนเรียนอยู่จริง — ใช้ตอน "เพิ่มผู้เรียนที่ระบบตกหล่น" (dropdown เลือกชื่อ)
+  // ไม่กรองตามคอร์ส เพราะไม่บังคับเลือกคอร์สก่อนอัปโหลดแล้ว
   useEffect(() => {
     let cancelled = false;
-    fetchMyCourses()
-      .then((list) => {
-        if (cancelled) return;
-        setCourses(list.map((c) => ({ id: c.course_id, name: c.course_name })));
-      })
-      .catch(() => {
-        // เงียบไว้พอ — โหลดไม่สำเร็จแค่ทำให้เลือกคอร์สไม่ได้ชั่วคราว ไม่ควรบล็อกทั้งหน้า
-      })
-      .finally(() => {
-        if (!cancelled) setCoursesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // รายชื่อผู้เรียนของ "คอร์สที่เลือก" เท่านั้น — โหลดใหม่ทุกครั้งที่เปลี่ยนคอร์ส
-  useEffect(() => {
-    if (selectedCourseId === '') {
-      setStudents([]);
-      return;
-    }
-
-    let cancelled = false;
-    setStudentsLoading(true);
-    fetchMyStudents(selectedCourseId)
+    fetchAllActiveStudents()
       .then((list) => {
         if (cancelled) return;
         setStudents(list.map((s) => ({ id: s.customer_id, nickname: s.nickname })));
@@ -143,7 +109,7 @@ export function useDetect() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCourseId]);
+  }, []);
 
   const updateItem = (uid: string, patch: Partial<BatchItem>) => {
     setItems((prev) => prev.map((item) => (item.uid === uid ? { ...item, ...patch } : item)));
@@ -159,7 +125,7 @@ export function useDetect() {
     const valid = incoming.filter((f) => f.type.startsWith('video/') || f.type.startsWith('image/'));
 
     if (rejected.length > 0) {
-      alert('มีไฟล์ที่ไม่ใช่รูปภาพหรือวิดีโอถูกข้ามไป กรุณาเลือกเฉพาะรูปภาพ/วิดีโอเท่านั้น');
+      showToast('มีไฟล์ที่ไม่ใช่รูปภาพหรือวิดีโอถูกข้ามไป กรุณาเลือกเฉพาะรูปภาพ/วิดีโอเท่านั้น', "error");
     }
 
     setItems((prev) => {
@@ -194,7 +160,7 @@ export function useDetect() {
   // วิเคราะห์ทุกไฟล์ที่ยังไม่เคยวิเคราะห์ "ทีละไฟล์ตามลำดับ" (ไม่ขนาน) — เพราะ face-service
   // รันบนเครื่องที่อาจไม่แรง ยิงพร้อมกันหลายไฟล์เสี่ยงค้างทั้งหมดพร้อมกันแทนที่จะทยอยเสร็จ
   const analyzeAll = async () => {
-    if (analyzingAll || selectedCourseId === '') return;
+    if (analyzingAll) return;
     const pending = items.filter((item) => item.detections === null && !item.analyzing);
     if (pending.length === 0) return;
 
@@ -205,12 +171,12 @@ export function useDetect() {
         // รูปและวิดีโอคืนผลลัพธ์รูปแบบเดียวกันแล้ว (face_count + students[]) — ต่างกันแค่ endpoint
         // และชื่อฟิลด์ raw id เท่านั้น ดึงมาเป็นรูปทรงเดียวกันก่อนใช้ต่อ (กัน TS union ไม่ narrow ให้)
         const { rawId, faceCount, students: detectedStudents } = item.isVideo
-          ? await uploadDetectVideo(item.file, selectedCourseId).then((r) => ({
+          ? await uploadDetectVideo(item.file).then((r) => ({
               rawId: r.raw_video_id,
               faceCount: r.face_count,
               students: r.students,
             }))
-          : await uploadDetectPhoto(item.file, selectedCourseId).then((r) => ({
+          : await uploadDetectPhoto(item.file).then((r) => ({
               rawId: r.raw_photo_id,
               faceCount: r.face_count,
               students: r.students,
@@ -382,10 +348,6 @@ export function useDetect() {
 
   return {
     inputRef,
-    courses,
-    coursesLoading,
-    selectedCourseId,
-    setSelectedCourseId,
     students,
     studentsLoading,
     items,

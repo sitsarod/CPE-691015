@@ -9,7 +9,7 @@ import { fetchMyPosts } from "@/services/postAPI";
 import type { PostItem } from "@/types/post";
 import PostMediaThumb from "@/components/PostMediaThumb";
 import PostViewerModal from "@/components/PostViewerModal";
-import { Grid2X2, ClipboardCheck, ImageOff } from "lucide-react";
+import { Grid2X2, ClipboardCheck, ImageOff, Info } from "lucide-react";
 
 
 const ROLE_LABEL: Record<string, string> = {
@@ -175,13 +175,7 @@ export default function ProfileView({
     { label: "เบอร์ผู้ปกครอง", value: profile?.parentPhoneNumber },
   ].filter((item) => item.value);
 
-  if (isLoading) {
-    return (
-      <div className="w-full min-h-[calc(100vh-96px)] flex items-center justify-center text-gray-500">
-        กำลังโหลดข้อมูลโปรไฟล์...
-      </div>
-    );
-  }
+  if (isLoading) return <ProfileViewSkeleton />;
 
   if (error) {
     return (
@@ -333,24 +327,38 @@ export default function ProfileView({
                 <p className="text-sm">ยังไม่มีรูปหรือวิดีโอที่คุณถูกแท็กไว้</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
-                {posts.map((post, i) => (
-                  <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
-                    <PostMediaThumb
-                      post={post}
-                      onOpen={() => setViewingIndex(i)}
-                      onDeleted={() =>
-                        setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)))
-                      }
-                    />
-                    {post.type === "video" && (
-                      <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        วิดีโอ
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <>
+                {/* แจ้งเตือนว่ารูป/วิดีโอต้นฉบับจะถูกลบอัตโนมัติ (ดู photoPostRetention ฝั่ง backend
+                    cmd/serve/main.go) กันคนไม่รู้แล้วเสียดายทีหลัง — กดปุ่มดาวน์โหลดที่รูป/วิดีโอ
+                    แต่ละอันเพื่อเก็บไว้เองก่อนหมดเวลา
+                    ⚠️ นับ 7 วันจากตอนที่ถูกแท็กเข้าโปรไฟล์นี้ (ตอนที่เห็นในหน้านี้ครั้งแรก) ไม่ใช่
+                    ตอนที่โค้ช/แอดมินอัปโหลดไฟล์ดิบเข้าระบบ (ดู DeleteOldRawPhotos/DeleteOldRawVideos) */}
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 sm:text-sm">
+                  <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <p>
+                    รูปและวิดีโอต้นฉบับจะถูกลบออกจากระบบอัตโนมัติภายใน 7 วันหลังถูกแท็กเข้าโปรไฟล์นี้
+                    หากต้องการเก็บไว้ กรุณากดดาวน์โหลดก่อนหมดเวลา
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-2">
+                  {posts.map((post, i) => (
+                    <div key={`${post.type}-${post.id}`} className="relative aspect-square overflow-hidden bg-gray-100">
+                      <PostMediaThumb
+                        post={post}
+                        onOpen={() => setViewingIndex(i)}
+                        onDeleted={() =>
+                          setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)))
+                        }
+                      />
+                      {post.type === "video" && (
+                        <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          วิดีโอ
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -413,6 +421,57 @@ export default function ProfileView({
           onNavigate={setViewingIndex}
         />
       )}
+    </div>
+  );
+}
+
+
+// โครงหน้าตอนโหลด — ล้อ layout จริง (รูปกลม + ชื่อ + ปุ่ม + ตารางข้อมูล + แท็บ)
+// เดิมเป็นข้อความ "กำลังโหลด..." กลางจอ พอข้อมูลมาถึงหน้าจะกระโดดทั้งหน้า
+function ProfileViewSkeleton() {
+  return (
+    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
+      <div className="w-full max-w-5xl animate-pulse rounded-3xl bg-white p-10 shadow-sm md:p-16">
+        <div className="mb-6 flex flex-col">
+          <div className="flex flex-row items-center gap-8 md:gap-14">
+            <div className="h-28 w-28 flex-shrink-0 rounded-full bg-gray-200 md:h-36 md:w-36" />
+            <div className="w-full space-y-4">
+              <div className="h-8 w-64 max-w-full rounded bg-gray-200 md:h-10" />
+              <div className="flex gap-6">
+                <div className="h-5 w-20 rounded bg-gray-100" />
+                <div className="h-5 w-24 rounded bg-gray-100" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 flex gap-4">
+            <div className="h-12 w-36 rounded-lg bg-gray-100" />
+            <div className="h-12 w-36 rounded-lg bg-gray-100" />
+          </div>
+        </div>
+
+        <div className="mb-8 w-full border-t border-gray-200 pt-8">
+          <div className="mb-6 h-6 w-32 rounded bg-gray-200" />
+          <div className="grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <div className="h-3 w-24 rounded bg-gray-100" />
+                <div className="h-5 w-40 max-w-full rounded bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex w-full justify-center gap-8 border-t border-gray-200 pt-3">
+          <div className="h-5 w-20 rounded bg-gray-200" />
+          <div className="h-5 w-20 rounded bg-gray-100" />
+        </div>
+
+        <div className="mt-8 grid grid-cols-3 gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-lg bg-gray-100" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
