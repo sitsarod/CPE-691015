@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"CPE-691015/internal/dto"
@@ -14,6 +15,33 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// chatTokenFrom ดึงกุญแจลับของห้องแชทจากคำขอ — รองรับทั้ง header (คำขอทั่วไป)
+// และ query string (สำหรับ SSE ผ่าน EventSource ที่แนบ custom header ไม่ได้)
+func chatTokenFrom(c *gin.Context) string {
+	if t := strings.TrimSpace(c.GetHeader("X-Chat-Token")); t != "" {
+		return t
+	}
+	return strings.TrimSpace(c.Query("token"))
+}
+
+// publicChatBaseURL คืน base URL สำหรับสร้างลิงก์ไฟล์แนบที่เก็บในเครื่อง (fallback เมื่อไม่มี Cloudinary)
+// อ่านจาก env PUBLIC_BASE_URL ก่อน ถ้าไม่ตั้งค่าไว้จึงประกอบจาก host ของคำขอจริง
+// (เดิม hardcode http://localhost:8000 ทำให้ไฟล์แนบเปิดไม่ได้เมื่อ deploy จริง)
+func publicChatBaseURL(c *gin.Context) string {
+	if base := strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	scheme := "http"
+	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	host := c.Request.Host
+	if host == "" {
+		host = "localhost:8000"
+	}
+	return scheme + "://" + host
+}
 
 type AutoQAController struct {
 	service    services.AutoQAService
@@ -75,7 +103,7 @@ func (ctrl *AutoQAController) UploadChatAttachment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, dto.ChatUploadResponse{
-		URL:  "http://localhost:8000/uploads/chat/" + filename,
+		URL:  publicChatBaseURL(c) + "/uploads/chat/" + filename,
 		Type: kind,
 		Name: displayName,
 	})
@@ -92,7 +120,8 @@ func autoQAErrorStatus(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, services.ErrCannotModifyMessage):
 		return http.StatusForbidden
-	case errors.Is(err, services.ErrUserNotFoundForChat), errors.Is(err, services.ErrEmptyMessage):
+	case errors.Is(err, services.ErrUserNotFoundForChat), errors.Is(err, services.ErrEmptyMessage),
+		errors.Is(err, services.ErrInvalidAttachment):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
@@ -220,6 +249,31 @@ func (ctrl *AutoQAController) GetChatSessionByID(c *gin.Context) {
 		return
 	}
 
+	// ต้องมี token ของห้องที่ถูกต้องเท่านั้นถึงเข้าถึงได้ (กัน IDOR — ID เดาง่าย)
+	if err := ctrl.service.AuthorizeSession(uint(id), chatTokenFrom(c)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		return
+	}
+
+	res, err := ctrl.service.GetChatSessionByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// AdminGetChatSessionByID — แอดมินเปิดดูห้องแชทได้โดยไม่ต้องมี token ของห้อง
+// (ยืนยันสิทธิ์ด้วย JWT + role admin ที่ระดับ route แทน) ใช้กับหน้าจัดการแชทฝั่งแอดมิน
+func (ctrl *AutoQAController) AdminGetChatSessionByID(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Chat Session ID"})
+		return
+	}
+
 	res, err := ctrl.service.GetChatSessionByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
@@ -244,8 +298,9 @@ func (ctrl *AutoQAController) StreamChatSession(c *gin.Context) {
 	}
 	sessionID := uint(id)
 
-	// ตรวจว่าห้องนี้มีอยู่จริงก่อนเปิด stream ค้างไว้ (กันเปิด goroutine ทิ้งไว้เปล่าๆ กับ id มั่ว)
-	if _, err := ctrl.service.GetChatSessionByID(sessionID); err != nil {
+	// ต้องมี token ที่ถูกต้องถึงเปิด stream ได้ (กัน IDOR + กันเปิด goroutine ทิ้งไว้กับ id มั่ว)
+	// EventSource แนบ header ไม่ได้ จึงรับ token ผ่าน query string (?token=)
+	if err := ctrl.service.AuthorizeSession(sessionID, chatTokenFrom(c)); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
 		return
 	}
@@ -346,6 +401,12 @@ func (ctrl *AutoQAController) AskQuestion(c *gin.Context) {
 		return
 	}
 
+	// ต้องเป็นเจ้าของห้อง (มี token ถูกต้อง) เท่านั้นถึงส่งข้อความเข้าห้องนี้ได้
+	if err := ctrl.service.AuthorizeSession(uint(sessionID), chatTokenFrom(c)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		return
+	}
+
 	var req dto.AskQuestionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -397,6 +458,12 @@ func (ctrl *AutoQAController) EditMessage(c *gin.Context) {
 		return
 	}
 
+	// ต้องเป็นเจ้าของห้อง (มี token ถูกต้อง) เท่านั้นถึงแก้ไขข้อความในห้องนี้ได้
+	if err := ctrl.service.AuthorizeSession(uint(sessionID), chatTokenFrom(c)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
+		return
+	}
+
 	var req dto.EditMessageReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -421,6 +488,12 @@ func (ctrl *AutoQAController) DeleteMessage(c *gin.Context) {
 	msgID, err := strconv.ParseUint(c.Param("msgId"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Message ID"})
+		return
+	}
+
+	// ต้องเป็นเจ้าของห้อง (มี token ถูกต้อง) เท่านั้นถึงลบข้อความในห้องนี้ได้
+	if err := ctrl.service.AuthorizeSession(uint(sessionID), chatTokenFrom(c)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat Session not found"})
 		return
 	}
 

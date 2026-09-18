@@ -5,6 +5,7 @@ import { autoQaAPI } from '../../../services/autoQaAPI';
 import { AutoQA, CreateAutoQAReq, UpdateAutoQAReq } from '../../../types/autoQa';
 import { Plus, Edit2, Trash2, X, Search, MessageCircleQuestion, Inbox, Tag, Loader2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import AutoQASkeleton from './components/AutoQASkeleton';
 
 export default function AutoQAManagement() {
   const [qas, setQas] = useState<AutoQA[]>([]);
@@ -140,54 +141,54 @@ export default function AutoQAManagement() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 sm:space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl">
-            <MessageCircleQuestion className="text-[#CC0000]" size={24} />
-            จัดการคลังข้อมูล Q&amp;A
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            คำถาม-คำตอบสำเร็จรูปที่บอทใช้ตอบลูกค้าอัตโนมัติ และแสดงเป็นปุ่ม Quick Reply
-          </p>
+      {/* Header + Search รวมอยู่ในกรอบเดียว */}
+      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl">
+              <MessageCircleQuestion className="text-[#CC0000]" size={24} />
+              จัดการคลังข้อมูล Q&amp;A
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              คำถาม-คำตอบสำเร็จรูปที่บอทใช้ตอบลูกค้าอัตโนมัติ และแสดงเป็นปุ่ม Quick Reply
+            </p>
+          </div>
+          <button
+            onClick={openModalForNew}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#CC0000] px-4 py-2.5 font-medium text-white shadow-md shadow-[#CC0000]/20 transition-all hover:-translate-y-0.5 hover:bg-[#990000] sm:w-auto"
+          >
+            <Plus size={18} />
+            เพิ่ม Q&amp;A ใหม่
+          </button>
         </div>
-        <button
-          onClick={openModalForNew}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#CC0000] px-4 py-2.5 font-medium text-white shadow-md shadow-[#CC0000]/20 transition-all hover:-translate-y-0.5 hover:bg-[#990000] sm:w-auto"
-        >
-          <Plus size={18} />
-          เพิ่ม Q&amp;A ใหม่
-        </button>
-      </div>
 
-      {/* Search */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-        <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ค้นหาจากคำถาม คีย์เวิร์ด หรือคำตอบ..."
-            className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-9 text-sm text-gray-700 outline-none focus:border-[#CC0000] focus:bg-white focus:ring-1 focus:ring-[#CC0000]"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-              aria-label="ล้างคำค้น"
-            >
-              <X size={16} />
-            </button>
-          )}
+        {/* Search — คั่นด้วยเส้นบางในกรอบเดียวกัน */}
+        <div className="border-t border-gray-100 p-4">
+          <div className="relative max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ค้นหาจากคำถาม คีย์เวิร์ด หรือคำตอบ..."
+              className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-9 text-sm text-gray-700 outline-none focus:border-[#CC0000] focus:bg-white focus:ring-1 focus:ring-[#CC0000]"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                aria-label="ล้างคำค้น"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-9 w-9 animate-spin text-[#CC0000]" />
-        </div>
+        <AutoQASkeleton />
       ) : filteredQas.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white px-6 py-16 text-center shadow-sm">
           <div className="grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-gray-400">
@@ -288,7 +289,7 @@ export default function AutoQAManagement() {
                 <div>
                   <label className="mb-1 block text-sm font-semibold text-gray-800">คำถามหลัก (Question) *</label>
                   <p className="mb-2 text-xs text-gray-500">
-                    คำถามสั้น ๆ ที่เป็นตัวแทน เช่น &apos;คอร์สเรียนมีอะไรบ้าง&apos; (จะโชว์เป็นปุ่ม Quick Reply ให้ลูกค้าด้วย)
+                    คำถามสั้น ๆ  เช่น คอร์สเรียนมีอะไรบ้าง
                   </p>
                   <input
                     type="text"

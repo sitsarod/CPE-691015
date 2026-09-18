@@ -69,6 +69,7 @@ func main() {
 		&models.PaymentItem{},
 		&models.Announcement{},
 		&models.Category{},
+		&models.AnnouncementBookmark{},
 		&models.HomeContent{},
 		&models.HeroSlide{},
 		&models.BankAccount{},

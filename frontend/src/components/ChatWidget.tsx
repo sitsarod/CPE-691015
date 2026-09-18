@@ -41,6 +41,12 @@ export function chatSessionKey(owner: string): string {
   return `auto_qa_session_${owner}`;
 }
 
+// เก็บกุญแจลับของห้อง (access_token) แยกตามเจ้าของ คู่กับ session id
+// ต้องมีทั้งคู่ถึงจะเข้าถึงห้องได้ (กัน IDOR) — ถ้า token หาย ก็กู้ห้องเดิมไม่ได้ ต้องเริ่มใหม่
+export function chatTokenKey(owner: string): string {
+  return `auto_qa_token_${owner}`;
+}
+
 // เวลาที่เปิดกล่องแชทดูข้อความล่าสุดครั้งล่าสุด — ใช้เทียบกับข้อความ admin_reply
 // เพื่อคำนวณ badge แจ้งเตือน "ข้อความตอบกลับใหม่ที่ยังไม่ได้อ่าน" บน CustomerTopbar
 export function chatLastViewedKey(owner: string): string {
@@ -85,6 +91,11 @@ function mapAutoQAsToMessages(qas: AutoQA[]): ChatMessage[] {
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [session, setSession] = useState<ChatSession | null>(null);
+  // กุญแจลับของห้องปัจจุบัน — เก็บแยกจาก session เพราะ backend ส่ง access_token กลับเฉพาะตอนสร้าง
+  // (ตอนกู้ห้อง/ดึงซ้ำจะไม่มีมาด้วย) ต้องอ่านจาก localStorage มาถือไว้เองเพื่อแนบทุกคำขอ
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  // จำนวนข้อความตอบกลับจากแอดมินที่ยังไม่ได้เปิดอ่าน — โชว์เป็น badge บนปุ่มลอย (ตอนกล่องปิดอยู่)
+  const [unreadCount, setUnreadCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [quickReplies, setQuickReplies] = useState<AutoQA[]>([]);
 
@@ -120,6 +131,17 @@ export default function ChatWidget() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // เปิดกล่องแชท → เลื่อนลงข้อความล่าสุดทันที
+  // (ข้อความเดิมถูกโหลดไว้ก่อนแล้ว state messages จึงไม่เปลี่ยนตอนเปิด eff[messages] ด้านบนจึงไม่ยิง)
+  // เลื่อนซ้ำอีกครั้งหลัง 250ms เผื่อรูปแนบ/เลย์เอาต์โหลดช้าแล้วดันความสูงเพิ่ม
+  useEffect(() => {
+    if (!isOpen || restoring) return;
+    const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    scrollToBottom();
+    const t = setTimeout(scrollToBottom, 250);
+    return () => clearTimeout(t);
+  }, [isOpen, restoring, messages.length]);
 
   useEffect(() => {
     const openHandler = () => setIsOpen(true);
@@ -167,21 +189,28 @@ export default function ChatWidget() {
   // กู้ห้องแชทเดิมของเจ้าของนี้ (ถ้ามีและยังไม่หมดอายุ 3 วัน)
   const loadSavedSession = async (owner: string) => {
     const id = localStorage.getItem(chatSessionKey(owner));
-    if (!id) {
+    const tok = localStorage.getItem(chatTokenKey(owner));
+    // ต้องมีทั้ง id และ token ถึงจะกู้ห้องเดิมได้ (token คือกุญแจเข้าถึง)
+    if (!id || !tok) {
+      localStorage.removeItem(chatSessionKey(owner));
+      localStorage.removeItem(chatTokenKey(owner));
       setRestoring(false);
       return;
     }
     try {
-      const fetched = await autoQaAPI.getChatSessionById(Number(id));
+      const fetched = await autoQaAPI.getChatSessionById(Number(id), tok);
       if (fetched && fetched.status === 'active' && chatOwner() === owner) {
         setSession(fetched);
+        setSessionToken(tok);
         if (fetched.auto_qas) setMessages(mapAutoQAsToMessages(fetched.auto_qas));
         autoStartTriedRef.current = true;
       } else {
         localStorage.removeItem(chatSessionKey(owner));
+        localStorage.removeItem(chatTokenKey(owner));
       }
     } catch {
       localStorage.removeItem(chatSessionKey(owner));
+      localStorage.removeItem(chatTokenKey(owner));
     } finally {
       setRestoring(false);
     }
@@ -193,6 +222,8 @@ export default function ChatWidget() {
     if (ownerRef.current === owner) return;
     ownerRef.current = owner;
     setSession(null);
+    setSessionToken(null);
+    setUnreadCount(0);
     setMessages([]);
     setEditingRowId(null);
     autoStartTriedRef.current = false;
@@ -220,6 +251,7 @@ export default function ChatWidget() {
   useEffect(() => {
     if (isOpen) {
       syncToOwner();
+      setUnreadCount(0); // เปิดกล่องแล้ว = อ่านแล้ว เคลียร์ badge ทันที
       try {
         localStorage.setItem(chatLastViewedKey(chatOwner()), new Date().toISOString());
       } catch {
@@ -232,6 +264,13 @@ export default function ChatWidget() {
   // หมายเหตุ: ไม่สร้างห้องแชททันทีที่เปิดกล่อง — สร้างแบบ lazy ตอนกดส่งข้อความ/ไฟล์ครั้งแรก
   // (ดู createSession() ที่ถูกเรียกจาก handleSend) เพื่อไม่ให้เกิดห้องแชทว่างเปล่าเวลาผู้ใช้แค่เปิดดู
 
+  // ข้อความต้อนรับ — แยกตามประเภทผู้ใช้:
+  //   ผู้เยี่ยมชม (guest) → บอกว่าเป็นระบบตอบอัตโนมัติ (มีบอท + ปุ่ม Q&A ให้กด)
+  //   ผู้ใช้ที่ล็อกอินแล้ว → คุยกับแอดมินตรง ๆ ไม่มีบอท/Q&A จึงบอกให้พิมพ์ถามได้เลย
+  const greetingText = loggedInCustomer
+    ? `สวัสดีค่ะคุณ ${displayName} พิมพ์ข้อความสอบถามได้เลยค่ะ เดี๋ยวเจ้าหน้าที่จะรีบตอบกลับให้เร็วที่สุดค่ะ`
+    : `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 7 วัน มีอะไรให้เราช่วยไหมคะ?`;
+
   const createSession = async (): Promise<ChatSession | null> => {
     setCreating(true);
     try {
@@ -240,12 +279,16 @@ export default function ChatWidget() {
         : {};
       const newSession = await autoQaAPI.createChatSession(payload);
       setSession(newSession);
+      // เก็บ id + กุญแจลับของห้องไว้ใช้เข้าถึงในคำขอถัดไป (token มีมาเฉพาะตอนสร้างนี้เท่านั้น)
+      const tok = newSession.access_token || '';
+      setSessionToken(tok);
       localStorage.setItem(chatSessionKey(chatOwner()), String(newSession.id));
+      if (tok) localStorage.setItem(chatTokenKey(chatOwner()), tok);
       setMessages([
         {
           id: 'greeting',
           sender: 'bot',
-          text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 7 วัน มีอะไรให้เราช่วยไหมคะ?`,
+          text: greetingText,
           timestamp: new Date(),
         },
       ]);
@@ -264,9 +307,9 @@ export default function ChatWidget() {
   // เวอร์ชันล่าสุดที่อ้างอิง session ปัจจุบันได้เสมอ โดยไม่ต้อง reconnect ทุกครั้งที่ state อื่นเปลี่ยน
   const refreshSessionRef = useRef<() => Promise<void>>(async () => {});
   refreshSessionRef.current = async () => {
-    if (!session) return;
+    if (!session || !sessionToken) return;
     try {
-      const fetched = await autoQaAPI.getChatSessionById(session.id);
+      const fetched = await autoQaAPI.getChatSessionById(session.id, sessionToken);
       if (fetched && fetched.status === 'active') {
         if (fetched.auto_qas) {
           const loaded = mapAutoQAsToMessages(fetched.auto_qas);
@@ -287,7 +330,9 @@ export default function ChatWidget() {
       const msg = err instanceof Error ? err.message : '';
       if (msg.includes('not found') || msg.includes('ไม่พบ')) {
         localStorage.removeItem(chatSessionKey(chatOwner()));
+        localStorage.removeItem(chatTokenKey(chatOwner()));
         setSession(null);
+        setSessionToken(null);
         setMessages([]);
         autoStartTriedRef.current = false;
       } else {
@@ -296,13 +341,13 @@ export default function ChatWidget() {
     }
   };
 
-  const isChatStreamActive = isOpen && !!session && session.status === 'active';
+  const isChatStreamActive = isOpen && !!session && !!sessionToken && session.status === 'active';
 
   // SSE — รับสัญญาณ "มีข้อความใหม่" แบบเรียลไทม์จาก backend แทนการ poll รัวๆ ทุก 5 วิเหมือนเดิม
   // ใช้ session ID เป็นคีย์ (ไม่ต้องล็อกอิน ต่างจาก NotificationBell ที่ต้องมี JWT) — พอมีสัญญาณเข้ามา
   // ค่อยไปเรียก GET /chat-sessions/:id จริงเหมือนตอน poll เดิม มี reconnect เองถ้าหลุด
   useEffect(() => {
-    if (!isChatStreamActive || !session) return;
+    if (!isChatStreamActive || !session || !sessionToken) return;
     const base = process.env.NEXT_PUBLIC_API_URL;
     if (!base) return;
 
@@ -312,7 +357,8 @@ export default function ChatWidget() {
 
     const connect = () => {
       if (closed) return;
-      es = new EventSource(`${base}/chat-sessions/${session.id}/stream`);
+      // EventSource แนบ custom header ไม่ได้ จึงส่งกุญแจลับผ่าน query string เพื่อยืนยันสิทธิ์
+      es = new EventSource(`${base}/chat-sessions/${session.id}/stream?token=${encodeURIComponent(sessionToken)}`);
       es.addEventListener('notify', () => refreshSessionRef.current());
       es.onerror = () => {
         es?.close();
@@ -335,9 +381,44 @@ export default function ChatWidget() {
   // (เดิมยิงทุก 5 วิไม่หยุดตราบใดที่เปิดกล่องแชทค้างไว้ ตอนนี้ SSE เป็นตัวหลัก อันนี้แค่กันพลาด)
   useVisibleInterval(() => refreshSessionRef.current(), 45000, isChatStreamActive);
 
+  // เช็คข้อความตอบกลับใหม่จากแอดมินขณะ "กล่องปิดอยู่" เพื่ออัปเดต badge ตัวเลขบนปุ่มลอย
+  // นับเฉพาะข้อความ admin_reply ที่ใหม่กว่าเวลาที่เปิดกล่องอ่านครั้งล่าสุด
+  const checkUnreadRef = useRef<() => Promise<void>>(async () => {});
+  checkUnreadRef.current = async () => {
+    if (!session || !sessionToken) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const fetched = await autoQaAPI.getChatSessionById(session.id, sessionToken);
+      if (!fetched || fetched.status !== 'active') {
+        setUnreadCount(0);
+        return;
+      }
+      const lastViewedRaw = localStorage.getItem(chatLastViewedKey(chatOwner()));
+      const lastViewed = lastViewedRaw ? new Date(lastViewedRaw).getTime() : 0;
+      const count = (fetched.auto_qas || []).filter(
+        (qa) => qa.mode === 'admin_reply' && new Date(qa.created_at).getTime() > lastViewed
+      ).length;
+      setUnreadCount(count);
+    } catch {
+      // เงียบไว้ ไม่ให้ error กระทบปุ่มลอย
+    }
+  };
+
+  // เช็คทันทีเมื่อกู้ห้องได้ตอนกล่องยังปิด + poll ทุก 30 วิระหว่างปิด (หยุดเองเมื่อเปิดกล่อง/สลับแท็บ)
+  useEffect(() => {
+    if (!isOpen && session && sessionToken) checkUnreadRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, session?.id, sessionToken]);
+  useVisibleInterval(() => checkUnreadRef.current(), 30000, !isOpen && !!session && !!sessionToken);
+
   const handleResetSession = () => {
     localStorage.removeItem(chatSessionKey(chatOwner()));
+    localStorage.removeItem(chatTokenKey(chatOwner()));
     setSession(null);
+    setSessionToken(null);
+    setUnreadCount(0);
     setMessages([]);
     setInputText('');
     setPendingAttachment(null);
@@ -395,12 +476,14 @@ export default function ChatWidget() {
     setIsSending(true);
 
     try {
+      // ห้องที่เพิ่งสร้างจะมี access_token ติดมากับ object เลย ส่วนห้องที่กู้มาใช้ token ใน state
+      const token = activeSession.access_token ?? sessionToken ?? undefined;
       const response = await autoQaAPI.askQuestion(activeSession.id, {
         question: text,
         attachment_url: attach?.url,
         attachment_type: attach?.type,
         attachment_name: attach?.name,
-      });
+      }, token);
       if (response.answer) {
         setMessages((prev) => [...prev, { id: `temp-bot-${Date.now()}`, sender: 'bot', text: response.answer, timestamp: new Date() }]);
       }
@@ -418,7 +501,7 @@ export default function ChatWidget() {
     if (rowId == null || !session) return;
     if (!t) return;
     try {
-      await autoQaAPI.editChatMessage(session.id, rowId, t);
+      await autoQaAPI.editChatMessage(session.id, rowId, t, sessionToken ?? undefined);
       setMessages((prev) => prev.map((m) => (m.rowId === rowId && m.sender === 'user' ? { ...m, text: t } : m)));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'แก้ไขข้อความไม่สำเร็จ');
@@ -432,7 +515,7 @@ export default function ChatWidget() {
     if (!session) return;
     if (!window.confirm('ต้องการลบข้อความนี้ใช่หรือไม่?')) return;
     try {
-      await autoQaAPI.deleteChatMessage(session.id, rowId);
+      await autoQaAPI.deleteChatMessage(session.id, rowId, sessionToken ?? undefined);
       setMessages((prev) => prev.filter((m) => m.rowId !== rowId));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'ลบข้อความไม่สำเร็จ');
@@ -449,9 +532,15 @@ export default function ChatWidget() {
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-[#CC0000] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[#990000] transition-colors z-50 animate-bounce"
-        aria-label="Open chat"
+        aria-label={unreadCount > 0 ? `เปิดแชท มีข้อความใหม่ ${unreadCount} ข้อความ` : 'Open chat'}
       >
         <MessageCircle size={28} />
+        {/* badge จำนวนข้อความตอบกลับใหม่จากแอดมิน */}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 flex items-center justify-center rounded-full bg-white text-[#CC0000] text-xs font-bold border-2 border-[#CC0000] shadow">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
       </button>
     );
   }
@@ -479,9 +568,12 @@ export default function ChatWidget() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
         {restoring ? (
-          <div className="flex flex-col h-full items-center justify-center gap-3 text-gray-500">
-            <Loader2 size={28} className="animate-spin text-[#CC0000]" />
-            <p className="text-sm">กำลังโหลด...</p>
+          // skeleton ฟองแชทระหว่างกู้ห้องเดิม (สลับซ้าย/ขวาให้เหมือนบทสนทนาจริง)
+          <div className="flex flex-col space-y-3">
+            <div className="self-start h-10 w-40 animate-pulse rounded-2xl rounded-bl-none bg-gray-200" />
+            <div className="self-end h-10 w-32 animate-pulse rounded-2xl rounded-br-none bg-[#CC0000]/20" />
+            <div className="self-start h-16 w-52 animate-pulse rounded-2xl rounded-bl-none bg-gray-200" />
+            <div className="self-end h-10 w-36 animate-pulse rounded-2xl rounded-br-none bg-[#CC0000]/20" />
           </div>
         ) : (
           <div className="flex flex-col space-y-3">
@@ -492,7 +584,7 @@ export default function ChatWidget() {
                 msg={{
                   id: 'greeting-preview',
                   sender: 'bot',
-                  text: `สวัสดีค่ะคุณ ${displayName} นี่เป็นข้อความตอบกลับอัตโนมัติ แชทนี้จะยังคงอยู่ภายใน 7 วัน มีอะไรให้เราช่วยไหมคะ?`,
+                  text: greetingText,
                   timestamp: greetingTime,
                 }}
                 isEditing={false}
@@ -546,7 +638,8 @@ export default function ChatWidget() {
             </div>
           ) : (
             <>
-              {(quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && !pendingAttachment && (
+              {/* ปุ่ม Quick Reply (Q&A สำเร็จรูป) แสดงเฉพาะผู้เยี่ยมชม — ผู้ล็อกอินคุยกับแอดมินตรง ๆ */}
+              {!loggedInCustomer && (quickReplies?.length || 0) > 0 && (messages?.length || 0) < 5 && !pendingAttachment && (
                 <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar">
                   {quickReplies.map((qr) => (
                     <button

@@ -29,4 +29,7 @@ type Announcement struct {
 	StartDate time.Time `json:"start_date"`
 	EndDate   time.Time `json:"end_date"`
 	ViewCount uint      `json:"view_count" gorm:"default:0"`
+
+	// IsPinned = แอดมินปักหมุดประกาศนี้ให้ลอยอยู่บนสุดของรายการ (เช่น ข่าวด่วน/ปิดปรับปรุง)
+	IsPinned bool `json:"is_pinned" gorm:"not null;default:false"`
 }

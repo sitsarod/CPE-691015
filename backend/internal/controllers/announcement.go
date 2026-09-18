@@ -76,6 +76,15 @@ func (ctrl *AnnouncementController) GetAnnouncementByID(c *gin.Context) {
 		return
 	}
 
+	// กันประกาศเฉพาะสมาชิก (visibility=member) รั่วให้ผู้เยี่ยมชมที่เดา ID ตรง ๆ
+	// ต้องล็อกอินแล้วเท่านั้น (มี role จาก OptionalAuth) ถึงเปิดดูได้ ไม่งั้นตอบ 404 เหมือนไม่มี
+	if res.Visibility == services.VisibilityMember {
+		if _, authed := c.Get("role"); !authed {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Announcement not found"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
@@ -90,19 +99,133 @@ func (ctrl *AnnouncementController) GetAllAnnouncements(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+// resolveAudience กำหนดกลุ่มเป้าหมายของประกาศจาก "สิทธิ์จริง" (JWT ผ่าน OptionalAuth)
+// ไม่ใช่เชื่อค่า ?audience= ที่ client ส่งมาล้วน ๆ — กันไม่ให้ผู้เยี่ยมชมขอ ?audience=member
+// แล้วเห็นประกาศเฉพาะสมาชิก
+//
+//	ผู้ล็อกอินแล้ว (มี role) → member (เห็น all/member)
+//	ผู้เยี่ยมชม             → guest  (เห็น all/guest)
+//
+// client ยัง "ขอให้แคบลง" ได้ด้วย ?audience=guest (เช่นหน้าแรกที่สมาชิกเปิดดูก็ให้เห็นแบบ guest)
+// แต่ "ขอให้กว้างขึ้น" (guest ขอ member) ไม่ได้ — จะถูกลดเหลือ guest เสมอ
+func resolveAudience(c *gin.Context) string {
+	_, authed := c.Get("role")
+	switch c.Query("audience") {
+	case services.VisibilityGuest:
+		return services.VisibilityGuest
+	case services.VisibilityMember:
+		if authed {
+			return services.VisibilityMember
+		}
+		return services.VisibilityGuest
+	default:
+		if authed {
+			return services.VisibilityMember
+		}
+		return services.VisibilityGuest
+	}
+}
+
 // GetActiveAnnouncements คืนเฉพาะประกาศที่กำลังแสดงผล — สำหรับหน้าเว็บสาธารณะ
-// ?audience=guest  → หน้าแรกก่อนล็อกอิน (visibility: all/guest)
-// ?audience=member → แดชบอร์ดลูกค้าที่ล็อกอินแล้ว (visibility: all/member)
-// ไม่ระบุ → ไม่กรอง visibility
+// กลุ่มเป้าหมาย (guest/member) กำหนดจากสิทธิ์จริงใน resolveAudience ไม่เชื่อ query ล้วน ๆ
 func (ctrl *AnnouncementController) GetActiveAnnouncements(c *gin.Context) {
-	audience := c.Query("audience")
-	res, err := ctrl.service.GetActiveAnnouncements(audience)
+	res, err := ctrl.service.GetActiveAnnouncements(resolveAudience(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// SetPinned ปักหมุด/ยกเลิกปักหมุดประกาศ (แอดมิน)
+func (ctrl *AnnouncementController) SetPinned(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		return
+	}
+	var req dto.PinAnnouncementReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	res, err := ctrl.service.SetAnnouncementPinned(uint(id), req.Pinned)
+	if err != nil {
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// === Bookmark (ผู้ใช้ที่ล็อกอิน) ===
+
+// AddBookmark บันทึกประกาศไว้อ่านทีหลัง
+func (ctrl *AnnouncementController) AddBookmark(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		return
+	}
+	if err := ctrl.service.AddBookmark(userID, uint(id)); err != nil {
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "บันทึกประกาศแล้ว"})
+}
+
+// RemoveBookmark ยกเลิกการบันทึกประกาศ
+func (ctrl *AnnouncementController) RemoveBookmark(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid announcement ID"})
+		return
+	}
+	if err := ctrl.service.RemoveBookmark(userID, uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ยกเลิกการบันทึกแล้ว"})
+}
+
+// GetMyBookmarks คืนประกาศที่ผู้ใช้บันทึกไว้ (รวมที่หมดอายุแล้ว)
+func (ctrl *AnnouncementController) GetMyBookmarks(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return
+	}
+	res, err := ctrl.service.GetBookmarkedAnnouncements(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
+// GetMyBookmarkIDs คืนเฉพาะ id ของประกาศที่บันทึกไว้ (ให้หน้าเว็บไฮไลต์ปุ่มหัวใจในฟีด)
+func (ctrl *AnnouncementController) GetMyBookmarkIDs(c *gin.Context) {
+	userID, _, ok := GetAuthContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้จากโทเคน"})
+		return
+	}
+	ids, err := ctrl.service.GetBookmarkedIDs(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": ids})
 }
 
 // GetGuestGallery คืนประกาศที่ visibility เป็น all/guest ทั้งหมด (รวมที่หมดอายุแล้ว)
@@ -165,9 +288,10 @@ func (ctrl *AnnouncementController) IncrementViewCount(c *gin.Context) {
 		return
 	}
 
-	err = ctrl.service.IncrementViewCount(uint(id))
+	// c.ClientIP() เชื่อถือได้เพราะตั้ง SetTrustedProxies(nil) ไว้ (คืน IP จริงของ TCP ปลอมไม่ได้)
+	err = ctrl.service.IncrementViewCount(uint(id), c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(announcementErrorStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 

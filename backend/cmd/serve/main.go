@@ -30,28 +30,14 @@ func startCustomerStatusJob() {
 	}()
 }
 
-// startAnnouncementCleanupJob ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ
-// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 1 ชั่วโมง (เบา ไม่หนัก DB)
-func startAnnouncementCleanupJob() {
-	announcementService := services.NewAnnouncementService(config.DB)
-	go func() {
-		for {
-			if n, err := announcementService.DeleteExpiredAnnouncements(); err != nil {
-				log.Printf("ลบประกาศที่หมดอายุอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("ลบประกาศที่หมดอายุอัตโนมัติ %d รายการ", n)
-			}
-			time.Sleep(1 * time.Hour)
-		}
-	}()
-}
-
 // startChatCleanupJob ลบห้องแชทของผู้เยี่ยมชม (guest) ที่สร้างมานานเกิน 7 วันอัตโนมัติ
 // (เฉพาะ guest — ห้องแชทของผู้ใช้ที่ล็อกอินแล้วจะไม่ถูกลบ) พร้อม log ข้อความ
 // ตรงกับข้อความต้อนรับที่แจ้งผู้ใช้ว่า "แชทนี้จะยังคงอยู่ภายใน 7 วัน"
 // รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง
 func startChatCleanupJob() {
-	autoQAService := services.NewAutoQAService(config.DB)
+	// ส่ง Cloudinary ให้ service ด้วย เพื่อให้ลบไฟล์แนบออกจาก storage จริงตอนลบห้องเก่า
+	// (nil ได้ถ้าไม่ได้ตั้งค่า Cloudinary — จะลบเฉพาะไฟล์ในเครื่องแทน)
+	autoQAService := services.NewAutoQAService(config.DB, services.NewCloudinaryService())
 	go func() {
 		for {
 			if n, err := autoQAService.DeleteOldSessions(7 * 24 * time.Hour); err != nil {
@@ -180,8 +166,9 @@ func main() {
 	// 3.1 เริ่ม background job ปรับสถานะลูกค้า active/inactive อัตโนมัติ (รายวัน)
 	startCustomerStatusJob()
 
-	// 3.2 ลบประกาศที่หมดอายุ + ลบห้องแชทที่ปิดเกิน 7 วัน อัตโนมัติ
-	startAnnouncementCleanupJob()
+	// 3.2 ลบห้องแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติ
+	// หมายเหตุ: เลิกลบประกาศที่หมดอายุอัตโนมัติแล้ว — "หมดอายุ" = ซ่อนจากฟีด (กรองด้วยวันที่ใน
+	// GetActiveAnnouncements) แต่ record ยังอยู่ เพื่อให้ฟีเจอร์ "บันทึกไว้อ่านทีหลัง" เปิดดูย้อนหลังได้
 	startChatCleanupJob()
 
 	// 3.3 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน

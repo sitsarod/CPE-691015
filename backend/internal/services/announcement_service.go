@@ -4,7 +4,9 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"errors"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -46,7 +48,18 @@ type AnnouncementService interface {
 	DeleteAnnouncement(id uint) error
 	// DeleteExpiredAnnouncements ลบประกาศที่พ้นวันสิ้นสุดแล้วอัตโนมัติ (คืนจำนวนที่ลบ)
 	DeleteExpiredAnnouncements() (int64, error)
-	IncrementViewCount(id uint) error
+	// IncrementViewCount เพิ่มยอดวิว — viewerKey (เช่น IP) ใช้กันการปั่นยอดซ้ำ ๆ จากคนเดิม
+	IncrementViewCount(id uint, viewerKey string) error
+	// SetAnnouncementPinned ปักหมุด/ยกเลิกปักหมุดประกาศ (แอดมิน)
+	SetAnnouncementPinned(id uint, pinned bool) (*dto.AnnouncementDTO, error)
+
+	// === Bookmark (ผู้ใช้ที่ล็อกอินบันทึกประกาศไว้อ่านทีหลัง) ===
+	AddBookmark(userID, announcementID uint) error
+	RemoveBookmark(userID, announcementID uint) error
+	// GetBookmarkedAnnouncements คืนประกาศที่ผู้ใช้บันทึกไว้ (รวมที่หมดอายุแล้ว) เรียงตามเวลาที่บันทึกล่าสุด
+	GetBookmarkedAnnouncements(userID uint) ([]dto.AnnouncementDTO, error)
+	// GetBookmarkedIDs คืนเฉพาะ id ของประกาศที่ผู้ใช้บันทึกไว้ (ให้ฝั่งหน้าเว็บไว้ไฮไลต์ปุ่มหัวใจ)
+	GetBookmarkedIDs(userID uint) ([]uint, error)
 
 	CreateCategory(req *dto.CreateCategoryReq) (*dto.CategoryDTO, error)
 	UpdateCategory(id uint, req *dto.UpdateCategoryReq) (*dto.CategoryDTO, error)
@@ -54,12 +67,53 @@ type AnnouncementService interface {
 	GetAllCategories() ([]dto.CategoryDTO, error)
 }
 
+// viewDedupTTL คือช่วงเวลาที่นับวิวจากผู้ชมคนเดิม (IP เดิม) ต่อประกาศเดิมได้แค่ครั้งเดียว
+const viewDedupTTL = 1 * time.Hour
+
 type announcementService struct {
-	db   *gorm.DB
+	db *gorm.DB
+
+	// กันปั่นยอดวิว — จำ (viewerKey|announcementID) ล่าสุดในหน่วยความจำ
+	viewMu        sync.Mutex
+	viewSeen      map[string]time.Time
+	viewLastClean time.Time
 }
 
 func NewAnnouncementService(db *gorm.DB) AnnouncementService {
-	return &announcementService{db: db}
+	return &announcementService{
+		db:            db,
+		viewSeen:      make(map[string]time.Time),
+		viewLastClean: time.Now(),
+	}
+}
+
+// shouldCountView คืน true ถ้าควรนับวิวครั้งนี้ (ยังไม่เคยนับจาก viewerKey นี้ในช่วง TTL)
+// viewerKey ว่าง (ไม่รู้ IP) ให้นับปกติ — ดีกว่าไม่นับเลย
+func (s *announcementService) shouldCountView(viewerKey string, id uint) bool {
+	if viewerKey == "" {
+		return true
+	}
+	key := viewerKey + "|" + strconv.FormatUint(uint64(id), 10)
+	now := time.Now()
+
+	s.viewMu.Lock()
+	defer s.viewMu.Unlock()
+
+	// เก็บกวาด key ที่หมดอายุเป็นระยะ กันแมพโตไม่จำกัด
+	if now.Sub(s.viewLastClean) > viewDedupTTL {
+		for k, t := range s.viewSeen {
+			if now.Sub(t) > viewDedupTTL {
+				delete(s.viewSeen, k)
+			}
+		}
+		s.viewLastClean = now
+	}
+
+	if last, ok := s.viewSeen[key]; ok && now.Sub(last) < viewDedupTTL {
+		return false
+	}
+	s.viewSeen[key] = now
+	return true
 }
 
 // bangkokLocation คืนโซนเวลาไทย (Asia/Bangkok, UTC+7) เสมอ ไม่ว่า timezone ของเซิร์ฟเวอร์
@@ -171,7 +225,8 @@ func (s *announcementService) GetAnnouncementByID(id uint) (*dto.AnnouncementDTO
 
 func (s *announcementService) GetAllAnnouncements() ([]dto.AnnouncementDTO, error) {
 	var announcements []models.Announcement
-	err := s.db.Preload("User").Preload("Category").Order("created_at DESC").Find(&announcements).Error
+	// ประกาศที่ปักหมุดขึ้นก่อนเสมอ แล้วค่อยเรียงตามวันที่สร้างล่าสุด
+	err := s.db.Preload("User").Preload("Category").Order("is_pinned DESC, created_at DESC").Find(&announcements).Error
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +258,7 @@ func (s *announcementService) GetActiveAnnouncements(audience string) ([]dto.Ann
 		q = q.Where("visibility IN ?", []string{VisibilityAll, VisibilityMember})
 	}
 
-	err := q.Order("created_at DESC").Find(&announcements).Error
+	err := q.Order("is_pinned DESC, created_at DESC").Find(&announcements).Error
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +277,7 @@ func (s *announcementService) GetGuestGalleryAnnouncements() ([]dto.Announcement
 	var announcements []models.Announcement
 	err := s.db.Preload("User").Preload("Category").
 		Where("visibility IN ?", []string{VisibilityAll, VisibilityGuest}).
-		Order("start_date DESC").
+		Order("is_pinned DESC, start_date DESC").
 		Find(&announcements).Error
 	if err != nil {
 		return nil, err
@@ -304,12 +359,80 @@ func (s *announcementService) DeleteAnnouncement(id uint) error {
 	return s.db.Delete(&models.Announcement{}, id).Error
 }
 
-func (s *announcementService) IncrementViewCount(id uint) error {
+func (s *announcementService) IncrementViewCount(id uint, viewerKey string) error {
 	var announcement models.Announcement
 	if err := s.db.First(&announcement, id).Error; err != nil {
 		return err
 	}
+	// ผู้ชมคนเดิม (IP เดิม) เปิดประกาศเดิมซ้ำในช่วง TTL ไม่นับเพิ่ม — กันปั่นยอด
+	if !s.shouldCountView(viewerKey, id) {
+		return nil
+	}
 	return s.db.Model(&models.Announcement{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + ?", 1)).Error
+}
+
+func (s *announcementService) SetAnnouncementPinned(id uint, pinned bool) (*dto.AnnouncementDTO, error) {
+	var announcement models.Announcement
+	if err := s.db.First(&announcement, id).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&models.Announcement{}).Where("id = ?", id).
+		Update("is_pinned", pinned).Error; err != nil {
+		return nil, err
+	}
+	return s.GetAnnouncementByID(id)
+}
+
+// === Bookmark ===
+
+func (s *announcementService) AddBookmark(userID, announcementID uint) error {
+	// ตรวจว่าประกาศมีอยู่จริงก่อน กันบันทึก id มั่ว
+	if err := s.db.First(&models.Announcement{}, announcementID).Error; err != nil {
+		return err
+	}
+	bookmark := models.AnnouncementBookmark{UserID: userID, AnnouncementID: announcementID}
+	// ON CONFLICT DO NOTHING — บันทึกซ้ำไม่เป็นไร (idempotent) กันชน unique index
+	return s.db.Where(models.AnnouncementBookmark{UserID: userID, AnnouncementID: announcementID}).
+		FirstOrCreate(&bookmark).Error
+}
+
+func (s *announcementService) RemoveBookmark(userID, announcementID uint) error {
+	return s.db.Where("user_id = ? AND announcement_id = ?", userID, announcementID).
+		Delete(&models.AnnouncementBookmark{}).Error
+}
+
+func (s *announcementService) GetBookmarkedAnnouncements(userID uint) ([]dto.AnnouncementDTO, error) {
+	var bookmarks []models.AnnouncementBookmark
+	// เรียงตามเวลาที่บันทึกล่าสุด (created_at ของ bookmark) — preload ตัวประกาศ + หมวด/ผู้เขียน
+	err := s.db.Where("user_id = ?", userID).
+		Preload("Announcement.User").
+		Preload("Announcement.Category").
+		Order("created_at DESC").
+		Find(&bookmarks).Error
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]dto.AnnouncementDTO, 0, len(bookmarks))
+	for i := range bookmarks {
+		// ประกาศอาจถูกลบไปแล้ว (Announcement เป็น nil) — ข้ามไป ไม่ให้ panic
+		if bookmarks[i].Announcement == nil {
+			continue
+		}
+		dtos = append(dtos, mapToAnnouncementDTO(bookmarks[i].Announcement))
+	}
+	return dtos, nil
+}
+
+func (s *announcementService) GetBookmarkedIDs(userID uint) ([]uint, error) {
+	var ids []uint
+	err := s.db.Model(&models.AnnouncementBookmark{}).
+		Where("user_id = ?", userID).
+		Pluck("announcement_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 func (s *announcementService) CreateCategory(req *dto.CreateCategoryReq) (*dto.CategoryDTO, error) {
@@ -383,6 +506,7 @@ func mapToAnnouncementDTO(m *models.Announcement) dto.AnnouncementDTO {
 		StartDate:   m.StartDate,
 		EndDate:     m.EndDate,
 		ViewCount:   m.ViewCount,
+		IsPinned:    m.IsPinned,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
 	}

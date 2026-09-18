@@ -3,27 +3,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { autoQaAPI } from '../../../services/autoQaAPI';
 import { ChatSession, AutoQA } from '../../../types/autoQa';
-import { ADMIN_CHAT_VIEWED_EVENT, adminChatLastViewedKey, URGENT_WAIT_MS, formatWaitElapsed } from '../../../components/AdminTopBar';
+import { ADMIN_CHAT_VIEWED_EVENT, adminChatLastViewedKey, URGENT_WAIT_MS } from '../../../components/AdminTopBar';
 import { NOTIFICATION_STREAM_EVENT } from '../../../components/NotificationBell';
 import { useVisibleInterval } from '../../../hooks/useVisibleInterval';
+import ChatSessionsListSkeleton from './components/ChatSessionsListSkeleton';
 import {
   MessageSquare, Send, Trash2, Power, RotateCcw, Search, ArrowLeft,
   MoreVertical, Settings, X, Mail, Phone, User, Calendar, RefreshCw,
   Paperclip, FileText, Loader2, Download, Clock,
 } from 'lucide-react';
 
-// สถานะ "ใครทักมา / รอนานแค่ไหน" ของแต่ละห้องแชท สำหรับแสดงในรายการฝั่งซ้าย
-function sessionRowMeta(s: ChatSession): { isUnread: boolean; isUrgent: boolean; waitingMs: number } {
+// สถานะ "ใครทักมา / นานแค่ไหน" ของแต่ละห้องแชท สำหรับแสดงในรายการฝั่งซ้าย
+// unreadCount = จำนวนข้อความของลูกค้าที่เข้ามาหลังแอดมินเปิดดูครั้งล่าสุด (0 = อ่านหมดแล้ว)
+function sessionRowMeta(s: ChatSession): { unreadCount: number; isUrgent: boolean; waitingMs: number } {
   const qas = s.auto_qas || [];
-  if (qas.length === 0 || typeof window === 'undefined') return { isUnread: false, isUrgent: false, waitingMs: 0 };
+  if (qas.length === 0 || typeof window === 'undefined') return { unreadCount: 0, isUrgent: false, waitingMs: 0 };
   const latest = qas.reduce((a, b) => (new Date(a.created_at).getTime() > new Date(b.created_at).getTime() ? a : b));
-  if (latest.mode === 'admin_reply') return { isUnread: false, isUrgent: false, waitingMs: 0 };
+  if (latest.mode === 'admin_reply') return { unreadCount: 0, isUrgent: false, waitingMs: 0 };
   const lastViewedRaw = localStorage.getItem(adminChatLastViewedKey(s.id));
   const lastViewed = lastViewedRaw ? Number(lastViewedRaw) : 0;
   const latestTime = new Date(latest.created_at).getTime();
-  const isUnread = latestTime > lastViewed;
+  // นับเฉพาะข้อความของลูกค้า (ไม่ใช่ของแอดมิน) ที่ใหม่กว่าเวลาที่แอดมินเปิดดูล่าสุด
+  const unreadCount = qas.filter(
+    (q) => q.mode !== 'admin_reply' && new Date(q.created_at).getTime() > lastViewed
+  ).length;
   const waitingMs = s.status === 'active' ? Date.now() - latestTime : 0;
-  return { isUnread, isUrgent: s.status === 'active' && waitingMs >= URGENT_WAIT_MS, waitingMs };
+  return { unreadCount, isUrgent: s.status === 'active' && waitingMs >= URGENT_WAIT_MS, waitingMs };
+}
+
+// formatSentAgo แสดงว่าข้อความล่าสุดถูกส่งมานานแค่ไหนแล้ว (แทนคำว่า "รอ...") สำหรับรายการแชท
+function formatSentAgo(ms: number): string {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return 'ส่งเมื่อสักครู่';
+  if (minutes < 60) return `ส่งเมื่อ ${minutes} นาทีที่แล้ว`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `ส่งเมื่อ ${hours} ชม.ที่แล้ว`;
+  const days = Math.floor(hours / 24);
+  return `ส่งเมื่อ ${days} วันที่แล้ว`;
 }
 
 // ── helpers ──────────────────────────────────────────────
@@ -58,6 +74,9 @@ export default function ChatSessionsManagement() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoOpenedRef = useRef(false); // กันเปิดซ้ำจาก ?session= เมื่อ loadData รันใหม่ (เช่นกด "รีเฟรชรายการ")
+  // ตัวรีเฟรชอัตโนมัติ (รายการ + ห้องที่เปิดอยู่) — เก็บเป็น ref แล้วอัปเดตทุก render
+  // เพื่อให้ handler ของ SSE/poll เรียกเวอร์ชันล่าสุดที่อ้าง selectedSession ปัจจุบันได้เสมอ
+  const autoRefreshRef = useRef<() => void>(() => {});
 
   const loadData = async () => {
     setIsLoading(true);
@@ -87,14 +106,15 @@ export default function ChatSessionsManagement() {
   };
 
   // รีเฟรชทันทีเมื่อมีข้อความลูกค้าเข้ามาจริงๆ (สัญญาณ SSE จาก NotificationBell) แทนการรอ poll
+  // เรียกผ่าน ref เพื่อให้รีเฟรช "ทั้งรายการซ้ายและห้องที่เปิดอยู่" ด้วยข้อมูล selectedSession ล่าสุด
   useEffect(() => {
-    window.addEventListener(NOTIFICATION_STREAM_EVENT, refreshSessionsList);
-    return () => window.removeEventListener(NOTIFICATION_STREAM_EVENT, refreshSessionsList);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handler = () => autoRefreshRef.current();
+    window.addEventListener(NOTIFICATION_STREAM_EVENT, handler);
+    return () => window.removeEventListener(NOTIFICATION_STREAM_EVENT, handler);
   }, []);
 
   // poll สำรองทุก 60 วิ เผื่อ SSE หลุดชั่วคราว — หยุดอัตโนมัติเมื่อแอดมินย่อ/สลับแท็บออกไป
-  useVisibleInterval(refreshSessionsList, 60000);
+  useVisibleInterval(() => autoRefreshRef.current(), 60000);
 
   // บังคับ re-render ทุก 30 วิ เพื่อให้ข้อความ "รอ X นาที" นับเวลาต่อไปเรื่อย ๆ
   // (ไม่ยิง request ใดๆ แค่ re-render ในเครื่อง แต่หยุดตอนแท็บถูกซ่อนไว้ด้วยเพื่อประหยัด CPU)
@@ -161,7 +181,7 @@ export default function ChatSessionsManagement() {
 
   const viewSessionDetails = async (id: number) => {
     try {
-      const data = await autoQaAPI.getChatSessionById(id);
+      const data = await autoQaAPI.getAdminChatSessionById(id);
       setSelectedSession(data);
       markSessionViewed(id);
     } catch (err) {
@@ -174,13 +194,28 @@ export default function ChatSessionsManagement() {
     if (!selectedSession) return;
     setRefreshing(true);
     try {
-      const data = await autoQaAPI.getChatSessionById(selectedSession.id);
+      const data = await autoQaAPI.getAdminChatSessionById(selectedSession.id);
       setSelectedSession(data);
       markSessionViewed(selectedSession.id);
     } catch (err) {
       console.error('Failed to refresh session', err);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  // อัปเดต ref ทุก render ให้ชี้ selectedSession ปัจจุบัน — ใช้ตอนได้สัญญาณ SSE/poll
+  // รีเฟรชทั้งรายการซ้ายและห้องที่เปิดอยู่ (ถ้ามี) แบบเงียบ ๆ ไม่โชว์สปินเนอร์
+  autoRefreshRef.current = () => {
+    refreshSessionsList();
+    if (selectedSession) {
+      autoQaAPI
+        .getAdminChatSessionById(selectedSession.id)
+        .then((data) => {
+          setSelectedSession(data);
+          markSessionViewed(selectedSession.id);
+        })
+        .catch(() => { /* เงียบไว้ ไม่ให้กระทบการใช้งาน */ });
     }
   };
 
@@ -265,7 +300,7 @@ export default function ChatSessionsManagement() {
 
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div className="p-8 text-center text-gray-400 text-sm">กำลังโหลด...</div>
+            <ChatSessionsListSkeleton />
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">
               {search ? 'ไม่พบผลการค้นหา' : 'ยังไม่มีการสนทนา'}
@@ -273,7 +308,7 @@ export default function ChatSessionsManagement() {
           ) : (
             filtered.map((s) => {
               const active = selectedSession?.id === s.id;
-              const { isUnread, isUrgent, waitingMs } = sessionRowMeta(s);
+              const { unreadCount, isUrgent, waitingMs } = sessionRowMeta(s);
               return (
                 <button
                   key={s.id}
@@ -284,24 +319,31 @@ export default function ChatSessionsManagement() {
                 >
                   <div className={`relative w-12 h-12 rounded-full ${avatarColor(s.guest_name)} text-white flex items-center justify-center font-bold text-lg flex-shrink-0`}>
                     {initialOf(s.guest_name)}
+                    {/* จุดสถานะออนไลน์ (เขียว/เทา) มุมล่างขวา */}
                     <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${s.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    {isUnread && (
-                      <span className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${isUrgent ? 'bg-orange-500' : 'bg-[#CC0000]'}`} />
+                    {/* จำนวนข้อความใหม่ที่ยังไม่อ่าน — เป็นตัวเลขมุมบนขวา (แยกจากจุดสถานะสีเขียว) */}
+                    {unreadCount > 0 && (
+                      <span
+                        className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full border-2 border-white text-[10px] font-bold leading-none text-white ${isUrgent ? 'bg-orange-500' : 'bg-[#CC0000]'}`}
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`truncate ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>{s.guest_name}</span>
+                      <span className={`truncate ${unreadCount > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>{s.guest_name}</span>
                       <span className="text-[11px] text-gray-400 flex-shrink-0">{fmtDate(s.created_at)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       <span className="text-xs text-gray-500 truncate">{s.guest_email}</span>
-                      {isUrgent ? (
-                        <span className="text-[10px] font-semibold text-orange-600 flex items-center gap-0.5 flex-shrink-0">
-                          <Clock size={10} /> {formatWaitElapsed(waitingMs)}
-                        </span>
-                      ) : s.status === 'closed' ? (
+                      {s.status === 'closed' ? (
                         <span className="text-[10px] text-gray-400 flex-shrink-0">ปิดแล้ว</span>
+                      ) : waitingMs > 0 ? (
+                        // ข้อความล่าสุดเป็นของลูกค้าที่ยังไม่ได้ตอบ → บอกว่าส่งมานานแค่ไหนแล้ว
+                        <span className={`text-[10px] font-semibold flex items-center gap-0.5 flex-shrink-0 ${isUrgent ? 'text-orange-600' : 'text-gray-400'}`}>
+                          <Clock size={10} /> {formatSentAgo(waitingMs)}
+                        </span>
                       ) : null}
                     </div>
                   </div>

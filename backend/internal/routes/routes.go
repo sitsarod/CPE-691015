@@ -75,7 +75,7 @@ func SetupRoutes(r *gin.Engine) {
 	homeContentService := services.NewHomeContentService(db)
 	homeContentController := controllers.NewHomeContentController(homeContentService)
 
-	autoQAService := services.NewAutoQAService(db)
+	autoQAService := services.NewAutoQAService(db, cloudinaryService)
 	autoQAController := controllers.NewAutoQAController(autoQAService, cloudinaryService)
 
 	consentService := services.NewConsentService(db, cloudinaryService)
@@ -425,11 +425,19 @@ func SetupRoutes(r *gin.Engine) {
 			adminHomeGroup.PATCH("/coaches/:id/feature", homeContentController.SetCoachFeature)
 		}
 
-		api.GET("/announcements", announcementController.GetActiveAnnouncements)
-		api.GET("/announcements/:id", announcementController.GetAnnouncementByID)
+		// OptionalAuth: อ่านตัวตนจาก JWT ถ้ามี เพื่อแยกสิทธิ์ guest/member (ประกาศ visibility=member
+		// ต้องล็อกอินถึงเห็น) — แต่ไม่บังคับล็อกอิน ผู้เยี่ยมชมยังเรียกได้ในฐานะ guest
+		api.GET("/announcements", middlewares.OptionalAuth(db), announcementController.GetActiveAnnouncements)
+		api.GET("/announcements/:id", middlewares.OptionalAuth(db), announcementController.GetAnnouncementByID)
 		api.POST("/announcements/:id/view", announcementController.IncrementViewCount)
 		api.GET("/announcements/categories", announcementController.GetAllCategories)
 		api.GET("/announcements/gallery", announcementController.GetGuestGallery)
+
+		// Bookmark ประกาศ (ผู้ใช้ที่ล็อกอิน) — บันทึกไว้อ่านทีหลัง
+		protected.POST("/announcements/:id/bookmark", announcementController.AddBookmark)
+		protected.DELETE("/announcements/:id/bookmark", announcementController.RemoveBookmark)
+		protected.GET("/me/announcement-bookmarks", announcementController.GetMyBookmarks)
+		protected.GET("/me/announcement-bookmarks/ids", announcementController.GetMyBookmarkIDs)
 
 		adminOnly.GET("/admin/announcements", announcementController.GetAllAnnouncements)
 
@@ -465,6 +473,7 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			protectedAnnouncementGroup.POST("", announcementController.CreateAnnouncement)
 			protectedAnnouncementGroup.PATCH("/:id", announcementController.UpdateAnnouncement)
+			protectedAnnouncementGroup.PATCH("/:id/pin", announcementController.SetPinned)
 			protectedAnnouncementGroup.DELETE("/:id", announcementController.DeleteAnnouncement)
 			protectedAnnouncementGroup.POST("/categories", announcementController.CreateCategory)
 			protectedAnnouncementGroup.PATCH("/categories/:id", announcementController.UpdateCategory)
@@ -472,6 +481,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		adminOnly.GET("/admin/chat-sessions", autoQAController.GetAllChatSessions)
+		adminOnly.GET("/admin/chat-sessions/:id", autoQAController.AdminGetChatSessionByID)
 		adminOnly.PATCH("/admin/chat-sessions/:id", autoQAController.UpdateChatSession)
 		adminOnly.DELETE("/admin/chat-sessions/:id", autoQAController.DeleteChatSession)
 		adminOnly.POST("/admin/chat-sessions/:id/reply", autoQAController.AdminReply)

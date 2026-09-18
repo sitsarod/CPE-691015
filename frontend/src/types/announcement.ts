@@ -29,6 +29,7 @@ export interface Announcement {
   start_date: string;
   end_date: string;
   view_count: number;
+  is_pinned: boolean;
   created_at: string;
   updated_at: string;
 }

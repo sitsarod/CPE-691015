@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { announcementAPI } from '@/services/announcementAPI';
 import { Announcement } from '@/types/announcement';
-import { ArrowLeft, Calendar, Eye, ExternalLink, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Eye, ExternalLink, User, Bookmark, BookmarkCheck } from 'lucide-react';
+import AnnouncementDetailSkeleton from './components/AnnouncementDetailSkeleton';
 
 export default function AnnouncementDetailPage() {
   const params = useParams();
@@ -14,6 +15,24 @@ export default function AnnouncementDetailPage() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
+
+  // สลับบันทึก/ยกเลิกบันทึกประกาศ — อัปเดต UI แบบ optimistic แล้วค่อยยิง API
+  const toggleBookmark = async () => {
+    if (bookmarkBusy || !announcement) return;
+    const next = !bookmarked;
+    setBookmarked(next);
+    setBookmarkBusy(true);
+    try {
+      if (next) await announcementAPI.addBookmark(announcement.id);
+      else await announcementAPI.removeBookmark(announcement.id);
+    } catch {
+      setBookmarked(!next); // ย้อนกลับถ้าล้มเหลว
+    } finally {
+      setBookmarkBusy(false);
+    }
+  };
 
   // ลิงก์ปลอดภัยเฉพาะ http/https — กัน scheme อันตราย (javascript:, data: ฯลฯ) ที่อาจหลุดผ่านมา
   // แม้แบ็กเอนด์จะ validate ไว้แล้ว (defense in depth ฝั่ง client)
@@ -32,6 +51,12 @@ export default function AnnouncementDetailPage() {
         setLoading(true);
         const data = await announcementAPI.getAnnouncementById(id);
         if (active) setAnnouncement(data);
+
+        // เช็กว่าเคยบันทึกประกาศนี้ไว้ไหม (ผู้ใช้ล็อกอินอยู่แล้วในโซน /customer)
+        announcementAPI
+          .getMyBookmarkIds()
+          .then((ids) => { if (active) setBookmarked(ids.includes(id)); })
+          .catch(() => {});
 
         // นับยอดเข้าชมแค่ครั้งแรกต่อเบราว์เซอร์ต่อประกาศ กัน endpoint (ไม่ต้องล็อกอิน) โดนยิงซ้ำ
         // เพื่อปั่นยอดวิว — เก็บรายการ id ที่นับไปแล้วไว้ใน localStorage
@@ -61,11 +86,7 @@ export default function AnnouncementDetailPage() {
   }, [id]);
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-7xl min-h-[60vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CC0000]"></div>
-      </div>
-    );
+    return <AnnouncementDetailSkeleton />;
   }
 
   if (notFound || !announcement) {
@@ -129,6 +150,18 @@ export default function AnnouncementDetailPage() {
             <span className="flex items-center gap-1.5 text-sm text-gray-500 md:ml-auto">
               <Eye size={16} /> {announcement.view_count} ครั้ง
             </span>
+            <button
+              onClick={toggleBookmark}
+              disabled={bookmarkBusy}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                bookmarked
+                  ? 'border-[#CC0000] bg-[#FFF0F0] text-[#CC0000]'
+                  : 'border-gray-300 text-gray-600 hover:border-[#CC0000] hover:text-[#CC0000]'
+              }`}
+            >
+              {bookmarked ? <BookmarkCheck size={16} className="fill-current" /> : <Bookmark size={16} />}
+              {bookmarked ? 'บันทึกแล้ว' : 'บันทึกไว้อ่านทีหลัง'}
+            </button>
           </div>
 
           <h1 className="text-3xl md:text-4xl font-extrabold mb-6 text-gray-900 leading-tight">

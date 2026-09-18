@@ -16,8 +16,14 @@ type AnnouncementDTO struct {
 	StartDate   time.Time    `json:"start_date"`
 	EndDate     time.Time    `json:"end_date"`
 	ViewCount   uint         `json:"view_count"`
+	IsPinned    bool         `json:"is_pinned"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// PinAnnouncementReq สำหรับปักหมุด/ยกเลิกปักหมุดประกาศ (แอดมิน)
+type PinAnnouncementReq struct {
+	Pinned bool `json:"pinned"`
 }
 
 type UserDTO struct {

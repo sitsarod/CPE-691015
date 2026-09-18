@@ -70,7 +70,7 @@ func CORSMiddleware() gin.HandlerFunc {
         }
 
         c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Chat-Token")
         c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
         if c.Request.Method == "OPTIONS" {
@@ -183,6 +183,58 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 
         c.Next()
     }
+}
+
+// OptionalAuth พยายามอ่านตัวตนจาก Bearer token ถ้ามีและถูกต้อง (ตั้ง userID/role ใน context)
+// แต่ "ไม่บังคับ" — ไม่มี token หรือ token ใช้ไม่ได้ ก็ปล่อยผ่านเป็นผู้เยี่ยมชม (guest) ไม่ตอบ 401
+//
+// ใช้กับ endpoint สาธารณะที่ต้องแยกสิทธิ์ guest/member เช่นประกาศที่ตั้ง visibility=member
+// ตรรกะการตรวจ token เหมือน AuthMiddleware ทุกด่าน (type/version/บัญชีถูกลบ) แต่ทุกกรณีที่ไม่ผ่าน
+// จะ "fail เป็น guest" แทนการปฏิเสธ เพื่อไม่ให้ token ที่หมดอายุทำให้หน้าเว็บสาธารณะเปิดไม่ได้
+func OptionalAuth(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if !(len(parts) == 2 && parts[0] == "Bearer") {
+			c.Next()
+			return
+		}
+		claims, err := token.Parse(parts[1])
+		if err != nil {
+			c.Next()
+			return
+		}
+		if t, _ := claims["type"].(string); t != token.TypeAccess {
+			c.Next()
+			return
+		}
+		userID, err := token.UserID(claims)
+		if err != nil {
+			c.Next()
+			return
+		}
+		var current struct{ TokenVersion int }
+		result := db.Model(&models.User{}).
+			Select("token_version").
+			Where("id = ?", userID).
+			Scan(&current)
+		if result.Error != nil || result.RowsAffected == 0 {
+			c.Next()
+			return
+		}
+		if token.Version(claims) != current.TokenVersion {
+			c.Next()
+			return
+		}
+
+		c.Set("userID", claims["user_id"])
+		c.Set("role", claims["role"])
+		c.Next()
+	}
 }
 
 // RequireRole checks if the user's role matches any of the allowed roles.

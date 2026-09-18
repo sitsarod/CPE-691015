@@ -17,6 +17,10 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+// chatTokenHeader สร้าง header แนบกุญแจลับของห้องแชท (ถ้ามี) สำหรับ endpoint สาธารณะที่กัน IDOR
+const chatTokenHeader = (token?: string): Record<string, string> =>
+  token ? { 'X-Chat-Token': token } : {};
+
 export const autoQaAPI = {
   // --- Public Endpoints ---
 
@@ -33,33 +37,45 @@ export const autoQaAPI = {
     return res.data;
   },
 
-  getChatSessionById: async (id: number): Promise<ChatSession> => {
-    const res = await apiFetch<ApiResponse<ChatSession>>(`/chat-sessions/${id}`);
+  // token = กุญแจลับของห้อง (จาก createChatSession) ต้องแนบทุกครั้งเพื่อยืนยันสิทธิ์เข้าถึง (กัน IDOR)
+  getChatSessionById: async (id: number, token?: string): Promise<ChatSession> => {
+    const res = await apiFetch<ApiResponse<ChatSession>>(`/chat-sessions/${id}`, {
+      headers: chatTokenHeader(token),
+    });
     return res.data;
   },
 
-  askQuestion: async (sessionId: number, req: AskQuestionReq): Promise<AskQuestionResponse> => {
+  askQuestion: async (sessionId: number, req: AskQuestionReq, token?: string): Promise<AskQuestionResponse> => {
     const res = await apiFetch<ApiResponse<AskQuestionResponse>>(`/chat-sessions/${sessionId}/ask`, {
       method: 'POST',
+      headers: chatTokenHeader(token),
       body: JSON.stringify(req),
     });
     return res.data;
   },
 
   // ลูกค้าแก้ไขข้อความของตัวเอง
-  editChatMessage: async (sessionId: number, msgId: number, question: string): Promise<AutoQA> => {
+  editChatMessage: async (sessionId: number, msgId: number, question: string, token?: string): Promise<AutoQA> => {
     const res = await apiFetch<ApiResponse<AutoQA>>(`/chat-sessions/${sessionId}/messages/${msgId}`, {
       method: 'PATCH',
+      headers: chatTokenHeader(token),
       body: JSON.stringify({ question }),
     });
     return res.data;
   },
 
   // ลูกค้าลบข้อความของตัวเอง
-  deleteChatMessage: async (sessionId: number, msgId: number): Promise<void> => {
+  deleteChatMessage: async (sessionId: number, msgId: number, token?: string): Promise<void> => {
     await apiFetch<{ message: string }>(`/chat-sessions/${sessionId}/messages/${msgId}`, {
       method: 'DELETE',
+      headers: chatTokenHeader(token),
     });
+  },
+
+  // แอดมินเปิดดูห้องแชท (ยืนยันสิทธิ์ด้วย JWT+role admin ไม่ต้องมี token ของห้อง)
+  getAdminChatSessionById: async (id: number): Promise<ChatSession> => {
+    const res = await apiFetch<ApiResponse<ChatSession>>(`/admin/chat-sessions/${id}`);
+    return res.data;
   },
 
   // --- Admin Endpoints ---
