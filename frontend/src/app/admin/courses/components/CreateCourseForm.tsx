@@ -16,6 +16,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
   const [description, setDescription] = useState("");
   const [learningOutcomes, setLearningOutcomes] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [status, setStatus] = useState("draft");
   const [packages, setPackages] = useState<PackageFormInput[]>([
     { id: Date.now().toString(), sessions_count: "", hours_count: "", max_seats: "", price: "", duration_days: "", schedules: [] }
   ]);
@@ -63,7 +64,7 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
       const newCourse = await createCourse({
         course_name: courseName,
         description: description,
-        status: "active",
+        status: status,
         image_url: imageUrl,
         learning_outcomes: learningOutcomes
           .split("\n")
@@ -139,6 +140,18 @@ export default function CreateCourseForm({ onSuccess }: { onSuccess: () => void 
           </div>
 
           <CourseImageField value={imageUrl} onChange={setImageUrl} />
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">สถานะ</label>
+            <select
+              value={status} onChange={(e) => setStatus(e.target.value)}
+              className="w-full md:w-1/3 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none"
+            >
+              <option value="draft">ฉบับร่าง (Draft)</option>
+              <option value="active">เปิดสอน (Active)</option>
+              <option value="inactive">ปิดชั่วคราว (Inactive)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">ฉบับร่างจะยังไม่แสดงบนหน้าเว็บไซต์ จนกว่าจะเปลี่ยนเป็นเปิดสอน</p>
+          </div>
         </div>
       </div>
 

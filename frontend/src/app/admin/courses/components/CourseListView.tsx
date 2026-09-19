@@ -1,13 +1,24 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2 } from "lucide-react"; 
+import { Clock, Calendar, Loader2, BookOpen, Edit, MoreVertical, Trash2, CheckCircle, FileEdit, EyeOff } from "lucide-react"; 
 import { fetchAllCoursesAdmin, deleteCourse } from "@/services/courseAPI";
 import { CourseDTO ,CoursePackageDTO , PackageScheduleInfoDTO} from "@/types/course";
 import CourseCover from "@/components/course/CourseCover";
 
 import { useGlobalToast } from "@/components/ToastProvider";
 import { useConfirm } from "@/components/ConfirmProvider";
+function CourseStatusBadge({ status }: { status?: string }) {
+  const base = "inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold shrink-0";
+
+  if (status === "draft")
+    return <span className={`${base} bg-amber-100 text-amber-800`}><FileEdit className="w-3 h-3 mr-1" /> ฉบับร่าง</span>;
+  if (status === "inactive")
+    return <span className={`${base} bg-slate-100 text-slate-700`}><EyeOff className="w-3 h-3 mr-1" /> ปิดชั่วคราว</span>;
+
+  return <span className={`${base} bg-green-100 text-green-800`}><CheckCircle className="w-3 h-3 mr-1" /> เปิดสอน</span>;
+}
+
 export default function CourseListView({ onEdit }: { onEdit?: (id: number) => void }) { 
   const showToast = useGlobalToast();
   const confirmAction = useConfirm();
@@ -71,7 +82,10 @@ export default function CourseListView({ onEdit }: { onEdit?: (id: number) => vo
                 <BookOpen className="w-6 h-6 text-[#CC0000] mr-3 shrink-0" />
               )}
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-gray-900">{course.course_name}</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xl font-bold text-gray-900">{course.course_name}</h3>
+                  <CourseStatusBadge status={course.status} />
+                </div>
                 <p className="text-sm text-gray-500 line-clamp-1">{course.description}</p>
               </div>
             </div>

@@ -242,9 +242,11 @@ export default function EditCourseForm({ courseId, onSuccess, onCancel }: { cour
               value={status} onChange={(e) => setStatus(e.target.value)}
               className="w-full md:w-1/3 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-200 focus:border-[#CC0000] outline-none"
             >
+              <option value="draft">ฉบับร่าง (Draft)</option>
               <option value="active">เปิดสอน (Active)</option>
               <option value="inactive">ปิดชั่วคราว (Inactive)</option>
             </select>
+            <p className="mt-1 text-xs text-gray-500">ฉบับร่างจะยังไม่แสดงบนหน้าเว็บไซต์ จนกว่าจะเปลี่ยนเป็นเปิดสอน</p>
           </div>
         </div>
       </div>
