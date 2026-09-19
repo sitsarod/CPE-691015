@@ -20,7 +20,7 @@ var defaultBillingTypes = []models.BillingType{
 	{Model: gorm.Model{ID: 1}, BillingTypeName: billingTypeCourseFee},
 	{Model: gorm.Model{ID: 2}, BillingTypeName: billingTypeCourtFee},
 	{Model: gorm.Model{ID: 3}, BillingTypeName: "ค่าอุปกรณ์"},
-	{Model: gorm.Model{ID: 4}, BillingTypeName: "ค่าสมาชิก"},
+	{Model: gorm.Model{ID: 4}, BillingTypeName: "ค่าพาไปแข่งขัน"},
 	{Model: gorm.Model{ID: 5}, BillingTypeName: "อื่นๆ"},
 }
 
