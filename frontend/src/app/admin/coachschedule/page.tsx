@@ -172,7 +172,6 @@ export default function CoachSchedulePage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-2.5">
-            <CalendarDays className="h-6 w-6 text-[#CC0000]" />
             จัดตารางสอน
           </h1>
           <p className="mt-1 text-sm text-gray-500">คลิกที่คาบเรียนเพื่อมอบหมายว่าโค้ชคนไหนเป็นผู้สอน (แสดงเฉพาะคอร์สที่มีนักเรียนกำลังเรียน)</p>

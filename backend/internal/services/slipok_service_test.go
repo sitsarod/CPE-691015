@@ -98,19 +98,25 @@ func TestVerifySlipApiRejection(t *testing.T) {
 
 func TestMatchesBankAccount(t *testing.T) {
 	cases := []struct {
-		name     string
-		account  string
-		proxy    string
-		expected string
-		want     bool
+		name      string
+		account   string
+		proxy     string
+		accountNo string
+		promptPay string
+		want      bool
 	}{
-		{"masked tail matches full account", "xxx-x-x1234-x", "", "0123456781234", true},
-		{"masked tail matches short account", "xxxx1234", "", "1234", true},
-		{"different tail digits", "xxx-x-x9999-x", "", "0123456781234", false},
-		{"empty account falls back to proxy", "", "xxx-xxx-x789", "0123456789", true},
-		{"empty account and proxy trust SlipOK's own validation", "", "", "0123456781234", true},
-		{"empty expected account never matches", "xxx-x-x1234-x", "", "", false},
-		{"exact match no masking", "0123456781234", "", "0123456781234", true},
+		{"masked tail matches full account", "xxx-x-x1234-x", "", "0123456781234", "", true},
+		{"masked tail matches short account", "xxxx1234", "", "1234", "", true},
+		{"different tail digits", "xxx-x-x9999-x", "", "0123456781234", "", false},
+		{"empty account falls back to proxy", "", "xxx-xxx-x789", "0123456789", "", true},
+		{"empty account and proxy trust SlipOK's own validation", "", "", "0123456781234", "", true},
+		{"empty expected identifiers never match", "xxx-x-x1234-x", "", "", "", false},
+		{"exact match no masking", "0123456781234", "", "0123456781234", "", true},
+		// พร้อมเพย์: SlipOK คืนค่ามาใน proxy (โชว์ท้าย) ต้องเทียบกับ PromptPayID ไม่ใช่เลขบัญชี
+		{"promptpay proxy matches promptpay id not account", "", "XXXXXXXXX6371", "4812740589", "0898766371", true},
+		{"promptpay proxy matches national id promptpay", "", "XXXXXXXXX6371", "4812740589", "1103700126371", true},
+		{"promptpay proxy matches neither identifier", "", "XXXXXXXXX9999", "4812740589", "0898766371", false},
+		{"promptpay id ignored when account matches", "1234", "", "1234", "0898766371", true},
 	}
 
 	for _, c := range cases {
@@ -119,9 +125,9 @@ func TestMatchesBankAccount(t *testing.T) {
 				Account: SlipOkReceiverAccount{Value: c.account},
 				Proxy:   SlipOkReceiverAccount{Value: c.proxy},
 			}}
-			got := MatchesBankAccount(data, c.expected)
+			got := MatchesBankAccount(data, c.accountNo, c.promptPay)
 			if got != c.want {
-				t.Errorf("MatchesBankAccount(account=%q, proxy=%q, %q) = %v, want %v", c.account, c.proxy, c.expected, got, c.want)
+				t.Errorf("MatchesBankAccount(account=%q, proxy=%q, accountNo=%q, promptPay=%q) = %v, want %v", c.account, c.proxy, c.accountNo, c.promptPay, got, c.want)
 			}
 		})
 	}

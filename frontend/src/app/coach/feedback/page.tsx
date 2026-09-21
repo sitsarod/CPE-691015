@@ -103,7 +103,7 @@ export default function CoachFeedbackPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">รีวิวของฉัน (Reviews)</h1>
+        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">รีวิวของฉัน</h1>
         <p className="text-sm text-slate-500 mt-1">
           ความคิดเห็นและคะแนนจากลูกค้าที่รีวิวถึงคุณ — ใช้เป็นแนวทางในการพัฒนาการสอน
         </p>

@@ -364,10 +364,10 @@ func (s *PaymentService) autoVerifySlip(invoiceID uint, slipURL string, account 
 		return
 	}
 
-	if !MatchesBankAccount(data, activeAccount.AccountNo) {
+	if !MatchesBankAccount(data, activeAccount.AccountNo, activeAccount.PromptPayID) {
 		s.recordSlipOk(invoiceID, false, "ยอดโอนถูกต้อง แต่บัญชีปลายทางบนสลิปไม่ตรงกับบัญชีรับเงินของสถาบัน")
-		log.Printf("[SlipOK] invoice #%d: ผู้รับปลายทางไม่ตรงกัน (account=%q, proxy=%q, บัญชีในระบบ=%q)",
-			invoiceID, data.Receiver.Account.Value, data.Receiver.Proxy.Value, activeAccount.AccountNo)
+		log.Printf("[SlipOK] invoice #%d: ผู้รับปลายทางไม่ตรงกัน (account=%q, proxy=%q, บัญชีในระบบ=%q, พร้อมเพย์=%q)",
+			invoiceID, data.Receiver.Account.Value, data.Receiver.Proxy.Value, activeAccount.AccountNo, activeAccount.PromptPayID)
 		return
 	}
 

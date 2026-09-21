@@ -98,9 +98,6 @@ export default function CustomerAttendancePage() {
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-4 sm:px-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[#CC0000]">
-            <History className="h-5 w-5" />
-          </span>
           <h1 className="text-base font-bold text-gray-900 sm:text-lg">ประวัติการเข้าเรียน</h1>
         </div>
 

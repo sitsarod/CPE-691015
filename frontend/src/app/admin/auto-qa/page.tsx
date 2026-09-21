@@ -146,7 +146,6 @@ export default function AutoQAManagement() {
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl">
-              <MessageCircleQuestion className="text-[#CC0000]" size={24} />
               จัดการคลังข้อมูล Q&amp;A
             </h1>
             <p className="mt-1 text-sm text-gray-500">

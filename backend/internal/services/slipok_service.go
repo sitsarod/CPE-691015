@@ -150,23 +150,40 @@ func (s *SlipOkService) VerifySlip(slipURL string, expectedAmount float64) (*Sli
 }
 
 // MatchesBankAccount ตรวจว่าผู้รับปลายทางที่ SlipOK ส่งกลับ (เลขบัญชี หรือพร้อมเพย์ proxy ที่ถูก mask บางส่วน)
-// ตรงกับบัญชีที่ระบบตั้งไว้หรือไม่ โดยเทียบจากชุดตัวเลขที่มองเห็นได้เท่านั้น
+// ตรงกับ "ตัวระบุบัญชีรับเงิน" ตัวใดตัวหนึ่งของสถาบันหรือไม่ — ส่งได้ทั้งเลขบัญชีธนาคารและพร้อมเพย์ไอดี
+// เพราะกรณีโอนผ่านพร้อมเพย์ SlipOK จะคืนค่ามาใน proxy (เบอร์/เลข ปชช.) ไม่ใช่เลขบัญชี ต้องเทียบกับพร้อมเพย์ไอดีด้วย
+// เทียบจากชุดตัวเลขที่มองเห็นได้เท่านั้น และถือว่าผ่านถ้าตรงกับตัวระบุใดตัวหนึ่ง
 // ถ้า SlipOK ไม่คืนทั้งเลขบัญชีและ proxy มาเลย (พบได้กับบางธนาคาร/บาง proxy type) จะเชื่อผลตรวจของ SlipOK เอง
 // เพราะตอนเรียกได้ส่ง log=true ไปแล้ว ซึ่ง SlipOK จะตรวจกับบัญชีที่ผูกไว้ในระบบ SlipOK ให้อยู่แล้ว
-func MatchesBankAccount(data *SlipOkData, expectedAccountNo string) bool {
-	expectedDigits := digitsOnly(expectedAccountNo)
-	if expectedDigits == "" {
+func MatchesBankAccount(data *SlipOkData, expectedIdentifiers ...string) bool {
+	expected := make([]string, 0, len(expectedIdentifiers))
+	for _, id := range expectedIdentifiers {
+		if d := digitsOnly(id); d != "" {
+			expected = append(expected, d)
+		}
+	}
+	if len(expected) == 0 {
 		return false
 	}
 
 	if accountDigits := digitsOnly(data.Receiver.Account.Value); accountDigits != "" {
-		return digitsSuffixMatch(accountDigits, expectedDigits)
+		return matchesAnyIdentifier(accountDigits, expected)
 	}
 	if proxyDigits := digitsOnly(data.Receiver.Proxy.Value); proxyDigits != "" {
-		return digitsSuffixMatch(proxyDigits, expectedDigits)
+		return matchesAnyIdentifier(proxyDigits, expected)
 	}
 
 	return true
+}
+
+// matchesAnyIdentifier คืน true ถ้าเลขที่เห็นบนสลิป (actual) ตรงแบบ suffix กับตัวระบุใดตัวหนึ่งที่ตั้งไว้
+func matchesAnyIdentifier(actual string, expected []string) bool {
+	for _, e := range expected {
+		if digitsSuffixMatch(actual, e) {
+			return true
+		}
+	}
+	return false
 }
 
 func digitsSuffixMatch(a, b string) bool {

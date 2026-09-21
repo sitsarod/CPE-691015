@@ -37,7 +37,7 @@ export function AdminReviewsDesktop({ manager }: { manager: AdminReviews }) {
 
       <div className="mb-8">
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-          รีวิวและข้อเสนอแนะ (Reviews)
+          รีวิวและข้อเสนอแนะ
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           รีวิวคอร์ส โค้ช สถานที่ บริการ และข้อเสนอแนะอื่นๆ จากลูกค้าที่ลงทะเบียนเรียน —
