@@ -5,14 +5,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Calendar, Clock, Wallet, UserCircle, Camera, ListTodo, Star, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 
+// เรียงตามความถี่ที่โค้ชใช้จริง: ตารางงานเช็คบ่อยสุด ตามด้วยงานหลังคาบสอน (ประเมิน/จำแนกผู้เรียน)
+// เวลาว่างตั้งเป็นครั้งคราว การเงินสำคัญแต่เช็คไม่บ่อย ย้ายขึ้นจากท้ายสุด (เดิมอยู่หลังรีวิวซึ่งสำคัญน้อยกว่า)
 const navItems = [
   { href: "/coach/dashboard", icon: <Home />, label: "หน้าแรก" },
   { href: "/coach/schedule", icon: <Calendar />, label: "ตารางงาน" },
-  { href: "/coach/availability", icon: <Clock />, label: "เวลาว่าง" },
   { href: "/coach/evalution", icon: <ListTodo />, label: "ประเมินผู้เรียน" },
   { href: "/coach/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
-  { href: "/coach/feedback", icon: <Star />, label: "รีวิวของฉัน" },
+  { href: "/coach/availability", icon: <Clock />, label: "เวลาว่าง" },
   { href: "/coach/payment", icon: <Wallet />, label: "การเงิน" },
+  { href: "/coach/feedback", icon: <Star />, label: "รีวิวของฉัน" },
 ];
 
 // Mobile bottom bar: 4 primary icons + a "more" button that opens a full-screen menu

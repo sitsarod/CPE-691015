@@ -7,17 +7,16 @@ import { Home, Wallet, ClipboardList, UserRoundCheck, MessageSquareMore, Megapho
 
 const navItems = [
   { href: "/admin/dashboard", icon: <Home />, label: "หน้าแรก" },
-  { href: "/admin/payment", icon: <Wallet />, label: "การเงิน" },
-  { href: "/admin/courses", icon: <ClipboardList />, label: "จัดการข้อมูลคอร์ส" },
   { href: "/admin/attendance", icon: <UserRoundCheck />, label: "เช็คชื่อ" },
+  { href: "/admin/enrollments", icon: <Book />, label: "การลงทะเบียนเรียน" },
+  { href: "/admin/payment", icon: <Wallet />, label: "การเงิน" },
+  { href: "/admin/coachschedule", icon: <CalendarClock />, label: "จัดตารางสอน" },
+  { href: "/admin/courses", icon: <ClipboardList />, label: "จัดการข้อมูลคอร์ส" },
+  { href: "/admin/members", icon: <BookUser />, label: "จัดการสมาชิก" },
   { href: "/admin/face-review", icon: <ScanFace />, label: "ตรวจสอบรูปใบหน้า" },
   { href: "/admin/detect", icon: <Camera />, label: "จำแนกผู้เรียน" },
-  { href: "/admin/feedback", icon: <MessageSquareMore />, label: "คำติชม" },
   { href: "/admin/announcements", icon: <Megaphone />, label: "ประกาศข่าวสาร" },
-  { href: "/admin/members", icon: <BookUser />, label: "จัดการสมาชิก" },
-  { href: "/admin/coachschedule", icon: <CalendarClock />, label: "จัดตารางสอน" },
-  { href: "/admin/enrollments", icon: <Book />, label: "การลงทะเบียนเรียน" },
-  // "จัดการแชท (Chat Sessions)" ย้ายไปเปิดจากปุ่ม "สอบถาม" มุมขวาบนของ AdminTopBar แล้ว
+  { href: "/admin/feedback", icon: <MessageSquareMore />, label: "คำติชม" },
   { href: "/admin/auto-qa", icon: <ListChecks />, label: "จัดการ Q&A" },
 ];
 

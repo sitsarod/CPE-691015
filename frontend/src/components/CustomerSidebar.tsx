@@ -6,13 +6,15 @@ import { usePathname } from "next/navigation";
 import { Home, Wallet, ClipboardList, Calendar, History, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
 import { getUserProfileAPI } from "@/services/userAPI";
 
+// เรียงตามความถี่ที่นักเรียนเช็คจริง: ตารางเรียน/คอร์สของฉันเช็คบ่อยสุด (คาบต่อไปเมื่อไหร่ เหลือกี่ครั้ง)
+// รองลงมาคือประวัติ/การเงินที่เช็คเป็นครั้งคราว ส่วนรีวิวเช็คน้อยสุด
 const navItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
   { href: "/customer/overview", icon: <LayoutDashboard />, label: "แดชบอร์ด" },
-  { href: "/customer/payment", icon: <Wallet />, label: "การเงิน" },
-  { href: "/customer/enrollment", icon: <ClipboardList />, label: "คอร์สของฉัน" },
   { href: "/customer/schedule", icon: <Calendar />, label: "ตารางเรียน" },
+  { href: "/customer/enrollment", icon: <ClipboardList />, label: "คอร์สของฉัน" },
   { href: "/customer/attendance", icon: <History />, label: "ประวัติเข้าเรียน" },
+  { href: "/customer/payment", icon: <Wallet />, label: "การเงิน" },
   { href: "/customer/feedback", icon: <StarCheck />, label: "รีวิวของฉัน" },
 ];
 
