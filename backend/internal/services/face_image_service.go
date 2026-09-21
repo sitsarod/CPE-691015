@@ -175,6 +175,8 @@ func (s *FaceImageService) Upload(userID uint, pose models.FacePose, file io.Rea
 		return nil, errors.New("ไม่สามารถบันทึกข้อมูลรูปใบหน้าได้")
 	}
 
+	NotifyFaceImageQueued()
+
 	return &image, nil
 }
 

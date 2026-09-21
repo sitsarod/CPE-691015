@@ -174,6 +174,61 @@ func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 	return closed, nil
 }
 
+const (
+	// ⚠️ ตาข่ายกันพลาดตอนไม่มีรอบเปิดอยู่ ต้องยาวกว่าหน้าต่าง autosuspend ของ Neon เสมอ
+	autoCloseIdleInterval = time.Hour
+
+	// ถึงกำหนดแล้วแต่ปิดไม่สำเร็จ — ห้ามวนทันที ไม่งั้นกลายเป็น hot loop ยิงฐานไม่หยุด
+	autoCloseRetryWait = 5 * time.Minute
+)
+
+// attendanceSessionOpened คือสัญญาณปลุกงานปิดรอบเมื่อแอดมินเพิ่งเปิดรอบใหม่
+var attendanceSessionOpened = make(chan struct{}, 1)
+
+// NotifyAttendanceSessionOpened ให้งานปิดรอบไปคำนวณจังหวะตื่นใหม่ตามคาบที่เพิ่งเปิด
+func NotifyAttendanceSessionOpened() {
+	select {
+	case attendanceSessionOpened <- struct{}{}:
+	default:
+	}
+}
+
+// WaitForAttendanceSessionOpened คืน channel ที่ส่งสัญญาณเมื่อมีรอบใหม่ถูกเปิด
+func WaitForAttendanceSessionOpened() <-chan struct{} {
+	return attendanceSessionOpened
+}
+
+// NextAutoCloseWait คืนเวลารอจนถึงกำหนดปิดของคาบที่ใกล้ที่สุด ไม่มีรอบเปิดอยู่ก็นอนยาว
+func (s *AttendanceService) NextAutoCloseWait() time.Duration {
+	var sessions []models.AttendanceSession
+	if err := s.db.Where("status = ?", models.AttendanceSessionOpen).
+		Find(&sessions).Error; err != nil {
+		return autoCloseIdleInterval
+	}
+	if len(sessions) == 0 {
+		return autoCloseIdleInterval
+	}
+
+	now := nowLocal()
+	earliest := now.Add(autoCloseIdleInterval)
+	for i := range sessions {
+		deadline, ok := sessionScanDeadline(&sessions[i])
+		if !ok {
+			// อ่านเวลาคาบไม่ได้ — isStaleSession ใช้เกณฑ์ "ข้ามวันแล้วหรือยัง" แทน
+			deadline = startOfLocalDay(now).Add(24 * time.Hour)
+		}
+		if deadline.Before(earliest) {
+			earliest = deadline
+		}
+	}
+
+	// ถึงกำหนดแล้วแต่ยังอยู่ในรายการ = รอบนี้เพิ่งปิดไม่สำเร็จ
+	if wait := time.Until(earliest); wait > 0 {
+		return min(wait, autoCloseIdleInterval)
+	}
+	return autoCloseRetryWait
+}
+
 // isStaleSession บอกว่ารอบนี้เลยเวลาจนควรถูกปิดอัตโนมัติแล้วหรือยัง
 func isStaleSession(session *models.AttendanceSession, now time.Time) bool {
 	if deadline, ok := sessionScanDeadline(session); ok {

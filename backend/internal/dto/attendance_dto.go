@@ -89,6 +89,9 @@ type AttendanceSessionDTO struct {
 	// แต่สแกนไม่ได้ ถ้าหน้าเว็บดูแค่ Status จะโชว์กล้องให้ยิงแล้วเจอ error ทุกครั้ง
 	CanScan bool `json:"can_scan"`
 
+	// FaceScanReady = รอบนี้มีใบหน้าที่พร้อมเทียบอยู่จริงไหม — false แล้วหน้าเว็บต้องไม่ส่งเฟรม
+	FaceScanReady bool `json:"face_scan_ready"`
+
 	// แพ็กเกจที่เรียนอยู่ในคาบนี้ — เรียง id จากน้อยไปมาก
 	Packages []ClassPackageDTO `json:"packages"`
 

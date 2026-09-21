@@ -201,6 +201,8 @@ func (s *AttendanceService) OpenSession(packageID uint, adminUserID uint) (*dto.
 		return nil, errors.New("ไม่สามารถเปิดรอบเช็คชื่อได้")
 	}
 
+	NotifyAttendanceSessionOpened()
+
 	return s.GetSession(session.ID)
 }
 
@@ -240,6 +242,7 @@ func (s *AttendanceService) GetSession(sessionID uint) (*dto.AttendanceSessionDT
 		ScheduleStartTime: session.ScheduleStartTime,
 		ScheduleEndTime:   session.ScheduleEndTime,
 		CanScan:           canScanNow(&session, nowLocal()),
+		FaceScanReady:     s.FaceScanReady(s.db, &session),
 		Packages:          classPackages,
 		Roster:            roster,
 		WalkInCandidates:  walkInCandidates,

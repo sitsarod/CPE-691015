@@ -85,6 +85,51 @@ func (s *AttendanceService) analyzeFace(image []byte) (string, error) {
 	return models.FormatEmbedding(res.Embedding), nil
 }
 
+// FaceScanReady บอกว่ารอบนี้มีใบหน้าให้เทียบอยู่จริงไหม
+//
+// ⚠️ กลุ่มผู้สมัครต้องตรงกับ matchFaceSubject เป๊ะ ๆ ไม่งั้นจะตอบ true ทั้งที่ไม่มีใครให้แมตช์
+func (s *AttendanceService) FaceScanReady(tx *gorm.DB, session *models.AttendanceSession) bool {
+	if s.faceEngine == nil || !s.faceEngine.Enabled() {
+		return false
+	}
+
+	packageIDs, err := s.siblingPackageIDs(tx, session)
+	if err != nil {
+		return false
+	}
+
+	var hit []int
+	if err := tx.Raw(`
+		SELECT 1
+		FROM face_images fi
+		JOIN enrollments e ON e.customer_id = fi.customer_id
+		WHERE fi.status = ?
+		  AND fi.embedding IS NOT NULL
+		  AND e.package_id IN ?
+		  AND e.status = ?
+		  AND e.deleted_at IS NULL
+
+		UNION ALL
+
+		SELECT 1
+		FROM face_images fi
+		JOIN coaches c ON c.id = fi.coach_id
+		WHERE fi.status = ?
+		  AND fi.embedding IS NOT NULL
+		  AND c.status = ?
+		  AND c.deleted_at IS NULL
+
+		LIMIT 1
+	`,
+		models.FaceImageReady, packageIDs, models.EnrollmentStatusActive,
+		models.FaceImageReady, coachStatusActive,
+	).Scan(&hit).Error; err != nil {
+		return false
+	}
+
+	return len(hit) > 0
+}
+
 // faceCandidate คือหนึ่งอันดับจากการค้นหา
 //
 // ⚠️ จัดกลุ่มตาม "คน" ไม่ใช่ตาม enrollment เพราะคนหนึ่งคนมี enrollment ที่ active
