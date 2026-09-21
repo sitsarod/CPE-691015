@@ -18,7 +18,7 @@ import (
 func newErasureTestDB(t *testing.T) *gorm.DB {
 	return newTestDB(t,
 		&models.User{}, &models.Coach{}, &models.Customer{},
-		&models.Photo{}, &models.FaceImage{},
+		&models.FaceImage{},
 		&models.CoachAvailability{}, &models.WorkSchedule{},
 		&models.CoachAttendance{}, &models.BiometricConsent{},
 	)

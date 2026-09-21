@@ -8,12 +8,12 @@ import (
 
 // เทสนี้คุมช่องโหว่ที่เจอ: ตอนนักเรียนถอนความยินยอมเก็บข้อมูลใบหน้า ระบบต้องลบ
 // "หลักฐานว่าเคยถูกจำแนกใบหน้า" (DetectedVideo/DetectedPhoto) ของนักเรียนคนนั้นออกด้วย
-// ไม่ใช่ลบแค่ Photo (รูปยินยอมอ้างอิง) เฉย ๆ — ส่วน RawVideo/RawPhoto (ไฟล์ต้นฉบับ)
+// ไม่ใช่ลบแค่ FaceImage (รูปยินยอมอ้างอิง) เฉย ๆ — ส่วน RawVideo/RawPhoto (ไฟล์ต้นฉบับ)
 // ต้องไม่ถูกลบ เพราะอาจมีนักเรียนคนอื่นที่ยังยินยอมอยู่ถูกแท็กอยู่ในสื่อชิ้นเดียวกันด้วย
 func TestWithdrawCascadesDeleteDetectionLinksButKeepsRawMedia(t *testing.T) {
 	db := newTestDB(t,
 		&models.User{}, &models.Customer{}, &models.BiometricConsent{},
-		&models.Photo{}, &models.RawVideo{}, &models.DetectedVideo{},
+		&models.RawVideo{}, &models.DetectedVideo{},
 		&models.RawPhoto{}, &models.DetectedPhoto{}, &models.FaceImage{},
 	)
 

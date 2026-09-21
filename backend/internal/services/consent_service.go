@@ -247,33 +247,26 @@ func (s *ConsentService) Withdraw(userID uint, meta ConsentMeta) (*dto.FaceConse
 	// ต้องอยู่ใน transaction เดียวกันเพราะถ้าแยกกันแล้วอันหลังพลาด จะเกิดกรณี
 	// "บันทึกว่าถอนแล้ว แต่ข้อมูลใบหน้ายังอยู่" ซึ่งคือการเก็บข้อมูลชีวภาพ
 	// โดยไม่มีฐานความยินยอมรองรับ — ผิดตรงกับที่ประกาศไว้กับผู้ใช้พอดี
-	photoFiles, faceKeys, err := s.withdrawAndDeletePhotos(subject, userID, meta)
+	faceKeys, err := s.withdrawAndDeleteFaceImages(subject, userID, meta)
 	if err != nil {
 		return nil, err
 	}
 
-	// ลบไฟล์จริงหลัง commit เท่านั้น (ดูเหตุผลที่ RemovePhotoFiles)
-	RemovePhotoFiles(photoFiles)
+	// ลบไฟล์จริงหลัง commit เท่านั้น
 	DestroyFaceImageFiles(s.faceStorage, faceKeys)
 
 	return s.GetStatus(userID)
 }
 
-// withdrawAndDeletePhotos เขียนแถวถอนความยินยอม + ลบภาพใบหน้า ในทรานแซกชันเดียว
+// withdrawAndDeleteFaceImages เขียนแถวถอนความยินยอม + ลบภาพใบหน้า ในทรานแซกชันเดียว
 //
-// คืนรายการ URL ของไฟล์ที่ต้องลบตามหลัง commit
+// คืนรายการ StorageKey บน Cloudinary ที่ต้องลบตามหลัง commit
 //
 // ⚠️ นักเรียนที่ถอนความยินยอมแล้ว ต้องไม่เหลือ "หลักฐานว่าเคยถูกจำแนกใบหน้า" ค้างอยู่ด้วย
 // จึงต้องลบ DetectedVideo/DetectedPhoto (แถวที่บอกว่า "นักเรียนคนนี้อยู่ในวิดีโอ/รูปไหนบ้าง")
 // ของนักเรียนคนนั้นออกไปพร้อมกันในทรานแซกชันเดียวกัน — ไม่ลบ RawVideo/RawPhoto (ไฟล์ต้นฉบับ)
 // เอง เพราะอาจมีนักเรียนคนอื่นที่ยังยินยอมอยู่ถูกแท็กอยู่ในสื่อชิ้นเดียวกันด้วย
-//
-// ใช้ Unscoped() (ลบจริง ไม่ใช่ soft delete) ด้วยเหตุผลเดียวกับ Photo — แถวนี้คือ
-// หลักฐานผลลัพธ์การจำแนกใบหน้า นับเป็นข้อมูลชีวภาพเช่นกัน
-// คืนสองรายการที่ต้องเอาไปลบ "หลัง commit": URL ของไฟล์ในเครื่อง (ตาราง photos)
-// และ StorageKey บน Cloudinary (ตาราง face_images)
-func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, []string, error) {
-	var photoFiles []string
+func (s *ConsentService) withdrawAndDeleteFaceImages(subject *consentSubject, actorUserID uint, meta ConsentMeta) ([]string, error) {
 	var faceKeys []string
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -281,44 +274,29 @@ func (s *ConsentService) withdrawAndDeletePhotos(subject *consentSubject, actorU
 			return err
 		}
 
-		var files []string
 		var err error
 		if subject.CoachID != nil {
-			files, err = DeleteCoachPhotos(tx, *subject.CoachID)
-			// รูปใบหน้าของโค้ชต้องหายด้วย — DeleteCoachPhotos แตะแค่ตาราง photos
-			// (ระบบรูปตัวเก่า) ถ้าไม่ลบตรงนี้จะเกิด "ถอนแล้วแต่ระบบยังจำหน้าได้"
-			if err == nil {
-				faceKeys, err = DeleteCoachFaceImages(tx, *subject.CoachID)
-			}
+			faceKeys, err = DeleteCoachFaceImages(tx, *subject.CoachID)
 		} else {
-			files, err = DeleteCustomerPhotos(tx, *subject.CustomerID)
-			if err == nil {
-				err = deleteFaceDetectionLinks(tx, *subject.CustomerID)
-			}
-			// รูปใบหน้าที่ใช้เช็คชื่อ — ต้องหายในทรานแซกชันเดียวกัน
-			// ไม่งั้นเกิดกรณี "บันทึกว่าถอนแล้ว แต่ระบบยังจำหน้าได้อยู่"
-			//
-			// TODO (เฟส D): เคลียร์ snapshot ที่ถ่ายตอนเช็คชื่อด้วย ตอนนี้ยังไม่มี
-			// คอลัมน์ student_attendances.snapshot_key ให้เคลียร์ (แผนข้อ 3.3/8.3)
-			if err == nil {
+			if err = deleteFaceDetectionLinks(tx, *subject.CustomerID); err == nil {
+				// รูปใบหน้าที่ใช้เช็คชื่อ — ต้องหายในทรานแซกชันเดียวกัน
+				// ไม่งั้นเกิดกรณี "บันทึกว่าถอนแล้ว แต่ระบบยังจำหน้าได้อยู่"
+				//
+				// TODO (เฟส D): เคลียร์ snapshot ที่ถ่ายตอนเช็คชื่อด้วย ตอนนี้ยังไม่มี
+				// คอลัมน์ student_attendances.snapshot_key ให้เคลียร์ (แผนข้อ 3.3/8.3)
 				faceKeys, err = DeleteCustomerFaceImages(tx, *subject.CustomerID)
 			}
 		}
-		if err != nil {
-			return err
-		}
-
-		photoFiles = files
-		return nil
+		return err
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return photoFiles, faceKeys, nil
+	return faceKeys, nil
 }
 
 // deleteFaceDetectionLinks ลบแถว DetectedVideo/DetectedPhoto ของนักเรียนคนนี้ทั้งหมด
-// (ตัวไฟล์ RawVideo/RawPhoto ไม่ถูกลบ — ดูเหตุผลในคอมเมนต์ของ withdrawAndDeletePhotos)
+// (ตัวไฟล์ RawVideo/RawPhoto ไม่ถูกลบ — ดูเหตุผลในคอมเมนต์ของ withdrawAndDeleteFaceImages)
 func deleteFaceDetectionLinks(tx *gorm.DB, customerID uint) error {
 	if err := tx.Unscoped().Where("customer_id = ?", customerID).Delete(&models.DetectedVideo{}).Error; err != nil {
 		return errors.New("ไม่สามารถลบประวัติวิดีโอที่เคยตรวจพบใบหน้าได้")

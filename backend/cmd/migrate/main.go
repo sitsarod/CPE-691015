@@ -49,7 +49,6 @@ func main() {
 		&models.Coach{},
 		&models.Product{},
 		&models.Customer{},
-		&models.Photo{},
 		&models.FaceImage{},
 		&models.Evaluation{},
 		&models.Review{},
@@ -186,12 +185,7 @@ func main() {
 		log.Fatalf("เติมอัตราค่าจ้างย้อนหลังให้ตารางงานไม่สำเร็จ: %v", err)
 	}
 
-	// AutoMigrate เพิ่มคอลัมน์อย่างเดียว ไม่ลบให้ ต้องสั่งล้างซากของระบบเก่าเอง
-	if err := services.CleanupLegacyFacePhotos(db); err != nil {
-		log.Fatalf("ล้างข้อมูลใบหน้าของระบบเก่าไม่สำเร็จ: %v", err)
-	}
-
-	// ค่าสนามเปลี่ยนจากราคาต่อชั่วโมงเป็นยอดรวมของคาบ
+// ค่าสนามเปลี่ยนจากราคาต่อชั่วโมงเป็นยอดรวมของคาบ
 	if db.Migrator().HasColumn(&models.AttendanceSession{}, "court_hourly_rate") {
 		if err := db.Migrator().DropColumn(&models.AttendanceSession{}, "court_hourly_rate"); err != nil {
 			log.Fatalf("ลบคอลัมน์ค่าสนามต่อชั่วโมงไม่สำเร็จ: %v", err)

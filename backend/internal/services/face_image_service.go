@@ -394,8 +394,8 @@ func DeleteCustomerFaceImages(tx *gorm.DB, customerID uint) ([]string, error) {
 
 // DeleteCoachFaceImages ทำเหมือน DeleteCustomerFaceImages แต่ของโค้ช
 //
-// จำเป็นตอนโค้ชถอนความยินยอมและตอนลบบัญชีโค้ช — เดิม DeleteCoachPhotos ลบแค่ตาราง
-// photos (ระบบรูปตัวเก่า) ไม่ได้แตะ face_images
+// จำเป็นตอนโค้ชถอนความยินยอมและตอนลบบัญชีโค้ช เพื่อไม่ให้เหลือข้อมูลชีวภาพค้างอยู่โดยไม่มี
+// ฐานความยินยอมรองรับ
 func DeleteCoachFaceImages(tx *gorm.DB, coachID uint) ([]string, error) {
 	var keys []string
 	if err := tx.Model(&models.FaceImage{}).
@@ -416,8 +416,9 @@ func DeleteCoachFaceImages(tx *gorm.DB, coachID uint) ([]string, error) {
 
 // DestroyFaceImageFiles ลบไฟล์บน Cloudinary — เรียกหลัง commit เท่านั้น
 //
-// ไม่คืน error โดยตั้งใจ (เหมือน RemovePhotoFiles) แต่ต้อง log เสมอ เพราะการลบ
-// ข้อมูลชีวภาพไม่สำเร็จแบบเงียบ ๆ ทำให้ตรวจย้อนหลังไม่ได้ว่าลบจริงหรือยัง
+// ไม่คืน error โดยตั้งใจ (ลบไฟล์ย้อนกลับไม่ได้ ผู้เรียก retry ทั้งก้อนไม่ควรเจอ error ซ้ำจาก
+// ส่วนที่ลบไปแล้ว) แต่ต้อง log เสมอ เพราะการลบข้อมูลชีวภาพไม่สำเร็จแบบเงียบ ๆ
+// ทำให้ตรวจย้อนหลังไม่ได้ว่าลบจริงหรือยัง
 func DestroyFaceImageFiles(cld *CloudinaryService, keys []string) {
 	if cld == nil {
 		return

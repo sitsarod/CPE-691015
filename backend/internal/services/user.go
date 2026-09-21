@@ -287,9 +287,9 @@ func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, act
 	// ลบ user กับข้อมูลพ่วงทั้งหมดใน transaction เดียว
 	// ถ้าแยกกันแล้วอันหลังพลาด จะเหลือข้อมูลส่วนตัวค้างโดยไม่มีบัญชีเจ้าของ
 	//
-	// ไฟล์ภาพใบหน้าบนดิสก์ลบ "หลัง" commit เท่านั้น เพราะการลบไฟล์ย้อนกลับไม่ได้
-	// ถ้าลบระหว่าง transaction แล้ว rollback ทีหลัง จะได้แถวที่ยังอยู่แต่ไฟล์หายไป
-	// ซึ่งซ่อมไม่ได้ (ดูเหตุผลเต็มที่ services.RemovePhotoFiles)
+	// ไฟล์ที่เก็บนอกฐานข้อมูล (อัปโหลด/ภาพใบหน้า) ลบ "หลัง" commit เท่านั้น เพราะการลบไฟล์
+	// ย้อนกลับไม่ได้ ถ้าลบระหว่าง transaction แล้ว rollback ทีหลัง จะได้แถวที่ยังอยู่แต่ไฟล์หายไป
+	// ซึ่งซ่อมไม่ได้
 	var files erasureFiles
 
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -318,7 +318,6 @@ func DeleteUserAccount(db *gorm.DB, faceStorage *CloudinaryService, id uint, act
 		return err
 	}
 
-	RemovePhotoFiles(files.photos)
 	removeUploadedFiles(files.uploads)
 	DestroyFaceImageFiles(faceStorage, files.faceKeys)
 	return nil
@@ -390,13 +389,6 @@ func deleteCustomerData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFile
 
 	// ภาพใบหน้าเป็นข้อมูลชีวภาพ (PDPA ม.26)
 	// เมื่อไม่มีสถานะนักเรียนแล้ว ฐานที่ใช้เก็บก็หมดไปด้วย จึงต้องลบทันที
-	photoFiles, err := DeleteCustomerPhotos(tx, customer.ID)
-	if err != nil {
-		return files, err
-	}
-	files.photos = photoFiles
-
-	// รูปที่ใช้เช็คชื่ออยู่คนละตารางกับ photos ต้องลบแยก
 	// ไม่งั้นแถวค้างถาวรโดยไม่มีเจ้าของ และไฟล์บนคลาวด์ไม่มีใครชี้ถึงอีกเลย
 	faceKeys, err := DeleteCustomerFaceImages(tx, customer.ID)
 	if err != nil {
@@ -418,8 +410,8 @@ func deleteCustomerData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFile
 
 // deleteCoachData ลบโปรไฟล์โค้ช ข้อมูลชีวภาพ และตารางเวลาที่ยังไม่เกิดขึ้น
 //
-// คืนสองรายการที่ต้องเอาไปลบ "หลัง" commit เหมือนฝั่งผู้เรียน:
-// URL ของไฟล์ในเครื่อง (ตาราง photos) และ StorageKey บน Cloudinary (ตาราง face_images)
+// คืนรายการ StorageKey บน Cloudinary (ตาราง face_images) ที่ต้องเอาไปลบ "หลัง" commit
+// เหมือนฝั่งผู้เรียน
 func deleteCoachData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFiles, error) {
 	var files erasureFiles
 
@@ -443,13 +435,6 @@ func deleteCoachData(tx *gorm.DB, userID uint, actorUserID uint) (erasureFiles, 
 	}
 
 	// ข้อมูลชีวภาพ เหตุผลเดียวกับฝั่งผู้เรียน
-	photoFiles, err := DeleteCoachPhotos(tx, coach.ID)
-	if err != nil {
-		return files, err
-	}
-	files.photos = photoFiles
-
-	// รูปที่ใช้สแกนหน้าเช็คชื่อเข้างานอยู่คนละตารางกับ photos ต้องลบแยก
 	//
 	// เดิมตรงนี้ข้ามไป เพราะสมัยที่เขียนโค้ชยังลงทะเบียนใบหน้าไม่ได้ (face_images
 	// ผูกกับ customers อย่างเดียว) แต่ตอนนี้ผูกกับ coaches ได้แล้ว ถ้าไม่ลบ

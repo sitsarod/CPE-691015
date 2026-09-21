@@ -14,7 +14,7 @@ import (
 // newDeleteTestDB สร้าง DB พร้อมทุกตารางที่การลบสมาชิกไปแตะ
 func newDeleteTestDB(t *testing.T) *gorm.DB {
 	return newTestDB(t, &models.User{}, &models.Customer{}, &models.Coach{},
-		&models.Photo{}, &models.FaceImage{}, &models.CoachAvailability{}, &models.WorkSchedule{})
+		&models.FaceImage{}, &models.CoachAvailability{}, &models.WorkSchedule{})
 }
 
 // seedUser สร้างผู้ใช้หนึ่งคนตามบทบาทที่กำหนด แล้วคืน id
@@ -161,7 +161,7 @@ func TestDeleteUserCleansCoachRelatedData(t *testing.T) {
 	}
 
 	// ภาพใบหน้า (ข้อมูลชีวภาพ) — ต้องหาย
-	db.Create(&models.Photo{CoachID: &coach.ID, PhotoURL: "https://example.com/a.jpg"})
+	db.Create(&models.FaceImage{CoachID: &coach.ID, StorageKey: "faces/coach-delete-test", Pose: models.PoseFront, Status: models.FaceImageReady})
 	// เวลาว่างประจำสัปดาห์ — ต้องหาย
 	db.Create(&models.CoachAvailability{CoachID: coach.ID, DayOfWeek: "monday", StartTime: "09:00", EndTime: "12:00"})
 
@@ -183,7 +183,7 @@ func TestDeleteUserCleansCoachRelatedData(t *testing.T) {
 		}
 	}
 
-	assertCount(&models.Photo{}, 0, "ภาพใบหน้าเป็นข้อมูลชีวภาพ ต้องถูกลบตาม PDPA")
+	assertCount(&models.FaceImage{}, 0, "ภาพใบหน้าเป็นข้อมูลชีวภาพ ต้องถูกลบตาม PDPA")
 	assertCount(&models.CoachAvailability{}, 0, "เวลาว่างของโค้ชที่ออกไปแล้วต้องไม่ค้างในระบบ")
 
 	// คาบในอนาคตต้องหาย แต่คาบที่ผ่านมาแล้วต้องอยู่ เพราะใช้คิดค่าจ้างย้อนหลัง
@@ -208,7 +208,7 @@ func TestDeleteUserCleansCoachRelatedData(t *testing.T) {
 }
 
 // ลบผู้เรียนแล้วภาพใบหน้าต้องหายไปด้วย
-func TestDeleteUserRemovesCustomerPhotos(t *testing.T) {
+func TestDeleteUserRemovesCustomerFaceImages(t *testing.T) {
 	db := newDeleteTestDB(t)
 	svc := NewUserService(db)
 
@@ -219,14 +219,14 @@ func TestDeleteUserRemovesCustomerPhotos(t *testing.T) {
 	if err := db.Create(&customer).Error; err != nil {
 		t.Fatalf("สร้าง customer ไม่สำเร็จ: %v", err)
 	}
-	db.Create(&models.Photo{CustomerID: customer.ID, PhotoURL: "https://example.com/b.jpg"})
+	db.Create(&models.FaceImage{CustomerID: &customer.ID, StorageKey: "faces/customer-delete-test", Pose: models.PoseFront, Status: models.FaceImageReady})
 
 	if err := svc.DeleteUser(target, actor); err != nil {
 		t.Fatalf("ลบผู้เรียนควรผ่าน แต่ได้ error: %v", err)
 	}
 
 	var count int64
-	db.Model(&models.Photo{}).Where("customer_id = ?", customer.ID).Count(&count)
+	db.Model(&models.FaceImage{}).Where("customer_id = ?", customer.ID).Count(&count)
 	if count != 0 {
 		t.Fatalf("ภาพใบหน้าของผู้เรียนต้องถูกลบ แต่เหลือ %d แถว", count)
 	}
