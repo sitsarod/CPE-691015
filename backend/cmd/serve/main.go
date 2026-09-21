@@ -51,19 +51,26 @@ func startChatCleanupJob() {
 }
 
 // startAttendanceAutoCloseJob ปิดรอบเช็คชื่อที่ลืมกดปิด (ดู AutoCloseStaleSessions)
-// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 15 นาที
-//
-// ถี่กว่างานอื่นเพราะ markAbsentees อ่านรายชื่อ ณ ตอนปิด ยิ่งทิ้งไว้นานรายชื่อยิ่งเพี้ยน
 func startAttendanceAutoCloseJob() {
 	attendanceService := services.NewAttendanceService(config.DB)
 	go func() {
+		timer := time.NewTimer(0)
+		defer timer.Stop()
+
 		for {
+			select {
+			case <-services.WaitForAttendanceSessionOpened():
+			case <-timer.C:
+			}
+
 			if n, err := attendanceService.AutoCloseStaleSessions(); err != nil {
 				log.Printf("ปิดรอบเช็คชื่อที่ค้างอัตโนมัติล้มเหลว: %v", err)
 			} else if n > 0 {
 				log.Printf("ปิดรอบเช็คชื่อที่เลยเวลาแล้วอัตโนมัติ %d รอบ", n)
 			}
-			time.Sleep(15 * time.Minute)
+
+			timer.Stop()
+			timer.Reset(attendanceService.NextAutoCloseWait())
 		}
 	}()
 }

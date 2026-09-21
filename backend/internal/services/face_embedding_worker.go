@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"log"
@@ -22,6 +23,15 @@ const (
 	faceWorkerBatchSize = 10
 	faceWorkerInterval  = 10 * time.Second
 
+	// ⚠️ ต้องยาวกว่าหน้าต่าง autosuspend ของ Neon เสมอ ไม่งั้น compute ไม่มีวันหลับ
+	faceWorkerSafetyInterval = 30 * time.Minute
+
+	// ถอยจังหวะทวีคูณเมื่อล้มเหลวชั่วคราว ไม่มีเพดานจำนวนครั้ง — กันแค่ "ลองถี่ ๆ" ไม่ใช่ "ลองอีก"
+	faceWorkerBackoffBase = 30 * time.Second
+	faceWorkerBackoffMax  = 30 * time.Minute
+
+	faceWorkerLogAttempts = 3
+
 	// เกณฑ์คุณภาพขั้นต่ำ (det_score จากโมเดล) — ต่ำกว่านี้ให้ถ่ายใหม่ดีกว่า
 	// เพราะ embedding จากภาพเบลอจะเทียบไม่แม่นตอนเช็คชื่อจริง
 	faceQualityThreshold = 0.50
@@ -30,6 +40,17 @@ const (
 	// เผื่อไว้เป็นเกราะชั้นสองเผื่อมีไฟล์แปลกปลอมเข้ามาทางอื่น
 	faceWorkerMaxImageBytes = 8 << 20
 )
+
+// faceWorkQueued คือสัญญาณปลุก worker — cap 1 ส่งแบบไม่บล็อก อัปรวดเดียวหลายท่าก็ปลุกครั้งเดียว
+var faceWorkQueued = make(chan struct{}, 1)
+
+// NotifyFaceImageQueued ปลุก worker ให้ทำงานทันที เรียกหลังบันทึกแถว pending สำเร็จ
+func NotifyFaceImageQueued() {
+	select {
+	case faceWorkQueued <- struct{}{}:
+	default:
+	}
+}
 
 type FaceEmbeddingWorker struct {
 	db     *gorm.DB
@@ -41,33 +62,56 @@ func NewFaceEmbeddingWorker(db *gorm.DB, engine FaceEngine, cld *CloudinaryServi
 	return &FaceEmbeddingWorker{db: db, engine: engine, cld: cld}
 }
 
-// Run วนประมวลผลจนกว่า ctx จะถูกยกเลิก
+// Run รอสัญญาณแล้วประมวลผล จนกว่า ctx จะถูกยกเลิก
 //
-// ⚠️ ใช้ ticker + context ไม่ใช่ time.Sleep แบบ job อื่นในโปรเจกต์
-// เพื่อให้หยุดได้ตอน shutdown แทนที่จะค้างเป็น goroutine ผีจนโปรเซสตาย
+// ⚠️ ขับด้วยสัญญาณ ไม่ poll — ตอนไม่มีรูปรอต้องไม่แตะฐานเลย ไม่งั้น Neon ไม่หลับ
 func (w *FaceEmbeddingWorker) Run(ctx context.Context) {
 	if !w.engine.Enabled() || w.cld == nil {
 		log.Println("worker สร้าง embedding ไม่เริ่มทำงาน — ยังตั้งค่า face-service หรือ Cloudinary ไม่ครบ")
 		return
 	}
 
-	ticker := time.NewTicker(faceWorkerInterval)
-	defer ticker.Stop()
+	// ตื่นครั้งแรกทันที เก็บกวาดแถวที่ค้างมาจากก่อนรีสตาร์ท
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 
 	for {
-		if n, err := w.ProcessPending(ctx); err != nil {
+		select {
+		case <-ctx.Done():
+			log.Println("worker สร้าง embedding หยุดทำงานแล้ว")
+			return
+		case <-faceWorkQueued:
+		case <-timer.C:
+		}
+
+		n, err := w.ProcessPending(ctx)
+		if err != nil {
 			log.Printf("worker สร้าง embedding ล้มเหลว: %v", err)
 		} else if n > 0 {
 			log.Printf("worker ประมวลผลรูปใบหน้า %d ใบ", n)
 		}
 
-		select {
-		case <-ctx.Done():
-			log.Println("worker สร้าง embedding หยุดทำงานแล้ว")
-			return
-		case <-ticker.C:
-		}
+		timer.Stop()
+		timer.Reset(w.nextWait(n))
 	}
+}
+
+// nextWait บอกว่าควรตื่นเองอีกทีเมื่อไหร่ ถ้าไม่มีใครมาปลุกก่อน
+func (w *FaceEmbeddingWorker) nextWait(processed int) time.Duration {
+	if processed >= faceWorkerBatchSize {
+		return faceWorkerInterval
+	}
+
+	var earliest sql.NullTime
+	row := w.db.Model(&models.FaceImage{}).
+		Where("status = ?", models.FaceImagePending).
+		Select("MIN(next_attempt_at)").
+		Row()
+	if row == nil || row.Scan(&earliest) != nil || !earliest.Valid {
+		return faceWorkerSafetyInterval
+	}
+
+	return max(faceWorkerInterval, min(time.Until(earliest.Time), faceWorkerSafetyInterval))
 }
 
 // ProcessPending ประมวลผลรูปสถานะ pending ไม่เกินหนึ่ง batch คืนจำนวนที่ตัดสินผลได้
@@ -75,7 +119,9 @@ func (w *FaceEmbeddingWorker) Run(ctx context.Context) {
 // แยกออกจาก Run เพื่อให้เรียกตรง ๆ ได้เวลาทดสอบ โดยไม่ต้องรอ ticker
 func (w *FaceEmbeddingWorker) ProcessPending(ctx context.Context) (int, error) {
 	var pending []models.FaceImage
-	if err := w.db.Where("status = ?", models.FaceImagePending).
+	if err := w.db.
+		Where("status = ?", models.FaceImagePending).
+		Where("next_attempt_at IS NULL OR next_attempt_at <= ?", time.Now()).
 		Order("created_at asc"). // คนที่รอนานที่สุดได้คิวก่อน
 		Limit(faceWorkerBatchSize).
 		Find(&pending).Error; err != nil {
@@ -108,13 +154,13 @@ func (w *FaceEmbeddingWorker) processOne(ctx context.Context, image *models.Face
 
 	raw, err := w.downloadImage(ctx, image.StorageKey)
 	if err != nil {
-		log.Printf("worker: ดึงรูป id=%d ไม่สำเร็จ: %v", image.ID, err)
+		w.deferRetry(image, "ดึงรูป", err)
 		return false
 	}
 
 	res, err := w.engine.Embed(ctx, raw)
 	if err != nil {
-		log.Printf("worker: วิเคราะห์รูป id=%d ไม่สำเร็จ: %v", image.ID, err)
+		w.deferRetry(image, "วิเคราะห์รูป", err)
 		return false
 	}
 
@@ -129,6 +175,26 @@ func (w *FaceEmbeddingWorker) processOne(ctx context.Context, image *models.Face
 		w.accept(image, res)
 	}
 	return true
+}
+
+// deferRetry เลื่อนคิวของแถวที่ล้มเหลวชั่วคราว กันแถวพังถาวรวนดาวน์โหลดซ้ำไม่รู้จบ
+func (w *FaceEmbeddingWorker) deferRetry(image *models.FaceImage, step string, cause error) {
+	attempt := image.AttemptCount + 1
+
+	backoff := faceWorkerBackoffBase << min(attempt-1, 16)
+	if backoff > faceWorkerBackoffMax || backoff <= 0 {
+		backoff = faceWorkerBackoffMax
+	}
+	next := time.Now().Add(backoff)
+
+	if attempt <= faceWorkerLogAttempts {
+		log.Printf("worker: %s id=%d ไม่สำเร็จ (ครั้งที่ %d): %v", step, image.ID, attempt, cause)
+	}
+
+	w.update(image, map[string]any{
+		"attempt_count":   attempt,
+		"next_attempt_at": next,
+	})
 }
 
 func (w *FaceEmbeddingWorker) downloadImage(ctx context.Context, storageKey string) ([]byte, error) {

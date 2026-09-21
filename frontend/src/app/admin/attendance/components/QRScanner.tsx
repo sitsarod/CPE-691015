@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Camera, CameraOff, Loader2, SwitchCamera, Timer } from "lucide-react";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 
 
@@ -253,37 +254,37 @@ export default function QRScanner({
     }
   }, [paused, status]);
 
+  const sendFaceFrame = useCallback(() => {
+    const video = document.querySelector<HTMLVideoElement>(`#${ELEMENT_ID} video`);
+    if (!video || !video.videoWidth) return;
+
+    const scale = Math.min(1, FACE_FRAME_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) onFaceFrameRef.current?.(blob);
+      },
+      "image/jpeg",
+      0.85
+    );
+  }, []);
+
   // ดึงเฟรมไปทายใบหน้าคู่ขนานกับการอ่าน QR — ไม่มีปุ่มสลับโหมด ทำสองอย่างพร้อมกัน
   //
   // หยุดตอน paused ด้วยเหตุผลเดียวกับที่หยุดอ่าน QR: มีการ์ดยืนยันค้างอยู่
-  // หรือกำลังบันทึก ยิงต่อไปก็มีแต่จะได้คนเดิมซ้ำ ๆ
-  useEffect(() => {
-    if (status !== "running" || paused || !onFaceFrame) return;
-
-    const timer = setInterval(() => {
-      const video = document.querySelector<HTMLVideoElement>(`#${ELEMENT_ID} video`);
-      if (!video || !video.videoWidth) return;
-
-      const scale = Math.min(1, FACE_FRAME_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) onFaceFrameRef.current?.(blob);
-        },
-        "image/jpeg",
-        0.85
-      );
-    }, FACE_FRAME_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, [status, paused, onFaceFrame]);
+  // หรือกำลังบันทึก ยิงต่อไปก็มีแต่จะได้คนเดิมซ้ำ ๆ · แท็บที่ถูกซ่อนก็หยุดด้วย
+  useVisibleInterval(
+    sendFaceFrame,
+    FACE_FRAME_INTERVAL_MS,
+    status === "running" && !paused && !!onFaceFrame
+  );
 
   const switchCamera = () => {
     const next: Facing = facing === "user" ? "environment" : "user";

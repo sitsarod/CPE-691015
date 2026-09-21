@@ -67,6 +67,10 @@ const SCAN_COOLDOWN_SECONDS = 5;
 
 const REPEAT_NOTICE_SILENCE_MS = 30_000;
 
+// ⚠️ ต้องตรงกับ ErrFaceEngineUnavailable ใน services/attendance_face.go
+const FACE_ENGINE_DOWN_HINT = "ระบบสแกนใบหน้าไม่พร้อมใช้งาน";
+const FACE_ENGINE_RETRY_MS = 5 * 60_000;
+
 // จำโหมดสนามไว้ข้ามการรีโหลด — ไม่งั้นกด F5 ครั้งเดียวก็หลุดออกจากล็อก
 const KIOSK_STORAGE_KEY = "attendance_kiosk";
 
@@ -384,6 +388,19 @@ export default function AdminAttendancePage() {
 
   const lastRejected = useRef<{ key: string; at: number } | null>(null);
 
+  // ref คู่กันไว้กันเตือนซ้ำจากคำขอที่ยังค้างอยู่
+  const [isFaceScanOn, setIsFaceScanOn] = useState(true);
+  const faceEngineDown = useRef(false);
+
+  useEffect(() => {
+    if (isFaceScanOn) return;
+    const timer = setTimeout(() => {
+      faceEngineDown.current = false;
+      setIsFaceScanOn(true);
+    }, FACE_ENGINE_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [isFaceScanOn]);
+
   const handleFaceFrame = useCallback(
     async (frame: Blob) => {
       if (!session || faceInFlight.current) return;
@@ -424,15 +441,22 @@ export default function AdminAttendancePage() {
         // เก็บเฟรมที่ทำให้แมตช์ไว้ใช้ตอนกดยืนยัน
         // backend จะ resolve ตัวตนใหม่จากรูปนี้อีกครั้ง ไม่ได้เชื่อ id ที่เราส่ง
         setFaceFrame(frame);
-      } catch {
+      } catch (err: unknown) {
         // ⚠️ ต้องเงียบ — เฟรมส่วนใหญ่ไม่มีหน้าคนหรือจำไม่ได้ ซึ่งเป็นเรื่องปกติ
         // ถ้าเด้ง error ทุกครั้งจอจะกระพริบข้อความตลอดเวลาที่ไม่มีใครยืนอยู่
         // ความล้มเหลวที่ผู้ใช้ต้องรู้คือตอน "กดยืนยันแล้วบันทึกไม่ได้" เท่านั้น
+        // ยกเว้น service ไม่พร้อม — ต้องหยุดยิงแล้วบอกให้ใช้ QR แทน
+        const detail = err instanceof Error ? err.message : "";
+        if (detail.includes(FACE_ENGINE_DOWN_HINT) && !faceEngineDown.current) {
+          faceEngineDown.current = true;
+          setIsFaceScanOn(false);
+          showToast("ระบบสแกนใบหน้าไม่พร้อมใช้งาน — พักไว้ก่อน ใช้ QR เช็คชื่อได้ตามปกติ", "error");
+        }
       } finally {
         faceInFlight.current = false;
       }
     },
-    [session, startCooldown]
+    [session, startCooldown, showToast]
   );
 
   const cancelFace = useCallback(() => {
@@ -669,7 +693,9 @@ export default function AdminAttendancePage() {
         outcome={outcome}
         onDismissOutcome={dismissOutcome}
         onExit={exitKiosk}
-        onFaceFrame={handleFaceFrame}
+        onFaceFrame={
+          isFaceScanOn && session?.face_scan_ready ? handleFaceFrame : undefined
+        }
         faceCandidate={faceCandidate}
         isConfirmingFace={isConfirmingFace}
         onConfirmFace={confirmFace}
@@ -949,6 +975,9 @@ export default function AdminAttendancePage() {
   // แต่ backend ปฏิเสธการสแกนทุกครั้ง (ErrAttendanceExpired) โชว์กล้องต่อ = หลอกให้กดเปล่า
   const canScan = isOpen && session.can_scan;
 
+  // ไม่มีใบหน้าให้เทียบก็ไม่ต้องส่งเฟรม — กล้องยังอ่าน QR ต่อตามปกติ
+  const canSendFaceFrames = isFaceScanOn && session.face_scan_ready;
+
   const totalCount = session.roster.length;
   const checkedCount = totalCount - session.pending_count;
 
@@ -1160,7 +1189,7 @@ export default function AdminAttendancePage() {
             {useCamera ? (
               <QRScanner
                 onScan={runScan}
-                onFaceFrame={handleFaceFrame}
+                onFaceFrame={canSendFaceFrames ? handleFaceFrame : undefined}
                 paused={isCheckingIn || cooldown > 0 || faceCandidate !== null}
                 pausedReason={
                   faceCandidate

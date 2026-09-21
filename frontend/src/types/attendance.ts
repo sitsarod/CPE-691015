@@ -96,6 +96,9 @@ export interface AttendanceSession {
   // แต่สแกนไม่ได้ อย่าดูแค่ status
   can_scan: boolean;
 
+  // มีใบหน้าให้เทียบในรอบนี้จริงไหม — false แล้วห้ามส่งเฟรมไปทาย
+  face_scan_ready: boolean;
+
   packages: ClassPackage[];
   roster: RosterItem[];
   walk_in_candidates: RosterItem[];

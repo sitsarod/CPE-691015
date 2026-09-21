@@ -77,6 +77,10 @@ type FaceImage struct {
 	VerifiedBy   *uint      `json:"verified_by"` // users.id ของแอดมินที่ตรวจ
 	VerifiedAt   *time.Time `json:"verified_at"`
 	RejectReason string     `json:"reject_reason" gorm:"type:varchar(255)"`
+
+	// worker ใช้ถอยจังหวะ retry แทนการมาร์ค rejected ซึ่งจะลบไฟล์ของผู้ใช้ทิ้ง
+	AttemptCount  int        `json:"-"`
+	NextAttemptAt *time.Time `json:"-" gorm:"index"`
 }
 
 // FormatEmbedding แปลง slice เป็นรูปแบบข้อความที่ pgvector รับ: "[0.01,-0.23,...]"
