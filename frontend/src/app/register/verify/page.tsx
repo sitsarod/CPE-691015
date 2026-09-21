@@ -82,7 +82,7 @@ function VerifyEmailForm() {
 
   return (
     <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+      <div className="max-w-md w-full bg-white">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">ยืนยันอีเมล</h2>
           <p className="text-gray-500">
@@ -112,7 +112,11 @@ function VerifyEmailForm() {
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <p className="mt-6 text-center text-xs text-gray-400">
+          หากไม่เจออีเมลในกล่องขาเข้า ลองตรวจสอบในโฟลเดอร์สแปม/อีเมลขยะ (Junk/Spam) ด้วย
+        </p>
+
+        <div className="mt-3 text-center text-sm text-gray-600">
           <p>ไม่ได้รับรหัส?</p>
           <button
             type="button"

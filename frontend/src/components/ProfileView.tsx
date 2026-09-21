@@ -188,8 +188,8 @@ export default function ProfileView({
   }
 
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      <div className="bg-white w-full max-w-5xl p-10 md:p-16 rounded-3xl shadow-sm text-left">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+      <div className="bg-white w-full max-w-5xl  text-left">
 
         {/* Profile Section สไตล์ IG */}
         <div className="flex flex-col mb-6">
@@ -227,7 +227,6 @@ export default function ProfileView({
 
               <div className="flex flex-row items-center gap-6 text-sm md:text-lg text-gray-600 font-medium">
                 <span><strong className="text-gray-900 font-bold">{posts.length}</strong> posts</span>
-                <span><strong className="text-gray-900 font-bold">182</strong> followers</span>
               </div>
             </div>
           </div>
@@ -430,8 +429,8 @@ export default function ProfileView({
 // เดิมเป็นข้อความ "กำลังโหลด..." กลางจอ พอข้อมูลมาถึงหน้าจะกระโดดทั้งหน้า
 function ProfileViewSkeleton() {
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      <div className="w-full max-w-5xl animate-pulse rounded-3xl bg-white p-10 shadow-sm md:p-16">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+      <div className="w-full max-w-5xl animate-pulse bg-white">
         <div className="mb-6 flex flex-col">
           <div className="flex flex-row items-center gap-8 md:gap-14">
             <div className="h-28 w-28 flex-shrink-0 rounded-full bg-gray-200 md:h-36 md:w-36" />
@@ -439,7 +438,6 @@ function ProfileViewSkeleton() {
               <div className="h-8 w-64 max-w-full rounded bg-gray-200 md:h-10" />
               <div className="flex gap-6">
                 <div className="h-5 w-20 rounded bg-gray-100" />
-                <div className="h-5 w-24 rounded bg-gray-100" />
               </div>
             </div>
           </div>

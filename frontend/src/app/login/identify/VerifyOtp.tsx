@@ -50,8 +50,11 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
     <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
       <div className="bg-white w-full max-w-3xl">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">ยืนยัน OTP</h1>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-gray-500">
           เราได้ส่งรหัส OTP ไปที่อีเมล <span className="font-semibold text-gray-800">{userData?.maskedEmail}</span> แล้ว
+        </p>
+        <p className="mb-8 mt-1 text-xs text-gray-400">
+          หากไม่เจออีเมลในกล่องขาเข้า ลองตรวจสอบในโฟลเดอร์สแปม/อีเมลขยะ (Junk/Spam) ด้วย
         </p>
 
         {errorMsg && (
