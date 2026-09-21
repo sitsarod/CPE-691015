@@ -85,7 +85,7 @@ export default function ConfirmDialog({
             className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ring-8 sm:h-12 sm:w-12 ${
               isDanger
                 ? "bg-red-100 text-[#CC0000] ring-red-50"
-                : "bg-blue-100 text-blue-600 ring-blue-50"
+                : "bg-rose-100 text-[#CD0D13] ring-rose-50"
             }`}
           >
             <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -121,7 +121,7 @@ export default function ConfirmDialog({
             className={`w-full rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.97] disabled:opacity-60 sm:w-auto sm:py-2.5 ${
               isDanger
                 ? "bg-[#CC0000] hover:bg-[#AA0000] focus-visible:ring-[#CC0000]"
-                : "bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-600"
+                : "bg-[#CD0D13] hover:bg-[#A30A0E] focus-visible:ring-[#CD0D13]"
             }`}
           >
             {busy ? "กำลังทำงาน..." : confirmText}

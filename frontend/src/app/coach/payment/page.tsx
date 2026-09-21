@@ -270,11 +270,7 @@ export default function CoachPaymentPage() {
 
   const yearGroups: YearGroup[] = useMemo(() => {
     const map = new Map<number, YearGroup>();
-    wageEntries.forEach((w) => {
-      if (!w.expensedate) return;
-      const d = new Date(w.expensedate);
-      const year = d.getFullYear();
-      const month = d.getMonth();
+    const ensureYear = (year: number) => {
       if (!map.has(year)) {
         map.set(year, {
           year,
@@ -283,15 +279,28 @@ export default function CoachPaymentPage() {
           months: Array.from({ length: 12 }, (_, m) => ({ month: m, total: 0, count: 0, entries: [] })),
         });
       }
-      const yg = map.get(year)!;
+      return map.get(year)!;
+    };
+    wageEntries.forEach((w) => {
+      if (!w.expensedate) return;
+      const d = new Date(w.expensedate);
+      const yg = ensureYear(d.getFullYear());
+      const month = d.getMonth();
       yg.total += w.expenseamount;
       yg.count += 1;
       yg.months[month].total += w.expenseamount;
       yg.months[month].count += 1;
       yg.months[month].entries.push(w);
     });
+    // รวมปีที่มี "เฉพาะโบนัส/รายได้อื่น" (ยังไม่มีค่าจ้างการสอน) เข้ามาด้วย เพื่อให้โค้ช
+    // ที่ได้รับแต่โบนัสยังมีตัวเลือกปี + currentYearGroup ให้เลือก สรุปและตารางจึงแสดงได้
+    // (ยอดค่าจ้าง/จำนวนคาบของปีนั้นยังเป็น 0 ตามจริง โบนัสถูกเลเยอร์แยกผ่าน bonusByMonth)
+    otherEntries.forEach((e) => {
+      if (!e.expensedate) return;
+      ensureYear(new Date(e.expensedate).getFullYear());
+    });
     return Array.from(map.values()).sort((a, b) => b.year - a.year);
-  }, [wageEntries]);
+  }, [wageEntries, otherEntries]);
 
   useEffect(() => {
     if (yearGroups.length > 0 && selectedYear === null) {
@@ -690,14 +699,19 @@ export default function CoachPaymentPage() {
         </div>
       ) : (
         <>
-          {wageEntries.length === 0 ? (
-            <div className="border border-gray-200 bg-white py-16 text-center text-gray-400">
-              <Wallet className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm font-semibold text-gray-500">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
-              <p className="text-xs mt-1">เมื่อสถาบันบันทึกค่าจ้างการสอนให้ ระบบจะแสดงสรุปและกราฟรายได้ที่นี่</p>
+          {/* ยังไม่มีค่าจ้างการสอน แต่มีโบนัส/รายได้อื่น — โชว์เป็นแบนเนอร์แจ้ง แล้วยัง
+              แสดงสรุปโบนัสด้านล่างต่อ (เดิมบล็อกนี้ซ่อนสรุปทั้งหมดจนโบนัสไม่ขึ้นเลย) */}
+          {wageEntries.length === 0 && (
+            <div className="flex items-start gap-3 border border-gray-200 bg-white px-5 py-4 text-sm">
+              <Wallet className="mt-0.5 h-5 w-5 flex-shrink-0 text-gray-300" />
+              <div>
+                <p className="font-semibold text-gray-600">ยังไม่มีข้อมูลเงินเดือน / ค่าจ้างการสอน</p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  เมื่อสถาบันบันทึกค่าจ้างการสอนให้ ระบบจะแสดงสรุปและกราฟค่าจ้างที่นี่ · ด้านล่างเป็นสรุปโบนัส / รายได้อื่น ๆ ที่คุณได้รับ
+                </p>
+              </div>
             </div>
-          ) : (
-          <>
+          )}
           {/* Stats — แถบ 1px-gutter 4 ช่อง */}
           <div
             ref={statsScrollRef}
@@ -801,7 +815,9 @@ export default function CoachPaymentPage() {
 
           {effectiveView === "monthly" && currentYearGroup ? (
             <>
-              {/* Monthly bar chart — ซ่อนบนมือถือ (แท่งแคบ + tooltip อาศัย hover) ดูข้อมูลได้จากตารางด้านล่างแทน */}
+              {/* Monthly bar chart — ซ่อนบนมือถือ (แท่งแคบ + tooltip อาศัย hover) ดูข้อมูลได้จากตารางด้านล่างแทน
+                  · ซ่อนทั้งบล็อกเมื่อปีที่เลือกไม่มีค่าจ้างเลย (เช่นได้รับแต่โบนัส) จะได้ไม่โชว์กราฟเปล่า */}
+              {bestMonth && (
               <div className="hidden md:block">
                 <div className="mb-6 border-b border-gray-200 pb-4">
                   <h3 className="text-xl font-semibold tracking-tight text-gray-900">รายได้รายเดือน ปี {selectedYear}</h3>
@@ -838,6 +854,7 @@ export default function CoachPaymentPage() {
                   })}
                 </div>
               </div>
+              )}
 
               {/* Monthly breakdown table — รวมคอลัมน์เทียบตารางสอน (เฉพาะโค้ชรายครั้ง) เข้ามาในตัว
                   กดที่แถวเพื่อขยายดูรายการแบบสมุดบัญชี */}
@@ -1123,8 +1140,6 @@ export default function CoachPaymentPage() {
               </div>
             </div>
           ) : null}
-          </>
-          )}
         </>
       )}
       </div>
