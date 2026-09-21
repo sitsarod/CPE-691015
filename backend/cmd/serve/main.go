@@ -140,6 +140,30 @@ func startPhotoPostCleanupJob() {
 	}()
 }
 
+// unverifiedUserRetention คือเวลาที่บัญชีที่สมัครไว้แต่ไม่เคยยืนยันอีเมลเลยจะถูกเก็บไว้ก่อนลบถาวร
+//
+// เผื่อคนพิมพ์อีเมลผิด/ปลอมตอนสมัคร แล้ว "ไม่กลับมาสมัครซ้ำเลย" ทิ้งบัญชีขยะที่จองอีเมลนั้น
+// ไว้ถาวร (login ก็ไม่ได้ ลบเองก็ไม่ได้) OTP หมดอายุแค่ 10 นาที (ดู otpTTL) ชั่วโมงเดียว
+// จึงเผื่อเวลาให้พอเกินกว่าจะกดขอรหัสใหม่/ลองใหม่ได้สบาย ๆ โดยไม่เสี่ยงไปลบคนที่กำลังยืนยันอยู่จริง
+const unverifiedUserRetention = 1 * time.Hour
+
+// startUnverifiedUserCleanupJob ลบบัญชีที่สมัครมานานเกิน unverifiedUserRetention แต่ไม่เคยยืนยัน
+// อีเมลเลยอัตโนมัติ — รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 15 นาที (ถี่กว่างานอื่นเพราะช่วง
+// retention สั้นแค่ 1 ชั่วโมง ต้องเช็คถี่พอจะไม่ปล่อยให้ค้างเกินที่ตั้งใจไว้นานเกินไป)
+func startUnverifiedUserCleanupJob() {
+	userService := services.NewUserService(config.DB)
+	go func() {
+		for {
+			if n, err := userService.DeleteUnverifiedUsers(unverifiedUserRetention); err != nil {
+				log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติล้มเหลว: %v", err)
+			} else if n > 0 {
+				log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติ %d บัญชี", n)
+			}
+			time.Sleep(15 * time.Minute)
+		}
+	}()
+}
+
 // startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา
 //
 // ⚠️ ขับด้วยสัญญาณ (NotifyFaceImageQueued) ไม่ poll — ตอนไม่มีรูปรอจะหลับยาว
@@ -213,6 +237,9 @@ func main() {
 
 	// 3.4.1 ลบรูป/วิดีโอโพสต์ที่เกิน 7 วันอัตโนมัติ
 	startPhotoPostCleanupJob()
+
+	// 3.4.2 ลบบัญชีที่สมัครไว้แต่ไม่เคยยืนยันอีเมลเกิน 1 ชั่วโมงอัตโนมัติ (กันอีเมลถูกจองค้างถาวร)
+	startUnverifiedUserCleanupJob()
 
 	// 3.5 สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา (pending → awaiting_review/rejected)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
