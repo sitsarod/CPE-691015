@@ -183,7 +183,6 @@ export default function CoachSchedulePage() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-150 pb-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-[#CC0000]" />
             ตารางงานของฉัน
           </h1>
           <p className="text-gray-500 mt-1 text-sm">คาบสอนที่แอดมินมอบหมายให้คุณ — คลิกที่คาบเพื่อดูรายละเอียด</p>

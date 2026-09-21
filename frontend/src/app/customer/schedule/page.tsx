@@ -249,9 +249,6 @@ export default function CustomerSchedulePage() {
       {/* 1. Summary Table Section (Top) */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-4 sm:px-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[#CC0000]">
-            <BookOpen className="h-5 w-5" />
-          </span>
           <h2 className="text-base font-bold text-gray-900 sm:text-lg">
             สรุปข้อมูลคอร์สเรียนของคุณ
           </h2>
@@ -362,9 +359,6 @@ export default function CustomerSchedulePage() {
       {/* 2. Timetable Grid Section (Bottom) */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-4 sm:px-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[#CC0000]">
-            <Calendar className="h-5 w-5" />
-          </span>
           <h2 className="text-base font-bold text-gray-900 sm:text-lg">
             ตารางเรียนประจำสัปดาห์
           </h2>

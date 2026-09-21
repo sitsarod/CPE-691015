@@ -18,7 +18,7 @@ export default function AdminCoursesPage() {
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-gray-900">จัดการคอร์สเรียน (Courses)</h1>
+        <h1 className="text-3xl font-black text-gray-900">จัดการคอร์สเรียน</h1>
         <p className="text-gray-500 mt-2">ดูรายการคอร์สทั้งหมด หรือเพิ่มคอร์สใหม่</p>
       </div>
 
