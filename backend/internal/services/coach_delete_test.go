@@ -30,7 +30,7 @@ import (
 func newCoachDeleteTestDB(t *testing.T) *gorm.DB {
 	return newTestDB(t,
 		&models.User{}, &models.Coach{},
-		&models.Photo{}, &models.FaceImage{},
+		&models.FaceImage{},
 		&models.CoachAvailability{}, &models.WorkSchedule{},
 		&models.CoachAttendance{}, &models.BiometricConsent{},
 	)
@@ -65,7 +65,6 @@ func seedFullCoach(t *testing.T, db *gorm.DB, suffix string) coachFixture {
 	future := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 
 	// ── ฝั่งที่ต้องหายไป ──
-	mustCreate(t, db, &models.Photo{CoachID: &coach.ID, PhotoURL: "https://example.com/" + suffix + ".jpg"})
 	mustCreate(t, db, &models.FaceImage{
 		CoachID: &coach.ID, StorageKey: "faces/" + suffix,
 		Pose: models.PoseFront, Status: models.FaceImageReady,
@@ -120,7 +119,6 @@ func footprint(t *testing.T, db *gorm.DB, f coachFixture) map[string]int64 {
 	return map[string]int64{
 		"users":              count(&models.User{}, "id = ?", f.userID),
 		"coaches":            count(&models.Coach{}, "id = ?", f.coachID),
-		"photos":             count(&models.Photo{}, "coach_id = ?", f.coachID),
 		"face_images":        count(&models.FaceImage{}, "coach_id = ?", f.coachID),
 		"availability":       count(&models.CoachAvailability{}, "coach_id = ?", f.coachID),
 		"work_schedules":     count(&models.WorkSchedule{}, "coach_id = ?", f.coachID),
@@ -178,8 +176,7 @@ func TestCoachServiceDeleteKeepsPayrollHistory(t *testing.T) {
 		// หายไป
 		"users":        0, // บัญชีต้องล็อกอินไม่ได้อีก
 		"coaches":      0, // โปรไฟล์ต้องไม่โผล่ในรายชื่อ
-		"photos":       0, // ข้อมูลชีวภาพ ต้องลบตาม PDPA
-		"face_images":  0, // ข้อมูลชีวภาพเช่นกัน (คนละตารางกับ photos)
+		"face_images":  0, // ข้อมูลชีวภาพ ต้องลบตาม PDPA
 		"availability": 0, // โค้ชที่ออกไปแล้วต้องไม่โผล่เป็นตัวเลือกในหน้าจัดตาราง
 
 		// อยู่ต่อ

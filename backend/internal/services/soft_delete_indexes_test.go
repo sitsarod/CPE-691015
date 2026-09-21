@@ -23,7 +23,7 @@ import (
 func newIndexTestDB(t *testing.T) *gorm.DB {
 	// ต้อง migrate ทั้ง users และ coaches เพื่อให้ index ถูกสร้างครบทั้งสองตัว
 	return newTestDB(t, &models.User{}, &models.Coach{},
-		&models.Photo{}, &models.FaceImage{},
+		&models.FaceImage{},
 		&models.CoachAvailability{}, &models.WorkSchedule{})
 }
 

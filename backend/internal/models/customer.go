@@ -53,7 +53,6 @@ type Customer struct {
     FaceConsentStatus FaceConsentStatus `json:"face_consent_status" gorm:"type:varchar(20);default:'unknown'"`
 
 
-	Photos            	[]Photo 		`json:"photo" gorm:"foreignKey:CustomerID"`
 	// json:"-" เพราะเป็นข้อมูลชีวภาพ ห้ามหลุดออก API
 	FaceImages        	[]FaceImage 	`json:"-" gorm:"foreignKey:CustomerID"`
 	Evaluations       	[]Evaluation    `json:"evaluation" gorm:"foreignKey:CustomerID"`

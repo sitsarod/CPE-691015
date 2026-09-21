@@ -25,15 +25,13 @@ import (
 
 // erasureFiles คือไฟล์ที่ต้องลบ "หลัง" transaction commit
 //
-// แยกสามกลุ่มเพราะอยู่คนละที่และลบด้วยวิธีต่างกัน
+// แยกสองกลุ่มเพราะอยู่คนละที่และลบด้วยวิธีต่างกัน
 type erasureFiles struct {
-	photos   []string // ตาราง photos → โฟลเดอร์ uploads/faces
 	uploads  []string // รูปโปรไฟล์ ฯลฯ → โฟลเดอร์ uploads
 	faceKeys []string // ตาราง face_images → Cloudinary
 }
 
 func (f *erasureFiles) merge(other erasureFiles) {
-	f.photos = append(f.photos, other.photos...)
 	f.uploads = append(f.uploads, other.uploads...)
 	f.faceKeys = append(f.faceKeys, other.faceKeys...)
 }
@@ -145,7 +143,8 @@ func uploadFilePath(fileURL string) string {
 
 // removeUploadedFiles ลบไฟล์ที่อัปโหลดไว้ในเครื่อง — ต้องเรียกหลัง commit เท่านั้น
 //
-// ไม่คืน error ด้วยเหตุผลเดียวกับ RemovePhotoFiles แต่ต้อง log เสมอ
+// ลบไฟล์ย้อนกลับไม่ได้ ถ้าคืน error แล้วผู้เรียก retry ทั้งก้อนจะเจอ error ซ้ำจากส่วนที่ลบไปแล้ว
+// จึงไม่คืน error แต่ต้อง log เสมอ กันการลบข้อมูลส่วนตัวไม่สำเร็จแบบเงียบ ๆ ตรวจย้อนหลังไม่ได้
 func removeUploadedFiles(fileURLs []string) {
 	for _, url := range fileURLs {
 		path := uploadFilePath(url)

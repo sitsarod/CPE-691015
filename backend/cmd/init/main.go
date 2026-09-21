@@ -45,7 +45,6 @@ func main() {
 		&models.Coach{},
 		&models.Product{}, // อย่าลืมสร้างไฟล์ product.go ใน internal/models/
 		&models.Customer{},
-		&models.Photo{},
 		&models.FaceImage{},
 		&models.Evaluation{},
 		&models.Review{},
