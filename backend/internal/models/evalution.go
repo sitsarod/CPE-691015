@@ -13,5 +13,4 @@ type Evaluation struct {
 	Coach      		*Coach     		`json:"coach"    gorm:"foreignKey:CoachID"`
 	   
 	Assessment 		string 			`json:"assessment"`
-	VideoURL        string          `json:"video_url"`
 }

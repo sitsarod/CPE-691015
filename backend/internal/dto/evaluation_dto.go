@@ -5,7 +5,6 @@ import "time"
 type CreateEvaluationRequest struct {
 	CustomerID uint   `json:"customer_id" binding:"required"`
 	Assessment string `json:"assessment" binding:"required"`
-	VideoURL   string `json:"video_url"`
 }
 
 type EvaluationResponse struct {
@@ -14,7 +13,6 @@ type EvaluationResponse struct {
 	CoachID    uint      `json:"coach_id"`
 	CoachName  string    `json:"coach_name"`
 	Assessment string    `json:"assessment"`
-	VideoURL   string    `json:"video_url,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
