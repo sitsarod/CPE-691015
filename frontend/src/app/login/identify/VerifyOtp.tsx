@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import OtpInput from "@/components/OtpInput";
 import { verifyPasswordOTPAPI } from "@/services/passwordAPI";
 import { IdentifyUserData, IdentifyNextHandler } from "@/types/identify";
 
@@ -46,8 +47,8 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+      <div className="bg-white w-full max-w-3xl">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">ยืนยัน OTP</h1>
         <p className="text-sm text-gray-500 mb-8">
           เราได้ส่งรหัส OTP ไปที่อีเมล <span className="font-semibold text-gray-800">{userData?.maskedEmail}</span> แล้ว
@@ -60,16 +61,9 @@ export default function VerifyOtp({ userData, onNext, onBack }: VerifyOtpProps) 
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col w-full gap-y-5 text-left">
-          <div className="w-full flex flex-col space-y-1.5">
-            <label className="text-sm font-semibold text-gray-700">รหัส OTP</label>
-            <input 
-              type="text" 
-              maxLength={6}
-              placeholder="ป้อนรหัส OTP 6 หลัก" 
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-orange-primary text-base text-center font-mono tracking-widest text-xl" 
-            />
+          <div className="w-full flex flex-col items-center space-y-3">
+            <label className="text-sm font-semibold text-gray-700 self-start">รหัส OTP</label>
+            <OtpInput value={otp} onChange={setOtp} autoFocus disabled={isLoading} />
           </div>
 
           <div className="flex justify-between items-center space-x-3 w-full mt-6 pt-4 border-t border-gray-100">

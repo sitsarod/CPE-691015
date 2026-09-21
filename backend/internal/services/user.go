@@ -4,6 +4,8 @@ import (
 	"CPE-691015/internal/dto"
 	"CPE-691015/internal/models"
 	"errors"
+	"log"
+
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"time"
@@ -140,7 +142,18 @@ func (s *UserService) CreateUser(user *models.User) error {
 	var existingUser models.User
 
 	if err := s.db.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
-		return errors.New("บัญชีผู้ใช้นี้มีอยู่แล้ว")
+		if existingUser.EmailVerifiedAt != nil {
+			return errors.New("บัญชีผู้ใช้นี้มีอยู่แล้ว")
+		}
+
+		// บัญชีเดิมสมัครไว้แต่ไม่เคยยืนยันอีเมลเลย (พิมพ์อีเมลผิด/ปลอมตอนสมัครครั้งก่อน
+		// เป็นสาเหตุที่พบบ่อยที่สุด) — ถือว่าการสมัครครั้งนั้นยังไม่เกิดขึ้นจริง เพราะ login
+		// ไม่ได้ตั้งแต่แรกจนกว่าจะ verify (ดู AuthService.Login) จึงไม่มีข้อมูลอะไรผูกอยู่กับ
+		// บัญชีนี้ที่ต้องรักษาไว้ ลบทิ้งแล้วให้สมัครแทนที่ได้เลย ไม่งั้นอีเมลนั้นจะถูก "จอง" ค้าง
+		// ไว้ถาวรโดยไม่มีทางแก้เอง (ต้องรอแอดมินลบให้ด้วยมือ)
+		if err := deleteUnverifiedUser(s.db, existingUser.ID); err != nil {
+			return errors.New("ไม่สามารถแทนที่บัญชีเดิมที่ยังไม่ยืนยันอีเมลได้")
+		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
@@ -174,6 +187,56 @@ func (s *UserService) CreateUser(user *models.User) error {
 	}
 
 	return s.db.Create(user).Error
+}
+
+// deleteUnverifiedUser ลบบัญชีที่สมัครไว้แต่ไม่เคยยืนยันอีเมลทิ้งถาวร (แถว OTP + โปรไฟล์ + user)
+//
+// ⚠️ ต้องเป็นบัญชีที่ EmailVerifiedAt ยังเป็น nil เท่านั้น — ผู้เรียกมีหน้าที่เช็คก่อน
+// เป็น hard delete (Unscoped) เพราะบัญชีที่ล็อกอินไม่เคยได้เลยไม่มีข้อมูล/ประวัติอะไรผูกอยู่
+// ให้ต้องเก็บไว้ ต่างจากบัญชีที่เคยใช้งานจริงแล้วถูกลบทีหลัง (ดู DeleteUserAccount)
+//
+// ต้องลบเองทุกตาราง เพราะ ON DELETE CASCADE ของฐานข้อมูล "ใช้ไม่ได้" ที่นี่ (เหตุผลเดียวกับ
+// account_erasure.go — โมเดลใช้ soft delete ผ่าน gorm.Model ทำให้ cascade ของ DB ไม่ทำงาน)
+func deleteUnverifiedUser(db *gorm.DB, userID uint) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Where("user_id = ?", userID).Delete(&models.EmailVerificationOTP{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().Where("user_id = ?", userID).Delete(&models.Customer{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().Where("user_id = ?", userID).Delete(&models.Coach{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&models.User{}, userID).Error
+	})
+}
+
+// DeleteUnverifiedUsers ลบบัญชีที่สมัครมานานเกิน olderThan แต่ไม่เคยยืนยันอีเมลเลยทิ้งถาวร
+// (เรียกจาก background job รายชั่วโมง — ดู cmd/serve/main.go)
+//
+// ⚠️ เผื่อคนที่พิมพ์อีเมลผิด/ปลอมตอนสมัครแล้ว "ไม่กลับมาสมัครซ้ำเลย" ทิ้งบัญชีขยะค้างไว้ถาวร
+// จุดที่ deleteUnverifiedUser ถูกเรียกตอนสมัครซ้ำ (CreateUser) ช่วยกรณีที่กลับมาสมัครใหม่ทันที
+// ได้อยู่แล้ว แต่ไม่ช่วยกรณีที่ไม่กลับมาเลย — job นี้จึงมีไว้เก็บกวาดกรณีหลัง
+func (s *UserService) DeleteUnverifiedUsers(olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+
+	var staleUserIDs []uint
+	if err := s.db.Model(&models.User{}).
+		Where("email_verified_at IS NULL AND created_at < ?", cutoff).
+		Pluck("id", &staleUserIDs).Error; err != nil {
+		return 0, err
+	}
+
+	var deleted int64
+	for _, id := range staleUserIDs {
+		if err := deleteUnverifiedUser(s.db, id); err != nil {
+			log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมล id=%d ไม่สำเร็จ (ข้ามไปก่อน ลองใหม่รอบหน้า): %v", id, err)
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 // UpdateUser updates an existing user and their customer/coach details [PATCH]

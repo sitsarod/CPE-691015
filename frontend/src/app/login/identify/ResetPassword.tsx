@@ -72,8 +72,8 @@ export default function ResetPassword({ userData, onBack }: ResetPasswordProps) 
 
   if (done) {
     return (
-      <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-        <div className="bg-white w-full max-w-lg p-8 md:p-12 rounded-3xl shadow-md text-center space-y-5">
+      <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+        <div className="bg-white w-full max-w-lg text-center space-y-5">
           <h1 className="text-2xl font-bold text-gray-900">ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว</h1>
           <p className="text-sm text-gray-500">กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่ของท่าน</p>
 
@@ -86,8 +86,8 @@ export default function ResetPassword({ userData, onBack }: ResetPasswordProps) 
   }
 
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      <div className="bg-white w-full max-w-lg p-8 md:p-12 rounded-3xl shadow-md">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+      <div className="bg-white w-full max-w-lg">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">ตั้งรหัสผ่านใหม่</h1>
         <p className="text-sm text-gray-500 mb-8">
           {userData.maskedEmail ? `สำหรับบัญชี ${userData.maskedEmail}` : "กรุณาตั้งรหัสผ่านใหม่ของท่าน"}
