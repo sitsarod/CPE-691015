@@ -816,12 +816,12 @@ export default function AdminAttendancePage() {
         )}
 
         {unbilledSessions.length > 0 && (
-          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5">
             <div className="flex items-start gap-3">
-              <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+              <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-[#CC0000]" />
               <div>
-                <p className="font-semibold text-blue-900">รอบที่ยังไม่ได้ออกบิลค่าสนาม</p>
-                <p className="mt-0.5 text-sm text-blue-800">
+                <p className="font-semibold text-red-900">รอบที่ยังไม่ได้ออกบิลค่าสนาม</p>
+                <p className="mt-0.5 text-sm text-red-800">
                   รอบที่ระบบปิดให้อัตโนมัติ หรือปิดโดยยังไม่ได้กรอกค่าสนาม —
                   เข้าไปกรอกค่าสนามรวมเพื่อออกบิลให้คนในรอบ
                 </p>
@@ -832,7 +832,7 @@ export default function AdminAttendancePage() {
               {unbilledSessions.map((row) => (
                 <div
                   key={row.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-white p-4"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-white p-4"
                 >
                   <div>
                     <p className="font-semibold text-gray-900">
@@ -854,7 +854,7 @@ export default function AdminAttendancePage() {
                   <button
                     onClick={() => handleEnterSession(row.id)}
                     disabled={enteringSessionId !== null}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60 sm:w-auto"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-5 py-2.5 font-semibold text-white transition hover:bg-[#990000] disabled:opacity-60 sm:w-auto"
                   >
                     {enteringSessionId === row.id ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
@@ -1131,19 +1131,19 @@ export default function AdminAttendancePage() {
       )}
 
       {!isOpen && !session.court_billed_at && payerCount > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
           <div className="flex items-start gap-3">
-            <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <Receipt className="mt-0.5 h-5 w-5 shrink-0 text-[#CC0000]" />
             <div>
-              <p className="font-semibold text-blue-900">ยังไม่ได้ออกบิลค่าสนามของรอบนี้</p>
-              <p className="mt-0.5 text-sm text-blue-800">
+              <p className="font-semibold text-red-900">ยังไม่ได้ออกบิลค่าสนามของรอบนี้</p>
+              <p className="mt-0.5 text-sm text-red-800">
                 กรอกค่าสนามรวมของคาบนี้ ระบบจะหารให้คนที่มาเรียนและคนที่ยืนยันแล้วไม่มา แล้วออกบิลทันที
               </p>
             </div>
           </div>
           <button
             onClick={() => setCourtFeeMode("bill")}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#CC0000] px-4 font-semibold text-white transition hover:bg-[#990000] sm:w-auto"
           >
             <Receipt className="h-4 w-4" />
             ออกบิลค่าสนาม

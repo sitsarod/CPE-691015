@@ -298,6 +298,11 @@ func (s *AttendanceService) getRoster(tx *gorm.DB, session *models.AttendanceSes
 	if err := tx.Where("attendance_session_id = ?", session.ID).Find(&records).Error; err != nil {
 		return nil, nil, errors.New("ไม่สามารถดึงข้อมูลการเช็คชื่อได้")
 	}
+
+	enrollments, err = withCheckedInEnrollments(tx, enrollments, records)
+	if err != nil {
+		return nil, nil, err
+	}
 	byEnrollment := make(map[uint]*models.StudentAttendance, len(records))
 	for i := range records {
 		byEnrollment[records[i].EnrollmentID] = &records[i]
@@ -355,6 +360,41 @@ func (s *AttendanceService) confirmedCustomers(tx *gorm.DB, packageIDs []uint, c
 		out[id] = true
 	}
 	return out, nil
+}
+
+// withCheckedInEnrollments เติมใบที่เช็คชื่อในรอบนี้แล้วแต่ไม่ได้อยู่ใน list เพราะ deductSession
+// ปิดใบเป็น completed ทันทีที่ครั้งคงเหลือหมด (แพ็กเกจทดลอง 1 ครั้งเจอทุกครั้ง)
+func withCheckedInEnrollments(
+	tx *gorm.DB,
+	enrollments []models.Enrollment,
+	records []models.StudentAttendance,
+) ([]models.Enrollment, error) {
+	seen := make(map[uint]bool, len(enrollments))
+	for i := range enrollments {
+		seen[enrollments[i].ID] = true
+	}
+
+	missing := make([]uint, 0)
+	for _, r := range records {
+		if !seen[r.EnrollmentID] {
+			seen[r.EnrollmentID] = true
+			missing = append(missing, r.EnrollmentID)
+		}
+	}
+	if len(missing) == 0 {
+		return enrollments, nil
+	}
+
+	var extra []models.Enrollment
+	if err := tx.
+		Preload("Customer").
+		Preload("Customer.User").
+		Where("id IN ?", missing).
+		Order("id ASC").
+		Find(&extra).Error; err != nil {
+		return nil, errors.New("ไม่สามารถดึงรายชื่อผู้เรียนที่เช็คชื่อไปแล้วได้")
+	}
+	return append(enrollments, extra...), nil
 }
 
 func (s *AttendanceService) activeEnrollments(tx *gorm.DB, packageIDs []uint) ([]models.Enrollment, error) {
