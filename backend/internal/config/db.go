@@ -49,4 +49,18 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+
+	// ตั้งค่า connection pool ให้เข้ากับ Neon (autosuspend หลัง idle 5 นาที)
+	//
+	// พอ Neon หลับ มันจะปิด connection ฝั่ง server ทิ้ง — connection เก่าที่ค้างในพูล
+	// จะกลายเป็นของเสีย query แรกหลังตื่นจะเจอ "connection reset" ถ้าไม่รีไซเคิลก่อน
+	// จึงตั้งอายุ idle/lifetime ให้สั้นกว่าหน้าต่าง autosuspend เพื่อทิ้ง connection ตายเอง
+	if sqlDB, err := DB.DB(); err != nil {
+		log.Fatal("Failed to access underlying sql.DB:", err)
+	} else {
+		sqlDB.SetMaxOpenConns(10)                  // กันเปิดทะลักตอนโหลดพุ่ง
+		sqlDB.SetMaxIdleConns(2)                   // เก็บ connection ว่างไว้ไม่กี่เส้นพอ reuse
+		sqlDB.SetConnMaxIdleTime(3 * time.Minute)  // < 5 นาที: ปล่อย connection ว่างหลุดก่อน Neon หลับ
+		sqlDB.SetConnMaxLifetime(30 * time.Minute) // เพดานอายุ กัน connection ค้างข้ามรอบ suspend
+	}
 }

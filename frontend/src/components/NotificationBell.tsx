@@ -12,9 +12,14 @@ import {
 import { OPEN_CHAT_EVENT } from "@/components/ChatWidget";
 
 // ยิง event นี้ทุกครั้งที่ SSE stream ของ Notification ทั่วไปส่งสัญญาณ "มีแจ้งเตือนใหม่" มา
-// ให้ badge อื่นๆ ในหน้าเว็บ (เช่น badge ห้องแชท "สอบถาม" ของแอดมิน) อาศัย event นี้รีเฟรชตัวเอง
-// แทนการเปิด SSE connection ซ้ำซ้อน หรือ poll เซิร์ฟเวอร์เป็นระยะด้วยตัวเอง
+// ให้ badge/หน้าอื่นๆ ในหน้าเว็บ (เช่น badge ห้องแชท "สอบถาม" หรือหน้าการเงินของแอดมิน) อาศัย
+// event นี้รีเฟรชตัวเอง แทนการเปิด SSE connection ซ้ำซ้อน หรือ poll เซิร์ฟเวอร์เป็นระยะด้วยตัวเอง
+//
+// เป็น CustomEvent ที่พก detail.type = ชนิดแจ้งเตือน (เช่น "slip_uploaded") ผู้ฟังกรองได้ว่า
+// สัญญาณนี้เกี่ยวกับตัวเองไหม จะได้ไม่รีเฟรชมั่วทุกชนิด — ดู NotificationStreamDetail
 export const NOTIFICATION_STREAM_EVENT = "koyama:notification-stream";
+
+export type NotificationStreamDetail = { type: string };
 
 const TONE_DOT: Record<string, string> = {
   danger: "bg-rose-500",
@@ -93,9 +98,15 @@ export default function NotificationBell({
       const token = localStorage.getItem("token");
       if (!token || closed) return;
       es = new EventSource(`${base}/notifications/stream?token=${encodeURIComponent(token)}`);
-      es.addEventListener("notify", () => {
+      es.addEventListener("notify", (e) => {
         refresh();
-        window.dispatchEvent(new Event(NOTIFICATION_STREAM_EVENT));
+        // data = ชนิดแจ้งเตือนจาก backend (เช่น "slip_uploaded"); forward ต่อให้ผู้ฟังกรองได้
+        const type = (e as MessageEvent).data as string;
+        window.dispatchEvent(
+          new CustomEvent<NotificationStreamDetail>(NOTIFICATION_STREAM_EVENT, {
+            detail: { type },
+          }),
+        );
       });
       es.onerror = () => {
         es?.close();

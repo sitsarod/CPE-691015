@@ -140,9 +140,12 @@ func startPhotoPostCleanupJob() {
 	}()
 }
 
-// startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่รออยู่ ทุก 10 วินาที
+// startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา
 //
-// ⚠️ ต่างจาก job อื่นข้างบนตรงที่ใช้ ticker + context ไม่ใช่ time.Sleep
+// ⚠️ ขับด้วยสัญญาณ (NotifyFaceImageQueued) ไม่ poll — ตอนไม่มีรูปรอจะหลับยาว
+// เพื่อให้ Neon idle แล้ว scale-to-zero ได้ ไม่ยิง query ทิ้งทุกไม่กี่วินาที
+//
+// ⚠️ ต่างจาก job อื่นข้างบนตรงที่ใช้ context ไม่ใช่ time.Sleep
 // เพื่อให้หยุดได้ตอนปิดเซิร์ฟเวอร์ แทนที่จะค้างเป็น goroutine ผี
 //
 // ไม่ตั้งค่า face-service ไว้ worker จะไม่เริ่มเลยและ log บอก — รูปค้างที่ pending

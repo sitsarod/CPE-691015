@@ -9,4 +9,4 @@ package services
 // ไม่ต้องล็อกอิน แต่ต้องรู้ session ID ที่สุ่มไม่ได้ง่ายๆ ถึงจะดูได้) — ไม่ได้เพิ่มช่องโหว่ใหม่
 //
 // ใช้ type notificationHub ตัวเดิม (แค่คนละ instance/namespace) เพื่อไม่ต้องเขียน pub/sub ซ้ำ
-var ChatHub = &notificationHub{subs: make(map[uint]map[chan struct{}]bool)}
+var ChatHub = &notificationHub{subs: make(map[uint]map[chan string]bool)}

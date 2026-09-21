@@ -94,8 +94,6 @@ export function DetectDesktop({ manager }: { manager: DetectManager }) {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-[#CC0000]">
-          <span className="h-px w-7 bg-[#CC0000]" />
-          <span className="text-xs font-black uppercase tracking-[0.25em]">AI Classification</span>
         </div>
         <h1 className="mt-2.5 text-3xl font-black tracking-tight text-gray-900 md:text-4xl">
           จำแนกผู้เรียน

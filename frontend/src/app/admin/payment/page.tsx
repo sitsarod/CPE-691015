@@ -19,6 +19,11 @@ import {
   updateBilling
 } from "@/services/paymentAPI";
 import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
+import { NOTIFICATION_STREAM_EVENT, type NotificationStreamDetail } from "@/components/NotificationBell";
+
+// ชนิดแจ้งเตือนที่ "เกี่ยวกับหน้าการเงิน" เท่านั้นที่ควร trigger ให้โหลดข้อมูลใหม่
+// (backend NotifyAdmins ยิงชนิดพวกนี้ตอนสลิปเข้า/ยืนยันอัตโนมัติ — ดู payment_service.go)
+const PAYMENT_STREAM_TYPES = new Set(["slip_uploaded", "payment_auto_verified"]);
 
 export default function FinancialPortal() {
   const [subTab, setSubTab] = useState<'issue' | 'slips' | 'summary' | 'banks' | 'expenses'>('issue');
@@ -148,6 +153,28 @@ export default function FinancialPortal() {
       window.removeEventListener("focus", maybeRefetch);
       document.removeEventListener("visibilitychange", maybeRefetch);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // เรียลไทม์: เกาะสัญญาณ SSE ของกระดิ่งแจ้งเตือน (ท่อเดิม ไม่เปิด connection ใหม่)
+  // พอมีสลิปใหม่/auto-verify → backend NotifyAdmins → SSE เด้ง → ยิง event กลางนี้
+  // กรองเฉพาะชนิดที่เกี่ยวกับการเงิน (PAYMENT_STREAM_TYPES) จะได้ไม่รีเฟรชมั่วตอนมีแจ้งเตือนอื่น
+  // หน้านี้หนัก (โหลด 5 endpoint) จึง throttle ยาว 45 วิ + ดึงเฉพาะตอนแท็บเปิดอยู่จริง
+  // ใช้ lastFetchRef ร่วมกับ refetch-on-focus เพื่อกันดึงซ้ำซ้อน
+  useEffect(() => {
+    const STREAM_THROTTLE_MS = 45_000;
+    const onStream = (e: Event) => {
+      const type = (e as CustomEvent<NotificationStreamDetail>).detail?.type;
+      // ถ้ารู้ชนิดแต่ไม่เกี่ยวกับการเงิน → ข้าม; ถ้าไม่รู้ชนิด (backend เก่า/สัญญาณเปล่า "1"
+      // หรือ event ที่ไม่มี detail) ปล่อยผ่านเพื่อ backward-compatible จะได้ไม่พลาดของจริง
+      const known = type && type !== "1";
+      if (known && !PAYMENT_STREAM_TYPES.has(type)) return;
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchRef.current < STREAM_THROTTLE_MS) return;
+      fetchData(true);
+    };
+    window.addEventListener(NOTIFICATION_STREAM_EVENT, onStream);
+    return () => window.removeEventListener(NOTIFICATION_STREAM_EVENT, onStream);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

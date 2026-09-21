@@ -596,7 +596,7 @@ func (s *autoQAService) AdminReply(sessionID uint, req *dto.AdminReplyReq) (*dto
 	// แจ้งเตือนแบบเรียลไทม์ผ่าน SSE ให้ฝั่งลูกค้า/ผู้เยี่ยมชมที่กำลังเปิดกล่องแชทอยู่ — ใช้ ChatHub
 	// (ผูกกับ session ID) ครอบคลุมทั้งผู้เยี่ยมชมที่ไม่ได้ล็อกอินและสมาชิกที่ล็อกอิน ต่างจาก NotifHub
 	// ด้านล่างที่ต้องมี JWT จึงใช้ได้เฉพาะสมาชิกที่ล็อกอินเท่านั้น
-	ChatHub.Publish(sessionID)
+	ChatHub.Publish(sessionID, "chat_reply")
 
 	// แจ้งเตือนลูกค้าแบบเรียลไทม์ผ่าน SSE ของระบบ Notification ทั่วไป — เฉพาะกรณีเป็นสมาชิกที่ล็อกอินอยู่
 	// (มี user_id ผูกกับห้อง) เพิ่มเติมจาก ChatHub ด้านบน เพื่อให้ badge กระดิ่งแจ้งเตือนทั่วไปเห็นด้วย

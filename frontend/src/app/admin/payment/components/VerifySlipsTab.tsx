@@ -72,7 +72,10 @@ export default function VerifySlipsTab({
     return billings.filter(b => {
       let matchesStatus = false;
       if (slipFilter === 'all') {
-        matchesStatus = b.billingstatus === 'waitcheck' || !!b.slipurl;
+        // "ทั้งหมด" = ทุกรายการจริง ๆ — รวมค้างชำระ (unfunded/overdue ไม่มีสลิป) และ
+        // จ่ายเงินสด (paid ไม่มีสลิป) ด้วย ไม่ใช่แค่รายการที่มีสลิป/รอตรวจ
+        // (backend ตัดใบแจ้งหนี้ที่ยกเลิกทิ้งไปแล้ว จึงเหลือแต่สถานะที่ควรแสดง)
+        matchesStatus = true;
       } else if (slipFilter === 'pending') {
         matchesStatus = b.billingstatus === 'waitcheck';
       } else if (slipFilter === 'approved') {

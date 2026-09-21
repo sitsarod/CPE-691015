@@ -87,8 +87,6 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-[#CC0000]">
-          <span className="h-px w-6 bg-[#CC0000]" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">AI Classification</span>
         </div>
         <h1 className="mt-2 text-2xl font-black tracking-tight text-gray-900">จำแนกผู้เรียน</h1>
         <p className="mt-1 text-xs text-gray-500">
