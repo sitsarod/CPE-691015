@@ -185,8 +185,13 @@ func (ctrl *NotificationController) Stream(c *gin.Context) {
 		select {
 		case <-done:
 			return
-		case <-ch:
-			fmt.Fprint(c.Writer, "event: notify\ndata: 1\n\n")
+		case msg := <-ch:
+			// data = ชนิดแจ้งเตือน (เช่น slip_uploaded) ให้ client กรองได้ว่าจะรีเฟรชไหม
+			// เผื่อสัญญาณเปล่า (ไม่มีชนิด) ส่ง "1" เป็น fallback ให้ client เดิมยังทำงานได้
+			if msg == "" {
+				msg = "1"
+			}
+			fmt.Fprintf(c.Writer, "event: notify\ndata: %s\n\n", msg)
 			flusher.Flush()
 		case <-ticker.C:
 			fmt.Fprint(c.Writer, ": keepalive\n\n")

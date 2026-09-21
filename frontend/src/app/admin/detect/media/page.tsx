@@ -74,8 +74,6 @@ export default function AdminDetectMediaPage() {
       <div className="mx-auto max-w-4xl space-y-6 animate-in fade-in duration-500">
         <div>
           <div className="flex items-center gap-2 text-[#CC0000]">
-            <span className="h-px w-7 bg-[#CC0000]" />
-            <span className="text-xs font-black uppercase tracking-[0.25em]">AI Classification</span>
           </div>
           <h1 className="mt-2.5 text-3xl font-black tracking-tight text-gray-900">ดูรูป/วิดีโอแยกรายคน</h1>
           <p className="mt-2 text-sm text-gray-500">เลือกนักเรียนเพื่อดูรูปและวิดีโอทั้งหมดที่เขาถูกแท็กไว้</p>

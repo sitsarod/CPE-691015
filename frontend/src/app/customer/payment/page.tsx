@@ -294,7 +294,6 @@ export default function CustomerPaymentPage() {
       {/* header (editorial) */}
       <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <span className="text-[11.5px] font-medium uppercase tracking-[0.2em] text-[#CC0000]">Billing</span>
           <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-gray-900">การเงิน</h1>
           <p className="mt-1.5 text-[13px] font-light text-gray-500">
             บิลเรียกเก็บเงินและประวัติใบแจ้งหนี้ของคุณ · เลือกหลายบิลเพื่อชำระรวมครั้งเดียวได้

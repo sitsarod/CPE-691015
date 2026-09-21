@@ -166,7 +166,8 @@ func CreateNotification(db *gorm.DB, userID uint, ntype, signature, title, body,
 		return
 	}
 	// ส่งสัญญาณเรียลไทม์ไปยัง SSE stream ของผู้ใช้ (ถ้ากำลังเปิดเว็บอยู่)
-	NotifHub.Publish(userID)
+	// พก ntype ไปด้วย ให้ client กรองได้ว่าจะรีเฟรชหน้าตัวเองไหม
+	NotifHub.Publish(userID, ntype)
 }
 
 // NotifyAdmins ส่งแจ้งเตือนเดียวกันให้แอดมินทุกคน
