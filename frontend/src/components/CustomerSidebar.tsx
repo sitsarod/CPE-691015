@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Wallet, ClipboardList, Calendar, History, StarCheck, UserCircle, LayoutDashboard, MoreHorizontal, X, ShieldCheck, ScanFace, ChevronRight } from "lucide-react";
+import { getUserProfileAPI } from "@/services/userAPI";
 
 const navItems = [
   { href: "/customer/dashboard", icon: <Home />, label: "หน้าแรก" },
@@ -33,6 +34,7 @@ export default function CustomerSidebar() {
 
   const [userName, setUserName] = useState("กำลังโหลด...");
   const [userEmail, setUserEmail] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -43,6 +45,19 @@ export default function CustomerSidebar() {
     const fullName = [storedFirstName, storedLastName].filter(Boolean).join(" ");
     if (fullName) setUserName(fullName);
     if (storedEmail) setUserEmail(storedEmail);
+
+    // รูปโปรไฟล์ไม่ได้ถูกเก็บใน localStorage (session.ts จงใจไม่เก็บรูป)
+    // จึงต้องดึงจาก API เหมือนหน้าโปรไฟล์ เพื่อให้ avatar ใน sidebar ตรงกับรูปจริง
+    const userId = localStorage.getItem("user_id");
+    if (userId) {
+      getUserProfileAPI(Number(userId))
+        .then((profile) => {
+          if (profile?.profile_picture) setProfilePicture(profile.profile_picture);
+        })
+        .catch(() => {
+          // ดึงรูปไม่สำเร็จก็ปล่อยให้ fallback เป็นไอคอนตามเดิม ไม่ต้องรบกวนผู้ใช้
+        });
+    }
   }, []);
 
   // ล็อก scroll พื้นหลังตอนเปิดเมนูเต็มหน้าจอ
@@ -76,8 +91,13 @@ export default function CustomerSidebar() {
 
         <Link href="/customer/profile">
           <div className="flex items-center gap-4 flex-shrink-0 min-w-[260px] cursor-pointer hover:bg-gray-50 px-[22px] py-6 transition-colors">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
-              <UserCircle className="w-8 h-8" />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100 overflow-hidden">
+              {profilePicture ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profilePicture} alt="รูปโปรไฟล์" className="w-full h-full object-cover" />
+              ) : (
+                <UserCircle className="w-8 h-8" />
+              )}
             </div>
             <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
               <p className="text-[15px] font-bold text-gray-800 leading-tight truncate w-[160px]">{userName}</p>
@@ -191,8 +211,13 @@ export default function CustomerSidebar() {
                   pathname === "/customer/profile" ? "border-[#CC0000] bg-[#FFF0F0]" : "border-gray-200 hover:bg-gray-50"
                 }`}
               >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100">
-                  <UserCircle className="w-8 h-8" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 flex-shrink-0 bg-gray-100 overflow-hidden">
+                  {profilePicture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profilePicture} alt="รูปโปรไฟล์" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCircle className="w-8 h-8" />
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-[15px] font-bold text-gray-800 leading-tight truncate">{userName}</p>
