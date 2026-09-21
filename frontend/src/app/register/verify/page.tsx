@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/Button";
-import InputField from "@/components/InputField";
+import OtpInput from "@/components/OtpInput";
 import { verifyRegistrationOTPAPI, resendRegistrationOTPAPI } from "@/services/authAPI";
 import { saveSession } from "@/services/session";
 
@@ -81,7 +81,7 @@ function VerifyEmailForm() {
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">ยืนยันอีเมล</h2>
@@ -102,16 +102,10 @@ function VerifyEmailForm() {
         )}
 
         <form onSubmit={handleVerify} className="space-y-6">
-          <InputField
-            label="รหัสยืนยัน 6 หลัก"
-            name="otp"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="000000"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            required
-          />
+          <div className="flex flex-col items-center space-y-3">
+            <label className="self-start text-sm font-semibold text-gray-700">รหัสยืนยัน 6 หลัก</label>
+            <OtpInput value={otp} onChange={setOtp} autoFocus disabled={isVerifying} />
+          </div>
 
           <Button variant="primary" type="submit" disabled={isVerifying}>
             {isVerifying ? "กำลังยืนยัน..." : "ยืนยันอีเมล"}

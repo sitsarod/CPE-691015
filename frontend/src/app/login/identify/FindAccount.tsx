@@ -58,8 +58,8 @@ export default function FindAccount({ onNext }: FindAccountProps) {
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-96px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
-      <div className="bg-white w-full max-w-3xl p-8 md:p-12 rounded-3xl shadow-md">
+    <div className="w-full min-h-[calc(100vh-96px)] bg-white flex items-center justify-center p-4 md:p-8">
+      <div className="bg-white w-full max-w-3xl">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">ค้นหาบัญชีของคุณ</h1>
         <p className="text-sm text-gray-500 mb-8">ป้อนอีเมลหรือหมายเลขโทรศัพท์ของคุณเพื่อค้นหาบัญชี</p>
 
