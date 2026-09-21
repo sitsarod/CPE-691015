@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"time"
@@ -220,13 +221,82 @@ func (w *FaceEmbeddingWorker) downloadImage(ctx context.Context, storageKey stri
 // แต่บอกไม่ได้ว่าเป็นใบหน้าของเจ้าของบัญชีจริงหรือเปล่า คนต้องเป็นด่านสุดท้ายเสมอ
 func (w *FaceEmbeddingWorker) accept(image *models.FaceImage, res *FaceEmbedResult) {
 	vec := models.FormatEmbedding(res.Embedding)
-	w.update(image, map[string]any{
+	if !w.update(image, map[string]any{
 		"status":          models.FaceImageAwaitingReview,
 		"embedding":       vec,
 		"embedding_model": res.Model,
 		"quality_score":   res.Quality,
 		"reject_reason":   "",
-	})
+	}) {
+		return
+	}
+	w.notifyAwaitingReview(image)
+}
+
+// notifyAwaitingReview บอกแอดมินว่ามีใบหน้ารอตรวจ · ยิงครั้งเดียวต่อคนต่อรอบ ไม่ใช่ต่อรูป
+// เพราะคนหนึ่งอัปโหลดสามท่าพร้อมกันแต่แอดมินเข้าไปตรวจรอบเดียว
+func (w *FaceEmbeddingWorker) notifyAwaitingReview(image *models.FaceImage) {
+	column, subjectID := faceSubjectRef(image)
+	if column == "" {
+		return
+	}
+
+	// มีรูปของคนเดียวกันรอตรวจอยู่แล้ว = แจ้งไปแล้วในรอบนี้ ไม่ต้องเด้งซ้ำ
+	var siblings int64
+	if err := w.db.Model(&models.FaceImage{}).
+		Where(column+" = ? AND status = ? AND id <> ?",
+			subjectID, models.FaceImageAwaitingReview, image.ID).
+		Count(&siblings).Error; err != nil {
+		log.Printf("worker: ตรวจรูปที่รอตรวจของคนเดียวกันไม่สำเร็จ (id=%d): %v", image.ID, err)
+		return
+	}
+	if siblings > 0 {
+		return
+	}
+
+	who := faceSubjectName(w.db, column, subjectID)
+	body := "มีผู้ใช้อัปโหลดรูปใบหน้าไว้ รอตรวจสอบว่าเป็นเจ้าของบัญชีจริง"
+	if who != "" {
+		body = fmt.Sprintf("%s อัปโหลดรูปใบหน้าไว้ รอตรวจสอบว่าเป็นเจ้าของบัญชีจริง", who)
+	}
+
+	NotifyAdmins(w.db,
+		"face_image_review",
+		fmt.Sprintf("face-image-%d", image.ID),
+		"มีรูปใบหน้ารอตรวจสอบ",
+		body,
+		"/admin/face-review",
+		"warning",
+	)
+}
+
+// faceSubjectRef บอกว่ารูปนี้เป็นของนักเรียนหรือโค้ช (ฐานบังคับให้มีอย่างใดอย่างหนึ่งเสมอ)
+func faceSubjectRef(image *models.FaceImage) (string, uint) {
+	if image.CustomerID != nil {
+		return "customer_id", *image.CustomerID
+	}
+	if image.CoachID != nil {
+		return "coach_id", *image.CoachID
+	}
+	return "", 0
+}
+
+// faceSubjectName ชื่อที่เอาไว้แสดงในแจ้งเตือน · คืนค่าว่างได้ ผู้เรียกมีข้อความสำรองอยู่แล้ว
+func faceSubjectName(db *gorm.DB, column string, subjectID uint) string {
+	table := "customers"
+	if column == "coach_id" {
+		table = "coaches"
+	}
+	var name string
+	if err := db.Raw(`
+		SELECT COALESCE(NULLIF(TRIM(u.first_name || ' ' || u.last_name), ''), NULLIF(s.nickname, ''), '')
+		FROM `+table+` s JOIN users u ON u.id = s.user_id
+		WHERE s.id = ? AND s.deleted_at IS NULL
+	`, subjectID).Scan(&name).Error; err != nil {
+		log.Printf("worker: อ่านชื่อเจ้าของรูปไม่สำเร็จ (%s=%d): %v", column, subjectID, err)
+		return ""
+	}
+	return name
 }
 
 // reject ปฏิเสธรูปแล้วลบไฟล์ทิ้ง — ไม่มีเหตุให้เก็บภาพใบหน้าที่ระบบจะไม่ใช้
