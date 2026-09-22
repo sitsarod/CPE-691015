@@ -47,7 +47,7 @@ MAX_VIDEO_SAMPLE_FRAMES = 32
 # เพดานความยาววิดีโอที่จะ "จำแนกให้" — ยาวเกินนี้ข้ามการจำแนกไปเฉย ๆ (แต่โค้ชยังอัปโหลด/เก็บ/แท็ก
 # เองได้ปกติ เหมือนตอน face-service ล่ม) ฟีเจอร์นี้ออกแบบมาสำหรับคลิปสั้น ๆ ที่โพสต์แล้วลบทิ้งเองใน
 # 7 วัน ไม่ใช่บันทึกการซ้อมเต็มคาบ — ยิ่งคลิปสั้น ยิ่งได้เฟรมสุ่มถี่ขึ้นด้วย (ดู MAX_VIDEO_SAMPLE_FRAMES)
-MAX_VIDEO_DURATION_SECONDS = 5 * 60
+MAX_VIDEO_DURATION_SECONDS = 8 * 60
 
 # ชื่อโมเดลถูกส่งกลับไปเก็บทุกแถวใน face_images เพราะ embedding ข้ามโมเดลเทียบกันไม่ได้
 MODEL_NAME = os.getenv("FACE_MODEL_NAME", "buffalo_l")
@@ -101,6 +101,11 @@ class EmbedAllResponse(BaseModel):
     face_count: int
     faces: list[DetectedFace]
     model: str
+    # fallback_frame มีค่าเฉพาะ /embed-all-video ตอนที่ "ไม่เจอใบหน้าเลยสักหน้าเดียว" ในทุกเฟรมที่สุ่ม
+    # ตรวจ (faces=[] เท่านั้น) — เฟรมตัวแทนหนึ่งเฟรมจากคลิป (ไม่มีกรอบใบหน้ากำกับ เพราะไม่เจอตำแหน่ง)
+    # ให้โค้ช/แอดมินเห็นอย่างน้อยว่าคลิปนี้มีเนื้อหาอะไร แทนที่จะไม่มีอะไรให้ดูอ้างอิงเลยแม้แต่นิดเดียว
+    # (ดูเหตุผลเต็มที่ embed_all_video) /embed-all (รูป) ไม่ต้องใช้ เพราะฝั่งเว็บมีไฟล์ต้นฉบับอยู่แล้ว
+    fallback_frame: str | None = None
 
 
 def require_service_key(key: str | None) -> None:
@@ -341,4 +346,11 @@ def embed_all_video(req: EmbedRequest, x_service_key: str | None = Header(defaul
                 )
             )
 
-    return EmbedAllResponse(face_count=len(all_faces), faces=all_faces, model=MODEL_NAME)
+    fallback_frame = None
+    if not all_faces:
+        # ไม่เจอใบหน้าเลยสักหน้าเดียวในทุกเฟรมที่สุ่มตรวจ — เอาเฟรมกลางคลิปมาให้ดูเป็นหลักฐานว่า
+        # "คลิปนี้มีเนื้อหาอะไร" แทนที่จะไม่มีอะไรให้โค้ช/แอดมินดูอ้างอิงเลยแม้แต่นิดเดียว (เลือกเฟรม
+        # กลางแทนเฟรมแรก เผื่อเฟรมแรกเป็นช่วงเปลี่ยนฉาก/มืด/ว่างเปล่ามากกว่าช่วงกลางคลิป)
+        fallback_frame, _ = encode_frame(frames[len(frames) // 2])
+
+    return EmbedAllResponse(face_count=len(all_faces), faces=all_faces, model=MODEL_NAME, fallback_frame=fallback_frame)

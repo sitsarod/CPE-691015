@@ -113,7 +113,14 @@ func (ctrl *VideoController) UploadVideo(c *gin.Context) {
 	// ทำทั้งโค้ชและแอดมิน เพราะเทียบกับนักเรียนทั้งโรงเรียนแล้ว ไม่ต้องรู้ว่าใครสอนคอร์สไหน
 	matches, faceCount, err := ctrl.taggingService.DetectStudentsInVideo(c.Request.Context(), raw)
 	if err != nil {
-		log.Printf("จำแนกใบหน้าในวิดีโอ raw_video=%d ไม่สำเร็จ: %v", rawVideo.ID, err)
+		log.Printf("จำแนกใบหน้าในวิดีโอ raw_video=%d (%d bytes) ไม่สำเร็จ: %v", rawVideo.ID, len(raw), err)
+		// ErrFaceTaggingUnavailable (ยังไม่ได้ตั้งค่า face-service) ไม่ใช่ความผิดพลาดของไฟล์นี้เลย
+		// เป็นสถานะระดับระบบที่โค้ชทำอะไรแก้ไม่ได้อยู่แล้ว จึงไม่ต้องขึ้นข้อความให้สับสน — แต่ error
+		// อื่น ๆ ทั้งหมด (วิดีโอยาวเกิน/ไฟล์เสียหาย/service ล่ม) ต้องบอกโค้ชว่าทำไมไม่มีการ์ดขึ้นเลย
+		// ไม่งั้นจะดูเหมือน "AI ดูแล้วไม่เจอใครจริง ๆ" ทั้งที่จริงคือ AI ไม่ได้ดูเลย
+		if !errors.Is(err, services.ErrFaceTaggingUnavailable) {
+			resp.FaceTagError = "ระบบจำแนกใบหน้าอัตโนมัติทำงานกับไฟล์นี้ไม่สำเร็จ (เช่น วิดีโอยาวเกิน 8 นาที หรือไฟล์เสียหาย) — เพิ่มชื่อผู้เรียนเองได้ด้านล่าง"
+		}
 	} else {
 		resp.FaceCount = faceCount
 		for _, m := range matches {

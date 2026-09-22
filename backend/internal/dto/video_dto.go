@@ -18,4 +18,9 @@ type UploadVideoResponse struct {
 	// จึงมากกว่าจำนวนคนจริงในคลิปได้ — ดูคอมเมนต์ที่ FaceTaggingService.DetectStudentsInVideo)
 	FaceCount int                         `json:"face_count"`
 	Students  []DetectedStudentSuggestion `json:"students"`
+
+	// FaceTagError มีค่าเฉพาะตอนจำแนกใบหน้าอัตโนมัติล้มเหลวจริง ๆ (เช่น วิดีโอยาวเกิน/ไฟล์เสียหาย/
+	// face-service ล่ม) ไม่ใช่แค่ "ไม่เจอใครที่รู้จัก" — ให้หน้าเว็บบอกโค้ชได้ว่าทำไมไม่มีการ์ดขึ้นเลย
+	// แทนที่จะให้เห็นแผงตรวจทานว่างเปล่าเฉย ๆ จนเข้าใจผิดว่า AI ดูแล้วไม่เจอใครจริง ๆ
+	FaceTagError string `json:"face_tag_error,omitempty"`
 }

@@ -67,9 +67,11 @@ func TestDetectStudentsInPhotoSkipsModelWhenRosterEmpty(t *testing.T) {
 	}
 }
 
-// ใบหน้าที่เบลอ/เล็กเกินเกณฑ์ต้องถูกข้าม แต่ยังนับรวมใน faceCount
-// เพื่อให้โค้ชรู้ว่า "ระบบเห็นหน้าอยู่นะ แต่ไม่ชัดพอจะเดา" ไม่ใช่เข้าใจว่าในรูปไม่มีคน
-func TestDetectStudentsInPhotoSkipsLowQualityFaces(t *testing.T) {
+// ใบหน้าที่เบลอ/เล็กเกินเกณฑ์ต้องไม่ถูกเดาชื่ออัตโนมัติ (ข้าม matchFace ไปเลย) แต่ต้องยังโผล่เป็น
+// รายการ "ไม่ทราบชื่อ" (CustomerID=0) พร้อม Confidence = คุณภาพที่เจอ ให้โค้ช/แอดมินเห็นว่ามีคนอยู่
+// ตรงนี้จริง ๆ แทนที่จะทิ้งไปเงียบ ๆ จนไม่เหลือหลักฐานอะไรเลย (เคสวิดีโอ/รูปคุณภาพต่ำที่ไม่มีหน้าไหน
+// ผ่านเกณฑ์จับคู่อัตโนมัติเลยสักหน้าเดียว — ก่อนหน้านี้จะไม่เหลือการ์ดให้เห็นแม้แต่ใบเดียว)
+func TestDetectStudentsInPhotoSurfacesLowQualityFacesAsUnmatched(t *testing.T) {
 	db := evalTestDB(t)
 	engine := &fakeFaceEngine{
 		enabled: true,
@@ -92,11 +94,62 @@ func TestDetectStudentsInPhotoSkipsLowQualityFaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ไม่ควร error: %v", err)
 	}
-	if len(matches) != 0 {
-		t.Fatalf("หน้าคุณภาพต่ำต้องถูกข้ามทั้งหมด แต่ได้ %d รายการ", len(matches))
+	if len(matches) != 2 {
+		t.Fatalf("หน้าคุณภาพต่ำต้องโผล่เป็นรายการไม่ทราบชื่อ 2 รายการ แต่ได้ %d รายการ", len(matches))
+	}
+	for _, m := range matches {
+		if m.CustomerID != 0 {
+			t.Fatalf("หน้าคุณภาพต่ำต้องไม่ถูกเดาชื่อ (CustomerID ต้องเป็น 0) แต่ได้ %d", m.CustomerID)
+		}
+	}
+	// เรียงคุณภาพมากไปน้อย (ดู sort.Slice ใน matchFacesToRoster)
+	if matches[0].Confidence != 0.02 || matches[1].Confidence != 0.01 {
+		t.Fatalf("Confidence ต้องเท่ากับคุณภาพที่เจอและเรียงมากไปน้อย แต่ได้ %v, %v", matches[0].Confidence, matches[1].Confidence)
 	}
 	if faceCount != 2 {
 		t.Fatalf("ต้องรายงานว่าเจอ 2 หน้าแม้จะเดาไม่ได้ แต่ได้ %d", faceCount)
+	}
+}
+
+// ไม่เจอใบหน้าเลยสักหน้าเดียวในทุกเฟรมที่สุ่มตรวจ (Faces ว่างเปล่า) — ต้องยังโผล่เป็นรายการเดียว
+// ที่มีแค่ FrameImage (เฟรมตัวแทนจาก face-service) ไม่มี BBox เลย ให้โค้ช/แอดมินเห็นอย่างน้อยว่า
+// คลิปนี้มีเนื้อหาอะไร แทนที่จะไม่มีการ์ดขึ้นเลยแม้แต่ใบเดียว (ดู FaceTaggingService.DetectStudentsInVideo)
+func TestDetectStudentsInVideoSurfacesFallbackFrameWhenNoFacesFound(t *testing.T) {
+	db := evalTestDB(t)
+	engine := &fakeFaceEngine{
+		enabled: true,
+		allResult: &FaceEmbedAllResult{
+			FaceCount:     0,
+			Model:         "buffalo_l",
+			Faces:         nil,
+			FallbackFrame: "เฟรมตัวแทน-base64",
+		},
+	}
+	svc := NewFaceTaggingService(db, engine, NewEvaluationService(db))
+
+	coachID := seedCoachFor(t, db, 100, "uid-tag-fallback")
+	pkgID := seedCourseTaughtBy(t, db, coachID)
+	seedEnrolledCustomer(t, db, pkgID, models.EnrollmentStatusActive, "qr-tag-fallback")
+
+	matches, faceCount, err := svc.DetectStudentsInVideo(context.Background(), []byte("วิดีโอ"))
+	if err != nil {
+		t.Fatalf("ไม่ควร error: %v", err)
+	}
+	if faceCount != 0 {
+		t.Fatalf("ต้องรายงาน faceCount=0 แต่ได้ %d", faceCount)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("ต้องโผล่การ์ดเฟรมตัวแทน 1 รายการ แต่ได้ %d รายการ", len(matches))
+	}
+	m := matches[0]
+	if m.CustomerID != 0 {
+		t.Fatalf("ต้องไม่ทราบชื่อ (CustomerID=0) แต่ได้ %d", m.CustomerID)
+	}
+	if m.BBox != nil {
+		t.Fatalf("ไม่ควรมี BBox เพราะไม่เจอตำแหน่งใบหน้าให้อ้างอิง แต่ได้ %v", m.BBox)
+	}
+	if m.FrameImage != "เฟรมตัวแทน-base64" {
+		t.Fatalf("FrameImage ต้องเป็นเฟรมตัวแทนที่ face-service ส่งมา แต่ได้ %q", m.FrameImage)
 	}
 }
 

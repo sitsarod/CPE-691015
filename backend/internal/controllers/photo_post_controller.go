@@ -117,7 +117,11 @@ func (ctrl *PhotoPostController) UploadPhotoPost(c *gin.Context) {
 	// ทำทั้งโค้ชและแอดมิน เพราะเทียบกับนักเรียนทั้งโรงเรียนแล้ว ไม่ต้องรู้ว่าใครสอนคอร์สไหน
 	matches, faceCount, err := ctrl.taggingService.DetectStudentsInPhoto(c.Request.Context(), raw)
 	if err != nil {
-		log.Printf("จำแนกใบหน้าในรูป raw_photo=%d ไม่สำเร็จ: %v", rawPhoto.ID, err)
+		log.Printf("จำแนกใบหน้าในรูป raw_photo=%d (%d bytes) ไม่สำเร็จ: %v", rawPhoto.ID, len(raw), err)
+		// ดูคอมเมนต์เต็มที่ video_controller.go — ErrFaceTaggingUnavailable ไม่ใช่ความผิดของไฟล์นี้
+		if !errors.Is(err, services.ErrFaceTaggingUnavailable) {
+			resp.FaceTagError = "ระบบจำแนกใบหน้าอัตโนมัติทำงานกับไฟล์นี้ไม่สำเร็จ (เช่น ไฟล์เสียหาย หรือระบบขัดข้อง) — เพิ่มชื่อผู้เรียนเองได้ด้านล่าง"
+		}
 	} else {
 		resp.FaceCount = faceCount
 		for _, m := range matches {
