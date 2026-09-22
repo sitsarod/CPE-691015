@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -39,6 +40,10 @@ type FaceEmbedAllResult struct {
 	FaceCount int
 	Faces     []DetectedFaceEmbedding
 	Model     string
+	// FallbackFrame มีค่าเฉพาะวิดีโอที่ "ไม่เจอใบหน้าเลยสักหน้าเดียว" (Faces ว่างเปล่า) — เฟรม
+	// ตัวแทนหนึ่งเฟรมจากคลิป (ไม่มี bbox กำกับ เพราะไม่เจอตำแหน่งใบหน้าให้อ้างอิง) ให้โค้ช/แอดมิน
+	// เห็นอย่างน้อยว่าคลิปนี้มีเนื้อหาอะไร ดีกว่าไม่มีอะไรให้ดูอ้างอิงเลย (ดู DetectStudentsInVideo)
+	FallbackFrame string
 }
 
 // DetectedFaceEmbedding คือหนึ่งใบหน้าที่เจอในรูป/วิดีโอ — ยังไม่รู้ว่าเป็นใคร
@@ -137,6 +142,7 @@ type embedAllResponse struct {
 		BBox       []float64 `json:"bbox"`
 		FrameImage string    `json:"frame_image"` // มีค่าเฉพาะที่มาจาก /embed-all-video
 	} `json:"faces"`
+	FallbackFrame string `json:"fallback_frame"` // มีค่าเฉพาะ /embed-all-video ตอน Faces ว่างเปล่า
 }
 
 // postJSON ยิงรูป/วิดีโอไปที่ path ที่กำหนดแล้ว decode ผลลงใน out
@@ -166,7 +172,10 @@ func (e *HTTPFaceEngine) postJSON(ctx context.Context, client *http.Client, path
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("face-service ตอบ HTTP %d", resp.StatusCode)
+		// อ่าน body มาด้วย (จำกัดไว้กันตอบกลับมาใหญ่ผิดปกติ) — detail จาก HTTPException ฝั่ง Python
+		// (เช่น "video too large" ต่างจาก "invalid base64") ช่วยไล่สาเหตุได้ตรงกว่าดูแค่ status code เปล่า ๆ
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("face-service ตอบ HTTP %d: %s", resp.StatusCode, detail)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
@@ -236,9 +245,10 @@ func parseEmbedAllResponse(out embedAllResponse) *FaceEmbedAllResult {
 	}
 
 	return &FaceEmbedAllResult{
-		FaceCount: out.FaceCount,
-		Faces:     faces,
-		Model:     out.Model,
+		FaceCount:     out.FaceCount,
+		Faces:         faces,
+		Model:         out.Model,
+		FallbackFrame: out.FallbackFrame,
 	}
 }
 

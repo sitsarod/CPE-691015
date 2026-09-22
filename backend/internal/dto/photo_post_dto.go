@@ -34,6 +34,10 @@ type UploadPhotoPostResponse struct {
 	// ใช้บอกโค้ชว่า "เจอ 5 หน้า จับคู่ได้ 3 คน" จะได้รู้ว่าต้องแท็กเองอีกกี่คน
 	FaceCount int                         `json:"face_count"`
 	Students  []DetectedStudentSuggestion `json:"students"`
+
+	// FaceTagError มีค่าเฉพาะตอนจำแนกใบหน้าอัตโนมัติล้มเหลวจริง ๆ (เช่น ไฟล์เสียหาย/face-service ล่ม)
+	// ไม่ใช่แค่ "ไม่เจอใครที่รู้จัก" — ดูคอมเมนต์เต็มที่ dto.UploadVideoResponse.FaceTagError
+	FaceTagError string `json:"face_tag_error,omitempty"`
 }
 
 // PostItem คือรายการโพสต์ที่รวมทั้งรูปและวิดีโอเข้าด้วยกัน สำหรับแท็บ Posts ในโปรไฟล์นักเรียน

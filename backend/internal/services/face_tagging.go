@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"sort"
 
 	"CPE-691015/internal/models"
 
@@ -35,6 +36,10 @@ type FaceMatch struct {
 	// BBox คือกรอบใบหน้าที่แมตช์คนนี้ [x1, y1, x2, y2] เป็นพิกเซล — ของรูปต้นฉบับ (ฝั่งรูป) หรือ
 	// ของ FrameImage ด้านล่าง (ฝั่งวิดีโอ) ให้หน้าเว็บวาดกรอบ/ชื่อทับตอนตรวจทาน — nil ถ้า
 	// face-service ไม่ได้ส่ง bbox มา
+	//
+	// ⚠️ เมื่อ CustomerID == 0 (ยังไม่ทราบชื่อ — ดูคอมเมนต์ unmatchedFace ใน matchFacesToRoster)
+	// Confidence คือ "คุณภาพของหน้าที่เจอ" (det_score) ไม่ใช่คะแนนความเหมือนกับใครเลย เพราะไม่ได้
+	// จับคู่ใคร แค่เอาไว้โชว์เป็นเปอร์เซ็นต์ให้โค้ชเห็นว่าระบบมั่นใจแค่ไหนว่านี่คือ "หน้าคน" จริง
 	BBox []float64
 	// FrameImage คือเฟรมวิดีโอที่ย่อขนาดแล้ว (JPEG base64) ของเฟรมที่แมตช์คนนี้ได้คะแนนดีที่สุด —
 	// มีเฉพาะวิดีโอ (รูปฝั่งเดียวไม่ต้องใช้ เพราะหน้าเว็บมีไฟล์ต้นฉบับอยู่แล้ว) bbox ข้างบน
@@ -117,6 +122,16 @@ func (s *FaceTaggingService) DetectStudentsInVideo(ctx context.Context, video []
 	}
 
 	matches := s.matchFacesToRoster(result.Faces, customerIDs, nicknames)
+
+	// ไม่เจอใบหน้าเลยสักหน้าเดียวในทุกเฟรมที่สุ่มตรวจ (ต่างจาก "เจอแต่จับคู่ไม่ได้" ที่
+	// matchFacesToRoster จัดการให้แล้วผ่าน unmatched — เคสนั้น matches จะไม่ว่างเปล่า) — เอาเฟรม
+	// ตัวแทนที่ face-service ส่งมา (ดู FaceEmbedAllResult.FallbackFrame) มาแสดงเป็นหลักฐานอย่างน้อย
+	// ว่า "คลิปนี้มีเนื้อหาอะไร" ให้โค้ช/แอดมินดูแล้วระบุคนเองได้ ดีกว่าไม่มีอะไรให้ดูอ้างอิงเลย
+	// ไม่มี BBox เพราะไม่เจอตำแหน่งใบหน้าให้อ้างอิง (nil ตามค่าเริ่มต้นของ FaceMatch)
+	if len(matches) == 0 && result.FallbackFrame != "" {
+		matches = append(matches, FaceMatch{CustomerID: 0, FrameImage: result.FallbackFrame})
+	}
+
 	return matches, result.FaceCount, nil
 }
 
@@ -157,9 +172,27 @@ func (s *FaceTaggingService) matchFacesToRoster(
 		frameImage string
 	}
 	best := make(map[uint]bestMatch)
+
+	// หน้าที่ (ก) ผ่าน quality แต่จับคู่กับใครในรายชื่อไม่ได้เลย หรือ (ข) เบลอ/เล็กเกินไปจนไม่ผ่าน
+	// quality สำหรับจับคู่อัตโนมัติ — ทั้งสองแบบเก็บไว้เสนอเป็น "ไม่ทราบชื่อ" พร้อมกรอบ+เฟรมที่เจอ
+	// แทนที่จะทิ้งเงียบ ๆ ให้โค้ช/แอดมินระบุชื่อเองได้จากภาพที่เห็นจริง (มนุษย์ดูหน้าเบลอแล้วจำได้
+	// จากบริบทอื่น เช่น เสื้อผ้า/ตำแหน่งยืน ได้ดีกว่าระบบเดาอัตโนมัติมาก) ไม่ต้องมโนว่าใครตกหล่นแล้ว
+	// กดเพิ่มเองแบบไม่มีหลักฐานเหมือนก่อนมีฟีเจอร์นี้ (ดูคอมเมนต์ unmatched ด้านล่าง)
+	type unmatchedFace struct {
+		quality    float64
+		bbox       []float64
+		frameImage string
+	}
+	var unmatched []unmatchedFace
+
 	for _, face := range faces {
 		if face.Quality < faceTagMinQuality() {
-			continue // หน้าเบลอ/เล็กเกินไป เดาไปก็มั่ว
+			// เบลอ/เล็กเกินไปจนเดาชื่ออัตโนมัติไม่ได้ — แต่ insightface เองก็ยังฟันธงว่านี่คือ
+			// "หน้าคน" (ไม่ใช่วัตถุอื่น) จึงยังเก็บไว้เสนอเป็นไม่ทราบชื่อ ไม่ใช่ทิ้งไปเงียบ ๆ
+			// (สำคัญกับวิดีโอ/รูปคุณภาพต่ำที่ไม่มีหน้าไหนผ่านเกณฑ์นี้เลยสักหน้าเดียว จะได้ไม่เหลือ
+			// การ์ดว่างเปล่าให้โค้ชมองไม่เห็นแม้แต่ร่องรอยว่ามีคนอยู่ในภาพ)
+			unmatched = append(unmatched, unmatchedFace{quality: face.Quality, bbox: face.BBox, frameImage: face.FrameImage})
+			continue
 		}
 
 		customerID, confidence, err := s.matchFace(face.Embedding, customerIDs)
@@ -168,7 +201,9 @@ func (s *FaceTaggingService) matchFacesToRoster(
 			continue
 		}
 		if customerID == 0 {
-			continue // ไม่มีใครถึงเกณฑ์
+			// ไม่มีใครถึงเกณฑ์ — เก็บไว้เสนอเป็นคนที่ยังไม่ทราบชื่อแทนการทิ้งไปเฉย ๆ
+			unmatched = append(unmatched, unmatchedFace{quality: face.Quality, bbox: face.BBox, frameImage: face.FrameImage})
+			continue
 		}
 		if current, ok := best[customerID]; !ok || confidence > current.confidence {
 			best[customerID] = bestMatch{confidence: confidence, bbox: face.BBox, frameImage: face.FrameImage}
@@ -186,6 +221,25 @@ func (s *FaceTaggingService) matchFacesToRoster(
 		})
 	}
 	sortMatchesByConfidence(matches)
+
+	// ⚠️ ไม่มี customer_id ให้รวมหน้าซ้ำของคนเดียวกันข้ามเฟรมได้เหมือนฝั่งที่จับคู่ได้ (ไม่รู้ว่า
+	// หน้าไหนคือคนเดียวกัน) จึงจำกัดจำนวนไว้ที่ maxUnmatchedSuggestions แถวที่ชัดที่สุด กันโชว์
+	// การ์ด "ไม่ทราบชื่อ" ซ้ำเยอะเกินไปถ้าวิดีโอเจอคนแปลกหน้าเดิมโผล่หลายเฟรมที่สุ่มตรวจ
+	if len(unmatched) > 0 {
+		sort.Slice(unmatched, func(i, j int) bool { return unmatched[i].quality > unmatched[j].quality })
+		const maxUnmatchedSuggestions = 5
+		if len(unmatched) > maxUnmatchedSuggestions {
+			unmatched = unmatched[:maxUnmatchedSuggestions]
+		}
+		for _, u := range unmatched {
+			matches = append(matches, FaceMatch{
+				CustomerID: 0, // 0 = ยังไม่ทราบว่าใคร ให้โค้ช/แอดมินเลือกเองจากภาพที่เห็น
+				Confidence: u.quality, // คุณภาพของหน้าที่เจอ ไม่ใช่คะแนนจับคู่ (ดูคอมเมนต์ FaceMatch.BBox)
+				BBox:       u.bbox,
+				FrameImage: u.frameImage,
+			})
+		}
+	}
 
 	return matches
 }

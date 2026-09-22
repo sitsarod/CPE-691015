@@ -39,6 +39,12 @@ export const MAX_BATCH_FILES = 10;
 // ยังต้องตรวจทานเองอยู่ — เป็นค่าเริ่มต้นที่ยังไม่เคย calibrate จากข้อมูลจริง ปรับได้ถ้าเดาพลาดบ่อยไป
 export const AUTO_CONFIRM_THRESHOLD = 65;
 
+// MAX_VIDEO_DURATION_MINUTES — ต้องตรงกับ MAX_VIDEO_DURATION_SECONDS ฝั่ง face-service (main.py)
+// เป๊ะ ๆ แค่ไว้บอกโค้ชล่วงหน้าก่อนอัปโหลดเฉย ๆ ไม่ได้ validate ความยาวจริงฝั่งนี้ (ทำไม่ได้ก่อนอัปโหลด
+// อยู่ดี เพราะต้องถอด metadata จากไฟล์วิดีโอ) วิดีโอที่ยาวเกินยังอัปโหลด/เก็บ/แท็กเองได้ปกติ
+// แค่ AI จะไม่จำแนกให้เท่านั้น (ดู FaceTagError ที่ backend ส่งกลับมา)
+export const MAX_VIDEO_DURATION_MINUTES = 8;
+
 // BatchItem คือไฟล์หนึ่งไฟล์ในชุดที่เลือกมาพร้อมกัน — แต่ละไฟล์มีสถานะ/ผลวิเคราะห์/การยืนยันแยกจากกัน
 // ไม่ต้องเลือกคอร์สก่อนอัปโหลดแล้ว — ระบบจำแนกใบหน้าเทียบกับนักเรียนทั้งโรงเรียนให้เอง
 export interface BatchItem {
@@ -59,7 +65,19 @@ let uidCounter = 0;
 const nextUid = () => `d-${++uidCounter}`;
 
 function isItemReviewed(item: BatchItem): boolean {
-  return !!item.detections && item.detections.length > 0 && item.detections.every((d) => d.status !== 'pending');
+  return (
+    !!item.detections &&
+    item.detections.length > 0 &&
+    item.detections.every((d) => d.status !== 'pending' || isSkippableUnmatched(d))
+  );
+}
+
+// หน้าที่ AI เจอแล้วแต่จับคู่ใครในรายชื่อไม่ได้เลย (ดู FaceTaggingService.matchFacesToRoster) — ไม่บังคับ
+// ให้โค้ชต้องระบุชื่อก่อนบันทึกเสมอไป ถ้าไม่รู้จริง ๆ ก็ปล่อยผ่านได้เลย เพราะ studentId ยังเป็น '' อยู่
+// จะไม่ถูกส่งไป assign อยู่แล้ว (ดู saveItemNow) ต่างจากที่ AI เดาชื่อมาให้แล้ว (ต้องกด "ถูกต้อง"/แก้ไข
+// ก่อน) หรือโค้ชกดเพิ่มเอง (ตั้งใจเพิ่ม ต้องเลือกชื่อหรือลบทิ้งเอง ไม่ปล่อยค้างเงียบ ๆ)
+function isSkippableUnmatched(d: Detection): boolean {
+  return !d.predictedNickname && !!(d.bbox || d.frameImage);
 }
 
 function newBatchItem(file: File): BatchItem {
@@ -170,31 +188,50 @@ export function useDetect() {
       try {
         // รูปและวิดีโอคืนผลลัพธ์รูปแบบเดียวกันแล้ว (face_count + students[]) — ต่างกันแค่ endpoint
         // และชื่อฟิลด์ raw id เท่านั้น ดึงมาเป็นรูปทรงเดียวกันก่อนใช้ต่อ (กัน TS union ไม่ narrow ให้)
-        const { rawId, faceCount, students: detectedStudents } = item.isVideo
+        const { rawId, faceCount, students: detectedStudents, faceTagError } = item.isVideo
           ? await uploadDetectVideo(item.file).then((r) => ({
               rawId: r.raw_video_id,
               faceCount: r.face_count,
               students: r.students,
+              faceTagError: r.face_tag_error ?? null,
             }))
           : await uploadDetectPhoto(item.file).then((r) => ({
               rawId: r.raw_photo_id,
               faceCount: r.face_count,
               students: r.students,
+              faceTagError: r.face_tag_error ?? null,
             }));
 
         updateItem(item.uid, {
           analyzing: false,
           rawId,
           faceCount,
+          // จำแนกอัตโนมัติล้มเหลวจริง ๆ (ต่างจาก "ไม่เจอใครที่รู้จัก") — บอกโค้ชว่าทำไมไม่มีการ์ด
+          // ขึ้นเลย แทนที่จะให้เห็นแผงว่างเปล่าเฉย ๆ จนเข้าใจผิดว่า AI ดูแล้วไม่เจอใครจริง ๆ
+          error: faceTagError,
           detections: detectedStudents.map((s) => {
-            const confidence = Math.round(s.confidence);
+            // customer_id = 0 คือหน้าที่ AI เจอแล้ว (ไม่ว่าจะชัดพอจับคู่ได้หรือเบลอเกินจะเดาชื่อ)
+            // แต่จับคู่กับใครในรายชื่อไม่ได้เลย (ดู FaceTaggingService.matchFacesToRoster) — ยังโชว์
+            // กรอบ/เฟรมที่เจอไว้เป็นหลักฐานให้โค้ช/แอดมินเลือกชื่อเอง แทนที่จะทิ้งไปเงียบ ๆ เหมือนเดิม
+            //
+            // confidence ยังคงโชว์เสมอแม้ isUnmatched — ฝั่ง backend ส่ง "คุณภาพของหน้าที่เจอ" มาแทน
+            // คะแนนจับคู่ในเคสนี้ (ไม่ใช่ null) ให้โค้ชเห็นว่าระบบมั่นใจแค่ไหนว่านี่คือหน้าคนจริง
+            //
+            // ⚠️ ยกเว้นตอนไม่มี bbox เลย (วิดีโอที่ไม่เจอใบหน้าเลยสักหน้าเดียว — เอาเฟรมตัวแทนมาโชว์
+            // เฉย ๆ ดู FaceTaggingService.DetectStudentsInVideo) กรณีนั้นไม่มีการตรวจจับจริงให้อ้างอิง
+            // เลย โชว์ 0% จะหลอกตาว่ามีคุณภาพมาประเมิน ทั้งที่จริงคือ "ไม่เจออะไรเลย"
+            const isUnmatched = s.customer_id === 0;
+            const confidence = s.bbox ? Math.round(s.confidence) : null;
             return {
               uid: nextUid(),
-              predictedNickname: s.nickname,
+              predictedNickname: isUnmatched ? null : s.nickname,
               confidence,
-              studentId: s.customer_id,
+              studentId: isUnmatched ? '' : s.customer_id,
               // มั่นใจสูงพอ = ยืนยันให้เลยอัตโนมัติ ไม่ต้องรอโค้ชกด (ยังกดแก้ไข/ลบทีหลังได้เหมือนเดิม)
-              status: (confidence >= AUTO_CONFIRM_THRESHOLD ? 'confirmed' : 'pending') as DetectionStatus,
+              // หน้าที่ยังไม่ทราบชื่อต้องรอโค้ชเลือกเองเสมอ ห้าม auto-confirm เด็ดขาด
+              status: (!isUnmatched && confidence !== null && confidence >= AUTO_CONFIRM_THRESHOLD
+                ? 'confirmed'
+                : 'pending') as DetectionStatus,
               // ฝั่งรูป bbox อ้างอิงไฟล์ต้นฉบับที่มีอยู่แล้ว ฝั่งวิดีโอ bbox อ้างอิง frameImage
               // ที่ backend ส่งมาคู่กันเสมอ (คนละรูปอ้างอิงกัน แยกไว้จะได้ไม่ใช้ผิดคู่กัน)
               bbox: s.bbox ?? null,

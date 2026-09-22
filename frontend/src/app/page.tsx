@@ -808,7 +808,7 @@ export default function Home() {
             {content.reviews_subtitle && (
               <p className="-mt-4 mb-8 text-sm font-light text-gray-500">{content.reviews_subtitle}</p>
             )}
-            <div className="grid grid-cols-1 gap-px bg-gray-200 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-px bg-white md:grid-cols-3">
               {reviews.map((review) => (
                 <div key={review.id} className="flex flex-col gap-3 bg-white p-7">
                   <div className="flex items-center gap-1">

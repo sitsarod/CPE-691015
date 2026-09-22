@@ -16,7 +16,15 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { DetectManager, DetectStudent, Detection, BatchItem, MAX_BATCH_FILES, AUTO_CONFIRM_THRESHOLD } from './useDetect';
+import {
+  DetectManager,
+  DetectStudent,
+  Detection,
+  BatchItem,
+  MAX_BATCH_FILES,
+  AUTO_CONFIRM_THRESHOLD,
+  MAX_VIDEO_DURATION_MINUTES,
+} from './useDetect';
 
 export function DetectMobile({ manager }: { manager: DetectManager }) {
   const {
@@ -122,6 +130,9 @@ export function DetectMobile({ manager }: { manager: DetectManager }) {
           </div>
           <p className="text-sm font-semibold text-[#CC0000]">แตะเพื่อเลือกไฟล์</p>
           <p className="text-xs text-gray-400">รองรับ JPG, PNG, MP4, MOV, WEBM — สูงสุด {MAX_BATCH_FILES} ไฟล์</p>
+          <p className="mt-0.5 text-xs text-gray-400">
+            วิดีโอที่ยาวเกิน {MAX_VIDEO_DURATION_MINUTES} นาที ยังอัปโหลดได้ปกติ แต่ AI จะไม่จำแนกให้ — ต้องแท็กเอง
+          </p>
         </button>
 
         {/* รายการไฟล์ที่เลือกไว้ */}
@@ -544,6 +555,12 @@ function PhotoPreviewWithMarks({
           const y2 = Math.min(naturalSize.h, by2 + padY);
 
           const isActive = d.uid === activeDetectionUid;
+          // ไม่ทราบชื่อ = กรอบสีเทาแทนแดง (ดูคอมเมนต์เต็มที่ DetectDesktop.tsx)
+          const isUnmatched = !d.predictedNickname;
+          const label = d.predictedNickname ?? 'ไม่ทราบชื่อ';
+          const confidenceLabel = d.confidence != null ? `${label} ${d.confidence}%` : label;
+          const markColorClass = isUnmatched ? 'border-gray-400' : 'border-[#CC0000]';
+          const solidColorClass = isUnmatched ? 'bg-gray-500' : 'bg-[#CC0000]';
 
           return (
             <div
@@ -556,17 +573,18 @@ function PhotoPreviewWithMarks({
                 height: `${((y2 - y1) / naturalSize.h) * 100}%`,
               }}
             >
-              {isActive ? (
-                <>
-                  <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
-                  <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2 py-1 text-xs font-black text-white shadow-md">
-                    {d.predictedNickname ?? 'ไม่ทราบชื่อ'}
-                  </span>
-                </>
-              ) : (
-                <div className="absolute inset-0 rounded-md border-2 border-white/70 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
-              )}
+              {/* โชว์กรอบ+ชื่อ+% ของทุกคนพร้อมกันเสมอ — คนที่กำลังโฟกัสอยู่แค่กรอบหนาขึ้นนิดหน่อย */}
+              <div
+                className={`absolute inset-0 rounded-md shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)] ${markColorClass} ${
+                  isActive ? 'border-[3px]' : 'border-2'
+                }`}
+              />
+              <div className={`absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full ${solidColorClass}`} />
+              <span
+                className={`absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white px-2 py-1 text-xs font-black text-white shadow-md ${solidColorClass}`}
+              >
+                {confidenceLabel}
+              </span>
             </div>
           );
         })}
@@ -602,8 +620,11 @@ function DetectionRow({
       }`}
     >
       {/* เฟรมวิดีโอที่แมตช์ได้ พร้อมกรอบมาร์กแบบเดียวกับฝั่งรูป — ให้โค้ชเห็นภาพจริงยืนยัน
-          แทนที่จะเห็นแค่เปอร์เซ็นต์มั่นใจลอย ๆ */}
-      {frameImage && bbox && <VideoFrameMark frameImage={frameImage} bbox={bbox} label={predictedNickname} />}
+          แทนที่จะเห็นแค่เปอร์เซ็นต์มั่นใจลอย ๆ (bbox เป็น null ได้ถ้าไม่เจอใบหน้าเลยสักหน้าเดียว —
+          VideoFrameMark จะโชว์แค่เฟรมตัวแทนเฉย ๆ ไม่มีกรอบ ดูคอมเมนต์ในนั้น) */}
+      {frameImage && (
+        <VideoFrameMark frameImage={frameImage} bbox={bbox} label={predictedNickname} confidence={confidence} />
+      )}
 
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100">
@@ -614,6 +635,12 @@ function DetectionRow({
             <p className="truncate text-sm font-semibold text-gray-800">
               AI คาดว่าคือ <span className="text-gray-900">{predictedNickname}</span>
             </p>
+          ) : bbox ? (
+            <p className="text-sm font-semibold text-gray-800">AI ตรวจพบคน แต่จับคู่ไม่ได้ — เลือกชื่อเอง</p>
+          ) : frameImage ? (
+            // ไม่เจอใบหน้าเลยสักหน้าเดียวในทั้งคลิป (ต่างจากข้างบนที่เจอแต่จับคู่ไม่ได้)
+            // ดูคอมเมนต์เต็มที่ DetectDesktop.tsx
+            <p className="text-sm font-semibold text-gray-800">AI ไม่พบใบหน้าในคลิปนี้เลย — ดูภาพแล้วระบุคนเอง</p>
           ) : (
             <p className="text-sm font-semibold text-gray-800">เพิ่มโดยโค้ช</p>
           )}
@@ -695,13 +722,36 @@ function VideoFrameMark({
   frameImage,
   bbox,
   label,
+  confidence,
 }: {
   frameImage: string;
-  bbox: [number, number, number, number];
+  bbox: [number, number, number, number] | null;
   label: string | null;
+  confidence?: number | null;
 }) {
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+
+  // ไม่เจอใบหน้าเลยสักหน้าเดียวในทั้งคลิป — ไม่มีตำแหน่งให้วาดกรอบ โชว์แค่เฟรมตัวแทนเฉย ๆ
+  // (ดูคอมเมนต์เต็มที่ DetectDesktop.tsx)
+  if (!bbox) {
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+        {/* eslint-disable-next-line @next/next/no-img-element -- data URI จาก base64 ใช้ next/image ไม่ได้ */}
+        <img src={`data:image/jpeg;base64,${frameImage}`} alt="" draggable={false} className="block w-full select-none" />
+        <div className="absolute inset-x-0 bottom-0 bg-black/60 px-3 py-2 text-center text-xs font-semibold text-white">
+          AI ไม่พบใบหน้าในคลิปนี้เลย — นี่คือภาพตัวอย่างจากคลิป
+        </div>
+      </div>
+    );
+  }
+
   const [bx1, by1, bx2, by2] = bbox;
+  // ไม่ทราบชื่อ = กรอบสีเทาแทนแดง (ดูคอมเมนต์เต็มที่ DetectDesktop.tsx)
+  const isUnmatched = !label;
+  const displayLabel = label ?? 'ไม่ทราบชื่อ';
+  const confidenceLabel = confidence != null ? `${displayLabel} ${confidence}%` : displayLabel;
+  const markColorClass = isUnmatched ? 'border-gray-400' : 'border-[#CC0000]';
+  const solidColorClass = isUnmatched ? 'bg-gray-500' : 'bg-[#CC0000]';
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
@@ -734,10 +784,12 @@ function VideoFrameMark({
                 height: `${((y2 - y1) / naturalSize.h) * 100}%`,
               }}
             >
-              <div className="absolute inset-0 rounded-md border-[3px] border-[#CC0000] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)]" />
-              <div className="absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full bg-[#CC0000]" />
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white bg-[#CC0000] px-2 py-1 text-xs font-black text-white shadow-md">
-                {label ?? 'ไม่ทราบชื่อ'}
+              <div className={`absolute inset-0 rounded-md border-[3px] shadow-[0_0_0_1.5px_rgba(255,255,255,0.85)] ${markColorClass}`} />
+              <div className={`absolute bottom-0 left-1/2 h-4 w-0.5 -translate-x-1/2 translate-y-full ${solidColorClass}`} />
+              <span
+                className={`absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[calc(100%+1rem)] whitespace-nowrap rounded-md border-2 border-white px-2 py-1 text-xs font-black text-white shadow-md ${solidColorClass}`}
+              >
+                {confidenceLabel}
               </span>
             </div>
           );

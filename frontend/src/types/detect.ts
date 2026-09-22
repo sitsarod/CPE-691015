@@ -19,6 +19,9 @@ export interface UploadPhotoPostResult {
   /** จำนวนใบหน้าทั้งหมดที่เจอในรูป (รวมที่จับคู่กับนักเรียนไม่ได้) */
   face_count: number;
   students: DetectedStudentSuggestion[];
+  /** มีค่าเฉพาะตอนจำแนกใบหน้าอัตโนมัติล้มเหลวจริง ๆ (เช่น ไฟล์เสียหาย/ระบบขัดข้อง) ไม่ใช่แค่
+   * "ไม่เจอใครที่รู้จัก" — โชว์ให้โค้ชรู้ว่าทำไมไม่มีการ์ดขึ้นเลย แทนที่จะดูเหมือน AI ไม่เจอใครจริง ๆ */
+  face_tag_error?: string;
 }
 
 export interface UploadVideoResult {
@@ -28,6 +31,8 @@ export interface UploadVideoResult {
    * จำนวนคนจริงในคลิปได้ (ไม่ใช่บั๊ก — ดูคอมเมนต์ฝั่ง backend ที่ DetectStudentsInVideo) */
   face_count: number;
   students: DetectedStudentSuggestion[];
+  /** ดูคอมเมนต์เต็มที่ UploadPhotoPostResult.face_tag_error */
+  face_tag_error?: string;
 }
 
 export interface AssignResult {
