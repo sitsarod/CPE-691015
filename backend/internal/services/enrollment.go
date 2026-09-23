@@ -593,7 +593,9 @@ func (s *EnrollmentService) ApproveEnrollment(enrollmentID uint, adminID uint, a
 	if targetUserID, rerr := ResolveUserID(s.db, enrollment.CustomerID); rerr == nil {
 		body := "คำขอสมัครเรียนของคุณได้รับการอนุมัติแล้ว เริ่มเรียนได้เลย"
 		href := "/customer/enrollment"
-		if enrollment.Status == models.EnrollmentStatusAwaitingPayment {
+		// มีบิล = ต้องชำระเงิน — ครอบคลุมทั้งนักเรียนใหม่ (awaiting_payment) และคนที่เคยเรียนแล้ว
+		// (ทั้งคู่ถูกสร้างบิลไว้ ต่างจากคอร์สทดลองฟรีที่ไม่มีบิล จึง BillingID = nil)
+		if enrollment.BillingID != nil {
 			body = "คำขอได้รับการอนุมัติ กรุณาชำระเงินเพื่อเริ่มเรียน"
 			href = "/customer/payment?tab=billings"
 		}

@@ -146,7 +146,8 @@ export default function InvoicesTab({
                         {statusText}
                       </span>
                       <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                        ช่องทาง: {inv.paymentmethod === "qr" ? "PromptPay QR" : inv.paymentmethod === "bank_transfer" ? "โอนเงินธนาคาร" : inv.paymentmethod}
+                        {/* เงินสด = แอดมินยืนยันรับเงินสด · ที่เหลือ (qr/โอน) แยกไม่ได้ว่าลูกค้าใช้ QR หรือเลขบัญชี จึงรวมเป็น "โอนเงินผ่านธนาคาร" */}
+                        ช่องทาง: {inv.paymentmethod === "cash" ? "เงินสด" : "โอนเงินผ่านธนาคาร"}
                       </span>
                     </div>
                   </div>

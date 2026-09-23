@@ -105,6 +105,34 @@ func (ctrl *PaymentController) ConfirmPayment(c *gin.Context) {
 	})
 }
 
+// ConfirmCashPayment ยืนยันว่าลูกค้าชำระด้วยเงินสด แล้วปิดบิลให้ (Admin)
+// แยกจาก ConfirmPayment เพราะต้องเขียนวิธีชำระเงินเป็น cash ทับของเดิม (เช่นใบที่ลูกค้าสร้างไว้เป็น QR)
+func (ctrl *PaymentController) ConfirmCashPayment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		respondJSON(c, http.StatusBadRequest, gin.H{"error": "ID ต้องเป็นตัวเลขเท่านั้น"})
+		return
+	}
+
+	// เก็บว่าแอดมินคนไหนเป็นผู้กดยืนยัน (users.id จาก JWT)
+	adminID, _, ok := GetAuthContext(c)
+	if !ok {
+		respondJSON(c, http.StatusUnauthorized, gin.H{"error": "ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่"})
+		return
+	}
+
+	invoice, err := ctrl.service.ConfirmCashPayment(uint(id), &adminID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+
+	respondJSON(c, http.StatusOK, gin.H{
+		"message": "บันทึกการชำระเงินสดสำเร็จแล้ว",
+		"data":    dto.ToInvoiceDTO(invoice),
+	})
+}
+
 // GetCustomerInvoices ดึงประวัติใบแจ้งหนี้ของลูกค้า
 func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

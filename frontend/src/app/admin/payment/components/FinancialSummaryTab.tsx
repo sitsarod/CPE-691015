@@ -579,6 +579,13 @@ export default function FinancialSummaryTab({
                         <span className="mt-0.5 block max-w-xs truncate text-[11.5px] text-slate-500" title={b.billingdescription}>
                           {b.billingdescription}
                         </span>
+                        {/* ป้ายเงินสด — ให้แยกออกจากบิลที่โอนเข้าได้ชัดในรายการบิลทั้งหมด */}
+                        {b.billingstatus === 'paid' && b.paymentmethod === 'cash' && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            เงินสด
+                          </span>
+                        )}
                         {/* ผู้ออกบิล + ผู้แก้ไขล่าสุด (audit) */}
                         {(b.admin || b.updated_by) && (
                           <span className="mt-0.5 block max-w-xs truncate text-[10.5px] text-slate-400">

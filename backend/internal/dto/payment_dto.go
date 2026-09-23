@@ -68,6 +68,9 @@ type BillingDTO struct {
 	UpdatedBy     *UserMinDTO     `json:"updated_by,omitempty"`
 	SlipImageUrl  string          `json:"slipurl,omitempty"`
 	InvoiceID     uint            `json:"invoice_id,omitempty"`
+	// PaymentMethod = วิธีชำระเงินของใบแจ้งหนี้ที่ผูกกับบิลนี้ (qr/bank_transfer/credit_card/cash)
+	// ใช้ให้หน้าบ้านแยกได้ว่าเป็นการรับเงินสด เพื่อขึ้นป้ายกำกับให้ชัด
+	PaymentMethod string          `json:"paymentmethod,omitempty"`
 	TransactionID string          `json:"transactionid,omitempty"`
 	// ผลตรวจสลิปอัตโนมัติ (SlipOK) ของใบแจ้งหนี้ที่ผูกกับบิลนี้
 	SlipOkChecked bool   `json:"slipok_checked"`
@@ -145,6 +148,7 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 	if invoice != nil {
 		dto.InvoiceID = invoice.ID
 		dto.SlipImageUrl = invoice.SlipImageUrl
+		dto.PaymentMethod = string(invoice.Method)
 		dto.TransactionID = invoice.TransactionID
 		dto.SlipOkChecked = invoice.SlipOkChecked
 		dto.SlipOkPassed = invoice.SlipOkPassed

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { BillingDTO } from './types';
-import { confirmSlip, rejectSlip, createInvoice } from "@/services/paymentAPI";
+import { confirmSlip, confirmCashPayment, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
 import { useConfirm } from "@/components/ConfirmProvider";
 export interface VerifySlipsTabProps {
@@ -20,6 +20,7 @@ interface InvoiceGroup {
   billings: BillingDTO[];
   totalAmount: number;
   billingstatus: BillingDTO['billingstatus'];
+  paymentMethod?: BillingDTO['paymentmethod'];
   slipurl?: string;
   transactionid?: string;
   slipokChecked?: boolean;
@@ -121,6 +122,7 @@ export default function VerifySlipsTab({
           billings: [],
           totalAmount: 0,
           billingstatus: b.billingstatus,
+          paymentMethod: b.paymentmethod,
           slipurl: b.slipurl,
           transactionid: b.transactionid,
           slipokChecked: b.slipok_checked,
@@ -239,7 +241,9 @@ export default function VerifySlipsTab({
         const invoice = await createInvoice(group.customerId, billingIds, 'cash', token || "");
         invoiceId = invoice.id;
       }
-      await confirmSlip(invoiceId, token || "");
+      // ต้องใช้ confirm-cash ไม่ใช่ confirm ธรรมดา — ใบที่ลูกค้าสร้างไว้ด้วย QR แล้วแนบสลิป
+      // จะยังเป็น method=qr อยู่ ถ้ายืนยันด้วย confirmSlip เฉย ๆ ใบจะโชว์ว่าจ่าย PromptPay QR
+      await confirmCashPayment(invoiceId, token || "");
       onTriggerToast('บันทึกการชำระเงินสดเรียบร้อยแล้ว');
       advanceRef.current = true;
       onFetchData();
@@ -527,6 +531,19 @@ export default function VerifySlipsTab({
                     {selectedGroup.customer ? `${selectedGroup.customer.firstName} ${selectedGroup.customer.lastName}` : "ผู้เรียน"}
                     {selectedGroup.customer?.nickname ? ` (${selectedGroup.customer.nickname})` : ""}
                   </span>
+                </div>
+
+                {/* ช่องทางชำระเงิน — ขึ้นป้ายเขียว "เงินสด" ให้ชัดเมื่อเป็นการรับเงินสด */}
+                <div className="flex items-center justify-between gap-4 py-[13px]">
+                  <span className="text-xs text-slate-500">ช่องทางชำระเงิน</span>
+                  {selectedGroup.paymentMethod === 'cash' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      เงินสด
+                    </span>
+                  ) : (
+                    <span className="text-right text-[13.5px] text-slate-800">โอนเงินผ่านธนาคาร</span>
+                  )}
                 </div>
 
                 {/* รายละเอียดบิล — หลายบิลแตกเป็นลิสต์ย่อย */}

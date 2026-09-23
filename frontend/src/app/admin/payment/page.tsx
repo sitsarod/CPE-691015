@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PlusCircle, ClipboardCheck, PieChart, Landmark, Receipt, Loader2, ChevronDown } from "lucide-react";
 import { BackendUser, BillingDTO, BankAccount, Expense, Coach } from "./components/types";
 import Toast from "@/components/Toast";
@@ -25,35 +26,44 @@ import { NOTIFICATION_STREAM_EVENT, type NotificationStreamDetail } from "@/comp
 // (backend NotifyAdmins ยิงชนิดพวกนี้ตอนสลิปเข้า/ยืนยันอัตโนมัติ — ดู payment_service.go)
 const PAYMENT_STREAM_TYPES = new Set(["slip_uploaded", "payment_auto_verified"]);
 
-export default function FinancialPortal() {
+// ครอบด้วย Suspense เพราะ useSearchParams บังคับให้ต้องมี boundary ตอน build (ดู AGENTS.md/Next docs)
+export default function FinancialPortalPage() {
+  return (
+    <Suspense fallback={null}>
+      <FinancialPortal />
+    </Suspense>
+  );
+}
+
+function FinancialPortal() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [subTab, setSubTab] = useState<'issue' | 'slips' | 'summary' | 'banks' | 'expenses'>('issue');
   // ฟิลเตอร์เริ่มต้นของแท็บตรวจสอบสลิป เมื่อ deep-link มาจากที่อื่น (เช่นแดชบอร์ด)
   const [initialSlipFilter, setInitialSlipFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'unpaid' | undefined>(undefined);
   const tabRowRef = useHorizontalWheelScroll<HTMLDivElement>();
 
-  // เปิดแท็บ/ฟิลเตอร์ตาม query param ตอนเข้าหน้า เช่น /admin/payment?tab=slips&filter=unpaid
+  // เปิดแท็บ/ฟิลเตอร์ตาม query param เช่น /admin/payment?tab=slips&filter=unpaid
+  // ผูกกับ searchParams (ไม่ใช่ [] mount เดียว) เพื่อให้การกดแจ้งเตือนขณะอยู่หน้านี้อยู่แล้ว
+  // สลับแท็บให้ด้วย — เดิม router.push เปลี่ยนแค่ URL แต่ไม่รีเมานต์ แท็บจึงไม่ขยับ
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
+    const tab = searchParams.get('tab');
     if (tab && ['issue', 'slips', 'summary', 'banks', 'expenses'].includes(tab)) {
       setSubTab(tab as 'issue' | 'slips' | 'summary' | 'banks' | 'expenses');
     }
-    const filter = params.get('filter');
+    const filter = searchParams.get('filter');
     if (filter && ['all', 'pending', 'approved', 'rejected', 'unpaid'].includes(filter)) {
       setInitialSlipFilter(filter as 'all' | 'pending' | 'approved' | 'rejected' | 'unpaid');
     }
-  }, []);
+  }, [searchParams]);
 
-  // เปลี่ยนแท็บ + เขียน ?tab= ลง URL ด้วย history API เพื่อให้รีเฟรชแล้วยังอยู่แท็บเดิม
-  // (ไม่ใช้ Next router เพราะไม่ต้องการ navigation/scroll — แค่บันทึกสถานะไว้ใน URL)
+  // เปลี่ยนแท็บ + เขียน ?tab= ลง URL ผ่าน router (scroll:false) เพื่อให้ searchParams เป็นแหล่งความจริงเดียว
+  // ถ้าใช้ history.replaceState ตรง ๆ useSearchParams จะไม่รับรู้ แล้วแจ้งเตือนแท็บเดิมซ้ำจะไม่สลับให้
   const changeTab = (id: typeof subTab) => {
     setSubTab(id);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', id);
-      window.history.replaceState(null, '', url.toString());
-    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', id);
+    router.replace(`?${params.toString()}`, { scroll: false });
   };
 
   // แสดง skeleton สั้น ๆ ทุกครั้งที่สลับแท็บ เพื่อให้รู้สึกลื่นและรู้ว่ากำลังโหลดเนื้อหาแท็บใหม่
