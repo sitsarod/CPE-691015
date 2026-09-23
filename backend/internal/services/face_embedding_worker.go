@@ -24,9 +24,6 @@ const (
 	faceWorkerBatchSize = 10
 	faceWorkerInterval  = 10 * time.Second
 
-	// ⚠️ ต้องยาวกว่าหน้าต่าง autosuspend ของ Neon เสมอ ไม่งั้น compute ไม่มีวันหลับ
-	faceWorkerSafetyInterval = 30 * time.Minute
-
 	// ถอยจังหวะทวีคูณเมื่อล้มเหลวชั่วคราว ไม่มีเพดานจำนวนครั้ง — กันแค่ "ลองถี่ ๆ" ไม่ใช่ "ลองอีก"
 	faceWorkerBackoffBase = 30 * time.Second
 	faceWorkerBackoffMax  = 30 * time.Minute
@@ -92,27 +89,37 @@ func (w *FaceEmbeddingWorker) Run(ctx context.Context) {
 			log.Printf("worker ประมวลผลรูปใบหน้า %d ใบ", n)
 		}
 
+		// ตั้ง timer ให้ตื่นเองเฉพาะตอนยังมีรูปค้าง (เช่นรอ retry) — ถ้าไม่เหลืออะไรเลย
+		// ไม่ตั้ง timer จะได้นอนรอสัญญาณอัปโหลดอย่างเดียว ช่วงว่างไม่แตะฐาน ให้ Neon หลับ
 		timer.Stop()
-		timer.Reset(w.nextWait(n))
+		if wait, ok := w.nextWait(n); ok {
+			timer.Reset(wait)
+		}
 	}
 }
 
 // nextWait บอกว่าควรตื่นเองอีกทีเมื่อไหร่ ถ้าไม่มีใครมาปลุกก่อน
-func (w *FaceEmbeddingWorker) nextWait(processed int) time.Duration {
+//
+// คืน ok=false เมื่อไม่มีรูปค้างเลย — worker จะไม่ตั้ง timer แต่นอนรอสัญญาณอัปโหลด
+// อย่างเดียว ช่วงว่างจึงไม่ยิง query ทิ้ง ให้ Neon idle แล้ว scale-to-zero ได้จริง
+func (w *FaceEmbeddingWorker) nextWait(processed int) (time.Duration, bool) {
+	// ยังเคลียร์ไม่หมดใน batch นี้ รีบวนเก็บต่อ
 	if processed >= faceWorkerBatchSize {
-		return faceWorkerInterval
+		return faceWorkerInterval, true
 	}
 
+	// เหลือแต่แถวที่เลื่อนเวลา retry ไว้ในอนาคต (deferRetry) — ตื่นให้พอดีตอนถึงคิว
+	// backoff สูงสุดแค่ faceWorkerBackoffMax จึงไม่ต้องมีเพดานเวลารออีกชั้น
 	var earliest sql.NullTime
 	row := w.db.Model(&models.FaceImage{}).
 		Where("status = ?", models.FaceImagePending).
 		Select("MIN(next_attempt_at)").
 		Row()
 	if row == nil || row.Scan(&earliest) != nil || !earliest.Valid {
-		return faceWorkerSafetyInterval
+		return 0, false
 	}
 
-	return max(faceWorkerInterval, min(time.Until(earliest.Time), faceWorkerSafetyInterval))
+	return max(faceWorkerInterval, time.Until(earliest.Time)), true
 }
 
 // ProcessPending ประมวลผลรูปสถานะ pending ไม่เกินหนึ่ง batch คืนจำนวนที่ตัดสินผลได้

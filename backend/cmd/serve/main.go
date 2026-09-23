@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"CPE-691015/internal/config"
@@ -16,36 +19,92 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// startCustomerStatusJob รันงานปรับสถานะลูกค้า (active/inactive) แบบอัตโนมัติทุกวัน
-// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 24 ชั่วโมง
-func startCustomerStatusJob() {
-	userService := services.NewUserService(config.DB)
-	go func() {
-		for {
-			if err := userService.SyncCustomerStatuses(); err != nil {
-				log.Printf("ปรับสถานะลูกค้าอัตโนมัติล้มเหลว: %v", err)
-			}
-			time.Sleep(24 * time.Hour)
-		}
-	}()
+// dailyMaintenanceHour = เวลารันงานดูแลระบบรายวันทั้งหมด (cleanup/sync) ที่รวบไว้รอบเดียว
+// เลือกตี 5 ช่วงแทบไม่มีคนใช้งาน เพื่อปลุก Neon แค่ครั้งเดียวต่อวันในเวลาที่กระทบผู้ใช้น้อยสุด
+const dailyMaintenanceHour = 5
+
+// nextDailyMaintenanceAt คืนเวลาตี 5 ครั้งถัดไปหลังจาก now (ยึดโซนเวลาไทยเสมอ ไม่อิง TZ เครื่อง)
+func nextDailyMaintenanceAt(now time.Time) time.Time {
+	local := now.In(services.AppLocation())
+	next := time.Date(local.Year(), local.Month(), local.Day(), dailyMaintenanceHour, 0, 0, 0, local.Location())
+	if !next.After(local) {
+		next = next.AddDate(0, 0, 1)
+	}
+	return next
 }
 
-// startChatCleanupJob ลบห้องแชทของผู้เยี่ยมชม (guest) ที่สร้างมานานเกิน 7 วันอัตโนมัติ
-// (เฉพาะ guest — ห้องแชทของผู้ใช้ที่ล็อกอินแล้วจะไม่ถูกลบ) พร้อม log ข้อความ
-// ตรงกับข้อความต้อนรับที่แจ้งผู้ใช้ว่า "แชทนี้จะยังคงอยู่ภายใน 7 วัน"
-// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง
-func startChatCleanupJob() {
-	// ส่ง Cloudinary ให้ service ด้วย เพื่อให้ลบไฟล์แนบออกจาก storage จริงตอนลบห้องเก่า
-	// (nil ได้ถ้าไม่ได้ตั้งค่า Cloudinary — จะลบเฉพาะไฟล์ในเครื่องแทน)
+// startDailyMaintenanceJob รวมงานดูแลระบบรายวันทั้งหมดไว้ใน scheduler เดียว รันวันละครั้งตอนตี 5
+//
+// เดิมแต่ละงานเป็น goroutine แยกที่ sleep 24 ชม.เอง เวลาตื่นผูกกับ "ตอน boot" เลยกระจายและ
+// คุมไม่ได้ · รวบมาไว้รอบเดียวเพื่อให้ Neon ถูกปลุกครั้งเดียวต่อวันแล้วกลับไปหลับยาว ๆ
+//
+// รันครั้งแรกทันทีตอน boot ด้วย — ตอน boot ต่อ DB อยู่แล้วจึงไม่ได้เพิ่มรอบปลุกใหม่ และกันงาน
+// ค้างบนโฮสต์ที่รีสตาร์ทบ่อยก่อนถึงตี 5 · จากนั้นตื่นตอนตี 5 ของทุกวัน
+//
+// ไม่รวมงานเตือนยืนยันมาเรียน (18:00 เวลามีความหมายต่อ UX) กับงาน event-driven
+// (attendance auto-close / face worker) เพราะจังหวะตื่นคนละแบบ
+func startDailyMaintenanceJob() {
+	userService := services.NewUserService(config.DB)
+	// ส่ง Cloudinary ให้ service ที่ต้องลบไฟล์แนบจริงตอนลบของเก่า (nil ได้ถ้าไม่ได้ตั้งค่า)
 	autoQAService := services.NewAutoQAService(config.DB, services.NewCloudinaryService())
-	go func() {
-		for {
-			if n, err := autoQAService.DeleteOldSessions(7 * 24 * time.Hour); err != nil {
-				log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติ %d ห้อง", n)
+	billingService := services.NewBillingService(config.DB)
+	mediaStorage := services.NewMediaStorage()
+	photoService := services.NewDetectedPhotoService(config.DB).WithMediaStorage(mediaStorage)
+	videoService := services.NewDetectedVideoService(config.DB).WithMediaStorage(mediaStorage)
+
+	// runOnce ทำงานดูแลทั้งชุดตามลำดับ · ครอบ recover ไว้ไม่ให้ task ใด panic แล้วทำให้
+	// scheduler ทั้งตัวตายจนงานรายวันหยุดถาวร (เดิมแยก goroutine เลยไม่ลามถึงกัน)
+	runOnce := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("งานดูแลระบบรายวัน panic (ข้ามรอบนี้ รอบหน้ารันต่อ): %v", r)
 			}
-			time.Sleep(6 * time.Hour)
+		}()
+
+		// 1) ปรับสถานะลูกค้า active/inactive
+		if err := userService.SyncCustomerStatuses(); err != nil {
+			log.Printf("ปรับสถานะลูกค้าอัตโนมัติล้มเหลว: %v", err)
+		}
+
+		// 2) ลบห้องแชทของผู้เยี่ยมชม (guest) ที่เกิน 7 วัน (เฉพาะ guest ไม่แตะห้องของผู้ล็อกอิน)
+		if n, err := autoQAService.DeleteOldSessions(7 * 24 * time.Hour); err != nil {
+			log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติล้มเหลว: %v", err)
+		} else if n > 0 {
+			log.Printf("ลบแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติ %d ห้อง", n)
+		}
+
+		// 3) เลื่อนสถานะบิลค้างชำระที่เลยกำหนดเป็น overdue (และเลื่อนกลับถ้า due_date เป็นอนาคต)
+		if n, err := billingService.MarkOverdueBillings(); err != nil {
+			log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+		} else if n > 0 {
+			log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติ %d รายการ", n)
+		}
+
+		// 4) ลบรูป/วิดีโอโพสต์ที่เกิน photoPostRetention
+		if n, err := photoService.DeleteOldRawPhotos(photoPostRetention); err != nil {
+			log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+		} else if n > 0 {
+			log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติ %d รูป", n)
+		}
+		if n, err := videoService.DeleteOldRawVideos(photoPostRetention); err != nil {
+			log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
+		} else if n > 0 {
+			log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติ %d คลิป", n)
+		}
+
+		// 5) ลบบัญชีที่ไม่เคยยืนยันอีเมลเกิน unverifiedUserRetention (กันอีเมลถูกจองค้างถาวร)
+		if n, err := userService.DeleteUnverifiedUsers(unverifiedUserRetention); err != nil {
+			log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติล้มเหลว: %v", err)
+		} else if n > 0 {
+			log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติ %d บัญชี", n)
+		}
+	}
+
+	go func() {
+		runOnce() // รอบแรกตอน boot
+		for {
+			time.Sleep(time.Until(nextDailyMaintenanceAt(time.Now())))
+			runOnce()
 		}
 	}()
 }
@@ -69,8 +128,12 @@ func startAttendanceAutoCloseJob() {
 				log.Printf("ปิดรอบเช็คชื่อที่เลยเวลาแล้วอัตโนมัติ %d รอบ", n)
 			}
 
+			// ตั้ง timer เฉพาะตอนมีรอบเปิดค้างจริง — ถ้าไม่มีรอบเปิดเลยไม่ตั้ง จะได้นอนรอ
+			// สัญญาณเปิดรอบใหม่อย่างเดียว ช่วงว่างไม่แตะฐาน ให้ Neon idle แล้วหลับ
 			timer.Stop()
-			timer.Reset(attendanceService.NextAutoCloseWait())
+			if wait, ok := attendanceService.NextAutoCloseWait(); ok {
+				timer.Reset(wait)
+			}
 		}
 	}()
 }
@@ -96,49 +159,9 @@ func startClassConfirmReminderJob() {
 	}()
 }
 
-// startBillingOverdueJob เลื่อนสถานะบิล unfunded ที่เลยวันครบกำหนดเป็น overdue อัตโนมัติ
-// (และเลื่อนกลับถ้า due_date ถูกแก้เป็นอนาคต) รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 1 ชั่วโมง
-func startBillingOverdueJob() {
-	billingService := services.NewBillingService(config.DB)
-	go func() {
-		for {
-			if n, err := billingService.MarkOverdueBillings(); err != nil {
-				log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("อัปเดตสถานะบิลเกินกำหนดอัตโนมัติ %d รายการ", n)
-			}
-			time.Sleep(1 * time.Hour)
-		}
-	}()
-}
-
 // photoPostRetention คือระยะเวลาที่รูป/วิดีโอโพสต์ (RawPhoto/RawVideo) จะถูกเก็บไว้ก่อนลบถาวร
 // ให้เวลาผู้ถูกแท็กดาวน์โหลดเก็บไว้เองก่อน (ปุ่มดาวน์โหลดอยู่ที่แท็บ Posts ในโปรไฟล์)
 const photoPostRetention = 7 * 24 * time.Hour
-
-// startPhotoPostCleanupJob ลบรูป/วิดีโอโพสต์ที่เกิน photoPostRetention อัตโนมัติ
-// รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 6 ชั่วโมง (ความถี่เดียวกับลบห้องแชทเก่า)
-func startPhotoPostCleanupJob() {
-	mediaStorage := services.NewMediaStorage()
-	photoService := services.NewDetectedPhotoService(config.DB).WithMediaStorage(mediaStorage)
-	videoService := services.NewDetectedVideoService(config.DB).WithMediaStorage(mediaStorage)
-
-	go func() {
-		for {
-			if n, err := photoService.DeleteOldRawPhotos(photoPostRetention); err != nil {
-				log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("ลบรูปโพสต์ที่เกินกำหนดอัตโนมัติ %d รูป", n)
-			}
-			if n, err := videoService.DeleteOldRawVideos(photoPostRetention); err != nil {
-				log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("ลบวิดีโอโพสต์ที่เกินกำหนดอัตโนมัติ %d คลิป", n)
-			}
-			time.Sleep(6 * time.Hour)
-		}
-	}()
-}
 
 // unverifiedUserRetention คือเวลาที่บัญชีที่สมัครไว้แต่ไม่เคยยืนยันอีเมลเลยจะถูกเก็บไว้ก่อนลบถาวร
 //
@@ -146,23 +169,6 @@ func startPhotoPostCleanupJob() {
 // ไว้ถาวร (login ก็ไม่ได้ ลบเองก็ไม่ได้) OTP หมดอายุแค่ 10 นาที (ดู otpTTL) ชั่วโมงเดียว
 // จึงเผื่อเวลาให้พอเกินกว่าจะกดขอรหัสใหม่/ลองใหม่ได้สบาย ๆ โดยไม่เสี่ยงไปลบคนที่กำลังยืนยันอยู่จริง
 const unverifiedUserRetention = 1 * time.Hour
-
-// startUnverifiedUserCleanupJob ลบบัญชีที่สมัครมานานเกิน unverifiedUserRetention แต่ไม่เคยยืนยัน
-// อีเมลเลยอัตโนมัติ — รันครั้งแรกทันทีตอนสตาร์ท แล้วทำซ้ำทุก 15 นาที (ถี่กว่างานอื่นเพราะช่วง
-// retention สั้นแค่ 1 ชั่วโมง ต้องเช็คถี่พอจะไม่ปล่อยให้ค้างเกินที่ตั้งใจไว้นานเกินไป)
-func startUnverifiedUserCleanupJob() {
-	userService := services.NewUserService(config.DB)
-	go func() {
-		for {
-			if n, err := userService.DeleteUnverifiedUsers(unverifiedUserRetention); err != nil {
-				log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติล้มเหลว: %v", err)
-			} else if n > 0 {
-				log.Printf("ลบบัญชีที่ไม่เคยยืนยันอีเมลอัตโนมัติ %d บัญชี", n)
-			}
-			time.Sleep(15 * time.Minute)
-		}
-	}()
-}
 
 // startFaceEmbeddingWorker สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา
 //
@@ -183,6 +189,53 @@ func startFaceEmbeddingWorker(ctx context.Context) {
 	go worker.Run(ctx)
 }
 
+// sensitiveQueryKeys คือ query param ที่ห้ามให้ค่าจริงโผล่ใน access log
+// (token = JWT ที่ SSE ส่งมาทาง query เพราะ EventSource ตั้ง header Authorization ไม่ได้)
+var sensitiveQueryKeys = []string{"token"}
+
+// sanitizedLogFormatter จัดรูปแบบ access log เหมือน Logger ดีฟอลต์ของ Gin
+// แต่ปกปิดค่าของ query param อ่อนไหว (เช่น ?token=...) ไม่ให้ค่าจริงถูกเขียนลง log
+// ตั้งใจไม่ใส่สี ANSI เพื่อให้ log ที่ไป stdout/ไฟล์อ่านง่ายและ grep ได้สะดวก
+func sanitizedLogFormatter(p gin.LogFormatterParams) string {
+	latency := p.Latency
+	// connection ยาว ๆ (เช่น SSE) ตัดเศษวินาทีทิ้งให้อ่านง่าย เหมือน Logger ดีฟอลต์
+	if latency > time.Minute {
+		latency = latency.Truncate(time.Second)
+	}
+	return fmt.Sprintf("[GIN] %s | %3d | %13v | %15s | %-7s %#v\n",
+		p.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		p.StatusCode,
+		latency,
+		p.ClientIP,
+		p.Method,
+		redactSensitiveQuery(p.Path),
+	)
+}
+
+// redactSensitiveQuery แทนค่าของ query param อ่อนไหวใน path ด้วย [redacted]
+// ถ้า path ไม่มี query หรือไม่มี key อ่อนไหวก็คืนค่าเดิม (parse ไม่ได้ = ตัดทั้งก้อนทิ้งกันหลุด)
+func redactSensitiveQuery(path string) string {
+	base, rawQuery, found := strings.Cut(path, "?")
+	if !found {
+		return path
+	}
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return base + "?[redacted]"
+	}
+	redacted := false
+	for _, key := range sensitiveQueryKeys {
+		if values.Has(key) {
+			values.Set(key, "[redacted]")
+			redacted = true
+		}
+	}
+	if !redacted {
+		return path
+	}
+	return base + "?" + values.Encode()
+}
+
 func main() {
 	// โหลด .env (มองหาไฟล์ .env ที่ขึ้นไป 3 ระดับจาก cmd/serve/)
 	_ = godotenv.Load("../../../.env")
@@ -197,7 +250,14 @@ func main() {
 	config.ConnectDB()
 
 	// 2. สร้าง Gin HTTP Engine
-	r := gin.Default()
+	//
+	// ใช้ gin.New() + ประกอบ middleware เองแทน gin.Default() เพราะ Logger ดีฟอลต์
+	// เขียน path พร้อม query string ดิบลง log ทำให้ ?token=<JWT> ของ SSE (/notifications/stream)
+	// หลุดเข้า access log ตรง ๆ — ใครเข้าถึง log ได้ก็เห็น token จริง ใช้สวมสิทธิ์ได้จน token หมดอายุ
+	// จึงใส่ formatter ที่ปกปิดค่า query param อ่อนไหวก่อน แล้วคง Recovery ไว้เหมือน gin.Default()
+	r := gin.New()
+	r.Use(gin.LoggerWithFormatter(sanitizedLogFormatter))
+	r.Use(gin.Recovery())
 
 	// ⚠️ ต้องตั้งก่อนใช้ rate limit ที่นับตาม IP
 	//
@@ -218,30 +278,19 @@ func main() {
 	// 3. ตั้งค่า Routes
 	routes.SetupRoutes(r)
 
-	// 3.1 เริ่ม background job ปรับสถานะลูกค้า active/inactive อัตโนมัติ (รายวัน)
-	startCustomerStatusJob()
-
-	// 3.2 ลบห้องแชทของผู้เยี่ยมชมที่เกิน 7 วันอัตโนมัติ
+	// 3.1 งานดูแลระบบรายวันทั้งหมด (ปรับสถานะลูกค้า / ลบแชท-รูป-โพสต์เก่า / บิลเกินกำหนด /
+	// ลบบัญชีที่ไม่ยืนยันอีเมล) รวบไว้ scheduler เดียว รันวันละครั้งตอนตี 5 ปลุก Neon ครั้งเดียวต่อวัน
 	// หมายเหตุ: เลิกลบประกาศที่หมดอายุอัตโนมัติแล้ว — "หมดอายุ" = ซ่อนจากฟีด (กรองด้วยวันที่ใน
 	// GetActiveAnnouncements) แต่ record ยังอยู่ เพื่อให้ฟีเจอร์ "บันทึกไว้อ่านทีหลัง" เปิดดูย้อนหลังได้
-	startChatCleanupJob()
+	startDailyMaintenanceJob()
 
-	// 3.3 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน
+	// 3.2 ปิดรอบเช็คชื่อที่ลืมกดปิด แล้วมาร์คคนที่ไม่มาเป็นขาดเรียน (event-driven ตื่นเมื่อมีรอบเปิด)
 	startAttendanceAutoCloseJob()
 
-	// 3.3.1 เตือนนักเรียนที่ยังไม่ยืนยันมาเรียนก่อนปิดรับ
+	// 3.3 เตือนนักเรียนที่ยังไม่ยืนยันมาเรียนก่อนปิดรับ (ทุกวันเวลา 18:00)
 	startClassConfirmReminderJob()
 
-	// 3.4 เลื่อนสถานะบิลค้างชำระที่เลยวันครบกำหนดเป็นเกินกำหนด (overdue) อัตโนมัติ
-	startBillingOverdueJob()
-
-	// 3.4.1 ลบรูป/วิดีโอโพสต์ที่เกิน 7 วันอัตโนมัติ
-	startPhotoPostCleanupJob()
-
-	// 3.4.2 ลบบัญชีที่สมัครไว้แต่ไม่เคยยืนยันอีเมลเกิน 1 ชั่วโมงอัตโนมัติ (กันอีเมลถูกจองค้างถาวร)
-	startUnverifiedUserCleanupJob()
-
-	// 3.5 สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา (pending → awaiting_review/rejected)
+	// 3.4 สร้าง embedding ให้รูปใบหน้าที่อัปโหลดเข้ามา (pending → awaiting_review/rejected)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	startFaceEmbeddingWorker(workerCtx)
