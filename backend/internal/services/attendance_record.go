@@ -175,7 +175,8 @@ func (s *AttendanceService) AutoCloseStaleSessions() (int, error) {
 }
 
 const (
-	// ⚠️ ตาข่ายกันพลาดตอนไม่มีรอบเปิดอยู่ ต้องยาวกว่าหน้าต่าง autosuspend ของ Neon เสมอ
+	// เพดานเวลารอ ใช้ตอนอ่านฐานพลาดหรือคาบที่อ่าน deadline ไม่ได้ — ไม่ให้นอนยาวเกินไป
+	// ⚠️ ต้องยาวกว่าหน้าต่าง autosuspend ของ Neon เสมอ (ตอนไม่มีรอบเปิดจะไม่ตั้ง timer เลย)
 	autoCloseIdleInterval = time.Hour
 
 	// ถึงกำหนดแล้วแต่ปิดไม่สำเร็จ — ห้ามวนทันที ไม่งั้นกลายเป็น hot loop ยิงฐานไม่หยุด
@@ -198,15 +199,20 @@ func WaitForAttendanceSessionOpened() <-chan struct{} {
 	return attendanceSessionOpened
 }
 
-// NextAutoCloseWait คืนเวลารอจนถึงกำหนดปิดของคาบที่ใกล้ที่สุด ไม่มีรอบเปิดอยู่ก็นอนยาว
-func (s *AttendanceService) NextAutoCloseWait() time.Duration {
+// NextAutoCloseWait คืนเวลารอจนถึงกำหนดปิดของคาบที่ใกล้ที่สุด
+//
+// คืน ok=false เมื่อไม่มีรอบเปิดอยู่เลย — งานปิดรอบจะไม่ตั้ง timer แต่นอนรอสัญญาณ
+// เปิดรอบใหม่อย่างเดียว ช่วงว่าง (เช่นนอกเวลาเรียน) จึงไม่ยิง query ทิ้ง ให้ Neon หลับได้
+// รอบต้องเปิดอยู่ก่อนถึงจะค้างให้ปิดได้ ไม่มีรอบเปิดก็ไม่มีอะไรต้องตื่นไปทำ
+func (s *AttendanceService) NextAutoCloseWait() (time.Duration, bool) {
 	var sessions []models.AttendanceSession
 	if err := s.db.Where("status = ?", models.AttendanceSessionOpen).
 		Find(&sessions).Error; err != nil {
-		return autoCloseIdleInterval
+		// อ่านฐานไม่ได้ตอนนี้ — ลองใหม่ในอีกสักพักดีกว่านอนยาวจนไม่ได้เช็คเลย
+		return autoCloseIdleInterval, true
 	}
 	if len(sessions) == 0 {
-		return autoCloseIdleInterval
+		return 0, false
 	}
 
 	now := nowLocal()
@@ -224,9 +230,9 @@ func (s *AttendanceService) NextAutoCloseWait() time.Duration {
 
 	// ถึงกำหนดแล้วแต่ยังอยู่ในรายการ = รอบนี้เพิ่งปิดไม่สำเร็จ
 	if wait := time.Until(earliest); wait > 0 {
-		return min(wait, autoCloseIdleInterval)
+		return min(wait, autoCloseIdleInterval), true
 	}
-	return autoCloseRetryWait
+	return autoCloseRetryWait, true
 }
 
 // isStaleSession บอกว่ารอบนี้เลยเวลาจนควรถูกปิดอัตโนมัติแล้วหรือยัง
