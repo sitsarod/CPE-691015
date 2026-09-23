@@ -58,6 +58,8 @@ export interface BillingDTO {
   };
   slipurl?: string;
   invoice_id?: number;
+  // วิธีชำระเงินของใบแจ้งหนี้ที่ผูกกับบิลนี้ — ใช้ขึ้นป้าย "เงินสด" ให้แอดมินเห็นชัด
+  paymentmethod?: "qr" | "bank_transfer" | "credit_card" | "cash";
   transactionid?: string;
   // ผลตรวจสลิปอัตโนมัติ (SlipOK) ของใบแจ้งหนี้
   // slipok_checked = false แปลว่าบัญชีไม่ได้เปิดตรวจอัตโนมัติ จึงยังไม่เคยตรวจ (ต้องตรวจเอง)

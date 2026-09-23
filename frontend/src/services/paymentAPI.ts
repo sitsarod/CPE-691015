@@ -271,6 +271,24 @@ export async function confirmSlip(invoiceId: number, token: string): Promise<{ m
   return resData;
 }
 
+// Confirm cash payment — ยืนยันว่าลูกค้าชำระด้วยเงินสด แล้วปิดบิลให้
+// ต่างจาก confirmSlip ตรงที่ backend เขียนวิธีชำระเงินเป็น cash ทับของเดิม
+// (กันกรณีลูกค้าสร้างใบไว้ด้วย PromptPay QR แล้วแอดมินมายืนยันว่ารับเป็นเงินสด — ต้องไม่โชว์ว่าจ่าย QR)
+export async function confirmCashPayment(invoiceId: number, token: string): Promise<{ message?: string; data?: BillingDTO }> {
+  const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/confirm-cash`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "บันทึกการชำระเงินสดไม่สำเร็จ");
+  }
+  return resData;
+}
+
 // Reject payment slip — reason บังคับกรอก ถูกส่งไปแจ้งลูกค้าและแสดงในประวัติใบแจ้งหนี้
 export async function rejectSlip(invoiceId: number, reason: string, token: string): Promise<{ message?: string; data?: BillingDTO }> {
   const response = await fetch(`${BASE_URL}/payments/invoices/${invoiceId}/reject`, {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Loader2
@@ -26,10 +26,20 @@ import InvoicesTab from "./components/InvoicesTab";
 import CheckoutModal from "./components/CheckoutModal";
 
 import { useConfirm } from "@/components/ConfirmProvider";
+// ครอบด้วย Suspense เพราะ useSearchParams บังคับให้ต้องมี boundary ตอน build (ดู AGENTS.md/Next docs)
 export default function CustomerPaymentPage() {
+  return (
+    <Suspense fallback={null}>
+      <CustomerPayment />
+    </Suspense>
+  );
+}
+
+function CustomerPayment() {
   const confirmAction = useConfirm();
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+
   // Data States
   const [billings, setBillings] = useState<BillingDTO[]>([]);
   const [invoices, setInvoices] = useState<InvoiceDTO[]>([]);
@@ -43,11 +53,20 @@ export default function CustomerPaymentPage() {
   const [selectedBillingIds, setSelectedBillingIds] = useState<number[]>([]);
 
   // เปิดแท็บตาม query param เมื่อ deep-link มาจากการแจ้งเตือน เช่น /customer/payment?tab=invoices
+  // ผูกกับ searchParams เพื่อให้กดแจ้งเตือนขณะอยู่หน้านี้อยู่แล้วก็สลับแท็บให้ (ไม่ใช่แค่ตอนเข้าหน้าครั้งแรก)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const tab = new URLSearchParams(window.location.search).get("tab");
+    const tab = searchParams.get("tab");
     if (tab === "billings" || tab === "invoices") setActiveTab(tab);
-  }, []);
+  }, [searchParams]);
+
+  // สลับแท็บ + เขียน ?tab= ลง URL ผ่าน router เพื่อให้ searchParams เป็นแหล่งความจริงเดียว
+  // (ไม่งั้นสลับแท็บเองแล้วแจ้งเตือนแท็บเดิมซ้ำจะไม่พาไปให้)
+  const changeTab = (tab: "billings" | "invoices") => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Record<number, boolean>>({});
 
   // Checkout Modal Context States
@@ -323,7 +342,7 @@ export default function CustomerPaymentPage() {
       {/* Tab Selector */}
       <div className="flex gap-4 sm:gap-6 border-b border-gray-200">
         <button
-          onClick={() => setActiveTab("billings")}
+          onClick={() => changeTab("billings")}
           className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-xs font-bold transition-all sm:flex-none sm:justify-start sm:gap-2 sm:text-sm ${
             activeTab === "billings"
               ? "border-[#CC0000] text-[#CC0000]"
@@ -341,7 +360,7 @@ export default function CustomerPaymentPage() {
           </span>
         </button>
         <button
-          onClick={() => setActiveTab("invoices")}
+          onClick={() => changeTab("invoices")}
           className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-xs font-bold transition-all sm:flex-none sm:justify-start sm:gap-2 sm:text-sm ${
             activeTab === "invoices"
               ? "border-[#CC0000] text-[#CC0000]"

@@ -434,6 +434,22 @@ func (s *PaymentService) recordSlipOk(invoiceID uint, passed bool, message strin
 // ConfirmPayment ยืนยันการชำระเงินโดยผู้ดูแลระบบ (Admin)
 // confirmedByID = users.id ของแอดมินที่กดอนุมัติ (nil = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
 func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*models.Invoice, error) {
+	return s.confirmPayment(invoiceID, confirmedByID, nil)
+}
+
+// ConfirmCashPayment ยืนยันว่าลูกค้าชำระด้วย "เงินสด" แล้วปิดบิลให้ (Admin)
+//
+// ต่างจาก ConfirmPayment ตรงที่บังคับเขียนวิธีชำระเงินเป็น cash ทับของเดิม —
+// จำเป็นเพราะแอดมินกดปุ่มนี้ได้แม้บนใบแจ้งหนี้ที่ลูกค้าสร้างไว้ด้วยวิธีอื่น (เช่น PromptPay QR)
+// แล้วแนบสลิปรอตรวจอยู่ ถ้าไม่ทับ ใบจะยังโชว์ว่าจ่ายด้วย QR ทั้งที่แอดมินยืนยันว่ารับเป็นเงินสด
+func (s *PaymentService) ConfirmCashPayment(invoiceID uint, confirmedByID *uint) (*models.Invoice, error) {
+	cash := models.MethodCash
+	return s.confirmPayment(invoiceID, confirmedByID, &cash)
+}
+
+// confirmPayment คือ core ของการยืนยันการชำระเงิน ใช้ร่วมกันระหว่างยืนยันปกติกับยืนยันเงินสด
+// overrideMethod != nil = เขียนทับวิธีชำระเงินของใบก่อนปิด (ใช้ตอนยืนยันเงินสด) · nil = คงวิธีเดิมไว้
+func (s *PaymentService) confirmPayment(invoiceID uint, confirmedByID *uint, overrideMethod *models.PaymentMethod) (*models.Invoice, error) {
 	var invoice models.Invoice
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -450,6 +466,10 @@ func (s *PaymentService) ConfirmPayment(invoiceID uint, confirmedByID *uint) (*m
 
 		invoice.Status = models.InvoiceSuccess
 		invoice.ConfirmedByID = confirmedByID
+		// เขียนทับวิธีชำระเงินเมื่อยืนยันเงินสด เพื่อไม่ให้ใบยังโชว์วิธีเดิม (เช่น QR) ที่ลูกค้าเลือกไว้ตอนสร้างใบ
+		if overrideMethod != nil {
+			invoice.Method = *overrideMethod
+		}
 		if err := tx.Save(&invoice).Error; err != nil {
 			return errors.New("ไม่สามารถยืนยันยอดเงินได้")
 		}
