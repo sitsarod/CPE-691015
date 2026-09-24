@@ -294,6 +294,26 @@ func (s *FaceImageService) ListForAdmin(status string) ([]dto.AdminFaceImageDTO,
 	return out, nil
 }
 
+// faceOwnerNotifyTarget คืน users.id ของเจ้าของรูป (นักเรียนหรือโค้ช) และลิงก์หน้าลงทะเบียนใบหน้า
+// ตามบทบาท เพื่อส่งแจ้งเตือนผลการตรวจให้ถูกคน คืน ok=false ถ้าหาเจ้าของไม่ได้ (ผู้เรียกข้ามการแจ้ง)
+func (s *FaceImageService) faceOwnerNotifyTarget(image *models.FaceImage) (userID uint, href string, ok bool) {
+	if image.CustomerID != nil {
+		uid, err := ResolveUserID(s.db, *image.CustomerID)
+		if err != nil {
+			return 0, "", false
+		}
+		return uid, "/customer/settings/face", true
+	}
+	if image.CoachID != nil {
+		var coach models.Coach
+		if err := s.db.First(&coach, *image.CoachID).Error; err != nil {
+			return 0, "", false
+		}
+		return coach.UserID, "/coach/settings/face", true
+	}
+	return 0, "", false
+}
+
 // Review — approve → ready · reject → rejected + ลบไฟล์ทิ้ง
 // (ไม่มีเหตุให้เก็บภาพที่ระบบจะไม่ใช้ ยิ่งเก็บยิ่งเสี่ยง) แต่คงแถวไว้ให้นักเรียนเห็นเหตุผล
 func (s *FaceImageService) Review(adminUserID, imageID uint, action, reason string) (*models.FaceImage, error) {
@@ -356,6 +376,35 @@ func (s *FaceImageService) Review(adminUserID, imageID uint, action, reason stri
 	if err := s.db.First(&image, imageID).Error; err != nil {
 		return nil, errors.New("ไม่สามารถดึงข้อมูลรูปใบหน้าได้")
 	}
+
+	// แจ้งเจ้าของรูปทันทีว่าผลการตรวจเป็นอย่างไร (best-effort — ล้มเหลวไม่กระทบผลตรวจที่บันทึกแล้ว)
+	if targetUserID, href, ok := s.faceOwnerNotifyTarget(&image); ok {
+		if action == "approve" {
+			CreateNotification(s.db, targetUserID,
+				"face_image_approved",
+				fmt.Sprintf("face-image-%d-approved", imageID),
+				"รูปใบหน้าผ่านการตรวจสอบ",
+				"รูปใบหน้าของคุณได้รับการอนุมัติแล้ว พร้อมใช้เช็คชื่อด้วยการสแกนใบหน้า",
+				href,
+				"success",
+			)
+		} else {
+			body := "รูปใบหน้าของคุณไม่ผ่านการตรวจสอบ"
+			if r := strings.TrimSpace(reason); r != "" {
+				body += fmt.Sprintf(" เหตุผล: %s", r)
+			}
+			body += " กรุณาถ่ายรูปใหม่"
+			CreateNotification(s.db, targetUserID,
+				"face_image_rejected",
+				fmt.Sprintf("face-image-%d-rejected", imageID),
+				"รูปใบหน้าไม่ผ่านการตรวจสอบ",
+				body,
+				href,
+				"danger",
+			)
+		}
+	}
+
 	return &image, nil
 }
 
