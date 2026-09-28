@@ -14,11 +14,13 @@ import EditBillingModal from "./components/EditBillingModal";
 import {
   fetchCustomers,
   fetchBillings,
+  fetchAllInvoices,
   fetchBankAccounts,
   fetchCoaches,
   fetchExpenses,
   updateBilling
 } from "@/services/paymentAPI";
+import { InvoiceDTO } from "@/app/customer/payment/components/types";
 import { useHorizontalWheelScroll } from "@/hooks/useHorizontalWheelScroll";
 import { NOTIFICATION_STREAM_EVENT, type NotificationStreamDetail } from "@/components/NotificationBell";
 
@@ -77,6 +79,7 @@ function FinancialPortal() {
   // Live API States
   const [students, setStudents] = useState<BackendUser[]>([]);
   const [billings, setBillings] = useState<BillingDTO[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceDTO[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
@@ -116,10 +119,11 @@ function FinancialPortal() {
       setApiError(null);
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
 
-      // Fetch students, billings, bank accounts, coaches, and expenses in parallel
-      const [studentsData, billingsData, bankAccountsData, coachesData, expensesData] = await Promise.all([
+      // Fetch students, billings, invoices, bank accounts, coaches, and expenses in parallel
+      const [studentsData, billingsData, invoicesData, bankAccountsData, coachesData, expensesData] = await Promise.all([
         fetchCustomers(token || ""),
         fetchBillings(token || ""),
+        fetchAllInvoices(token || ""),
         fetchBankAccounts(token || ""),
         fetchCoaches(token || ""),
         fetchExpenses(token || "")
@@ -127,6 +131,7 @@ function FinancialPortal() {
 
       setStudents(studentsData);
       setBillings(billingsData);
+      setInvoices(invoicesData);
       setBankAccounts(bankAccountsData);
       setCoaches(coachesData);
       setExpenses(expensesData);
@@ -202,18 +207,12 @@ function FinancialPortal() {
     return Array.from(byId.values());
   }, [billings]);
 
-  // Count distinct invoices awaiting review (not billing rows — one invoice can bundle
-  // several billings, and VerifySlipsTab groups by invoice_id, so the tab badge should
-  // match that grouping instead of over/under-counting individual billing rows).
-  const waitcheckInvoiceCount = useMemo(() => {
-    const keys = new Set<string>();
-    billings.forEach(b => {
-      if (b.billingstatus === 'waitcheck') {
-        keys.add(b.invoice_id ? `invoice-${b.invoice_id}` : `bill-${b.id}`);
-      }
-    });
-    return keys.size;
-  }, [billings]);
+  // Count distinct invoices awaiting review. VerifySlipsTab is now invoice-centric,
+  // so the badge counts pending invoices that have a slip attached (= waiting for admin).
+  const waitcheckInvoiceCount = useMemo(
+    () => invoices.filter(i => i.invoicestatus === 'pending' && !!i.slipurl).length,
+    [invoices]
+  );
 
   // Save billing edits
   const handleSaveBillingEdit = async (
@@ -365,7 +364,8 @@ function FinancialPortal() {
 
           {subTab === 'slips' && (
             <VerifySlipsTab
-              billings={billings}
+              invoices={invoices}
+              billings={dedupedBillings}
               onFetchData={() => fetchData(true)}
               onTriggerToast={triggerToast}
               initialFilter={initialSlipFilter}

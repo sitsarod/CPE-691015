@@ -175,6 +175,10 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 			dto.Status = "unfunded"
 		} else if invoice.Status == models.InvoiceCancelled {
 			dto.Status = "unfunded"
+		} else if invoice.Status == models.InvoiceExpired {
+			// ใบหมดอายุ (ลูกค้าทิ้งค้างไว้ไม่แนบสลิป) บิลกลับมาพร้อมออกใบใหม่ =
+			// ยังไม่ได้ชำระ ต้องไม่ปล่อยให้ตกไปใช้ b.Status ซึ่งอาจเป็น paid จากใบอื่น
+			dto.Status = "unfunded"
 		}
 	}
 
@@ -182,32 +186,16 @@ func toBillingDTOWithInvoice(b *models.Billing, invoice *models.Invoice) *Billin
 }
 
 // ToBillingDTOs maps a list of models.Billing to BillingDTOs
+//
+// หนึ่งบิล = หนึ่งแถวเสมอ โดยเลือก invoice ล่าสุดที่ไม่ถูกยกเลิกผ่าน ToBillingDTO
+// (logic เดียวกับ GetBillingByID) — เดิมวนสร้างแถวต่อ 1 invoice ทำให้บิลที่เคยถูก
+// reject/หมดอายุแล้วจ่ายสำเร็จภายหลัง โผล่ซ้ำหลายแถว (เช่น unfunded ผี + paid) จน
+// หน้าแอดมินนับรายได้ซ้ำและโชว์ยอดค้างที่จ่ายไปแล้ว
 func ToBillingDTOs(billings []models.Billing) []BillingDTO {
-	var dtos []BillingDTO
-	for _, b := range billings {
-		if len(b.PaymentItem) > 0 {
-			// If linked to invoices, create a DTO for each invoice it belongs to
-			var lastCancelled *models.Invoice
-			added := false
-			for _, item := range b.PaymentItem {
-				if item.Invoice != nil {
-					// Skip cancelled invoices to keep the list clean
-					if item.Invoice.Status == models.InvoiceCancelled {
-						lastCancelled = item.Invoice
-						continue
-					}
-					dtos = append(dtos, *toBillingDTOWithInvoice(&b, item.Invoice))
-					added = true
-				}
-			}
-			// If every invoice for this billing was cancelled, still surface it as
-			// unfunded instead of silently dropping the billing from the list.
-			if !added {
-				dtos = append(dtos, *toBillingDTOWithInvoice(&b, lastCancelled))
-			}
-		} else {
-			// If not linked to any invoice, just map it directly
-			dtos = append(dtos, *toBillingDTOWithInvoice(&b, nil))
+	dtos := make([]BillingDTO, 0, len(billings))
+	for i := range billings {
+		if dto := ToBillingDTO(&billings[i]); dto != nil {
+			dtos = append(dtos, *dto)
 		}
 	}
 	return dtos
@@ -261,6 +249,20 @@ type InvoiceDTO struct {
 	// เหตุผล/เวลาที่ถูกปฏิเสธ — มีค่าเฉพาะใบที่สถานะ rejected
 	RejectReason string     `json:"reject_reason,omitempty"`
 	RejectedAt   *time.Time `json:"rejected_at,omitempty"`
+
+	// ผลตรวจสลิปอัตโนมัติ (SlipOK) — ให้แอดมินเห็นตอนตรวจใบด้วยตนเอง
+	SlipOkChecked bool   `json:"slipok_checked"`
+	SlipOkPassed  bool   `json:"slipok_passed"`
+	SlipOkMessage string `json:"slipok_message,omitempty"`
+
+	// บัญชีปลายทางที่ลูกค้าโอนเข้า (snapshot ตอนแนบสลิป)
+	ReceivingBankName  string `json:"receiving_bank_name,omitempty"`
+	ReceivingAccountNo string `json:"receiving_account_no,omitempty"`
+
+	// แอดมินที่กดอนุมัติการชำระเงินจริง (nil = ระบบยืนยันอัตโนมัติผ่าน SlipOK)
+	ConfirmedBy *UserMinDTO `json:"confirmed_by,omitempty"`
+	// PaidAt = เวลาที่ยืนยันการชำระเงินจริง (มีค่าเฉพาะใบที่ success = invoice.UpdatedAt)
+	PaidAt *time.Time `json:"paid_at,omitempty"`
 }
 
 // ToInvoiceDTO maps models.Invoice to InvoiceDTO
@@ -275,21 +277,34 @@ func ToInvoiceDTO(i *models.Invoice) *InvoiceDTO {
 	}
 
 	dto := &InvoiceDTO{
-		ID:            i.ID,
-		TotalAmount:   i.TotalAmount,
-		Status:        string(i.Status),
-		TransactionID: i.TransactionID,
-		SlipImageUrl:  i.SlipImageUrl,
-		Method:        string(i.Method),
-		CustomerID:    i.CustomerID,
-		PaymentItems:  items,
-		CreatedAt:     i.CreatedAt,
-		RejectReason:  i.RejectReason,
-		RejectedAt:    i.RejectedAt,
+		ID:                 i.ID,
+		TotalAmount:        i.TotalAmount,
+		Status:             string(i.Status),
+		TransactionID:      i.TransactionID,
+		SlipImageUrl:       i.SlipImageUrl,
+		Method:             string(i.Method),
+		CustomerID:         i.CustomerID,
+		PaymentItems:       items,
+		CreatedAt:          i.CreatedAt,
+		RejectReason:       i.RejectReason,
+		RejectedAt:         i.RejectedAt,
+		SlipOkChecked:      i.SlipOkChecked,
+		SlipOkPassed:       i.SlipOkPassed,
+		SlipOkMessage:      i.SlipOkMessage,
+		ReceivingBankName:  i.ReceivingBankName,
+		ReceivingAccountNo: i.ReceivingAccountNo,
 	}
 
 	if i.Customer != nil {
 		dto.Customer = ToUserMinDTO(i.Customer)
+	}
+	if i.ConfirmedBy != nil {
+		dto.ConfirmedBy = ToUserMinDTO(i.ConfirmedBy)
+	}
+	// PaidAt = เวลายืนยันจริง (invoice.UpdatedAt ตอน success) — กฎเดียวกับ toBillingDTOWithInvoice
+	if i.Status == models.InvoiceSuccess {
+		paidAt := i.UpdatedAt
+		dto.PaidAt = &paidAt
 	}
 
 	return dto

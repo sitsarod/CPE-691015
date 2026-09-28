@@ -386,6 +386,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 		adminPaymentGroup := adminOnly.Group("/payments")
 		{
+			adminPaymentGroup.GET("/invoices", paymentController.GetAllInvoices)
 			adminPaymentGroup.POST("/invoices/:id/confirm", paymentController.ConfirmPayment)
 			adminPaymentGroup.POST("/invoices/:id/confirm-cash", paymentController.ConfirmCashPayment)
 			adminPaymentGroup.PATCH("/invoices/:id/reject", paymentController.RejectPayment)

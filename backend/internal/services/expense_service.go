@@ -280,6 +280,15 @@ func (s *ExpenseService) UpdateExpense(id uint, req dto.UpdateExpenseRequest, ac
 		}
 
 		prevAmount := expense.Amount
+		// เก็บค่าเดิมของ row ก่อนถูกแก้ ไว้ใช้ตัดสินว่ายอดเดิมถูกนับอยู่ใน AlreadyPaid ของโค้ช
+		// ที่กำลังตรวจหรือไม่ (paidWages นับเฉพาะ coach_id + type=coach_wages และรายเดือนยังกรองงวด)
+		origType := expense.Type
+		origDate := expense.Date
+		var origCoachID *uint
+		if expense.CoachID != nil {
+			v := *expense.CoachID
+			origCoachID = &v
+		}
 
 		// รวมค่าที่แก้เข้ากับของเดิมเพื่อได้สถานะสุดท้าย แล้วค่อยตรวจกฎ
 		if req.Amount != nil {
@@ -333,10 +342,30 @@ func (s *ExpenseService) UpdateExpense(id uint, req dto.UpdateExpenseRequest, ac
 				return err
 			}
 
-			ceiling := payroll.Unpaid + prevAmount
+			// เพดาน = ยอดที่ควรได้ (Expected) หัก "ยอดที่จ่ายไปแล้วโดย row อื่น"
+			// AlreadyPaid ที่ ComputeCoachPayroll คืนมา รวมยอดเดิมของ row นี้ไว้ก็ต่อเมื่อ row นี้
+			// เข้าเงื่อนไขของ paidWages สำหรับโค้ชที่กำลังตรวจ จึงต้องหักยอดเดิมออกเฉพาะกรณีนั้น
+			// ไม่งั้น (เช่น ย้ายโค้ช, เปลี่ยน type จาก non-wage เป็น wage, หรือย้ายงวดเดือน)
+			// จะบวกยอดเดิมกลับทั้งที่ไม่ได้อยู่ใน AlreadyPaid ของโค้ชใหม่ = เพดานเฟ้อ จ่ายเกินได้
+			oldContribution := 0.0
+			sameCoach := origCoachID != nil && *origCoachID == *expense.CoachID
+			if origType == models.ExpenseTypeCoach && sameCoach {
+				if payroll.PaymentType == PaymentTypeMonthly {
+					// รายเดือน: AlreadyPaid กรองเฉพาะงวดของ asOf → ยอดเดิมนับก็ต่อเมื่ออยู่เดือนเดียวกัน
+					mr := monthRange(asOf)
+					if !origDate.Before(mr[0]) && origDate.Before(mr[1]) {
+						oldContribution = prevAmount
+					}
+				} else {
+					// รายคาบ: AlreadyPaid รวมทุกงวด → ยอดเดิมนับเสมอเมื่อเป็นโค้ช/type เดียวกัน
+					oldContribution = prevAmount
+				}
+			}
+
+			ceiling := payroll.Expected - (payroll.AlreadyPaid - oldContribution)
 			if expense.Amount > ceiling+payrollEpsilon {
 				return fmt.Errorf("%w (แก้ได้ไม่เกิน %.2f บาท แต่กรอกมา %.2f บาท)",
-					ErrPayrollExceeds, ceiling, expense.Amount)
+					ErrPayrollExceeds, positive(ceiling), expense.Amount)
 			}
 		}
 

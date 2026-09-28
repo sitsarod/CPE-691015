@@ -338,6 +338,22 @@ export async function fetchCustomerInvoices(customerId: string | number, token: 
   return resData.data || [];
 }
 
+// Fetch all invoices (admin only) — invoice-centric source for the verify-slips tab
+export async function fetchAllInvoices(token: string): Promise<InvoiceDTO[]> {
+  const response = await fetch(`${BASE_URL}/payments/invoices`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    }
+  });
+  const resData = await response.json();
+  if (!response.ok) {
+    throw new Error(resData.error || "ไม่สามารถดึงข้อมูลใบแจ้งหนี้ได้");
+  }
+  return resData.data || [];
+}
+
 // Create invoice from multiple billings
 export async function createInvoice(customerId: number, billingIds: number[], method: string, token: string): Promise<InvoiceDTO> {
   const response = await fetch(`${BASE_URL}/payments/invoices`, {

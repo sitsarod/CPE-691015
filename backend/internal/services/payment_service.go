@@ -460,8 +460,14 @@ func (s *PaymentService) confirmPayment(invoiceID uint, confirmedByID *uint, ove
 			return ErrInvoiceNotFound
 		}
 
+		// ยืนยันได้เฉพาะใบที่ยัง "รอดำเนินการ" (pending) เท่านั้น เช่นเดียวกับ Reject/Cancel
+		// ถ้าใบถูกยกเลิก/ปฏิเสธ/หมดอายุไปแล้ว ห้ามชุบชีวิตกลับมาเป็น success ไม่งั้นจะมาร์ค
+		// บิลเป็น paid ซ้ำและ trigger activateEnrollment ใหม่ = นับรายได้ซ้ำ/เปิดสิทธิ์ซ้ำ
 		if invoice.Status == models.InvoiceSuccess {
 			return businessErr("ใบแจ้งหนี้นี้ชำระเงินสำเร็จไปแล้ว")
+		}
+		if invoice.Status != models.InvoicePending {
+			return businessErr("ใบแจ้งหนี้นี้ถูกปิดไปแล้ว ไม่สามารถยืนยันการชำระเงินได้")
 		}
 
 		invoice.Status = models.InvoiceSuccess
@@ -544,6 +550,32 @@ func (s *PaymentService) GetCustomerInvoices(customerID uint) ([]models.Invoice,
 	err := s.db.Preload("PaymentItem").
 		Preload("PaymentItem.Billing").
 		Where("customer_id = ?", customerID).
+		Find(&invoices).Error
+	return invoices, err
+}
+
+// GetAllInvoices ดึงใบแจ้งหนี้ทั้งหมด (สำหรับหน้าตรวจสลิปของ Admin) แบบ invoice-centric
+//
+// ต่างจาก GetAllBillings ตรงที่คืน "ใบแจ้งหนี้" พร้อมบิลครบชุดเดิมและยอด snapshot ของใบ
+// (invoice.TotalAmount) จึงไม่หดตามการออกใบใหม่บางบิล — แก้ปัญหาการ์ดใบที่ถูกปฏิเสธโชว์ยอด/จำนวนบิลไม่ครบ
+//
+// ตัด cancelled/expired ทิ้ง (ตรงกับฝั่งลูกค้าที่ซ่อนใบยกเลิก และ expired = ใบที่ทิ้งค้างไม่แนบสลิป)
+func (s *PaymentService) GetAllInvoices() ([]models.Invoice, error) {
+	// ปิดใบ pending ที่ทิ้งค้างไม่แนบสลิปให้เป็น expired ก่อน เพื่อให้ชุดที่กรองออกตรงจริง (lazy sweep)
+	s.sweepStalePendingInvoices()
+
+	var invoices []models.Invoice
+	err := s.db.
+		Preload("Customer").
+		Preload("Customer.Customer"). // ต้องมีเพื่อให้ ToUserMinDTO เติม nickname ได้
+		Preload("ConfirmedBy").
+		Preload("PaymentItem").
+		Preload("PaymentItem.Billing").
+		Preload("PaymentItem.Billing.BillingType").
+		Preload("PaymentItem.Billing.Admin").
+		Preload("PaymentItem.Billing.UpdatedBy").
+		Where("status NOT IN ?", []models.InvoiceStatus{models.InvoiceCancelled, models.InvoiceExpired}).
+		Order("id DESC").
 		Find(&invoices).Error
 	return invoices, err
 }

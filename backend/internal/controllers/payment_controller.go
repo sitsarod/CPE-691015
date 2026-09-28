@@ -157,6 +157,19 @@ func (ctrl *PaymentController) GetCustomerInvoices(c *gin.Context) {
 	})
 }
 
+// GetAllInvoices ดึงใบแจ้งหนี้ทั้งหมด (Admin) สำหรับหน้าตรวจสลิปแบบ invoice-centric
+func (ctrl *PaymentController) GetAllInvoices(c *gin.Context) {
+	invoices, err := ctrl.service.GetAllInvoices()
+	if err != nil {
+		respondJSON(c, http.StatusInternalServerError, gin.H{"error": "ดึงข้อมูลใบแจ้งหนี้ไม่สำเร็จ"})
+		return
+	}
+
+	respondJSON(c, http.StatusOK, gin.H{
+		"data": dto.ToInvoiceDTOs(invoices),
+	})
+}
+
 // RejectPayment ปฏิเสธการชำระเงิน (Admin)
 func (ctrl *PaymentController) RejectPayment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

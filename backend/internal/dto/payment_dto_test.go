@@ -121,6 +121,94 @@ func TestToBillingDTO(t *testing.T) {
 	}
 }
 
+// #2: บิลที่มีความพยายามจ่ายหลายครั้ง (เช่น rejected แล้วค่อย success) ต้องแสดงแค่ "แถวเดียว"
+// โดยเลือกใบล่าสุดที่ไม่ถูกยกเลิก — เดิมแตกเป็นหลายแถว (unfunded ผี + paid) ทำให้หน้าแอดมิน
+// นับรายได้ซ้ำและโชว์ยอดค้างที่จ่ายไปแล้ว
+func TestToBillingDTOs_DedupesToOneRowPerBill(t *testing.T) {
+	billings := []models.Billing{
+		{
+			Model:  gorm.Model{ID: 7},
+			Amount: 500,
+			Status: models.StatusPaid, // บิลจ่ายสำเร็จแล้วผ่านใบล่าสุด
+			PaymentItem: []models.PaymentItem{
+				{Invoice: &models.Invoice{Model: gorm.Model{ID: 1}, Status: models.InvoiceRejected}},
+				{Invoice: &models.Invoice{Model: gorm.Model{ID: 2}, Status: models.InvoiceSuccess}},
+			},
+		},
+	}
+
+	dtos := ToBillingDTOs(billings)
+
+	if len(dtos) != 1 {
+		t.Fatalf("บิลเดียวต้องได้แถวเดียว แต่ได้ %d แถว (บั๊กนับซ้ำกลับมา)", len(dtos))
+	}
+	if dtos[0].Status != "paid" {
+		t.Fatalf("ต้องแสดงสถานะ paid (ใบล่าสุดสำเร็จ) แต่ได้ %q", dtos[0].Status)
+	}
+}
+
+// #2/#4-dto: ใบแจ้งหนี้ที่หมดอายุ (expired) ต้อง map เป็น unfunded ไม่ตกไปใช้ b.Status
+// (เดิมไม่มีเคส expired ในการ derive สถานะ ทำให้ใบหมดอายุอาจสืบทอด paid จากที่อื่น)
+func TestToBillingDTOs_ExpiredInvoiceMapsToUnfunded(t *testing.T) {
+	billings := []models.Billing{
+		{
+			Model:  gorm.Model{ID: 8},
+			Amount: 300,
+			Status: models.StatusUnfunded,
+			PaymentItem: []models.PaymentItem{
+				{Invoice: &models.Invoice{Model: gorm.Model{ID: 3}, Status: models.InvoiceExpired}},
+			},
+		},
+	}
+
+	dtos := ToBillingDTOs(billings)
+
+	if len(dtos) != 1 {
+		t.Fatalf("บิลเดียวต้องได้แถวเดียว แต่ได้ %d แถว", len(dtos))
+	}
+	if dtos[0].Status != "unfunded" {
+		t.Fatalf("ใบหมดอายุต้องแสดงเป็น unfunded แต่ได้ %q", dtos[0].Status)
+	}
+}
+
+// ToInvoiceDTO ต้องส่งฟิลด์ที่หน้าตรวจสลิปแอดมิน (invoice-centric) ต้องใช้:
+// slipok_*, receiving_*, confirmed_by, paid_at — โดย paid_at มีค่าเฉพาะใบ success
+func TestToInvoiceDTO_EmitsAdminVerifyFields(t *testing.T) {
+	now := time.Now()
+	admin := &models.User{Model: gorm.Model{ID: 7}, FirstName: "Bob", LastName: "Admin", Role: models.AdminRole}
+	invoice := &models.Invoice{
+		Model:              gorm.Model{ID: 20, UpdatedAt: now},
+		TotalAmount:        100,
+		Status:             models.InvoiceSuccess,
+		SlipOkChecked:      true,
+		SlipOkPassed:       true,
+		SlipOkMessage:      "ผ่าน",
+		ReceivingBankName:  "ธ.ทดสอบ",
+		ReceivingAccountNo: "1234567890",
+		ConfirmedBy:        admin,
+	}
+
+	dto := ToInvoiceDTO(invoice)
+	if !dto.SlipOkChecked || !dto.SlipOkPassed || dto.SlipOkMessage != "ผ่าน" {
+		t.Fatalf("slipok fields ไม่ถูกส่งครบ: %+v", dto)
+	}
+	if dto.ReceivingBankName != "ธ.ทดสอบ" || dto.ReceivingAccountNo != "1234567890" {
+		t.Fatalf("receiving fields ไม่ถูกส่ง: %+v", dto)
+	}
+	if dto.ConfirmedBy == nil || dto.ConfirmedBy.FirstName != "Bob" {
+		t.Fatalf("confirmed_by ไม่ถูกส่ง: %+v", dto.ConfirmedBy)
+	}
+	if dto.PaidAt == nil {
+		t.Fatal("ใบ success ต้องมี paid_at")
+	}
+
+	// ใบที่ยังไม่ success ต้องไม่มี paid_at
+	pending := &models.Invoice{Model: gorm.Model{ID: 21}, Status: models.InvoicePending}
+	if ToInvoiceDTO(pending).PaidAt != nil {
+		t.Fatal("ใบ pending ต้องไม่มี paid_at")
+	}
+}
+
 func TestToInvoiceDTO(t *testing.T) {
 	invoice := &models.Invoice{
 		Model: gorm.Model{
