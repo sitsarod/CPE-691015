@@ -149,20 +149,57 @@ export function RealtimeInsights({ insights }: { insights: Insights }) {
           </span>
         </div>
 
-        {/* อัตราการใช้คาบเรียน */}
-        <div className="flex flex-col gap-2.5">
+        {/* นักเรียนคาบใกล้หมด — โอกาสตามต่อคอร์ส */}
+        <div className="flex flex-col gap-3.5">
           <div className="flex items-baseline justify-between">
-            <span className="text-xs font-light text-gray-500">อัตราการใช้คาบเรียน</span>
-            <span className="text-lg font-semibold tabular-nums text-gray-900">
-              {insights.sessionUsage.toFixed(1)}%
+            <span className="text-xs font-light text-gray-500">
+              นักเรียนคาบใกล้หมด{insights.lowSessionsTotal > 0 ? ` (${insights.lowSessionsTotal} คน)` : ""}
             </span>
+            {insights.lowSessionsTotal > 0 && (
+              <Link
+                href="/admin/enrollments"
+                className="text-xs font-medium text-[#CC0000] hover:text-[#990000]"
+              >
+                ดูทั้งหมด
+              </Link>
+            )}
           </div>
-          <div className="h-1.5 w-full overflow-hidden bg-gray-100">
-            <div
-              className="h-full bg-[#CC0000]"
-              style={{ width: `${Math.min(100, insights.sessionUsage)}%` }}
-            />
-          </div>
+          {insights.lowSessions.length === 0 ? (
+            <p className="text-sm text-gray-400">ไม่มีนักเรียนที่คาบใกล้หมด</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {insights.lowSessions.map((s, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-gray-900">{s.name}</p>
+                    <p className="truncate text-xs font-light text-gray-500">
+                      {s.course}
+                      {s.daysLeft != null &&
+                        (s.daysLeft < 0
+                          ? " · เกินกำหนดแล้ว"
+                          : s.daysLeft <= 7
+                          ? ` · หมดอายุใน ${s.daysLeft} วัน`
+                          : "")}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 whitespace-nowrap px-2 py-0.5 text-xs font-medium tabular-nums ${
+                      s.remaining <= 1
+                        ? "bg-[#FFF0F0] text-[#CC0000]"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    เหลือ {s.remaining} คาบ
+                  </span>
+                </div>
+              ))}
+              {insights.lowSessionsTotal > insights.lowSessions.length && (
+                <p className="text-xs font-light text-gray-400">
+                  และอีก {insights.lowSessionsTotal - insights.lowSessions.length} คน
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ทีมผู้สอน */}
