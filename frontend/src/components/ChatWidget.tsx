@@ -203,18 +203,23 @@ export default function ChatWidget() {
     }
     try {
       const fetched = await autoQaAPI.getChatSessionById(Number(id), tok);
-      if (fetched && fetched.status === 'active' && chatOwner() === owner) {
+      // กู้ห้องได้ทั้งที่ยัง active และที่ปิดแล้ว (closed) — ห้องที่ปิดจะแสดงประวัติ + แถบ "ปิดแล้ว"
+      // ขอแค่ยังเป็นเจ้าของเดิม ไม่ลบคีย์ทิ้งเพราะสถานะ closed อีกต่อไป (เดิมทำให้ประวัติหาย)
+      if (fetched && chatOwner() === owner) {
         setSession(fetched);
         setSessionToken(tok);
         if (fetched.auto_qas) setMessages(mapAutoQAsToMessages(fetched.auto_qas));
         autoStartTriedRef.current = true;
-      } else {
+      }
+      // ไม่พบ/owner เปลี่ยนกลางคัน → ไม่ต้องลบคีย์ เผื่อกู้ใหม่รอบหน้า
+    } catch (err) {
+      // ลบคีย์เฉพาะเมื่อห้อง "ไม่มีอยู่จริงแล้ว" (404/not found) เท่านั้น
+      // error ชั่วคราว (เน็ตสะดุด/เซิร์ฟเวอร์ล่ม) จะเก็บคีย์ไว้ให้ลองกู้ใหม่ ไม่ทำประวัติหาย
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('not found') || msg.includes('ไม่พบ')) {
         localStorage.removeItem(chatSessionKey(owner));
         localStorage.removeItem(chatTokenKey(owner));
       }
-    } catch {
-      localStorage.removeItem(chatSessionKey(owner));
-      localStorage.removeItem(chatTokenKey(owner));
     } finally {
       setRestoring(false);
     }

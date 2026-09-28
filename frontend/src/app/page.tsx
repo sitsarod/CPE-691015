@@ -880,17 +880,25 @@ export default function Home() {
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedNews(item)}
-                      className="group flex flex-col gap-1.5 border-b border-gray-200 py-4 text-left last:border-b-0"
+                      className="group flex items-center gap-3 border-b border-gray-200 py-4 text-left last:border-b-0"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10.5px] font-light tracking-[0.16em] text-gray-400">
-                          {item.category?.name || "ข่าว"}
+                      {/* รูปข่าวย่อยขนาดเล็ก */}
+                      <Poster
+                        src={item.image_url}
+                        alt={item.title}
+                        className="h-16 w-24 shrink-0 overflow-hidden rounded-md"
+                      />
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10.5px] font-light tracking-[0.16em] text-gray-400">
+                            {item.category?.name || "ข่าว"}
+                          </span>
+                          <span className="text-[11px] font-light text-gray-400">{fmtDate(item.start_date)}</span>
+                        </div>
+                        <span className="line-clamp-2 text-[15px] font-normal leading-snug text-gray-800 transition-colors group-hover:text-[#CC0000]">
+                          {item.title}
                         </span>
-                        <span className="text-[11px] font-light text-gray-400">{fmtDate(item.start_date)}</span>
                       </div>
-                      <span className="text-[15px] font-normal leading-snug text-gray-800 transition-colors group-hover:text-[#CC0000]">
-                        {item.title}
-                      </span>
                     </button>
                   ))
                 )}
