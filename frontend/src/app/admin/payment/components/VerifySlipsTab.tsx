@@ -244,24 +244,46 @@ export default function VerifySlipsTab({
     handleRejectSlip(invoiceId, reason.trim());
   };
 
-  // ลูกค้าจ่ายเงินสด (logic เดิม)
+  // ลูกค้าจ่ายเงินสด
+  //
+  // reuse invoiceId เฉพาะใบที่ยัง "เปิดรออนุมัติ" (waitcheck) เท่านั้น — กรณีอื่น (ใบถูกปฏิเสธ/
+  // ค้างชำระ/ไม่มีใบ) ต้องสร้างใบแจ้งหนี้เงินสด "ใหม่" สำหรับบิลที่ยังค้างเท่านั้น เพราะใบที่ถูก
+  // ปฏิเสธเป็น terminal — ยืนยันซ้ำไม่ได้ (guard #1 ฝั่ง backend) และการนับบิลที่ค้างจริงกันการ
+  // สร้างใบซ้อนบิลที่จ่ายไปแล้ว (backend CreateInvoice ก็บล็อกบิล paid/waitcheck ให้อีกชั้น)
   const handleCashPayment = async (group: InvoiceGroup) => {
+    const isOpenInvoice = group.billingstatus === 'waitcheck' && !!group.invoiceId;
+    const unpaidBills = group.billings.filter(
+      b => b.billingstatus === 'unfunded' || b.billingstatus === 'overdue'
+    );
+
+    // กดบนการ์ดที่บิลถูกจ่ายครบไปแล้ว (เช่นใบปฏิเสธที่ตามเก็บผ่านใบอื่นไปแล้ว) — ไม่ต้องออกใบใหม่
+    if (!isOpenInvoice && unpaidBills.length === 0) {
+      onTriggerToast('บิลในรายการนี้ชำระเงินไปแล้ว', 'info');
+      onFetchData();
+      return;
+    }
+
+    // ยอดที่ปิดจริง: ใบที่เปิดอยู่ใช้ยอดใบ, กรณีอื่นใช้ผลรวมเฉพาะบิลที่ยังค้าง (ไม่ใช่ snapshot ของใบเดิม)
+    const cashAmount = isOpenInvoice
+      ? group.totalAmount
+      : unpaidBills.reduce((sum, b) => sum + b.billingamount, 0);
+
     if (!(await confirmAction(
-      `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ${fmtBaht(group.totalAmount)} ใช่หรือไม่?`
+      `ยืนยันว่าลูกค้าชำระด้วยเงินสด ยอด ${fmtBaht(cashAmount)} ใช่หรือไม่?`
     ))) return;
 
     setSubmitting('cash');
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
       let invoiceId = group.invoiceId;
-      if (!invoiceId) {
-        const billingIds = group.billings.map(b => b.id);
-        const invoice = await createInvoice(group.customerId, billingIds, 'cash', token || "");
+      if (!isOpenInvoice) {
+        // สร้างใบเงินสดใหม่สำหรับบิลที่ยังค้างเท่านั้น (ข้ามบิลที่จ่ายไปแล้ว)
+        const invoice = await createInvoice(group.customerId, unpaidBills.map(b => b.id), 'cash', token || "");
         invoiceId = invoice.id;
       }
       // ต้องใช้ confirm-cash ไม่ใช่ confirm ธรรมดา — ใบที่ลูกค้าสร้างไว้ด้วย QR แล้วแนบสลิป
       // จะยังเป็น method=qr อยู่ ถ้ายืนยันด้วย confirmSlip เฉย ๆ ใบจะโชว์ว่าจ่าย PromptPay QR
-      await confirmCashPayment(invoiceId, token || "");
+      await confirmCashPayment(invoiceId!, token || "");
       onTriggerToast('บันทึกการชำระเงินสดเรียบร้อยแล้ว');
       advanceRef.current = true;
       onFetchData();
@@ -706,7 +728,8 @@ export default function VerifySlipsTab({
                       — ระบบจะสร้างใบแจ้งหนี้และปิดบิลให้
                     </p>
                   </>
-                ) : (selectedGroup.billingstatus === 'unfunded' || selectedGroup.billingstatus === 'overdue') ? (
+                ) : ((selectedGroup.billingstatus === 'unfunded' || selectedGroup.billingstatus === 'overdue') &&
+                     selectedGroup.billings.some(b => b.billingstatus === 'unfunded' || b.billingstatus === 'overdue')) ? (
                   <p className="text-[11.5px] text-slate-500">
                     รายการนี้ยังไม่ได้ชำระ —
                     <button
