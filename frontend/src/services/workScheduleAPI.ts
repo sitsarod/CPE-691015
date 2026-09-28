@@ -18,6 +18,8 @@ export interface WorkScheduleAdmin {
 // ข้อมูลตอน assign คาบสอนใหม่ (ตรงกับ dto.CreateWorkScheduleRequest)
 export interface CreateWorkScheduleInput {
   coach_id: number;
+  // ส่ง id เป็นหลัก · ถ้าไม่มี id backend หาจาก court_number ให้
+  court_id?: number;
   course_id: number;
   date: string; // YYYY-MM-DD
   start_time: string; // HH:MM

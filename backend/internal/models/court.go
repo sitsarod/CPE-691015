@@ -4,8 +4,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// Court = สนามที่ใช้สอน (admin จัดการรายการเอง: เพิ่ม/แก้ชื่อ/ลบ)
-// WorkSchedule เก็บชื่อสนามเป็น string (court_number) ตารางนี้เป็นเพียง "รายการตัวเลือก" ที่ admin ดูแลได้
+// Court = สนามที่ใช้สอน (admin เพิ่ม/แก้ชื่อ/ปิดใช้งาน/ลบ) · WorkSchedule ผูกด้วย court_id
+// ชื่อไม่ซ้ำกันหลัง normalize — บังคับที่ CourtService ไม่ใช่ที่ index
 type Court struct {
 	gorm.Model
 

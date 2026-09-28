@@ -6,6 +6,7 @@ import { AlertCircle, Calendar, RefreshCw, ChevronLeft, ChevronRight, Clock, Map
 
 import { fetchMyCoachProfile, fetchCoachSchedules } from "@/services/coachAPI";
 import { WorkScheduleItem } from "@/types/coach";
+import { courtLabel } from "@/lib/courtLabel";
 
 const DAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -256,7 +257,7 @@ export default function CoachSchedulePage() {
                             <div className="mt-1.5 text-xs font-semibold text-slate-500">{s.start_time} - {s.end_time}</div>
                             {s.court_number && (
                               <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
-                                <MapPin className="h-3 w-3 shrink-0" /> สนาม {s.court_number}
+                                <MapPin className="h-3 w-3 shrink-0" /> {courtLabel(s.court_number)}
                               </div>
                             )}
                           </button>
@@ -333,7 +334,7 @@ export default function CoachSchedulePage() {
                             </span>
                             {s.court_number && (
                               <span className="inline-flex items-center gap-1 text-slate-400">
-                                <MapPin className="h-3.5 w-3.5 shrink-0" /> สนาม {s.court_number}
+                                <MapPin className="h-3.5 w-3.5 shrink-0" /> {courtLabel(s.court_number)}
                               </span>
                             )}
                           </div>

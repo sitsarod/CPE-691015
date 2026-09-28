@@ -127,8 +127,8 @@ type CoachDetailResponse struct {
 // โครงสร้างย่อยของวันและเวลาว่างแต่ละช่วง
 type AvailabilityDetail struct {
 	DayOfWeek string `json:"day_of_week" valid:"required~dayOfWeek is required"` // เช่น "Monday", "Tuesday"
-	StartTime string `json:"start_time" valid:"required~startTime is required"`   // เช่น "09:00"
-	EndTime   string `json:"end_time" valid:"required~endTime is required"`       // เช่น "12:00"
+	StartTime string `json:"start_time" valid:"required~startTime is required"`  // เช่น "09:00"
+	EndTime   string `json:"end_time" valid:"required~endTime is required"`      // เช่น "12:00"
 }
 
 // Request เมื่อโค้ชกดยืนยันตารางเวลาว่างทั้งหมดเข้ามา
@@ -145,12 +145,14 @@ type CoachAvailabilityResponse struct {
 
 // Request เมื่อ Admin เป็นคนสร้างตารางงานให้โค้ช
 type CreateWorkScheduleRequest struct {
-	CoachID     uint   `json:"coach_id" valid:"required~coachId is required"`
-	CourseID    uint   `json:"course_id" valid:"required~courseId is required"`
-	Date        string `json:"date" valid:"required~date is required"` // รูปแบบ YYYY-MM-DD
-	StartTime   string `json:"start_time" valid:"required~startTime is required"`
-	EndTime     string `json:"end_time" valid:"required~endTime is required"`
-	CourtNumber string `json:"court_number"` // optional — เว้นว่างได้ (ยังไม่ระบุสนาม)
+	CoachID   uint   `json:"coach_id" valid:"required~coachId is required"`
+	CourseID  uint   `json:"course_id" valid:"required~courseId is required"`
+	Date      string `json:"date" valid:"required~date is required"` // รูปแบบ YYYY-MM-DD
+	StartTime string `json:"start_time" valid:"required~startTime is required"`
+	EndTime   string `json:"end_time" valid:"required~endTime is required"`
+	// สนาม optional · ส่ง CourtID เป็นหลัก ถ้าส่งแค่ชื่อ ระบบหา id ให้ (ดู resolveCourt)
+	CourtID     *uint  `json:"court_id"`
+	CourtNumber string `json:"court_number"`
 	Description string `json:"description"`
 	// IgnoreAvailability = โหมดฉุกเฉิน: ข้ามการเช็คว่าโค้ชว่างหรือไม่ (แต่ยังเช็คเวลาชน/สนามซ้อน)
 	// ใช้กรณีไม่มีโค้ชคนไหนว่างตรงเวลาเลย แต่แอดมินจำเป็นต้องมอบหมาย
@@ -196,6 +198,6 @@ type WorkScheduleResponse struct {
 	StartTime   string `json:"start_time"`
 	EndTime     string `json:"end_time"`
 	CourtNumber string `json:"court_number"`
-	CourseName  string `json:"course_name,omitempty"` 
+	CourseName  string `json:"course_name,omitempty"`
 	Description string `json:"description"`
 }

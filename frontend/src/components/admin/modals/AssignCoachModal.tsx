@@ -8,6 +8,7 @@ import { Court } from "@/services/courtAPI";
 import { AvailabilitySlot, COACH_LEVEL_OPTIONS, COACH_LICENSE_OPTIONS } from "@/types/coach";
 import { WeekSession, createWorkSchedule, deleteWorkSchedule } from "@/services/workScheduleAPI";
 import { suggestedCoaches } from "@/lib/coachRatio";
+import { courtLabel } from "@/lib/courtLabel";
 
 interface Props {
   isOpen: boolean;
@@ -29,7 +30,9 @@ const toMin = (t: string) => {
 
 export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, courts, availByCoach, studentsPerCoach, onChanged }: Props) {
   // ตัวเลือกสนาม: เฉพาะสนามที่เปิดใช้งาน (SelectField มี placeholder ว่าง = ไม่ระบุ อยู่แล้ว)
-  const courtOptions = courts.filter((c) => c.is_active).map((c) => ({ label: c.name, value: c.name }));
+  // value เป็น id — backend ตัดสินสนามซ้อนด้วย court_id ไม่ใช่ชื่อ
+  const activeCourts = courts.filter((c) => c.is_active);
+  const courtOptions = activeCourts.map((c) => ({ label: c.name, value: String(c.ID) }));
   const [selectedCoach, setSelectedCoach] = useState("");
   const [court, setCourt] = useState("");
   const [description, setDescription] = useState("");
@@ -97,7 +100,8 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
         date: session.date,
         start_time: session.start_time,
         end_time: session.end_time,
-        court_number: court,
+        court_id: court ? Number(court) : undefined,
+        court_number: activeCourts.find((c) => String(c.ID) === court)?.name ?? "",
         description: description.trim() || session.course_name,
         ignore_availability: emergency,
         package_id: session.package_id,
@@ -186,7 +190,7 @@ export function AssignCoachModal({ isOpen, onClose, session, isPast, coaches, co
                     >
                       <div className="min-w-0">
                         <span className="text-base font-semibold text-slate-800">{a.coach_name || `โค้ช #${a.coach_id}`}</span>
-                        <span className="text-sm text-slate-400 ml-3">{a.court_number ? `สนาม ${a.court_number}` : "ไม่ระบุสนาม"}</span>
+                        <span className="text-sm text-slate-400 ml-3">{courtLabel(a.court_number) || "ไม่ระบุสนาม"}</span>
                         {/* แถวฉุกเฉินไม่ผ่านกฎครบ ต้องเด่นพอให้แอดมินเห็นแล้วกดแก้ */}
                         {a.is_emergency && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">

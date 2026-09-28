@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Pencil, UserPlus, Users } from "lucide-react";
 import type { CoachRosterItem } from "@/types/attendance";
 import { METHOD_LABEL, coachStatusLabel, statusTone } from "@/types/attendance";
+import { courtLabel } from "@/lib/courtLabel";
 
 interface Props {
   coaches: CoachRosterItem[];
@@ -59,7 +60,7 @@ export default function CoachRosterList({
       <ul className="flex flex-col gap-2">
         {coaches.map((c) => {
           const sub = [
-            c.court_number ? `สนาม ${c.court_number}` : null,
+            courtLabel(c.court_number) || null,
             c.check_in_method ? METHOD_LABEL[c.check_in_method] : null,
             c.check_in_time
               ? new Date(c.check_in_time).toLocaleTimeString("th-TH", {
