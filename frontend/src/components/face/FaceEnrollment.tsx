@@ -95,6 +95,34 @@ export default function FaceEnrollment({ privacyHref }: Props) {
     };
   }, []);
 
+  // รูปที่เพิ่งอัปจะอยู่สถานะ pending ระหว่างที่ AI ประมวลผล แล้วผลจะเปลี่ยนเป็น
+  // rejected (AI ปฏิเสธ) หรือ awaiting_review (ผ่าน AI รอแอดมิน) เองภายหลังไม่กี่วินาที
+  // เดิมหน้าดึงรายการแค่ตอนโหลด/ตอนกดปุ่ม ผลจาก AI จึงไม่ขึ้นจนกว่าจะรีเฟรชเอง
+  // จึง poll ซ้ำระหว่างที่ยังมีรูป pending อยู่ ให้ผลการปฏิเสธขึ้นทันทีโดยไม่ต้องรีเฟรช
+  const hasPending = images.some((img) => img.status === "pending");
+  useEffect(() => {
+    if (!hasPending) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const list = await fetchMyFaceImages();
+        if (!cancelled) setImages(list);
+      } catch {
+        /* เงียบไว้ ปล่อยให้รอบถัดไปลองใหม่ */
+      }
+      // กันยิงไม่จบถ้า worker ค้าง (~1 นาที) — ผู้ใช้ยังกดรีเฟรชเองได้
+      if (attempts >= 20) clearInterval(timer);
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [hasPending]);
+
   const handleUpload = async (pose: FacePose, photo: Blob) => {
     await uploadFaceImage(pose, photo); // ถ้า throw CaptureDialog จะโชว์ error เอง
 

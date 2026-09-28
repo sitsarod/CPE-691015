@@ -196,6 +196,25 @@ func TestRejectPayment_RejectsAlreadyClosedAndKeepsBillingPaid(t *testing.T) {
 	}
 }
 
+// การยืนยันใบที่ปิดไปแล้ว (cancelled/rejected/expired) ต้องถูกปฏิเสธ ห้ามชุบชีวิตกลับมา
+// เป็น success ไม่งั้นจะมาร์คบิลที่จ่ายผ่านใบอื่นแล้วเป็น paid ซ้ำ = นับรายได้ซ้ำ (#1)
+func TestConfirmPayment_RejectsAlreadyClosedAndKeepsBillingPaid(t *testing.T) {
+	db := newInvoiceGuardTestDB(t)
+	billingID, staleInvoiceID := seedPaidBillingWithStaleInvoice(t, db)
+	svc := NewPaymentService(db, nil)
+
+	if _, err := svc.ConfirmPayment(staleInvoiceID, nil); err == nil {
+		t.Fatal("คาดว่ายืนยันใบที่ถูกยกเลิกไปแล้วต้องได้ error แต่กลับสำเร็จ")
+	}
+
+	if got := invoiceStatus(t, db, staleInvoiceID); got != models.InvoiceCancelled {
+		t.Fatalf("ใบที่ถูกยกเลิกต้องคงเป็น cancelled แต่กลายเป็น %q", got)
+	}
+	if got := billingStatus(t, db, billingID); got != models.StatusPaid {
+		t.Fatalf("บิลที่จ่ายแล้วต้องคงเป็น paid แต่กลายเป็น %q", got)
+	}
+}
+
 // เจ้าของยกเลิกใบ pending ของตัวเองได้ แต่คนอื่น (ไม่ใช่ admin) ยกเลิกไม่ได้ (กัน IDOR)
 func TestCancelInvoice_OwnershipEnforcedForCustomers(t *testing.T) {
 	db := newInvoiceGuardTestDB(t)

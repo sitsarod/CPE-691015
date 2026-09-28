@@ -1,10 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { BillingDTO } from './types';
+import { InvoiceDTO } from '@/app/customer/payment/components/types';
 import { confirmSlip, confirmCashPayment, rejectSlip, createInvoice } from "@/services/paymentAPI";
 
 import { useConfirm } from "@/components/ConfirmProvider";
 export interface VerifySlipsTabProps {
+  // invoice-centric: หน้าตรวจสลิปสร้างการ์ดจาก "ใบแจ้งหนี้จริง" (ยอด snapshot + บิลครบชุดเดิม)
+  invoices: InvoiceDTO[];
+  // billings ใช้เฉพาะแท็บ "ค้างชำระ" — บิลที่ยังไม่มีใบแจ้งหนี้ (invoice-centric ครอบไม่ถึง)
   billings: BillingDTO[];
   onFetchData: () => void;
   onTriggerToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -39,6 +43,7 @@ interface InvoiceGroup {
 const groupKey = (g: InvoiceGroup) => g.invoiceId ? `invoice-${g.invoiceId}` : `bill-${g.billings[0]?.id}`;
 
 export default function VerifySlipsTab({
+  invoices,
   billings,
   onFetchData,
   onTriggerToast,
@@ -68,85 +73,98 @@ export default function VerifySlipsTab({
     return new Date(dateStr).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
   };
 
-  // แถวที่ตรงกับตัวกรอง + คำค้น (logic เดิม — ไม่แตะ)
-  const waitcheckBillings = useMemo(() => {
-    return billings.filter(b => {
-      let matchesStatus = false;
-      if (slipFilter === 'all') {
-        // "ทั้งหมด" = ทุกรายการจริง ๆ — รวมค้างชำระ (unfunded/overdue ไม่มีสลิป) และ
-        // จ่ายเงินสด (paid ไม่มีสลิป) ด้วย ไม่ใช่แค่รายการที่มีสลิป/รอตรวจ
-        // (backend ตัดใบแจ้งหนี้ที่ยกเลิกทิ้งไปแล้ว จึงเหลือแต่สถานะที่ควรแสดง)
-        matchesStatus = true;
-      } else if (slipFilter === 'pending') {
-        matchesStatus = b.billingstatus === 'waitcheck';
-      } else if (slipFilter === 'approved') {
-        matchesStatus = b.billingstatus === 'paid';
-      } else if (slipFilter === 'rejected') {
-        matchesStatus = b.billingstatus === 'unfunded' && !!b.slipurl;
-      } else if (slipFilter === 'unpaid') {
-        // ค้างชำระ = ยังไม่เคยแนบสลิปเลย — กันบิลที่ถูก "ปฏิเสธ" (unfunded + มีสลิป) ปนเข้ามา
-        // เพราะบิลที่ถูกปฏิเสธก็ถูกคืนสถานะเป็น unfunded เหมือนกัน แต่ยังมี slipurl ติดอยู่
-        matchesStatus = (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') && !b.slipurl;
-      }
+  // Source A — 1 ใบแจ้งหนี้ = 1 กลุ่ม (invoice-centric)
+  // ใช้ยอด snapshot ของใบ (invoicetotalamount) + บิลครบชุดเดิมจาก paymentitems จึงไม่หด
+  // ตามการออกใบใหม่บางบิล — แก้บั๊กการ์ดใบที่ถูกปฏิเสธโชว์ยอด/จำนวนบิลไม่ครบ
+  const invoiceGroups = useMemo<InvoiceGroup[]>(() => {
+    return invoices.map(inv => {
+      const items = inv.paymentitems ?? [];                                  // Go marshal empty slice เป็น null ได้
+      const bills = items.map(it => it.billing).filter(Boolean) as BillingDTO[];
+      const first = bills[0];
+      // synthetic billingstatus เพื่อให้ statusMeta()/ตัวกรอง/actions เดิมทำงานต่อได้โดยไม่ต้องแก้
+      let billingstatus: BillingDTO['billingstatus'];
+      if (inv.invoicestatus === 'success') billingstatus = 'paid';
+      else if (inv.invoicestatus === 'rejected') billingstatus = 'unfunded';           // มี slipurl → statusMeta = ปฏิเสธแล้ว
+      else if (inv.invoicestatus === 'pending' && inv.slipurl) billingstatus = 'waitcheck';
+      else billingstatus = 'unfunded';                                                 // pending ไม่มีสลิป → แท็บค้างชำระ
+      return {
+        invoiceId: inv.id,
+        customer: inv.customer,                                              // จากใบ (backend preload Customer.Customer ให้ nickname)
+        customerId: inv.customer_id,
+        billings: bills,
+        totalAmount: inv.invoicetotalamount,                                 // snapshot = ตัวแก้บั๊ก
+        billingstatus,
+        paymentMethod: inv.paymentmethod,
+        slipurl: inv.slipurl || undefined,
+        transactionid: inv.transactionid,
+        slipokChecked: inv.slipok_checked,
+        slipokPassed: inv.slipok_passed,
+        slipokMessage: inv.slipok_message,
+        receivingBankName: inv.receiving_bank_name,
+        receivingAccountNo: inv.receiving_account_no,
+        confirmedBy: inv.confirmed_by,
+        admin: first?.admin,
+        updatedBy: first?.updated_by,
+        dueDate: first?.billingdue_date ?? inv.created_at,
+        createdAt: inv.created_at,
+        paidAt: inv.paid_at,
+      };
+    }).filter(g => g.billings.length > 0);                                   // กัน group ว่าง (ไม่ควรเกิด)
+  }, [invoices]);
 
-      const studentName = `${b.customer?.firstName || ''} ${b.customer?.lastName || ''}`.toLowerCase();
-      const desc = (b.billingdescription || '').toLowerCase();
-      const typeName = (b.billing_type?.billingtypename || '').toLowerCase();
-      const idStr = `bill-${b.id}`.toLowerCase();
-      const invoiceIdStr = b.invoice_id ? `invoice-${b.invoice_id}`.toLowerCase() : '';
-      const invoiceIdNumStr = b.invoice_id ? `#${b.invoice_id}`.toLowerCase() : '';
-      const query = slipSearchTerm.toLowerCase();
+  // Source B — บิลที่ยังไม่มีใบแจ้งหนี้เลย (เฉพาะแท็บ "ค้างชำระ")
+  // invoice-centric ครอบไม่ถึง จึงเสริมจาก billings ที่ยังไม่มี invoice_id — disjoint กับ Source A
+  const unpaidBillGroups = useMemo<InvoiceGroup[]>(() => {
+    return billings
+      .filter(b => !b.invoice_id && (b.billingstatus === 'unfunded' || b.billingstatus === 'overdue') && !b.slipurl)
+      .map(b => ({
+        invoiceId: undefined,
+        customer: b.customer,
+        customerId: b.customer_id,
+        billings: [b],
+        totalAmount: b.billingamount,
+        billingstatus: b.billingstatus,
+        paymentMethod: b.paymentmethod,
+        admin: b.admin,
+        updatedBy: b.updated_by,
+        dueDate: b.billingdue_date,
+        createdAt: b.created_at,
+      }));
+  }, [billings]);
 
-      const matchesSearch = studentName.includes(query) ||
-                            desc.includes(query) ||
-                            typeName.includes(query) ||
-                            idStr.includes(query) ||
-                            invoiceIdStr.includes(query) ||
-                            invoiceIdNumStr.includes(query);
-
-      return matchesStatus && matchesSearch;
-    });
-  }, [billings, slipFilter, slipSearchTerm]);
-
-  // จัดกลุ่มตาม invoice_id (logic เดิม — ไม่แตะ)
+  // รวมสองแหล่ง → กรองตามแท็บ + คำค้น → เรียง (คงชื่อ groupedWaitcheckBillings ให้โค้ดข้างล่างไม่ต้องแก้)
   const groupedWaitcheckBillings = useMemo<InvoiceGroup[]>(() => {
-    const groups: Record<string, InvoiceGroup> = {};
+    const all = [...invoiceGroups, ...unpaidBillGroups];
 
-    waitcheckBillings.forEach(b => {
-      const key = b.invoice_id ? `invoice-${b.invoice_id}` : `bill-${b.id}`;
-      if (!groups[key]) {
-        groups[key] = {
-          invoiceId: b.invoice_id,
-          customer: b.customer,
-          customerId: b.customer_id,
-          billings: [],
-          totalAmount: 0,
-          billingstatus: b.billingstatus,
-          paymentMethod: b.paymentmethod,
-          slipurl: b.slipurl,
-          transactionid: b.transactionid,
-          slipokChecked: b.slipok_checked,
-          slipokPassed: b.slipok_passed,
-          slipokMessage: b.slipok_message,
-          receivingBankName: b.receiving_bank_name,
-          receivingAccountNo: b.receiving_account_no,
-          confirmedBy: b.confirmed_by,
-          admin: b.admin,
-          updatedBy: b.updated_by,
-          dueDate: b.billingdue_date,
-          createdAt: b.created_at,
-          paidAt: b.paid_at,
-        };
-      }
-      groups[key].billings.push(b);
-      groups[key].totalAmount += b.billingamount;
-    });
+    const matchesFilter = (g: InvoiceGroup) => {
+      if (slipFilter === 'all') return true;
+      if (slipFilter === 'pending') return g.billingstatus === 'waitcheck';
+      if (slipFilter === 'approved') return g.billingstatus === 'paid';
+      if (slipFilter === 'rejected') return (g.billingstatus === 'unfunded' || g.billingstatus === 'overdue') && !!g.slipurl;
+      if (slipFilter === 'unpaid') return (g.billingstatus === 'unfunded' || g.billingstatus === 'overdue') && !g.slipurl;
+      return true;
+    };
 
-    return Object.values(groups).sort((a, b) => {
-      if (a.invoiceId && b.invoiceId) return b.invoiceId - a.invoiceId;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [waitcheckBillings]);
+    const query = slipSearchTerm.toLowerCase();
+    const matchesSearch = (g: InvoiceGroup) => {
+      if (!query) return true;
+      const customerName = `${g.customer?.firstName || ''} ${g.customer?.lastName || ''}`.toLowerCase();
+      if (customerName.includes(query)) return true;
+      if (g.invoiceId && (`invoice-${g.invoiceId}`.includes(query) || `#${g.invoiceId}`.includes(query))) return true;
+      return g.billings.some(b =>
+        `bill-${b.id}`.toLowerCase().includes(query) ||
+        (b.billingdescription || '').toLowerCase().includes(query) ||
+        (b.billing_type?.billingtypename || '').toLowerCase().includes(query)
+      );
+    };
+
+    return all
+      .filter(g => matchesFilter(g) && matchesSearch(g))
+      .sort((a, b) => {
+        if (a.invoiceId && b.invoiceId) return b.invoiceId - a.invoiceId;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [invoiceGroups, unpaidBillGroups, slipFilter, slipSearchTerm]);
 
   // แบ่งหน้ารายการ 10 รายการ/หน้า (logic เดิม)
   const PAGE_SIZE = 10;
