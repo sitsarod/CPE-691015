@@ -36,12 +36,21 @@ export interface AlertRow {
   href: string;
 }
 
+// นักเรียนที่คาบเรียนใกล้หมด — จุดเตือนให้แอดมินตามต่อคอร์ส (โอกาสขายซ้ำ)
+export interface LowSessionRow {
+  name: string;
+  course: string;
+  remaining: number;
+  daysLeft: number | null; // วันคงเหลือก่อนหมดอายุ (ถ้ามี); ติดลบ = เกินกำหนด
+}
+
 export interface Insights {
   newThisMonth: number;
   newDelta: number;
-  sessionUsage: number;
   coachCount: number;
   coachNames: string[]; // ชื่อโค้ชในทีม (สำหรับ roster บนแดชบอร์ด)
+  lowSessions: LowSessionRow[]; // นักเรียนคาบใกล้หมด เรียงจากเหลือน้อยสุด
+  lowSessionsTotal: number; // จำนวนทั้งหมดที่เข้าเกณฑ์ (อาจมากกว่าที่แสดง)
 }
 
 export interface DashboardData {

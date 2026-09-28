@@ -334,13 +334,41 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   };
   const newThisMonth = countNewStudents(curKey);
   const newLastMonth = countNewStudents(prevKey);
-  const totalSessions = enrollments.reduce((s, e) => s + (e.total_sessions || 0), 0);
-  const remainingSessions = enrollments.reduce(
-    (s, e) => s + (e.remaining_sessions || 0),
-    0
-  );
-  const sessionUsage =
-    totalSessions > 0 ? ((totalSessions - remainingSessions) / totalSessions) * 100 : 0;
+
+  // ---- นักเรียนคาบใกล้หมด: โอกาสตามต่อคอร์ส (ขายซ้ำ) ----
+  // เกณฑ์: กำลังเรียนอยู่ (active) · เหลือ 1–3 คาบ · เริ่มเรียนไปแล้ว (เหลือ < ทั้งหมด)
+  // ตัดแพ็กเกจทดลอง (trial) ออก เพราะคาบน้อยโดยธรรมชาติ ไม่ใช่จุดต่อคอร์ส
+  const LOW_SESSION_THRESHOLD = 3;
+  const LOW_SESSION_SHOW = 6; // จำนวนแถวที่แสดงบนแดชบอร์ด
+  const lowSessionAll = enrollments
+    .filter(
+      (e) =>
+        e.status?.toLowerCase() === "active" &&
+        !e.package?.is_trial &&
+        e.remaining_sessions > 0 &&
+        e.remaining_sessions <= LOW_SESSION_THRESHOLD &&
+        e.remaining_sessions < e.total_sessions
+    )
+    // เหลือน้อยสุดขึ้นก่อน; เท่ากันให้ที่ใกล้หมดอายุกว่าขึ้นก่อน
+    .sort(
+      (a, b) =>
+        a.remaining_sessions - b.remaining_sessions ||
+        (a.days_left ?? Infinity) - (b.days_left ?? Infinity)
+    );
+  const lowSessions = lowSessionAll.slice(0, LOW_SESSION_SHOW).map((e) => {
+    const c = e.customer;
+    const name =
+      c?.nickname?.trim() ||
+      `${c?.first_name ?? ""} ${c?.last_name ?? ""}`.trim() ||
+      "นักเรียน";
+    return {
+      name,
+      course: e.package?.course?.course_name ?? "หลักสูตร",
+      remaining: e.remaining_sessions,
+      daysLeft: e.days_left,
+    };
+  });
+
   // ---- ทีมผู้สอน: รายชื่อโค้ชในระบบ (สำหรับ roster บนแดชบอร์ด) ----
   const coachNames = coaches.map(
     (c) => c.nickname || `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "โค้ช"
@@ -349,9 +377,10 @@ export function buildDashboard(raw: RawDashboard): DashboardData {
   const insights: Insights = {
     newThisMonth,
     newDelta: pctChange(newThisMonth, newLastMonth),
-    sessionUsage,
     coachCount: coaches.length,
     coachNames,
+    lowSessions,
+    lowSessionsTotal: lowSessionAll.length,
   };
 
   return { kpis, chart: buckets, courses: courseRows, activities, alerts, insights };
