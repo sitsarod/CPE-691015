@@ -16,6 +16,7 @@ import tempfile
 import cv2
 import insightface
 import numpy as np
+import onnxruntime as ort
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
@@ -59,6 +60,46 @@ MODEL_ROOT = os.getenv("FACE_MODEL_ROOT", "~/.insightface")
 
 app = FastAPI(title="face-service", docs_url=None, redoc_url=None)
 
+
+def cpu_budget() -> int:
+    """จำนวน thread ที่ควรให้ onnxruntime ใช้ต่อ inference — ตั้งให้พอดีกับ vCPU ที่ container ได้จริง
+
+    ⚠️ onnxruntime (1.20 ไม่ได้ build มากับ OpenMP) ตั้ง intra_op_num_threads ดีฟอลต์ตาม "จำนวน
+    core ของเครื่อง host" ไม่ใช่โควตา CPU ที่ container ได้จริง บน Railway/K8s ที่ได้ CPU แค่เศษเสี้ยว
+    (เช่น host 32 core แต่ได้จริง 1–2 vCPU) มันจะ spawn thread เกินจำนวน CPU จริงมหาศาล → thread
+    แย่ง CPU กันเอง (oversubscription) สลับ context ไปมาจน inference ช้าลงกว่าใช้ thread น้อย ๆ ซะอีก
+    นี่คือสาเหตุที่ "ช้าบน Railway แต่ไม่ช้าบนเครื่องตัวเอง" ที่พบบ่อยที่สุด
+
+    ตั้งผ่าน ORT_NUM_THREADS ได้ตรง ๆ (แนะนำ = จำนวน vCPU ที่ซื้อ) ถ้าไม่ตั้ง จะพยายามอ่านโควตา
+    จริงจาก cgroup v2 ก่อน (Railway/Docker/K8s สมัยใหม่ใช้ cgroup v2) แล้วค่อย fallback เป็น 2
+    """
+    env = os.getenv("ORT_NUM_THREADS")
+    if env:
+        return max(1, int(env))
+
+    # cgroup v2: /sys/fs/cgroup/cpu.max = "<quota> <period>" (quota เป็น "max" = ไม่จำกัด)
+    # โควตา CPU จริง = quota / period (เช่น "150000 100000" = 1.5 vCPU)
+    try:
+        with open("/sys/fs/cgroup/cpu.max") as f:
+            quota_s, period_s = f.read().split()
+        if quota_s != "max":
+            cpus = int(quota_s) / int(period_s)
+            if cpus >= 1:
+                return max(1, round(cpus))
+    except (OSError, ValueError):
+        pass
+
+    return 2
+
+
+THREADS = cpu_budget()
+
+# ตั้ง intra_op = โควตา CPU จริง, inter_op = 1 (execution mode เป็น sequential อยู่แล้ว ไม่ต้องมี
+# thread รันหลาย op พร้อมกัน) ลด thread รวมให้ไม่เกิน CPU ที่มี → เลี่ยง oversubscription
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = THREADS
+sess_options.inter_op_num_threads = 1
+
 # โหลดตอนบูตครั้งเดียว — โหลดต่อ request จะช้ามากและกินหน่วยความจำซ้ำซ้อน
 # ctx_id=-1 = CPU (พอสำหรับ 10–20 คนต่อคาบ ไม่ต้องใช้ GPU)
 #
@@ -68,9 +109,29 @@ model = insightface.app.FaceAnalysis(
     name=MODEL_NAME,
     root=MODEL_ROOT,
     allowed_modules=["detection", "recognition"],
+    providers=["CPUExecutionProvider"],
 )
+
+# ⚠️ insightface 0.7.3 ไม่มีทางส่ง SessionOptions ผ่าน constructor (get_model ภายในรับแค่
+# providers/provider_options แล้วโยนทิ้ง sess_options) จึงต้องสร้าง InferenceSession ใหม่ทับ
+# session ของแต่ละ sub-model เอง — intra_op_num_threads ตั้งได้ "ตอนสร้าง session เท่านั้น"
+# แก้ทีหลังไม่ได้ ทำ "ก่อน" prepare() ปลอดภัยสุด (input/output name ไม่เปลี่ยน sub-model จึงเรียก
+# session ใหม่ได้ตามปกติ) session เดิมที่ FaceAnalysis สร้างจะถูกทิ้งไป เสียเวลาบูตนิดเดียวครั้งเดียว
+for sub_model in model.models.values():
+    sub_model.session = ort.InferenceSession(
+        sub_model.session.model_path,
+        sess_options=sess_options,
+        providers=["CPUExecutionProvider"],
+    )
+
 model.prepare(ctx_id=-1, det_size=(640, 640))
-log.info("โหลดโมเดล %s จาก %s เรียบร้อย", MODEL_NAME, MODEL_ROOT)
+
+# warmup — model.prepare() แค่โหลด weight แต่ onnxruntime allocate buffer + optimize graph จริง
+# ตอน inference "ครั้งแรก" ทำให้ request แรกหลัง deploy/หลังตื่นจากหลับ ช้าเป็นวินาที (เสี่ยงโดน
+# /health หรือ timeout ฝั่ง Go มองว่ายังไม่พร้อม) ยิงภาพเปล่าครั้งเดียวตอนบูตให้จบตรงนี้ก่อนเปิดรับ traffic
+model.get(np.zeros((640, 640, 3), dtype=np.uint8))
+
+log.info("โหลดโมเดล %s จาก %s (threads=%d) + warmup เรียบร้อย", MODEL_NAME, MODEL_ROOT, THREADS)
 
 
 class EmbedRequest(BaseModel):
