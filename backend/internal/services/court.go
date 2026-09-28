@@ -2,7 +2,9 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"CPE-691015/internal/models"
 
@@ -26,14 +28,33 @@ func (s *CourtService) GetAll() ([]models.Court, error) {
 	return courts, err
 }
 
+// cleanCourtName ตัด/ยุบช่องว่าง แล้วตรวจว่าไม่ว่างและไม่ยาวเกิน
+func cleanCourtName(name string) (string, error) {
+	name = strings.Join(strings.Fields(name), " ")
+	if name == "" {
+		return "", ErrCourtNameRequired
+	}
+	if err := validateCourtNameLength(name); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
 // Create เพิ่มสนามใหม่
 func (s *CourtService) Create(name string) (*models.Court, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, ErrCourtNameRequired
+	name, err := cleanCourtName(name)
+	if err != nil {
+		return nil, err
 	}
+
 	court := models.Court{Name: name, IsActive: true}
-	if err := s.db.Create(&court).Error; err != nil {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := ensureCourtNameUnique(tx, name, 0); err != nil {
+			return err
+		}
+		return tx.Create(&court).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &court, nil
@@ -48,11 +69,14 @@ func (s *CourtService) Update(id uint, name *string, isActive *bool) (*models.Co
 
 	updateData := make(map[string]interface{})
 	if name != nil {
-		trimmed := strings.TrimSpace(*name)
-		if trimmed == "" {
-			return nil, ErrCourtNameRequired
+		cleaned, err := cleanCourtName(*name)
+		if err != nil {
+			return nil, err
 		}
-		updateData["name"] = trimmed
+		if err := ensureCourtNameUnique(s.db, cleaned, id); err != nil {
+			return nil, err
+		}
+		updateData["name"] = cleaned
 	}
 	if isActive != nil {
 		updateData["is_active"] = *isActive
@@ -69,7 +93,19 @@ func (s *CourtService) Update(id uint, name *string, isActive *bool) (*models.Co
 	return &court, nil
 }
 
-// Delete ลบสนาม (คาบที่ถูก assign ไปแล้วยังเก็บชื่อสนามเป็น string ไว้ ไม่กระทบ)
+// Delete ลบสนาม · ห้ามลบถ้ายังมีคาบในอนาคตผูกอยู่ (ให้ปิดใช้งานแทน หรือย้ายคาบก่อน)
+// ⚠️ ถ้าปล่อยลบ คาบที่ค้างอยู่ชี้สนามที่ไม่มีแล้ว และสนามชื่อเดิมที่สร้างใหม่จะจองทับได้
 func (s *CourtService) Delete(id uint) error {
+	today := localDateString(time.Now())
+
+	var future int64
+	if err := s.db.Model(&models.WorkSchedule{}).
+		Where("court_id = ? AND date >= ?", id, today).
+		Count(&future).Error; err != nil {
+		return err
+	}
+	if future > 0 {
+		return fmt.Errorf("%w %d คาบ — ปิดใช้งานสนามแทน หรือย้ายคาบไปสนามอื่นก่อน", ErrCourtInUse, future)
+	}
 	return s.db.Delete(&models.Court{}, id).Error
 }

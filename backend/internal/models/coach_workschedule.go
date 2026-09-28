@@ -11,7 +11,13 @@ type WorkSchedule struct {
 	StartTime   string `json:"start_time" gorm:"type:varchar(10)" valid:"required~startTime is required"`
 	EndTime     string `json:"end_time" gorm:"type:varchar(10)" valid:"required~endTime is required"`
 	Description string `json:"description" gorm:"type:text" valid:"required~description is required"`
-	Courtnumber string `json:"court_number" gorm:"column:court_number;type:varchar(10)" valid:"required~courtNumber is required"`
+	// Courtnumber = ชื่อสนาม ณ ตอนมอบหมาย เก็บไว้อ่านย้อนหลัง · ห้ามใช้ตัดสินสนามซ้อน (ใช้ CourtID)
+	// ขนาดต้องเท่ากับ courts.name ไม่งั้นชื่อสนามยาวบันทึกไม่ได้
+	Courtnumber string `json:"court_number" gorm:"column:court_number;type:varchar(50)"`
+
+	// CourtID = สนามจริงในตาราง courts · NULL ได้ (ยังไม่ระบุสนาม หรือข้อมูลเก่าที่แมปไม่ได้)
+	CourtID *uint  `json:"court_id" gorm:"index"`
+	Court   *Court `json:"court,omitempty"`
 
 	CoachID uint   `json:"coach_id" gorm:"not null" valid:"required~coachId is required"`
 	Coach   *Coach `json:"coach,omitempty" gorm:"foreignKey:CoachID;constraint:OnDelete:CASCADE;"`

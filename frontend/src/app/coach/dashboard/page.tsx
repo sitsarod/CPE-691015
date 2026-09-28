@@ -7,6 +7,7 @@ import { AlertCircle, Wallet, CalendarDays, Clock, Star, type LucideIcon } from 
 
 import { fetchMyCoachProfile, fetchCoachSchedules, fetchCoachWages } from "@/services/coachAPI";
 import { CoachProfile, WorkScheduleItem, CoachWageEntry } from "@/types/coach";
+import { courtLabel } from "@/lib/courtLabel";
 
 // ปุ่มลัดไปหน้าที่โค้ชใช้บ่อย
 const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
@@ -120,7 +121,7 @@ export default function CoachDashboardPage() {
     .filter((s) => dayKey(s) === today)
     .sort((a, b) => a.start_time.localeCompare(b.start_time))[0];
   const firstTodayNote = firstToday
-    ? `คาบแรกวันนี้ ${firstToday.start_time} สนาม ${firstToday.court_number}`
+    ? `คาบแรกวันนี้ ${firstToday.start_time} ${courtLabel(firstToday.court_number) || "ยังไม่ระบุสนาม"}`
     : null;
 
   const statCards = [
@@ -250,7 +251,7 @@ export default function CoachDashboardPage() {
                         {s.course?.course_name || "-"}
                       </p>
                       <span className="flex-none border border-gray-200 px-3 py-1 text-xs font-light text-gray-600">
-                        สนาม {s.court_number}
+                        {courtLabel(s.court_number) || "ยังไม่ระบุสนาม"}
                       </span>
                     </div>
                   ))}

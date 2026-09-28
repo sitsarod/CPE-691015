@@ -3,7 +3,7 @@ import { Plus, Trash2, Loader2, MapPin } from "lucide-react";
 import Modal from "@/components/Modal";
 import Button from "@/components/Button";
 import { FormError } from "@/components/admin/ManagementUI";
-import { Court, getCourts, createCourt, updateCourt, deleteCourt } from "@/services/courtAPI";
+import { Court, getCourts, createCourt, updateCourt, deleteCourt, MAX_COURT_NAME_LENGTH } from "@/services/courtAPI";
 
 import { useConfirm } from "@/components/ConfirmProvider";
 interface Props {
@@ -57,16 +57,20 @@ export function CourtManageModal({ isOpen, onClose, onChanged }: Props) {
     }
   };
 
-  // บันทึกชื่อใหม่เมื่อออกจากช่อง (ถ้าเปลี่ยนจริง)
-  const handleRename = async (court: Court, name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === court.name) return;
+  // บันทึกชื่อใหม่เมื่อออกจากช่อง (ถ้าเปลี่ยนจริง) · ไม่สำเร็จให้ช่องกลับเป็นชื่อเดิม ไม่ค้างชื่อที่ไม่ได้บันทึก
+  const handleRename = async (court: Court, input: HTMLInputElement) => {
+    const trimmed = input.value.trim();
+    if (!trimmed || trimmed === court.name) {
+      input.value = court.name;
+      return;
+    }
     try {
       setBusyId(court.ID);
       await updateCourt(court.ID, { name: trimmed });
       await load();
       onChanged();
     } catch (err: unknown) {
+      input.value = court.name;
       setError(err instanceof Error ? err.message : "แก้ชื่อสนามไม่สำเร็จ");
     } finally {
       setBusyId(null);
@@ -120,6 +124,7 @@ export function CourtManageModal({ isOpen, onClose, onChanged }: Props) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              maxLength={MAX_COURT_NAME_LENGTH}
               placeholder="เช่น สนาม 1, คอร์ต A"
               className="flex-1 min-w-0 px-4 py-3 border border-gray-200 rounded-xl text-base bg-white text-gray-900 focus:outline-none focus:border-orange-primary"
             />
@@ -145,7 +150,8 @@ export function CourtManageModal({ isOpen, onClose, onChanged }: Props) {
                 <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                 <input
                   defaultValue={court.name}
-                  onBlur={(e) => handleRename(court, e.target.value)}
+                  maxLength={MAX_COURT_NAME_LENGTH}
+                  onBlur={(e) => handleRename(court, e.currentTarget)}
                   disabled={busyId === court.ID}
                   className="flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none border-b border-transparent focus:border-slate-300"
                 />

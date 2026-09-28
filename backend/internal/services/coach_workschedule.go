@@ -298,15 +298,36 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 		}
 	}
 
-	// 3) สนาม (optional): ถ้าระบุสนามมา ต้องไม่ถูกใช้โดย "คลาสอื่น" ที่ต่างคลาสกันในเวลาชนกัน
-	//    แต่อนุญาตให้สนามซ้ำได้ถ้าเป็น "คลาสเดียวกัน" (โค้ชหลายคน co-teach คลาสเดียวกัน)
-	//    นิยาม "คลาสเดียวกัน" = course + วัน + เวลาเริ่ม-จบ ตรงกัน (package เป็นแค่โควตาจำนวนครั้ง ไม่ใช่ตัวแยกคลาส)
-	if strings.TrimSpace(req.CourtNumber) != "" {
+	// 3) สนาม (optional): คลาสอื่นใช้สนามเดียวกันในเวลาชนกันไม่ได้ · คลาสเดียวกัน (co-teach) ได้
+	//    ตัดสินด้วย court_id · แถวเก่าที่ยังไม่ผูก id เทียบด้วยชื่อที่ normalize แล้ว
+	courtID, courtName, err := resolveCourt(tx, req.CourtID, req.CourtNumber)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrScheduleInvalid, err)
+	}
+	if courtID != nil || normalizeCourtName(courtName) != "" {
 		var courtJobs []models.WorkSchedule
-		if err := tx.Where("court_number = ? AND date = ? AND id <> ?", req.CourtNumber, req.Date, excludeID).Find(&courtJobs).Error; err != nil {
+		q := tx.Where("date = ? AND id <> ?", req.Date, excludeID)
+		if courtID != nil {
+			q = q.Where("court_id = ? OR (court_id IS NULL AND COALESCE(court_number, '') <> '')", *courtID)
+		} else {
+			q = q.Where("COALESCE(court_number, '') <> ''")
+		}
+		if err := q.Find(&courtJobs).Error; err != nil {
 			return err
 		}
 		for _, w := range courtJobs {
+			// แถวที่ผูก id แล้วให้เทียบด้วย id · แถวเก่าที่ยังไม่ผูกให้เทียบด้วยชื่อ
+			var same bool
+			if courtID != nil && w.CourtID != nil {
+				same = *w.CourtID == *courtID
+			} else {
+				same = normalizeCourtName(w.Courtnumber) == normalizeCourtName(courtName) &&
+					normalizeCourtName(courtName) != ""
+			}
+			if !same {
+				continue
+			}
+
 			ws, _ := timeToMinutesWS(w.StartTime)
 			we, _ := timeToMinutesWS(w.EndTime)
 			if reqStart < we && ws < reqEnd {
@@ -314,7 +335,11 @@ func (s *workScheduleService) validateScheduleSlot(tx *gorm.DB, req dto.CreateWo
 				if sameClass {
 					continue // อนุญาต: โค้ชอีกคนสอนคลาสเดียวกันบนสนามเดียวกัน
 				}
-				return fmt.Errorf("%w: สนาม %s ถูกใช้งานโดยคลาสอื่นในช่วงเวลานี้แล้ว", ErrScheduleConflict, req.CourtNumber)
+				label := courtName
+				if label == "" {
+					label = req.CourtNumber
+				}
+				return fmt.Errorf("%w: สนาม %s ถูกใช้งานโดยคลาสอื่นในช่วงเวลานี้แล้ว", ErrScheduleConflict, label)
 			}
 		}
 	}
@@ -366,13 +391,23 @@ func (s *workScheduleService) AssignWorkSchedule(req dto.CreateWorkScheduleReque
 				"กรุณาตรวจตารางเรียนของแพ็กเกจก่อนมอบหมายงาน", ErrScheduleInvalid)
 		}
 
+		// ชื่อสนามเก็บเป็นชื่อ ณ ตอนมอบหมาย คู่กับ id
+		courtID, courtName, err := resolveCourt(tx, req.CourtID, req.CourtNumber)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrScheduleInvalid, err)
+		}
+		if err := ensureCourtUsable(tx, courtID, nil); err != nil {
+			return fmt.Errorf("%w: %v", ErrScheduleConflict, err)
+		}
+
 		work = models.WorkSchedule{
 			Date: req.Date,
 			// เก็บรูปแบบมาตรฐานเสมอ ไม่ใช่ตามที่ client ส่งมา (ดู normalizeClockTime)
 			StartTime:         normalizeClockTime(req.StartTime),
 			EndTime:           normalizeClockTime(req.EndTime),
 			Description:       req.Description,
-			Courtnumber:       req.CourtNumber,
+			Courtnumber:       courtName,
+			CourtID:           courtID,
 			CoachID:           req.CoachID,
 			CourseID:          req.CourseID,
 			PackageID:         packageID,
@@ -692,14 +727,27 @@ func (s *workScheduleService) Update(id uint, req dto.CreateWorkScheduleRequest)
 
 		before = schedule // สแนปช็อตก่อนแก้ ใช้เทียบว่าต้องแจ้งใครหลัง commit
 
+		courtID, courtName, err := resolveCourt(tx, req.CourtID, req.CourtNumber)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrScheduleInvalid, err)
+		}
+		if err := ensureCourtUsable(tx, courtID, schedule.CourtID); err != nil {
+			return fmt.Errorf("%w: %v", ErrScheduleConflict, err)
+		}
+
 		updateData := map[string]interface{}{
-			"date":         req.Date,
-			"start_time":   normalizeClockTime(req.StartTime),
-			"end_time":     normalizeClockTime(req.EndTime),
-			"court_number": req.CourtNumber,
-			"description":  req.Description,
-			"coach_id":     req.CoachID,
-			"course_id":    req.CourseID,
+			"date":        req.Date,
+			"start_time":  normalizeClockTime(req.StartTime),
+			"end_time":    normalizeClockTime(req.EndTime),
+			"description": req.Description,
+			"coach_id":    req.CoachID,
+			"course_id":   req.CourseID,
+		}
+
+		// สนามเดิม = ไม่แตะชื่อที่เก็บไว้ ไม่งั้นเปลี่ยนชื่อสนามแล้วประวัติคาบเก่าเปลี่ยนตาม
+		if !sameCourt(schedule.CourtID, schedule.Courtnumber, courtID, courtName) {
+			updateData["court_id"] = courtID
+			updateData["court_number"] = courtName
 		}
 
 		if anchor := anchorPackageForSlot(tx, req); anchor != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"CPE-691015/internal/models"
 	"CPE-691015/internal/services"
@@ -88,7 +89,6 @@ func main() {
 		&models.ClassConfirmation{},
 		&models.AppSetting{},
 		&models.LegalDocumentRevision{},
-		
 	); err != nil {
 		log.Fatalf("AutoMigrate ไม่สำเร็จ: %v", err)
 	}
@@ -177,6 +177,31 @@ func main() {
 
 	if err := services.NormalizeFutureWorkSchedulePackages(db); err != nil {
 		log.Fatalf("ปรับแพ็กเกจของตารางงานโค้ชไม่สำเร็จ: %v", err)
+	}
+
+	// เติม court_id ให้คาบเก่าที่มีแต่ชื่อสนาม — รันซ้ำได้ แถวที่ผูกแล้วไม่ถูกแตะ
+	if linked, unmatched, err := services.BackfillWorkScheduleCourtIDs(db); err != nil {
+		log.Fatalf("ผูกคาบสอนกับตารางสนามไม่สำเร็จ: %v", err)
+	} else {
+		log.Printf("[court] ผูกคาบสอนกับสนามแล้ว %d แถว", linked)
+		if unmatched > 0 {
+			log.Printf("[court] ⚠️ อีก %d แถวมีชื่อสนามที่ไม่ตรงกับรายการสนามในระบบ "+
+				"ให้เพิ่มสนามนั้นที่หน้าจัดการสนามแล้วรันซ้ำ", unmatched)
+		}
+	}
+
+	// สนามชื่อซ้ำที่สร้างไว้ก่อนมีด่านกันซ้ำ ถูกมองเป็นคนละสนามและจองทับกันได้ — แจ้งให้แอดมินรวมเอง
+	if dups, err := services.DuplicateCourtNames(db); err != nil {
+		log.Fatalf("ตรวจชื่อสนามซ้ำไม่สำเร็จ: %v", err)
+	} else {
+		for _, group := range dups {
+			names := make([]string, 0, len(group))
+			for _, c := range group {
+				names = append(names, fmt.Sprintf("#%d %q", c.ID, c.Name))
+			}
+			log.Printf("[court] ⚠️ สนามชื่อซ้ำกัน: %s — ย้ายคาบไปสนามเดียวแล้วปิดใช้งานตัวที่เหลือ",
+				strings.Join(names, ", "))
+		}
 	}
 
 	// ตรึงอัตราค่าจ้างของคาบเก่าไว้กับตัวแถว ไม่ให้ยอดย้อนหลังเปลี่ยนตามเรตปัจจุบัน
