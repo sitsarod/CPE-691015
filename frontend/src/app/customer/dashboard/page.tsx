@@ -33,26 +33,19 @@ export default function CustomerDashboardPage() {
   /** คอร์สที่กำลังเรียนอยู่และใกล้หมดอายุภายใน 7 วัน */
   const [expiringSoon, setExpiringSoon] = useState<Enrollment[]>([]);
 
-  /** ป็อปอัพต้อนรับ — โชว์ครั้งเดียวตอนลูกค้าล็อกอินเข้ามาครั้งแรกและยังไม่มีคอร์ส */
+  /** ป็อปอัพต้อนรับ — โชว์ทุกครั้งที่ล็อกอินจนกว่าลูกค้าจะสมัครเรียนอย่างน้อย 1 ครั้ง */
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // คีย์กันโชว์ซ้ำ ผูกกับ user_id เพื่อให้แต่ละบัญชีนับครั้งแรกของตัวเอง
-  const welcomeSeenKey = (customerId: string) => `koyama_welcomed_${customerId}`;
-
   const goEnroll = () => {
-    const customerId = localStorage.getItem('user_id');
-    if (customerId) localStorage.setItem(welcomeSeenKey(customerId), '1');
     setShowWelcome(false);
     router.push('/customer/enrollment');
   };
 
   const dismissWelcome = () => {
-    const customerId = localStorage.getItem('user_id');
-    if (customerId) localStorage.setItem(welcomeSeenKey(customerId), '1');
     setShowWelcome(false);
   };
 
@@ -95,10 +88,9 @@ export default function CustomerDashboardPage() {
           )
         );
 
-        // ครั้งแรกที่ล็อกอิน (ยังไม่เคยเห็นป็อปอัพ) และยังไม่มีคอร์สเลย → ชวนไปสมัครคอร์ส
-        // เช็ก data.length === 0 ด้วย เพื่อไม่รบกวนคนที่มีคอร์สอยู่แล้วแต่มาเปิดเครื่องใหม่
-        const seen = localStorage.getItem(welcomeSeenKey(customerId));
-        if (!seen && data.length === 0) {
+        // ยังไม่มีคอร์สเลย (ยังไม่เคยสมัครเรียน) → โชว์ป็อปอัพชวนไปสมัครคอร์สทุกครั้งที่ล็อกอิน
+        // เมื่อสมัครเรียนอย่างน้อย 1 ครั้งแล้ว (data.length > 0) จะไม่โชว์อีก
+        if (data.length === 0) {
           setShowWelcome(true);
         }
       }
